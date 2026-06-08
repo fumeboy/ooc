@@ -1,5 +1,8 @@
 /**
- * ProgramWindowDiff — program_window 的执行历史 diff（design § 4.7）。
+ * program/visible/diff.tsx — program_window 的 visible/diff 组件（线 C）。
+ *
+ * 逻辑来自 packages/@ooc/web/src/domains/sessions/components/window-diff-renderers/ProgramWindowDiff.tsx，
+ * 签名收敛到 WindowDiffProps ({previous, current})，删去 windowId 引用。
  *
  * - history 按 execId 配对
  *     added → 新增 exec（绿底 + code + output）
@@ -7,7 +10,7 @@
  *     changed（极罕见）→ 黄底 + fallback inline 显示
  */
 
-import type { WindowDiffRendererProps } from "./registry";
+import type { WindowDiffProps } from "@ooc/web/src/domains/sessions/components/window-diff/window-diff-props";
 import {
   FieldDiffLine,
   Section,
@@ -18,7 +21,7 @@ import {
   readString,
   rowStyle,
   type DiffStatus,
-} from "./_shared";
+} from "@ooc/web/src/domains/sessions/components/window-diff-renderers/_shared";
 
 type ExecLike = {
   execId?: string;
@@ -51,8 +54,7 @@ function execStatus(prev: ExecLike | undefined, cur: ExecLike): DiffStatus {
   return "changed";
 }
 
-export function ProgramWindowDiff(props: WindowDiffRendererProps) {
-  const { previous, current, windowId } = props;
+export default function ProgramWindowDiff({ previous, current }: WindowDiffProps) {
   const prev = asRecord(previous);
   const cur = asRecord(current);
 
@@ -142,8 +144,8 @@ export function ProgramWindowDiff(props: WindowDiffRendererProps) {
   });
 
   return (
-    <div data-testid={`program-window-diff-${windowId}`}>
-      <Section title="program fields" testId={`program-fields-${windowId}`}>
+    <div data-testid="program-window-diff">
+      <Section title="program fields" testId="program-fields">
         <FieldDiffLine label="title" prev={readString(prev, "title")} cur={readString(cur, "title")} />
         <FieldDiffLine label="status" prev={readString(prev, "status")} cur={readString(cur, "status")} />
         <FieldDiffLine
@@ -153,7 +155,7 @@ export function ProgramWindowDiff(props: WindowDiffRendererProps) {
           status={comparePrimitive(prevHistory.length, curHistory.length)}
         />
       </Section>
-      <Section title="history" testId={`program-history-${windowId}`}>
+      <Section title="history" testId="program-history">
         {rows.length === 0 ? <div className="muted small">(no history)</div> : rows}
       </Section>
     </div>

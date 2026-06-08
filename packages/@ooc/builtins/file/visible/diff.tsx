@@ -1,41 +1,22 @@
 /**
- * FileWindowDiff — file_window 类型的 diff renderer。
+ * file/visible/diff.tsx — file_window 类型的 visible/diff 组件（线 C exemplar）。
  *
- * 用户直接点名：使用 `@codemirror/merge` 的 **unified** 单栏视图（不是 split）
- * 显示 prev → current 文件内容的行级 diff。
+ * 对称 visible/index.tsx 的 Window 组件；签名收敛到 WindowDiffProps ({previous, current})。
+ * 逻辑来自 packages/@ooc/web/src/domains/sessions/components/window-diff-renderers/FileWindowDiff.tsx，
+ * 删去 windowType / windowId 引用（type 由解析层定，id 不参与渲染）。
  *
- * 数据源策略（hybrid，与 F2 backend sub agent 并行 — 软退化优先）：
- *
- *   1. 优先：`current.fileDiff = { previousContent, currentContent, path, isBinary?, tooLarge? }`
- *      由 backend F2 在 windowsSnapshot entry 上附挂（同 entry，不动新 endpoint）。
- *
- *   2. fallback：从 props.previous / props.current 的 `content` 字段提取
- *      （向后兼容；F2 没到位时只能拿到 contextSnapshot 中 file_window 本身的
- *      字段，content 一般不在 snapshot 内 — 这条路径基本只能显示 path link）
- *
- *   3. 软退化：fileDiff 缺失且 content 也拿不到 → 显示 "file diff payload not yet
- *      available" + path link。**不崩**。
- *
- *   4. isBinary / tooLarge → 显示提示 + path link，不渲染 unifiedMergeView。
- *
- * 实现：
- *   - 用 @codemirror/merge 的 `unifiedMergeView({ original })` extension
- *     + EditorView (read-only) 组合
- *   - 在 useEffect 中 mount EditorView（非 SSR；与现有 LLMInputJsonViewer 同模式）
- *   - prev/current 变化时 dispose 旧 view 再 mount 新 view（避免 stale state）
- *
- * Round 10 F3。
+ * 数据源策略（软退化优先）：
+ *   1. 优先：current.fileDiff = { previousContent, currentContent, path, isBinary?, tooLarge? }
+ *   2. fallback：previous / current 的 content 字段
+ *   3. 软退化：均无 → 显示 "file diff payload not yet available"，不崩
  */
 
 import { useEffect, useRef } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { unifiedMergeView } from "@codemirror/merge";
-import type {
-  FileDiffData,
-  WindowSnapshotEntry,
-} from "../window-diff.helpers";
-import type { WindowDiffRendererProps } from "./registry";
+import type { FileDiffData, WindowSnapshotEntry } from "@ooc/web/src/domains/sessions/components/window-diff.helpers";
+import type { WindowDiffProps } from "@ooc/web/src/domains/sessions/components/window-diff/window-diff-props";
 
 /** 安全提取 fileDiff 字段；previous/current 可能任意 shape。 */
 function extractFileDiff(value: unknown): FileDiffData | undefined {
@@ -100,9 +81,7 @@ function Notice({
   );
 }
 
-export function FileWindowDiff(props: WindowDiffRendererProps) {
-  const { previous, current, windowId } = props;
-
+export default function FileWindowDiff({ previous, current }: WindowDiffProps) {
   // ----- 数据获取（优先 fileDiff，再 fallback content 提取） -----
   const currentFileDiff = extractFileDiff(current);
   const previousFileDiff = extractFileDiff(previous);
@@ -116,7 +95,7 @@ export function FileWindowDiff(props: WindowDiffRendererProps) {
   // ----- 退化分支 -----
   if (fileDiff && fileDiff.isBinary) {
     return (
-      <div data-testid={`file-window-diff-${windowId}`}>
+      <div data-testid="file-window-diff">
         <Notice variant="warn" path={fileDiff.path}>
           binary file — diff not shown.
         </Notice>
@@ -125,7 +104,7 @@ export function FileWindowDiff(props: WindowDiffRendererProps) {
   }
   if (fileDiff && fileDiff.tooLarge) {
     return (
-      <div data-testid={`file-window-diff-${windowId}`}>
+      <div data-testid="file-window-diff">
         <Notice variant="warn" path={fileDiff.path}>
           file too large to diff inline.
         </Notice>
@@ -143,7 +122,7 @@ export function FileWindowDiff(props: WindowDiffRendererProps) {
 
     if (typeof prevContent !== "string" && typeof curContent !== "string") {
       return (
-        <div data-testid={`file-window-diff-${windowId}`}>
+        <div data-testid="file-window-diff">
           <Notice variant="info" path={path}>
             file diff payload not yet available (backend windowsSnapshot doesn&apos;t
             carry <code>fileDiff</code> yet; <code>content</code> not in
@@ -160,7 +139,7 @@ export function FileWindowDiff(props: WindowDiffRendererProps) {
     };
     return (
       <div
-        data-testid={`file-window-diff-${windowId}`}
+        data-testid="file-window-diff"
         data-added={isAdded || undefined}
         data-removed={isRemoved || undefined}
         data-synthetic="true"
@@ -172,7 +151,6 @@ export function FileWindowDiff(props: WindowDiffRendererProps) {
           diff={synthetic}
           isAdded={isAdded}
           isRemoved={isRemoved}
-          windowId={windowId}
           synthetic
         />
       </div>
@@ -180,11 +158,9 @@ export function FileWindowDiff(props: WindowDiffRendererProps) {
   }
 
   // ----- 主路径：fileDiff present -----
-  // 外层 wrapper 保证 data-testid 在 React 还没 mount FileMergeView 内部 EditorView
-  // 之前就可见（单测路径 / 折叠态都依赖此 testid 定位）。
   return (
     <div
-      data-testid={`file-window-diff-${windowId}`}
+      data-testid="file-window-diff"
       data-added={isAdded || undefined}
       data-removed={isRemoved || undefined}
     >
@@ -192,7 +168,6 @@ export function FileWindowDiff(props: WindowDiffRendererProps) {
         diff={fileDiff}
         isAdded={isAdded}
         isRemoved={isRemoved}
-        windowId={windowId}
       />
     </div>
   );
@@ -202,7 +177,6 @@ interface FileMergeViewProps {
   diff: FileDiffData;
   isAdded: boolean;
   isRemoved: boolean;
-  windowId: string;
   /** 标记此次渲染来自 content fallback 而非真正的 fileDiff payload。 */
   synthetic?: boolean;
 }
@@ -211,7 +185,6 @@ function FileMergeView({
   diff,
   isAdded,
   isRemoved,
-  windowId,
   synthetic,
 }: FileMergeViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);

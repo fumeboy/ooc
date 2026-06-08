@@ -1,25 +1,25 @@
 /**
- * MethodExecDiff — method_exec window 的 args 字段级 diff（design § 4.8）。
+ * MethodExecDiff — method_exec window 的 visible/diff 组件（线 C）。
  *
- * Phase H rename: 原 CommandExecDiff,对应 type 字符串 "command_exec" → "method_exec"。
+ * 逻辑来自 window-diff-renderers/CommandExecDiff.tsx（MethodExecDiff 部分），
+ * 签名收敛到 WindowDiffProps ({previous, current})，删去 windowId 引用。
  *
- * method_exec 的 args 在 refine 阶段会累积；逐 loop 增量。
- * - command / status 字段顶部
- * - accumulatedArgs 按 key 逐项 diff（added / removed / changed / unchanged）
- * - result 字段（string）单独显示
+ * Diff 形态：
+ *   - command / status / description 字段顶部
+ *   - accumulatedArgs 按 key 逐项 diff（added / removed / changed / unchanged）
+ *   - result 字段（string）单独显示
  */
 
-import type { WindowDiffRendererProps } from "./registry";
+import type { WindowDiffProps } from "./window-diff-props";
 import {
   FieldDiffLine,
   Section,
   asRecord,
   readObject,
   readString,
-} from "./_shared";
+} from "../window-diff-renderers/_shared";
 
-export function MethodExecDiff(props: WindowDiffRendererProps) {
-  const { previous, current, windowId } = props;
+export default function MethodExecDiff({ previous, current }: WindowDiffProps) {
   const prev = asRecord(previous);
   const cur = asRecord(current);
 
@@ -30,8 +30,8 @@ export function MethodExecDiff(props: WindowDiffRendererProps) {
   ).sort();
 
   return (
-    <div data-testid={`command-exec-diff-${windowId}`}>
-      <Section title="command" testId={`commandexec-fields-${windowId}`}>
+    <div data-testid="method-exec-diff">
+      <Section title="command" testId="methodexec-fields">
         <FieldDiffLine label="command" prev={readString(prev, "command")} cur={readString(cur, "command")} />
         <FieldDiffLine label="status" prev={readString(prev, "status")} cur={readString(cur, "status")} />
         <FieldDiffLine
@@ -42,7 +42,7 @@ export function MethodExecDiff(props: WindowDiffRendererProps) {
       </Section>
       <Section
         title={`accumulatedArgs (${argKeys.length} key${argKeys.length === 1 ? "" : "s"})`}
-        testId={`commandexec-args-${windowId}`}
+        testId="methodexec-args"
       >
         {argKeys.length === 0 ? (
           <div className="muted small">(no args)</div>
@@ -52,12 +52,9 @@ export function MethodExecDiff(props: WindowDiffRendererProps) {
           ))
         )}
       </Section>
-      <Section title="result" testId={`commandexec-result-${windowId}`}>
+      <Section title="result" testId="methodexec-result">
         <FieldDiffLine label="result" prev={readString(prev, "result")} cur={readString(cur, "result")} />
       </Section>
     </div>
   );
 }
-
-/** @deprecated Phase H: renamed to MethodExecDiff. */
-export const CommandExecDiff = MethodExecDiff;

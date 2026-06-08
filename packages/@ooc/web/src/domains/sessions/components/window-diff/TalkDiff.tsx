@@ -1,17 +1,15 @@
 /**
- * TalkWindowDiff — talk_window 的 message-level diff。
+ * TalkDiff — talk_window 的 visible/diff 组件（线 C）。
  *
- * Talk window 在 contextSnapshot 中并不直接持有 transcript（消息在 inbox/outbox），
- * 但 OOC 现状下 windowsSnapshot entry 上可以挂 summary。这里我们采用 best-effort：
+ * 逻辑来自 window-diff-renderers/TalkWindowDiff.tsx，
+ * 签名收敛到 WindowDiffProps ({previous, current})，删去 windowId 引用。
  *
- *   - 取 prev/cur 上的 target / conversationId / status 做字段 diff
- *   - 如果挂了 transcript（snapshot 直接附；不挑剔来源）→ 消息级 diff
- *   - message 配对策略：优先 message.id（如有），否则按 index
- *
- * Round 10 F3。
+ * Diff 形态：
+ *   - target / conversationId / status / title 字段 diff
+ *   - transcript（或 messages）消息级 diff，按 id 配对，退化按 index
  */
 
-import type { WindowDiffRendererProps } from "./registry";
+import type { WindowDiffProps } from "./window-diff-props";
 import {
   FieldDiffLine,
   Section,
@@ -22,7 +20,7 @@ import {
   readString,
   rowStyle,
   type DiffStatus,
-} from "./_shared";
+} from "../window-diff-renderers/_shared";
 
 type MessageLike = {
   id?: string;
@@ -53,14 +51,13 @@ function asMessage(v: unknown): MessageLike {
   };
 }
 
-export function TalkWindowDiff(props: WindowDiffRendererProps) {
-  const { previous, current, windowId } = props;
+export default function TalkDiff({ previous, current }: WindowDiffProps) {
   const prev = asRecord(previous);
   const cur = asRecord(current);
 
   // ----- 头部字段级 diff -----
   const fields = (
-    <Section title="fields" testId={`talk-fields-${windowId}`}>
+    <Section title="fields" testId="talk-fields">
       <FieldDiffLine label="target" prev={readString(prev, "target")} cur={readString(cur, "target")} />
       <FieldDiffLine
         label="conversationId"
@@ -152,9 +149,9 @@ export function TalkWindowDiff(props: WindowDiffRendererProps) {
   };
 
   return (
-    <div data-testid={`talk-window-diff-${windowId}`}>
+    <div data-testid="talk-window-diff">
       {fields}
-      <Section title={`messages (${curTranscript.length} cur · ${prevTranscript.length} prev)`} testId={`talk-msgs-${windowId}`}>
+      <Section title={`messages (${curTranscript.length} cur · ${prevTranscript.length} prev)`} testId="talk-msgs">
         {renderTranscriptDiff()}
       </Section>
     </div>

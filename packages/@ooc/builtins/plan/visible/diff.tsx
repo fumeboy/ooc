@@ -1,7 +1,10 @@
 /**
- * PlanWindowDiff — plan_window 的 step-level diff（Round 7 plan first-class）。
+ * plan/visible/diff.tsx — plan_window 的 visible/diff 组件（线 C）。
  *
- * Diff 形态（design § 4.4）：
+ * 逻辑来自 packages/@ooc/web/src/domains/sessions/components/window-diff-renderers/PlanWindowDiff.tsx，
+ * 签名收敛到 WindowDiffProps ({previous, current})，删去 windowId 引用。
+ *
+ * Diff 形态：
  *   - title / description 文本字段 diff
  *   - status: active | done | archived
  *   - steps: 按 step.id 配对
@@ -12,7 +15,7 @@
  *       subPlanWindowId change → "sub plan link added/removed"
  */
 
-import type { WindowDiffRendererProps } from "./registry";
+import type { WindowDiffProps } from "@ooc/web/src/domains/sessions/components/window-diff/window-diff-props";
 import {
   FieldDiffLine,
   Section,
@@ -23,7 +26,7 @@ import {
   readString,
   rowStyle,
   type DiffStatus,
-} from "./_shared";
+} from "@ooc/web/src/domains/sessions/components/window-diff-renderers/_shared";
 
 type StepLike = {
   id?: string;
@@ -55,8 +58,7 @@ function stepDiffStatus(prev: StepLike | undefined, cur: StepLike): DiffStatus {
   return "changed";
 }
 
-export function PlanWindowDiff(props: WindowDiffRendererProps) {
-  const { previous, current, windowId } = props;
+export default function PlanWindowDiff({ previous, current }: WindowDiffProps) {
   const prev = asRecord(previous);
   const cur = asRecord(current);
 
@@ -156,8 +158,8 @@ export function PlanWindowDiff(props: WindowDiffRendererProps) {
   });
 
   return (
-    <div data-testid={`plan-window-diff-${windowId}`}>
-      <Section title="plan fields" testId={`plan-fields-${windowId}`}>
+    <div data-testid="plan-window-diff">
+      <Section title="plan fields" testId="plan-fields">
         <FieldDiffLine label="title" prev={readString(prev, "title")} cur={readString(cur, "title")} />
         <FieldDiffLine
           label="description"
@@ -168,7 +170,7 @@ export function PlanWindowDiff(props: WindowDiffRendererProps) {
       </Section>
       <Section
         title={`steps (${curSteps.length} cur · ${prevSteps.length} prev)`}
-        testId={`plan-steps-${windowId}`}
+        testId="plan-steps"
       >
         {rows.length === 0 ? <div className="muted small">(no steps)</div> : rows}
       </Section>

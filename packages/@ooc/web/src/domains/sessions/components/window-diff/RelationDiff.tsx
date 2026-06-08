@@ -1,19 +1,20 @@
 /**
- * RelationWindowDiff — relation_window 的双 scope body diff（design § 4.9）。
+ * RelationDiff — relation_window 的 visible/diff 组件（线 C）。
  *
- * relation_window 持有：
- *   - selfLongTermBody（long-term 对该 peer 的 relation note，object 级）
- *   - selfSessionBody（本 session 内的 relation note，flow 级）
+ * 逻辑来自 window-diff-renderers/RelationWindowDiff.tsx，
+ * 签名收敛到 WindowDiffProps ({previous, current})，删去 windowId 引用。
  *
- * 两块 body 各用 MarkdownBodyDiff（CodeMirror Merge unified）渲染。
+ * Diff 形态：
+ *   - peer 字段 diff（peerId / status / selfLongTermPath / selfSessionPath）
+ *   - selfLongTermBody（object scope）Markdown body diff
+ *   - selfSessionBody（flow scope）Markdown body diff
  */
 
-import type { WindowDiffRendererProps } from "./registry";
-import { FieldDiffLine, Section, asRecord, readString } from "./_shared";
-import { MarkdownBodyDiff } from "./MarkdownBodyDiff";
+import type { WindowDiffProps } from "./window-diff-props";
+import { FieldDiffLine, Section, asRecord, readString } from "../window-diff-renderers/_shared";
+import { MarkdownBodyDiff } from "../window-diff-renderers/MarkdownBodyDiff";
 
-export function RelationWindowDiff(props: WindowDiffRendererProps) {
-  const { previous, current, windowId } = props;
+export default function RelationDiff({ previous, current }: WindowDiffProps) {
   const prev = asRecord(previous);
   const cur = asRecord(current);
 
@@ -24,8 +25,8 @@ export function RelationWindowDiff(props: WindowDiffRendererProps) {
   const curSession = readString(cur, "selfSessionBody") ?? "";
 
   return (
-    <div data-testid={`relation-window-diff-${windowId}`}>
-      <Section title="peer" testId={`relation-fields-${windowId}`}>
+    <div data-testid="relation-window-diff">
+      <Section title="peer" testId="relation-fields">
         <FieldDiffLine label="peerId" prev={readString(prev, "peerId")} cur={readString(cur, "peerId")} />
         <FieldDiffLine label="status" prev={readString(prev, "status")} cur={readString(cur, "status")} />
         <FieldDiffLine
@@ -39,25 +40,25 @@ export function RelationWindowDiff(props: WindowDiffRendererProps) {
           cur={readString(cur, "selfSessionPath")}
         />
       </Section>
-      <Section title="selfLongTermBody (object scope)" testId={`relation-long-${windowId}`}>
+      <Section title="selfLongTermBody (object scope)" testId="relation-long">
         {prevLongTerm === "" && curLongTerm === "" ? (
           <div className="muted small">(empty)</div>
         ) : (
           <MarkdownBodyDiff
             previousBody={prevLongTerm}
             currentBody={curLongTerm}
-            testId={`relation-long-diff-${windowId}`}
+            testId="relation-long-diff"
           />
         )}
       </Section>
-      <Section title="selfSessionBody (flow scope)" testId={`relation-session-${windowId}`}>
+      <Section title="selfSessionBody (flow scope)" testId="relation-session">
         {prevSession === "" && curSession === "" ? (
           <div className="muted small">(empty)</div>
         ) : (
           <MarkdownBodyDiff
             previousBody={prevSession}
             currentBody={curSession}
-            testId={`relation-session-diff-${windowId}`}
+            testId="relation-session-diff"
           />
         )}
       </Section>

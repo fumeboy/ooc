@@ -17,7 +17,7 @@
  */
 
 import type { ReactNode } from "react";
-import type { WindowDiffRendererProps } from "./registry";
+import type { WindowDiffRendererProps } from "./types";
 
 type DiffStatus = "added" | "removed" | "changed" | "unchanged";
 

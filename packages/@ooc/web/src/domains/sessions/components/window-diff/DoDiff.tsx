@@ -1,17 +1,16 @@
 /**
- * DoWindowDiff — do_window 的 diff renderer。
+ * DoDiff — do_window 的 visible/diff 组件（线 C）。
  *
- * 突出显示：
+ * 逻辑来自 window-diff-renderers/DoWindowDiff.tsx，
+ * 签名收敛到 WindowDiffProps ({previous, current})，删去 windowId 引用。
+ *
+ * Diff 形态：
  *   - status 变化（running → archived 用大字号）
- *   - targetThreadId 变化（一般不应该变；变了 = bug 信号）
- *   - title 变化
- *   - isCreatorWindow 标记
- *
- * 不挖 transcript（do_window transcript 由 inbox/outbox 过滤而来；snapshot 上
- * 不直接挂；这里聚焦字段级 diff）。
+ *   - targetThreadId 变化
+ *   - title / isCreatorWindow 字段 diff
  */
 
-import type { WindowDiffRendererProps } from "./registry";
+import type { WindowDiffProps } from "./window-diff-props";
 import {
   FieldDiffLine,
   Section,
@@ -20,10 +19,9 @@ import {
   comparePrimitive,
   readString,
   rowStyle,
-} from "./_shared";
+} from "../window-diff-renderers/_shared";
 
-export function DoWindowDiff(props: WindowDiffRendererProps) {
-  const { previous, current, windowId } = props;
+export default function DoDiff({ previous, current }: WindowDiffProps) {
   const prev = asRecord(previous);
   const cur = asRecord(current);
 
@@ -32,8 +30,8 @@ export function DoWindowDiff(props: WindowDiffRendererProps) {
   const statusDiff = comparePrimitive(prevStatus, curStatus);
 
   return (
-    <div data-testid={`do-window-diff-${windowId}`}>
-      <Section title="child status" testId={`do-status-${windowId}`}>
+    <div data-testid="do-window-diff">
+      <Section title="child status" testId="do-status">
         <div
           data-diff-status={statusDiff}
           style={{
@@ -57,7 +55,7 @@ export function DoWindowDiff(props: WindowDiffRendererProps) {
           <StatusBadge status={statusDiff} />
         </div>
       </Section>
-      <Section title="fields" testId={`do-fields-${windowId}`}>
+      <Section title="fields" testId="do-fields">
         <FieldDiffLine
           label="targetThreadId"
           prev={readString(prev, "targetThreadId")}

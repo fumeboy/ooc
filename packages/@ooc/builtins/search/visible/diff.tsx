@@ -1,15 +1,18 @@
 /**
- * SearchWindowDiff — search_window 的 match-set diff。
+ * search/visible/diff.tsx — search_window 的 visible/diff 组件（线 C）。
  *
- * Diff 形态（design § 4.5）：
- *   - query 字段 diff（一般不变）
+ * 逻辑来自 packages/@ooc/web/src/domains/sessions/components/window-diff-renderers/SearchWindowDiff.tsx，
+ * 签名收敛到 WindowDiffProps ({previous, current})，删去 windowId 引用。
+ *
+ * Diff 形态：
+ *   - query 字段 diff
  *   - matches 集合按 path + line 配对
  *       新命中 → 绿底
  *       移除命中 → strike
  *       snippet 变化 → 黄底 + inline diff
  */
 
-import type { WindowDiffRendererProps } from "./registry";
+import type { WindowDiffProps } from "@ooc/web/src/domains/sessions/components/window-diff/window-diff-props";
 import {
   FieldDiffLine,
   Section,
@@ -20,7 +23,7 @@ import {
   readString,
   rowStyle,
   type DiffStatus,
-} from "./_shared";
+} from "@ooc/web/src/domains/sessions/components/window-diff-renderers/_shared";
 
 type MatchLike = { path?: string; line?: number; snippet?: string };
 
@@ -38,8 +41,7 @@ function matchKey(m: MatchLike): string {
   return `${m.path ?? ""}:${m.line ?? ""}`;
 }
 
-export function SearchWindowDiff(props: WindowDiffRendererProps) {
-  const { previous, current, windowId } = props;
+export default function SearchWindowDiff({ previous, current }: WindowDiffProps) {
   const prev = asRecord(previous);
   const cur = asRecord(current);
 
@@ -110,15 +112,15 @@ export function SearchWindowDiff(props: WindowDiffRendererProps) {
   });
 
   return (
-    <div data-testid={`search-window-diff-${windowId}`}>
-      <Section title="query" testId={`search-fields-${windowId}`}>
+    <div data-testid="search-window-diff">
+      <Section title="query" testId="search-fields">
         <FieldDiffLine label="kind" prev={readString(prev, "kind")} cur={readString(cur, "kind")} />
         <FieldDiffLine label="query" prev={readString(prev, "query")} cur={readString(cur, "query")} />
         <FieldDiffLine label="status" prev={readString(prev, "status")} cur={readString(cur, "status")} />
       </Section>
       <Section
         title={`matches (${curMatches.length} cur · ${prevMatches.length} prev)`}
-        testId={`search-matches-${windowId}`}
+        testId="search-matches"
       >
         {rows.length === 0 ? <div className="muted small">(no matches)</div> : rows}
       </Section>

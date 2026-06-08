@@ -4388,11 +4388,21 @@ export const root: DocTreeNode = {
                             肉眼找 diff 太累。升级方向: 每个 window type 自己 dispatch 一个 diff renderer
                             (web 端注册, 与 backend renderXml/compressView/contentHash 同精神, 但纯前端 dispatch)。
 
-                            **架构** (web/src/domains/sessions/components/window-diff-renderers/):
-                            - registry.ts: registerWindowDiffRenderer / getWindowDiffRenderer
-                            - 每 type 一个 .tsx 独立文件; index.ts side-effect 注册
-                            - LoopDiffView 在 row 展开时调 \`getWindowDiffRenderer(type)\` dispatch; 未注册 → FallbackJsonDiff
-                            - ErrorBoundary 包裹每个 renderer, 抛错 fallback 到 JSON tree + 一行 "renderer X failed" 提示
+                            **架构 (2026-06-08 线 C 收编: object 拥有自身 diff 展示, 对称 visible/index.tsx)**:
+                            object 经 \`visible/diff.tsx\` (default export \`({previous, current}) => JSX\`) 掌控自己
+                            "变化的展示", 与 \`visible/index.tsx\` (掌控"当前的展示") 对称。前端 \`resolveWindowDiff\`
+                            (web/.../sessions/components/window-diff/) 按 window 解析, 四档回退:
+                            - **builtin 静态**: \`BUILTIN_DIFF[window.type]\` → builtin 自己的 diff 组件
+                              (有 builtin 目录的 file/knowledge/search/program/plan 在 \`@ooc/builtins/<type>/visible/diff\`;
+                              无目录的 talk/do/relation/method_exec 留 web 本地, 与线 A visible 注册表同款不对称)
+                            - **user diff (档 2, 后置)**: user-defined object 写了 \`visible/diff.tsx\` → 动态加载
+                              (依赖后端 client-source-url 支持 \`?file=diff\` 寻址; 未实现, 暂落 before-after)
+                            - **before-after (回退)**: object 有 \`visible/index.tsx\` → 用 \`WindowVisible\` 并列渲
+                              previous + current (复用线 A 动态加载, 让未写 diff 的 user object 也有有意义降级)
+                            - **JSON 兜底**: \`FallbackJsonDiff\`
+                            LoopDiffView 在 row 展开时调 \`WindowDiff\`; ErrorBoundary 包裹, 抛错 fallback JSON + 提示。
+                            **MVP 收窄**: 档 2 未做; 且 user-defined type 直接 before-after, 不查 effectiveVisibleType
+                            继承 (线 A visible 查继承, diff 暂不对称)。
 
                             **type 设计**:
                             - **file_window**: **CodeMirror Merge unified 单栏** (复用 @codemirror/merge);
@@ -4418,7 +4428,8 @@ export const root: DocTreeNode = {
                             - 切 loop / 切 window 时重置 cache (避免内存膨胀)
 
                             **不变量**:
-                            - Type-dispatch (新 type 加 renderer 不动主框架; 未注册自动 fallback)
+                            - Object 自有 (新 object 的 diff 来自它自己的 visible/diff.tsx, builtin 静态 / user 动态;
+                              主框架不动; 无 diff 组件自动 before-after / JSON fallback)
                             - 前端 only (除 file_window backend 预算外, 不动 backend 协议)
                             - Fallback 优雅 (renderer 抛错 / 数据缺 → JSON tree)
                             - 不破坏现有 (LLMInputJsonViewer / WindowDiffRow 折叠态 / LoopActionPopover 全保留)
@@ -4430,13 +4441,15 @@ export const root: DocTreeNode = {
                             完整 design 见 docs/2026-05-27-type-dispatch-window-diff-view-design.md。
                             `,
                             named: {
-                                "WindowDiffRenderer": "web 端的 dispatch hook 类型; (previous, current, windowType, windowId) => ReactNode",
-                                "registerWindowDiffRenderer": "在 web/.../window-diff-renderers/registry.ts; side-effect 注册",
-                                "FallbackJsonDiff": "通用 JSON tree diff; 未注册 type / renderer 抛错时兜底",
-                                "fileDiff": "WindowSnapshotEntry 上的可选字段; 仅 file_window 类填; 含 previousContent + currentContent + path + isBinary?/tooLarge?",
-                                "ErrorBoundary": "包裹每个 renderer; 抛错 fallback + console.warn 显式 'renderer X failed: <msg>'",
-                                "CodeMirror Merge unified": "@codemirror/merge ^6.0.0; unified 单栏行级 diff; web/package.json 已有依赖",
-                                "数据获取 hybrid": "file_window 走 backend 预算 fileDiff; 其它 type 前端 fetch input.json 提取",
+                                "visible/diff.tsx": "object 自有的 diff 组件约定; default export ({previous, current}) => JSX; 对称 visible/index.tsx",
+                                "resolveWindowDiff": "web/.../window-diff/resolveWindowDiff.tsx; resolveWindowDiffKind 解析 + WindowDiff 渲染入口; 对称 resolveWindowVisible",
+                                "BUILTIN_DIFF": "web/.../window-diff/builtin-diff-registry.tsx; 9 type 静态注册表 (5 从 @ooc/builtins, 4 web 本地)",
+                                "WindowDiffProps": "{previous?: unknown; current?: unknown}; 类型 unknown 因形态可能是精简 WindowSnapshotEntry 或 fetch 来的完整 window",
+                                "before-after": "user-defined / 无 diff 组件时的回退; 用 WindowVisible 并列渲 previous + current",
+                                "FallbackJsonDiff": "通用 JSON tree diff; 最终兜底; 仍持有 WindowDiffRendererProps 类型供 ErrorBoundary 复用",
+                                "fileDiff": "WindowSnapshotEntry 上的可选字段; 仅 file 类填; 含 previousContent + currentContent + path + isBinary?/tooLarge?; file 走此 entry 免 fetch",
+                                "CodeMirror Merge unified": "@codemirror/merge ^6.0.0; unified 单栏行级 diff; file/visible/diff.tsx 直 import, builtins/file/package.json 声明依赖",
+                                "数据获取 hybrid": "file 走 entry 上 backend 预算的 fileDiff (免 fetch); 其它 type 前端 fetch input.json 提取完整 window 喂 WindowDiff (C-2)",
                             },
                         },
                     },
