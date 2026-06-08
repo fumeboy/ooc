@@ -11,12 +11,12 @@ export const endpoints = {
    * 根因 #3：frontend 不假设 backend client/index.tsx 路径，通过本 endpoint 拿权威 absPath / fsUrl。
    * stone：scope=stone；flow：scope=flow，需带 sessionId + page query。
    */
-  clientSourceUrl: (scope: "stone" | "flow", objectId: string, opts?: { sessionId?: string; page?: string }) => {
+  clientSourceUrl: (scope: "stone" | "flow", objectId: string, opts?: { sessionId?: string; page?: string; file?: string }) => {
     const base = `/api/objects/${scope}/${encodeURIComponent(objectId)}/client-source-url`;
-    if (scope === "stone") return base;
     const params = new URLSearchParams();
     if (opts?.sessionId) params.set("sessionId", opts.sessionId);
-    if (opts?.page) params.set("page", opts.page);
+    if (scope === "flow" && opts?.page) params.set("page", opts.page);
+    if (scope === "stone" && opts?.file) params.set("file", opts.file);
     const qs = params.toString();
     return qs ? `${base}?${qs}` : base;
   },
