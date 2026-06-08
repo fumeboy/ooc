@@ -5,6 +5,7 @@
 ## Tier A —— 控制面确定性（已实现，stories/thinkable.story.ts）
 - TC-THINK-01：seed knowledge（含 `activates_on: {"window::root": "show_content"}`）经 `loadKnowledgeIndex` 被加载、可被 root window trigger 激活。
 - TC-THINK-02：Object self.md 作为身份被 `readSelf` 加载（→ LLM instructions）。
+- TC-THINK-03：LLM input 的 `<commands>` 节点渲染 method 的**语义 description**（取自 `*_BASIC` 知识，经 `extractBasicDescription`），而非仅 method 名/paths。回归守卫——曾经只渲 `paths.join(",")`（≈ 方法名），LLM 看不懂每个 command 的含义；退回该行为则本 TC 变红。
 
 ## Tier B —— agent-native（真 LLM，env-gated）
 - 派多轮任务：轮1 学一条独特约定（如「ID 用 ULID」），轮2 用该约定。`processTrace` 显示连贯沿用。
