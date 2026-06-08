@@ -16,6 +16,8 @@
  * 后续 ooc-7 再考虑把 builtins 具体类型也下沉到 `_shared`。
  */
 
+import type { WindowDisplayState } from "./window-state.js";
+
 /** Object 类型枚举。新增类型必须同步在 REGISTRY 中注册。 */
 export type ObjectType =
   | "root"
@@ -123,6 +125,12 @@ export interface BaseContextWindow {
   provenance?: ContextWindowProvenance;
   relevance?: ContextWindowRelevance;
   boundFormId?: string;
+  /**
+   * P-window-state: 展示状态对象（viewport / lines / columns / transcriptViewport…）。
+   * 与业务数据分离，由 readable 维度的 WindowMethod 读写、readable 函数读取，随 window
+   * 持久化在 thread-context。缺省 = 无展示状态（按默认渲染）。
+   */
+  state?: WindowDisplayState;
   /**
    * Object 自我门面窗（id=type=objectId，由 initContextWindows 每次 thread 加载幂等重注入）。
    * 它从对象身份确定性重建、无独立 state.json，**不应持久化**——否则 thread-context.json 落成
