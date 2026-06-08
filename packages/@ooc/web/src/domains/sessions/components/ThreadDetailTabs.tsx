@@ -67,6 +67,7 @@ export function ThreadDetailTabs({
             thread={thread}
             selfObjectId={selfObjectId}
             onUserReply={onUserReply}
+            sessionId={sessionId}
           />
         )}
         {tab === "timeline" && (

@@ -59,6 +59,7 @@ export function FileViewer({
   thread,
   selfObjectId,
   onUserReply,
+  sessionId,
   _allowClientPreview = true,
 }: {
   file?: FileContent;
@@ -76,6 +77,9 @@ export function FileViewer({
   thread?: ThreadContext;
   selfObjectId?: string;
   onUserReply?: (text: string) => Promise<void>;
+  /** 线 A：当前 session（flow）id，透传给 ContextSnapshotViewer → WindowVisible 做 user-defined
+   *  object visible 的 stone worktree 路由（可选）。 */
+  sessionId?: string;
   /** Internal: false when called from ClientWithSourceToggle to prevent recursive preview. */
   _allowClientPreview?: boolean;
 }) {
@@ -94,7 +98,7 @@ export function FileViewer({
       );
     }
     if (snapshot) {
-      return <ContextSnapshotViewer snapshot={snapshot} selfObjectId={selfObjectId} onUserReply={onUserReply} />;
+      return <ContextSnapshotViewer snapshot={snapshot} selfObjectId={selfObjectId} onUserReply={onUserReply} sessionId={sessionId} />;
     }
     return <EmptyState title="Select a file" detail="Choose a file from the tree to preview its text content." />;
   }

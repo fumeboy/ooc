@@ -62,23 +62,7 @@ import {
   statusToTone,
   type Tone,
 } from "@ooc/builtins/_shared/visible/utils";
-import { WindowDetail as KnowledgeWindowDetail } from "@ooc/builtins/knowledge/visible/index.tsx";
-import { WindowDetail as FileWindowDetail } from "@ooc/builtins/file/visible/index.tsx";
-import { WindowDetail as TodoWindowDetail } from "@ooc/builtins/todo/visible/index.tsx";
-import { WindowDetail as SearchWindowDetail } from "@ooc/builtins/search/visible/index.tsx";
-import { WindowDetail as SkillIndexWindowDetail } from "@ooc/builtins/skill_index/visible/index.tsx";
-import { WindowDetail as PlanWindowDetail } from "@ooc/builtins/plan/visible/index.tsx";
-import { WindowDetail as MethodExecWindowDetail } from "./MethodExecWindowDetail";
-import { WindowDetail as ProgramWindowDetail } from "@ooc/builtins/program/visible/index.tsx";
-import { WindowDetail as RootWindowDetail } from "@ooc/builtins/root/visible/index.tsx";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
-import type { TodoWindow } from "@ooc/builtins/todo";
-import type { SkillIndexWindow } from "@ooc/builtins/skill_index";
-import type { PlanWindow } from "@ooc/builtins/plan";
-import type { ProgramWindow } from "@ooc/builtins/program";
-import type { FileWindow } from "@ooc/builtins/file";
-import type { KnowledgeWindow } from "@ooc/builtins/knowledge";
-import type { SearchWindow } from "@ooc/builtins/search";
+import { WindowVisible } from "./visible/resolveWindowVisible";
 
 const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {
   root: PanelTop,
@@ -97,25 +81,6 @@ const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {
   feishu_doc: FileText,
   plan: ClipboardList,
 };
-
-/** 已有专用渲染分支的 window type 集合；不在集合中的类型由 NodeDetail 末尾的 JSON 兜底渲染。 */
-const HANDLED_WINDOW_TYPES = new Set<string>([
-  "root",
-  "method_exec",
-  "form_guidance",
-  "do",
-  "todo",
-  "talk",
-  "program",
-  "file",
-  "knowledge",
-  "search",
-  "relation",
-  "skill_index",
-  "feishu_chat",
-  "feishu_doc",
-  "plan",
-]);
 
 /** 根据 ContextNode 的 data 派生 (icon, tone, status)。 */
 function nodeAffix(node: ContextNode): { icon: LucideIcon; tone: Tone; status?: string } {
@@ -368,65 +333,6 @@ function InlineTalkComposer({
 }
 
 /**
- * Relation window 详情面板。
- *
- * 2026-05-27 修订（撤回 R8-5 + 删除占位文案）：
- * - peer_readme section 重新挂回（render: stones/<peer>/readme.md, 只读）；
- *   default visibility 让大量 sibling/child relation 自动派生，没 readme 内容
- *   则空壳，违背 default visibility 初衷
- * - 缺失的 section 不再渲染占位文案；exists=false 或 body 空直接跳过整段
- */
-function RelationWindowDetail({
-  window,
-}: {
-  window: Extract<ContextWindow, { type: "relation" }>;
-}) {
-  const { displayName } = useDisplayName(window.peerId);
-  return (
-    <div className="llm-input-md-body" style={{ padding: "8px 12px" }}>
-      <div className="llm-input-attrs" style={{ marginBottom: 8 }}>
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">peer</span>
-          <span className="llm-input-attr-value">
-            {displayName !== window.peerId ? `${displayName} (${window.peerId})` : window.peerId}
-          </span>
-        </div>
-      </div>
-
-      {window.peerReadmeExists && window.peerReadmeBody ? (
-        <>
-          <h3 style={{ marginTop: 16 }}>peer · readme</h3>
-          {window.peerReadmePath ? (
-            <div className="muted small" style={{ marginBottom: 4 }}>{window.peerReadmePath}</div>
-          ) : null}
-          <MarkdownContent content={window.peerReadmeBody} />
-        </>
-      ) : null}
-
-      {window.selfLongTermExists && window.selfLongTermBody ? (
-        <>
-          <h3 style={{ marginTop: 16 }}>self · long_term</h3>
-          {window.selfLongTermPath ? (
-            <div className="muted small" style={{ marginBottom: 4 }}>{window.selfLongTermPath}</div>
-          ) : null}
-          <MarkdownContent content={window.selfLongTermBody} />
-        </>
-      ) : null}
-
-      {window.selfSessionExists && window.selfSessionBody ? (
-        <>
-          <h3 style={{ marginTop: 16 }}>self · session</h3>
-          {window.selfSessionPath ? (
-            <div className="muted small" style={{ marginBottom: 4 }}>{window.selfSessionPath}</div>
-          ) : null}
-          <MarkdownContent content={window.selfSessionBody} />
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-/**
  * Window 上可用的 command 清单(chips)。catalog 来自 `/api/objects/_shared/types`,缓存在
  * useObjectTypes 内,不随 thread polling 重拉。空数组(如 todo)隐藏整段;catalog
  * 还没到位先不渲染,避免 "0 commands" 闪烁。
@@ -458,252 +364,35 @@ function WindowCommandsChips({ type }: { type: string }) {
   );
 }
 
-/**
- * 模块级缓存的 world config(siteName / larkTenantHost)。
- *
- * - 同一会话内多个 detail 组件共享一份;首次 mount 触发 fetch,后续直接返回。
- * - 10 秒 TTL 已经够用:siteName/larkTenantHost 几乎不会运行时改;真要刷只需 reload。
- * - 避免每个 feishu_doc / feishu_chat detail 都自带 fetch 抖,也避免引入全局 Context。
- */
-type WorldConfigCache = {
-  siteName?: string;
-  larkTenantHost?: string;
-  hasLarkBot?: boolean;
-};
-let worldConfigCache: WorldConfigCache | null = null;
-let worldConfigInflight: Promise<WorldConfigCache> | null = null;
-let worldConfigFetchedAt = 0;
-const worldConfigSubscribers = new Set<() => void>();
-
-async function fetchWorldConfigCached(): Promise<WorldConfigCache> {
-  const now = Date.now();
-  if (worldConfigCache && now - worldConfigFetchedAt < 10_000) return worldConfigCache;
-  if (worldConfigInflight) return worldConfigInflight;
-  worldConfigInflight = (async () => {
-    try {
-      // 直接 fetch 避免引入 transport 依赖循环
-      const res = await fetch("/api/world/config");
-      const data = (await res.json()) as WorldConfigCache;
-      worldConfigCache = data;
-      worldConfigFetchedAt = Date.now();
-      for (const cb of worldConfigSubscribers) cb();
-      return data;
-    } finally {
-      worldConfigInflight = null;
-    }
-  })();
-  return worldConfigInflight;
-}
-
-function useWorldConfig(): WorldConfigCache | null {
-  const [, force] = useState(0);
-  useEffect(() => {
-    let active = true;
-    void fetchWorldConfigCached().then(() => {
-      if (active) force((x) => x + 1);
-    });
-    const sub = () => active && force((x) => x + 1);
-    worldConfigSubscribers.add(sub);
-    return () => {
-      active = false;
-      worldConfigSubscribers.delete(sub);
-    };
-  }, []);
-  return worldConfigCache;
-}
-
-/** kindSlug 映射;参考 spec:`https://{larkTenantHost}/{kindSlug}/{docToken}`。 */
-function feishuDocKindSlug(kind: string): string {
-  switch (kind) {
-    case "docx": return "docx";
-    case "doc": return "docs";
-    case "sheet": return "sheets";
-    case "base": return "base";
-    case "wiki": return "wiki";
-    case "drive_md": return "file";
-    default: return kind;
-  }
-}
-
-/** Feishu chat window 详情面板:行式消息流。 */
-function FeishuChatWindowDetail({
-  window,
-}: {
-  window: Extract<ContextWindow, { type: "feishu_chat" }>;
-}) {
-  const lastRefresh = window.lastRefreshAtMs
-    ? new Date(window.lastRefreshAtMs).toLocaleString()
-    : "(never)";
-  return (
-    <>
-      <div className="llm-input-attrs">
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">chat</span>
-          <span className="llm-input-attr-value">{window.chatName} ({window.chatId})</span>
-        </div>
-        {window.chatType && (
-          <div className="llm-input-attr-row">
-            <span className="llm-input-attr-key">chat type</span>
-            <span className="llm-input-attr-value">{window.chatType}</span>
-          </div>
-        )}
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">mode</span>
-          <span className="llm-input-attr-value">
-            {window.mode}
-            {window.mode === "tail" && window.tailCount ? ` (${window.tailCount})` : ""}
-            {window.mode === "search" && window.searchQuery ? ` "${window.searchQuery}"` : ""}
-            {window.mode === "thread" && window.threadAnchorMessageId ? ` @${window.threadAnchorMessageId}` : ""}
-          </span>
-        </div>
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">last refresh</span>
-          <span className="llm-input-attr-value">{lastRefresh}</span>
-        </div>
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">buffer size</span>
-          <span className="llm-input-attr-value">{window.buffer.length} message{window.buffer.length === 1 ? "" : "s"}</span>
-        </div>
-      </div>
-      {window.buffer.length === 0 ? (
-        <div className="llm-input-empty">buffer 为空,先 refresh。</div>
-      ) : (
-        <ul className="cw-feishu-msg-list">
-          {window.buffer.map((m) => {
-            const time = new Date(m.createTimeMs).toLocaleTimeString();
-            return (
-              <li key={m.messageId} className="cw-feishu-msg-row">
-                <span className="cw-feishu-msg-time">{time}</span>
-                <span className="cw-feishu-msg-sender">{m.sender}</span>
-                {m.senderKind && (
-                  <span className="cw-feishu-msg-kind" data-kind={m.senderKind}>
-                    {m.senderKind}
-                  </span>
-                )}
-                {m.replyToMessageId && (
-                  <span className="cw-feishu-msg-reply muted small">↪ {m.replyToMessageId}</span>
-                )}
-                <span className="cw-feishu-msg-text">{m.text}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </>
-  );
-}
-
-/** Feishu doc window 详情面板:markdown 长正文支持折叠。 */
-const FEISHU_DOC_PREVIEW_LIMIT = 400;
-
-function FeishuDocWindowDetail({
-  window,
-}: {
-  window: Extract<ContextWindow, { type: "feishu_doc" }>;
-}) {
-  const config = useWorldConfig();
-  const tenantHost = config?.larkTenantHost;
-  const slug = feishuDocKindSlug(window.docKind);
-  const docUrl = tenantHost ? `https://${tenantHost}/${slug}/${window.docToken}` : null;
-  const lastFetched = window.lastFetchedAtMs
-    ? new Date(window.lastFetchedAtMs).toLocaleString()
-    : "(never)";
-
-  const [expanded, setExpanded] = useState(false);
-  const body = window.content?.body ?? "";
-  const isMarkdown = window.content?.format === "markdown";
-  const longBody = body.length > FEISHU_DOC_PREVIEW_LIMIT;
-  const previewBody = longBody && !expanded ? body.slice(0, FEISHU_DOC_PREVIEW_LIMIT) + "…" : body;
-
-  return (
-    <>
-      <div className="llm-input-attrs">
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">doc</span>
-          <span className="llm-input-attr-value">
-            {window.docTitle}{" "}
-            {docUrl ? (
-              <a href={docUrl} target="_blank" rel="noreferrer" className="cw-feishu-doc-link">
-                <ExternalLink size={11} aria-hidden="true" /> open
-              </a>
-            ) : (
-              <span className="muted small">(host 未配置)</span>
-            )}
-          </span>
-        </div>
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">kind / token</span>
-          <span className="llm-input-attr-value">{window.docKind} · {window.docToken}</span>
-        </div>
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">mode</span>
-          <span className="llm-input-attr-value">{window.mode}</span>
-        </div>
-        {window.versionId && (
-          <div className="llm-input-attr-row">
-            <span className="llm-input-attr-key">version</span>
-            <span className="llm-input-attr-value">{window.versionId}</span>
-          </div>
-        )}
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">last fetched</span>
-          <span className="llm-input-attr-value">{lastFetched}</span>
-        </div>
-        <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">format</span>
-          <span className="llm-input-attr-value">{window.content?.format ?? "(empty)"} · {body.length} chars</span>
-        </div>
-      </div>
-      {body.length === 0 ? (
-        <div className="llm-input-empty">content 为空;先用 read 拉一次。</div>
-      ) : isMarkdown ? (
-        <div className="llm-input-md-body">
-          <MarkdownContent content={previewBody} />
-          {longBody && (
-            <button
-              type="button"
-              className="cw-feishu-doc-expand"
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? "收起" : `展开全文 (${body.length} 字)`}
-            </button>
-          )}
-        </div>
-      ) : (
-        // blocks 形态:暂展示 body 字符串(后端通常是 with-ids XML 文本)
-        <pre className="llm-input-pre">{previewBody}</pre>
-      )}
-      {!isMarkdown && longBody && (
-        <div style={{ padding: "0 14px 12px" }}>
-          <button
-            type="button"
-            className="cw-feishu-doc-expand"
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? "收起" : `展开全文 (${body.length} 字)`}
-          </button>
-        </div>
-      )}
-    </>
-  );
-}
-
 /** Window 详情：按 type narrow 渲染特定字段；通用字段（id/title/status）始终渲染。 */
+/** 未知 / 无 visible 的 window 兜底：整个对象按 JSON 只读显示。
+ *  从原 WindowDetail 内联 JSON 块抽出，作为 WindowVisible 的 jsonFallback。 */
+function JsonFallback({ window }: { window: ContextWindow }) {
+  return (
+    <CodeMirror
+      className="code-editor is-readonly"
+      value={formatJson(window)}
+      editable={false}
+      extensions={[jsonLanguage()]}
+      basicSetup={{ lineNumbers: false, foldGutter: true }}
+    />
+  );
+}
+
 function WindowDetail({
   window,
   transcript,
   selfObjectId,
   onUserReply,
+  sessionId,
 }: {
   window: ContextWindow;
   transcript?: TranscriptEntry[];
   selfObjectId?: string;
   onUserReply?: (text: string) => Promise<void>;
+  /** 线 A：透传给 WindowVisible，用于 user-defined object visible 的 stone worktree 路由（可选）。 */
+  sessionId?: string;
 }) {
-  // P6.§7: 渲染用 type —— 自身可渲染则用 window.type，否则用后端 enrichment 的 effectiveVisibleType。
-  // 交互判定（talk composer、form 检测等）仍使用原始 window.type。
-  const renderType = window.effectiveVisibleType ?? window.type;
-
   const rows: Array<[string, string]> = [
     ["id", window.id],
     ["type", window.type],
@@ -730,79 +419,10 @@ function WindowDetail({
           </div>
         ))}
       </div>
-      {renderType === "method_exec" && <MethodExecWindowDetail window={window as MethodExecWindow} />}
-      {renderType === "do" && (
-        <div className="llm-input-attrs">
-          <div className="llm-input-attr-row">
-            <span className="llm-input-attr-key">target_thread</span>
-            <span className="llm-input-attr-value">{(window as any).targetThreadId}</span>
-          </div>
-          {(window as any).isCreatorWindow && (
-            <div className="llm-input-attr-row">
-              <span className="llm-input-attr-key">role</span>
-              <span className="llm-input-attr-value">creator window（不可关闭）</span>
-            </div>
-          )}
-        </div>
-      )}
-      {renderType === "todo" && <TodoWindowDetail window={window as TodoWindow} />}
-      {renderType === "relation" && <RelationWindowDetail window={window as any} />}
-      {renderType === "skill_index" && <SkillIndexWindowDetail window={window as SkillIndexWindow} />}
-      {renderType === "feishu_chat" && <FeishuChatWindowDetail window={window as any} />}
-      {renderType === "feishu_doc" && <FeishuDocWindowDetail window={window as any} />}
-      {renderType === "plan" && <PlanWindowDetail window={window as PlanWindow} />}
-      {renderType === "talk" && (
-        <div className="llm-input-attrs">
-          <div className="llm-input-attr-row">
-            <span className="llm-input-attr-key">target</span>
-            <span className="llm-input-attr-value">{(window as any).target}</span>
-          </div>
-          <div className="llm-input-attr-row">
-            <span className="llm-input-attr-key">conversation</span>
-            <span className="llm-input-attr-value">{(window as any).conversationId}</span>
-          </div>
-        </div>
-      )}
-      {renderType === "program" && <ProgramWindowDetail window={window as ProgramWindow} />}
-      {renderType === "file" && <FileWindowDetail window={window as FileWindow} />}
-      {renderType === "knowledge" && <KnowledgeWindowDetail window={window as KnowledgeWindow} />}
-      {renderType === "search" && <SearchWindowDetail window={window as SearchWindow} />}
-      {renderType === "form_guidance" && (
-        <div className="llm-input-guidance">
-          <div className="llm-input-attrs">
-            <div className="llm-input-attr-row">
-              <span className="llm-input-attr-key">bound_to_form</span>
-              <span className="llm-input-attr-value">
-                {(window as any).boundFormId ?? "—"}
-              </span>
-            </div>
-            <div className="llm-input-attr-row">
-              <span className="llm-input-attr-key">priority</span>
-              <span className="llm-input-attr-value">
-                {(window as any).relevance?.priorityHint ?? "normal"}
-              </span>
-            </div>
-            <div className="llm-input-attr-row">
-              <span className="llm-input-attr-key">source</span>
-              <span className="llm-input-attr-value">
-                {(window as any).provenance?.reason?.sourceId ?? "—"}
-              </span>
-            </div>
-          </div>
-          <div className="llm-input-guidance-title">{window.title}</div>
-        </div>
-      )}
-      {/* 未知 window 类型兜底：把整个对象按 JSON 显示，保证新增 type 即使前端没补
-          专用渲染也能看到内容。已实现 case 的类型在这里被跳过，避免重复显示。 */}
-      {!HANDLED_WINDOW_TYPES.has(renderType) && (
-        <CodeMirror
-          className="code-editor is-readonly"
-          value={formatJson(window)}
-          editable={false}
-          extensions={[jsonLanguage()]}
-          basicSetup={{ lineNumbers: false, foldGutter: true }}
-        />
-      )}
+      {/* 线 A：统一 window 视觉渲染解析层。builtin 走静态注册表，user-defined object 走
+          运行时动态加载（自己写的 visible），都没有则 JSON 兜底。详见
+          ./visible/resolveWindowVisible.tsx。原 per-type switch + HANDLED_WINDOW_TYPES 已删除。 */}
+      <WindowVisible window={window} jsonFallback={JsonFallback} sessionId={sessionId} />
       {transcript && transcript.length > 0 && (
         <div className="llm-input-transcript">
           <div className="llm-input-transcript-head">transcript · {transcript.length} message{transcript.length === 1 ? "" : "s"}</div>
@@ -853,10 +473,12 @@ function NodeDetail({
   node,
   selfObjectId,
   onUserReply,
+  sessionId,
 }: {
   node: ContextNode | null;
   selfObjectId?: string;
   onUserReply?: (text: string) => Promise<void>;
+  sessionId?: string;
 }) {
   if (!node) return <div className="llm-input-empty">选择左侧节点查看详情。</div>;
   const data = node.data;
@@ -926,7 +548,7 @@ function NodeDetail({
   }
 
   if (data.kind === "window") {
-    return <WindowDetail window={data.window} transcript={data.transcript} selfObjectId={selfObjectId} onUserReply={onUserReply} />;
+    return <WindowDetail window={data.window} transcript={data.transcript} selfObjectId={selfObjectId} onUserReply={onUserReply} sessionId={sessionId} />;
   }
 
   if (data.kind === "windowGroup") {
@@ -1039,12 +661,16 @@ export function ContextSnapshotViewer({
   snapshot,
   selfObjectId,
   onUserReply,
+  sessionId,
 }: {
   snapshot: ContextSnapshot;
   /** 当前 thread 的 self objectId；用于决定 talk window 的 user 端 composer 是否要显示。 */
   selfObjectId?: string;
   /** 用户以 user 身份回复 talk window 时的发送回调；缺省时不显示 composer。 */
   onUserReply?: (text: string) => Promise<void>;
+  /** 线 A：当前 session（flow）id，透传给 WindowVisible 做 user-defined object visible 的
+   *  stone worktree 路由（可选；拿不到则读 committed visible）。 */
+  sessionId?: string;
 }) {
   const tree = useMemo(() => buildContextTree(snapshot), [snapshot]);
   const treeMap = useMemo(() => flattenContextTree(tree), [tree]);
@@ -1144,7 +770,7 @@ export function ContextSnapshotViewer({
           </ul>
         </aside>
         <section className="llm-input-main">
-          <NodeDetail node={selectedNode} selfObjectId={selfObjectId} onUserReply={onUserReply} />
+          <NodeDetail node={selectedNode} selfObjectId={selfObjectId} onUserReply={onUserReply} sessionId={sessionId} />
         </section>
       </div>
     </div>

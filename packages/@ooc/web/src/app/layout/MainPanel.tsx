@@ -212,6 +212,7 @@ export function MainPanel({
               thread={thread}
               selfObjectId={selfObjectId}
               onUserReply={onUserReply}
+              sessionId={sessionIdFromRoute}
             />
           )}
         </div>
