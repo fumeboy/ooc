@@ -5,6 +5,12 @@ node_modules/
 .ooc-world-test/
 .ooc-world/
 .ooc-world-*
+# .ooc-world-meta：作为 submodule 纳入（remote: fumeboy/ooc-0），仅 track stones/main 设计内容；
+# 运行时/内部物（flows / pools / stone bare 仓库）仍忽略。
+!.ooc-world-meta/
+.ooc-world-meta/flows/
+.ooc-world-meta/pools/
+.ooc-world-meta/stones/.stones_repo/
 .claude/
 .agent_context/
 goal.md

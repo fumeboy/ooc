@@ -1,0 +1,4 @@
+[submodule ".ooc-world-meta/stones/main"]
+	path = .ooc-world-meta/stones/main
+	url = https://github.com/fumeboy/ooc-0.git
+	branch = main
