@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Pin, PinOff } from "lucide-react";
 import { flowTitle, type FlowSession } from "../../flows";
+import { readPinned, togglePinned, writePinned } from "../pinned-sessions";
 
 function getDateLabel(ts: number) {
   const now = new Date();
@@ -57,17 +58,31 @@ function writeShowTestSessions(value: boolean): void {
 
 export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowSession[]; activeSessionId?: string; onSelect: (flow: FlowSession) => void }) {
   const [showTestSessions, setShowTestSessions] = useState<boolean>(() => readShowTestSessions());
+  const [pinned, setPinned] = useState<string[]>(() => readPinned());
 
   useEffect(() => {
     writeShowTestSessions(showTestSessions);
   }, [showTestSessions]);
 
+  const pinnedSet = new Set(pinned);
+  function handleTogglePin(sessionId: string) {
+    setPinned((prev) => {
+      const next = togglePinned(prev, sessionId);
+      writePinned(next);
+      return next;
+    });
+  }
+
   const testCount = flows.reduce((n, flow) => (isTestSession(flow.sessionId) ? n + 1 : n), 0);
   const visibleFlows = showTestSessions ? flows : flows.filter((flow) => !isTestSession(flow.sessionId));
+  const sortedFlows = [...visibleFlows].sort((a, b) => b.updatedAt - a.updatedAt);
+
+  // Pinned 分组排在最上方；pinned 的 session 与日期分组互斥（不重复出现）。
+  const pinnedFlows = sortedFlows.filter((flow) => pinnedSet.has(flow.sessionId));
+  const unpinnedFlows = sortedFlows.filter((flow) => !pinnedSet.has(flow.sessionId));
 
   const dateGrouped = new Map<string, FlowSession[]>();
-  const sortedFlows = [...visibleFlows].sort((a, b) => b.updatedAt - a.updatedAt);
-  for (const flow of sortedFlows) {
+  for (const flow of unpinnedFlows) {
     const label = getDateLabel(flow.createdAt);
     if (!dateGrouped.has(label)) dateGrouped.set(label, []);
     dateGrouped.get(label)?.push(flow);
@@ -78,6 +93,45 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
     : testCount > 0
       ? `Show ${testCount} hidden _test_ session${testCount === 1 ? "" : "s"}`
       : "No _test_ sessions to show";
+
+  const renderItem = (flow: FlowSession) => {
+    const label = flowTitle(flow);
+    const test = isTestSession(flow.sessionId);
+    const isPinned = pinnedSet.has(flow.sessionId);
+    // R6 #47:session 列表项改 `<a href>` 让浏览器中键 / 复制链接 /
+    // 返回键生效;click 仍走 onSelect 触发 react-router SPA 导航
+    const href = `/flows/${encodeURIComponent(flow.sessionId)}`;
+    return (
+      <div key={flow.sessionId} className="session-list-item-wrap">
+        <a
+          href={href}
+          className={`list-button session-list-item ${flow.sessionId === activeSessionId ? "active" : ""} ${test ? "session-list-item-test" : ""}`}
+          onClick={(e) => {
+            if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+            e.preventDefault();
+            onSelect(flow);
+          }}
+          title={`${label}\n${flow.sessionId}${test ? "\n(test session — hidden by default)" : ""}`}
+        >
+          <div className="session-list-item-row">
+            <span className="session-list-item-label" title={label}>{label}</span>
+            {test && <span className="session-list-item-tag">test</span>}
+          </div>
+          <div className="session-list-item-meta" title={flow.sessionId}>{flow.sessionId}</div>
+        </a>
+        <button
+          type="button"
+          className={`mini-button session-list-pin ${isPinned ? "is-pinned" : ""}`}
+          onClick={() => handleTogglePin(flow.sessionId)}
+          title={isPinned ? "Unpin session" : "Pin session"}
+          aria-label={isPinned ? "Unpin session" : "Pin session"}
+          aria-pressed={isPinned}
+        >
+          {isPinned ? <PinOff size={12} /> : <Pin size={12} />}
+        </button>
+      </div>
+    );
+  };
 
   return (
     <div className="session-list-shell">
@@ -104,39 +158,20 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
                 : "No sessions yet"}
           </p>
         ) : (
-          Array.from(dateGrouped.entries()).map(([label, items]) => (
-            <div key={label} className="session-list-group">
-              <div className="session-list-group-label">{label}</div>
-              <div className="session-list-group-items">
-                {items.map((flow) => {
-                  const label = flowTitle(flow);
-                  const test = isTestSession(flow.sessionId);
-                  // R6 #47:session 列表项改 `<a href>` 让浏览器中键 / 复制链接 /
-                  // 返回键生效;click 仍走 onSelect 触发 react-router SPA 导航
-                  const href = `/flows/${encodeURIComponent(flow.sessionId)}`;
-                  return (
-                    <a
-                      key={flow.sessionId}
-                      href={href}
-                      className={`list-button session-list-item ${flow.sessionId === activeSessionId ? "active" : ""} ${test ? "session-list-item-test" : ""}`}
-                      onClick={(e) => {
-                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-                        e.preventDefault();
-                        onSelect(flow);
-                      }}
-                      title={`${label}\n${flow.sessionId}${test ? "\n(test session — hidden by default)" : ""}`}
-                    >
-                      <div className="session-list-item-row">
-                        <span className="session-list-item-label" title={label}>{label}</span>
-                        {test && <span className="session-list-item-tag">test</span>}
-                      </div>
-                      <div className="session-list-item-meta" title={flow.sessionId}>{flow.sessionId}</div>
-                    </a>
-                  );
-                })}
+          <>
+            {pinnedFlows.length > 0 && (
+              <div className="session-list-group session-list-group-pinned">
+                <div className="session-list-group-label">Pinned</div>
+                <div className="session-list-group-items">{pinnedFlows.map(renderItem)}</div>
               </div>
-            </div>
-          ))
+            )}
+            {Array.from(dateGrouped.entries()).map(([label, items]) => (
+              <div key={label} className="session-list-group">
+                <div className="session-list-group-label">{label}</div>
+                <div className="session-list-group-items">{items.map(renderItem)}</div>
+              </div>
+            ))}
+          </>
         )}
       </nav>
     </div>

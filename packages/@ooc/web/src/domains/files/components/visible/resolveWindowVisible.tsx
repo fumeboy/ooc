@@ -28,6 +28,8 @@ import type { ContextWindow } from "../../context-snapshot";
 import { BUILTIN_VISIBLE } from "./builtin-visible-registry";
 import { endpoints } from "../../../../transport/endpoints";
 import { requestJson } from "../../../../transport/http";
+import { usePeerReadme } from "../../../objects";
+import { MarkdownContent } from "../../../../shared/ui/MarkdownContent";
 
 export type WindowVisibleKind =
   | { kind: "static"; key: string }
@@ -52,6 +54,41 @@ export function resolveWindowVisibleKind(
 type WindowComp = ComponentType<{ window: ContextWindow }>;
 
 const dynamicCache = new Map<string, WindowComp>();
+
+/**
+ * 无 visible 时的回退：展示该 object/window 的 **readable 文本**（对外呈现文本，
+ * 即该 object 的 readme，经 `/api/stones/<id>/readme` 取）。window 所属 object 的 id
+ * = `window.type`（与 resolveWindowVisibleKind 的 dynamic objectId 同源）。
+ *
+ * - readable 文本存在 → markdown 渲染。
+ * - 加载中 → 占位提示。
+ * - 无 readable 文本（文件缺失 / 空 / 非 stone id）→ 继续退到 JSON 兜底（jsonFallback）。
+ */
+function makeReadableFallback(jsonFallback: WindowComp): WindowComp {
+  return function ReadableFallback({ window }: { window: ContextWindow }) {
+    const { text, isLoading } = usePeerReadme(window.type);
+    if (text && text.trim().length > 0) {
+      return (
+        <div className="llm-input-detail-body">
+          <div className="llm-input-detail-header">
+            <div>
+              <div className="llm-input-detail-title">{window.title}</div>
+              <div className="llm-input-detail-meta">readable · {window.type}</div>
+            </div>
+          </div>
+          <div className="llm-input-readable markdown markdown-content">
+            <MarkdownContent content={text} />
+          </div>
+        </div>
+      );
+    }
+    if (isLoading) {
+      return <div className="llm-input-empty">加载 readable…</div>;
+    }
+    const J = jsonFallback;
+    return <J window={window} />;
+  };
+}
 
 /**
  * 动态加载 user-defined object 自己的 stone visible。
@@ -133,16 +170,19 @@ export function WindowVisible({
     return <C window={window} />;
   }
 
+  // 无 visible 时优先回退 readable 文本（对外呈现），readable 也没有再退 JSON。
+  const ReadableFallback = makeReadableFallback(jsonFallback);
+
   if (kind.kind === "json") {
-    const J = jsonFallback;
-    return <J window={window} />;
+    return <ReadableFallback window={window} />;
   }
 
-  // dynamic：先确定 fallback（继承链 builtin → JSON），再动态加载 object 自己的 visible。
+  // dynamic：先确定 fallback（继承链 builtin → readable → JSON），再动态加载 object 自己的
+  // visible；object 没写 visible（notFound）时落到这个 fallback。
   const inheritedKey = window.effectiveVisibleType;
   const InheritedFallback =
     inheritedKey && inheritedKey !== window.type ? BUILTIN_VISIBLE[inheritedKey] : undefined;
-  const Fallback: WindowComp = InheritedFallback ?? jsonFallback;
+  const Fallback: WindowComp = InheritedFallback ?? ReadableFallback;
 
   const C = loadDynamic(kind.objectId, kind.sessionId, Fallback);
   return (

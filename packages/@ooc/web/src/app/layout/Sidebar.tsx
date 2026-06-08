@@ -167,7 +167,7 @@ function buildHeatmapCells(
   return cells;
 }
 
-export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activeSessionTitle, showSessions, onToggleSessions, onShowWelcome, onScope, onNode, onSession, onCreateStone, onCreateKnowledge }: { scope: TreeScope; flows: FlowSession[]; tree?: FileTreeNode; activePath?: string; activeSessionId?: string; activeSessionTitle?: string; showSessions: boolean; onToggleSessions: () => void; onShowWelcome: () => void; onScope: (scope: TreeScope) => void; onNode: (node: FileTreeNode) => void; onSession: (flow: FlowSession) => void; onCreateStone?: () => void; onCreateKnowledge?: (node: FileTreeNode) => void }) {
+export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activeSessionTitle, scopeQuery, showSessions, onToggleSessions, onShowWelcome, onScope, onNode, onSession, onCreateStone, onCreateKnowledge }: { scope: TreeScope; flows: FlowSession[]; tree?: FileTreeNode; activePath?: string; activeSessionId?: string; activeSessionTitle?: string; scopeQuery?: string; showSessions: boolean; onToggleSessions: () => void; onShowWelcome: () => void; onScope: (scope: TreeScope) => void; onNode: (node: FileTreeNode) => void; onSession: (flow: FlowSession) => void; onCreateStone?: () => void; onCreateKnowledge?: (node: FileTreeNode) => void }) {
   const tabs: Array<{ scope: TreeScope; label: string; icon: ReactNode }> = [
     { scope: "flows", label: "Flows", icon: <Zap size={13} /> },
     { scope: "stones", label: "Stones", icon: <Box size={13} /> },
@@ -205,7 +205,8 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
             {tabs.map((item) => (
               <a
                 key={item.scope}
-                href={`/${item.scope}`}
+                // 保留 query string（session + 右栏 thread 上下文），与 SPA onScope 行为一致。
+                href={`/${item.scope}${scopeQuery ?? ""}`}
                 className={`tab ${scope === item.scope ? "active" : ""}`}
                 onClick={(e) => {
                   if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; // 让浏览器原生处理新标签 / 新窗口

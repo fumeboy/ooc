@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { continueThread, fetchJob, fetchSessionThreads, fetchThread, waitForJob } from "../domains/chat";
 import { fetchFile, fetchTree, type FileTreeNode, type TreeScope } from "../domains/files";
 import { fetchFlows, flowTitle, pauseFlowSession, resumeFlowSession, type FlowSession } from "../domains/flows";
@@ -20,6 +20,7 @@ import { ThreadHeader } from "./layout/ThreadHeader";
 import { initialState, type AppState, type SessionThread } from "./state";
 import { deriveClientPath } from "../domains/clients/client-path";
 import { scopeOf, toPath, useRouteState, type RouteState } from "./routing";
+import { recordVisit } from "./nav-history";
 
 /**
  * AppShell — URL 是导航源；本地 state 只缓存"已派生的数据 + transient UI"。
@@ -35,6 +36,7 @@ import { scopeOf, toPath, useRouteState, type RouteState } from "./routing";
 export function AppShell() {
   const route = useRouteState();
   const navigate = useNavigate();
+  const location = useLocation();
   const [state, setState] = useState<AppState>(initialState);
   const [showSessions, setShowSessions] = useState(true);
   const [stoneModalOpen, setStoneModalOpen] = useState(false);
@@ -51,6 +53,11 @@ export function AppShell() {
       return next;
     });
   }, []);
+
+  // 路由变化处统一拦截：记录最近访问的 path（只记 pathname，不含 query / domain）。
+  useEffect(() => {
+    recordVisit(location.pathname);
+  }, [location.pathname]);
 
   // URL 派生导航维度 —— 下游只读这几个变量，不再读 state.scope / state.active* 的导航字段
   const scope: TreeScope = scopeOf(route);
@@ -406,7 +413,11 @@ export function AppShell() {
   }
 
   function handleScope(targetScope: TreeScope) {
-    navigate(toPath({ kind: "scope", scope: targetScope }));
+    // 切 LeftPanel scope（Flows/Stones/Pools/World）只换 path、保留当前 query string——
+    // query 记录了当前 session（sessionId）以及 RightPanel 正在会话的 thread
+    // （objectId/threadId）；清空会丢失右栏上下文。
+    const search = location.search ?? "";
+    navigate(`${toPath({ kind: "scope", scope: targetScope })}${search}`);
   }
 
   function handleSelectThread(sel: SessionThread) {
@@ -442,7 +453,7 @@ export function AppShell() {
   return (
     <AppLayout
       mode={layoutMode}
-      sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={(() => { const f = state.flows.find((flow) => flow.sessionId === activeSessionId); return f ? flowTitle(f) : activeSessionId; })()} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
+      sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={(() => { const f = state.flows.find((flow) => flow.sessionId === activeSessionId); return f ? flowTitle(f) : activeSessionId; })()} scopeQuery={location.search} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
       main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} />}
       right={activeSessionId && activeObjectId && activeThreadId && !(activeObjectId === "user" && activeThreadId === "root") ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onShowContextWindows={handleShowContextWindows} /> : undefined}
     >

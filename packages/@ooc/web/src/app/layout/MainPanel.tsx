@@ -10,6 +10,7 @@ import { EmptyState } from "../../shared/ui/EmptyState";
 import { UserThreadHome } from "../../domains/sessions/components/UserThreadHome";
 import { ThreadDetailTabs } from "../../domains/sessions/components/ThreadDetailTabs";
 import { Welcome } from "./Welcome";
+import { BreadcrumbHistory } from "./BreadcrumbHistory";
 import {
   ClientWithSourceToggle,
   matchClientTarget,
@@ -74,7 +75,11 @@ export function MainPanel({
   const breadcrumbSegments = deriveBreadcrumbSegments(route, isWelcome, path, routeObjectDisplay);
   const breadcrumbText = breadcrumbSegments.map((s) => s.label).join(" › ");
   const headerTitle = deriveHeaderTitle(route, isWelcome, path, routeObjectDisplay);
-  const scopeEmpty = route.kind === "scope" ? scopeEmptyState(route.scope) : undefined;
+  // /flows scope landing（未选 session）展示 Welcome 界面而非 "Select a session" 空态——
+  // 与 sidebar 顶部 "create a new one from the welcome page" 指向的同一个组件。
+  const isFlowsLanding = route.kind === "scope" && route.scope === "flows";
+  const scopeEmpty =
+    route.kind === "scope" && !isFlowsLanding ? scopeEmptyState(route.scope) : undefined;
 
   // 2026-05-27 路由重构：path = view，sessionId 进 query。
   // user-home（SessionThreadsIndex）= /flows/index 路径；要求 sessionId 已设置才渲染主体，
@@ -151,6 +156,7 @@ export function MainPanel({
           )}
           {threadHeader}
           <button type="button" className="refresh" onClick={onRefresh} disabled={loading || !onRefresh} aria-label="Refresh" title="Refresh">↻</button>
+          <BreadcrumbHistory />
           {homeTarget && (
             <Link
               to={homeTarget}
@@ -166,7 +172,7 @@ export function MainPanel({
       <div className="panel flex flex-col flex-grow">
         <div className="main-body">
           {showBlockingError && <div className="section compact"><div className="error">{error}</div></div>}
-          {isWelcome ? (
+          {isWelcome || isFlowsLanding ? (
             <Welcome stones={stones} onCreateSession={onCreateSession} />
           ) : sessionMissing ? (
             <SessionNotFound sessionId={sessionIdFromRoute!} />
@@ -345,13 +351,8 @@ function deriveHeaderTitle(route: RouteState, isWelcome: boolean, path: string |
   }
 }
 
+// 注：scope === "flows" 不会走到这里——/flows landing 由 isFlowsLanding 提前渲染 Welcome。
 function scopeEmptyState(scope: "stones" | "flows" | "world" | "pools"): { title: string; detail: string } {
-  if (scope === "flows") {
-    return {
-      title: "Select a session",
-      detail: "Pick a session from the left sidebar, or create a new one from the welcome page (top of sidebar).",
-    };
-  }
   if (scope === "stones") {
     return {
       title: "Select a stone",
