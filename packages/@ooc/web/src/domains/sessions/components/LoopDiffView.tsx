@@ -27,13 +27,8 @@ import {
   type WindowSnapshotEntry,
 } from "./window-diff.helpers";
 import { WindowDiffRow } from "./WindowDiffRow";
-// side-effect: 触发所有 type renderer 注册
-import "./window-diff-renderers";
-import {
-  DiffRendererErrorBoundary,
-  FallbackJsonDiff,
-  getWindowDiffRenderer,
-} from "./window-diff-renderers";
+import { DiffRendererErrorBoundary } from "./window-diff-renderers";
+import { WindowDiff } from "./window-diff/resolveWindowDiff";
 
 export interface LoopDiffViewProps {
   sessionId: string;
@@ -267,12 +262,10 @@ export function LoopDiffView({
   const renderDetail = (windowId: string) => {
     const entry = entryByIdMemo.get(windowId);
     if (!entry) return null;
-    const windowType = entry.type;
+    const windowType = entry.type ?? "unknown";
 
-    // file_window：优先用 entry.current.fileDiff（不需 input fetch）
-    if (windowType === "file") {
-      const Renderer = getWindowDiffRenderer("file") ?? FallbackJsonDiff;
-      // previous/current 直接传 entry，FileWindowDiff 内部会 extract fileDiff
+    // file_window：entry.current 带后端附挂的 fileDiff，免 fetch 直传 WindowDiff（C-2）
+    if (entry.type === "file") {
       return (
         <DiffRendererErrorBoundary
           previous={entry.previous}
@@ -280,17 +273,16 @@ export function LoopDiffView({
           windowType={windowType}
           windowId={windowId}
         >
-          <Renderer
+          <WindowDiff
             previous={entry.previous}
             current={entry.current}
-            windowType={windowType}
-            windowId={windowId}
+            sessionId={sessionId}
           />
         </DiffRendererErrorBoundary>
       );
     }
 
-    // 其它 type：从 fetch 到的 input.json 中提取 window 对象
+    // 其它 type：从 fetch 到的 input.json 中提取完整 window 对象后传 WindowDiff（C-2）
     if (detailsLoading) {
       return <div className="muted small">Loading loop details…</div>;
     }
@@ -309,7 +301,6 @@ export function LoopDiffView({
       currentInputState !== undefined
         ? extractWindowFromInput(currentInputState, windowId)
         : undefined;
-    const Renderer = getWindowDiffRenderer(windowType) ?? FallbackJsonDiff;
     return (
       <DiffRendererErrorBoundary
         previous={previousObj}
@@ -317,11 +308,10 @@ export function LoopDiffView({
         windowType={windowType}
         windowId={windowId}
       >
-        <Renderer
+        <WindowDiff
           previous={previousObj}
           current={currentObj}
-          windowType={windowType}
-          windowId={windowId}
+          sessionId={sessionId}
         />
       </DiffRendererErrorBoundary>
     );
