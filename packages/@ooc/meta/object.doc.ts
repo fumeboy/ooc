@@ -107,7 +107,7 @@ export const root: DocTreeNode = {
         "programmable": "OOC Agent 由几个维度组合，programmable 是其中之一，定义 Agent 持有/演化自身函数方法库的能力",
         "visible": "OOC Agent 由几个维度组合，visible 是其中之一，定义 Agent 持有/演化自身 UI 页面的能力",
         "persistable": "OOC Agent 由几个维度组合，persistable 是其中之一，定义 Agent 的持久化存储能力",
-        "readable": "OOC 第 9 个概念维度（自我塑造第四件）：Object 控制自己在 Context 中如何以 XML 形式展示给其他 Agent / LLM；实现为 readable.md（静态）或 readable.ts（动态渲染函数）。当前作为 root patches.readable_concept 记录，未单独列为 children。",
+        "readable": "OOC 第 9 个概念维度（自我塑造第四件）：Object 控制自己在 Context 中如何以 XML 形式展示给其他 Agent / LLM；实现为 readable.md（静态）或 readable.ts（动态渲染函数）。除渲染外，readable 还注册 window method（windowMethods，控制 window 展示如 set_viewport）并持有 window 状态对象（WindowDisplayState，持久化在 thread-context）——window method 签名不同于 object method：额外接收 windowState、返回新 state（immutable）。当前作为 root patches.readable_concept 记录，未单独列为 children。",
         "extendable": "非能力维度的外接集成层：把外部世界（飞书 / notion / slack 等）按统一模板接入为可调用的 Window 与 command；实现见 packages/@ooc/core/extendable/",
         "stone": "OOC 持久层之一（静）：长期身份与设计源码（含 seed knowledge），进 git review",
         "pool": "OOC 持久层之一（积）：跨 session 累积的事实数据（含 sediment knowledge），不进 git",
@@ -1317,10 +1317,16 @@ export const root: DocTreeNode = {
                         "viewport_protocol": {
                             title: "viewport - 精细化控制单 window 渲染体量",
                             content: `
-                            每个有"长内容"的 window type 都应提供 \`viewport\` 字段（行+列范围）让 LLM 精细控制
+                            每个有"长内容"的 window type 都应提供 viewport（行+列范围）让 LLM 精细控制
                             渲染给自己的内容量。viewport 与 thinkable.context_budget 的 compressLevel 同层但正交：
                             compressLevel 由系统/LLM 在整个 window 之间做"宏观压缩"；viewport 由 LLM 在单个
                             window 内部做"微观节流"。
+
+                            **归属（2026-06-08 线 B）**：viewport 等展示参数收口为 window 状态对象
+                            \`WindowDisplayState\`（挂 \`window.state\`，随 thread-context 持久化）；\`set_viewport\`
+                            等是 **readable 维度的 window method**（不是 executable 的 object method），exec 读
+                            \`ctx.windowState\` 返回新 state（immutable），由 manager 写回 \`window.state\`。exec 调用
+                            入口不变（\`exec(window_id, command="set_viewport", args={...})\`），改的是 window 状态对象而非 object 业务数据。
 
                             **当前已实施**（file_window / knowledge_window / talk_window / do_window / search_window / program_window）：
 
@@ -1531,7 +1537,8 @@ export const root: DocTreeNode = {
                     公共 API \`registerObjectType\` / \`getObjectDefinition\` / \`listRegisteredObjectTypes\` /
                     \`lookupMethod\` / \`lookupMethodEntry\` / \`lookupConstructor\` / \`resolveMethod\`）
                     负责注册每种 ObjectType 的契约 \`ObjectDefinition\`:
-                    - **methods**: 这个 object 注册的 \`ObjectMethod\` 字典（canonical 名；旧名 \`commands\` 是 @deprecated alias，registry 内部双写以保持读取兼容）。
+                    - **methods**: 这个 object 注册的 \`ObjectMethod\` 字典（**object method**，控制 object 自身业务数据，归 executable；旧名 \`commands\` 是 @deprecated alias，registry 内部双写以保持读取兼容）。
+                    - **windowMethods**: \`WindowMethod\` 字典（控制 window 展示如 set_viewport，归 readable，与 methods 物理分离）。dispatch 时 object method 缺席才查此表；命中时注入 window 状态对象（\`WindowDisplayState\`）、exec 返回新 state 写回 \`window.state\`。同名禁止（注册期 fail-loud）。解析入口 \`lookupWindowMethod\`（沿 parentClass 链）。
                     - **parentClass**: 父类 id；method 解析在 self.type miss 后沿父类链向上回退（详见 children.parent_class_inheritance）。
                     - **isBuiltinFeature**: 该 type 是 Object 内置特性还是独立 flow object，决定持久化分支（详见 children.builtin_feature_split）。
                     - **renderXml / readable**: 这个 object 如何渲染进 Context（任选其一即可启动期 fail-loud）。
@@ -1551,7 +1558,9 @@ export const root: DocTreeNode = {
                     named: {
                         "ObjectRegistry": "注册各类 object type 行为的中心；REGISTRY Map in _shared/registry.ts",
                         "ObjectManager": "管理 thread.contextWindows 生命周期的组件（原 WindowManager）",
-                        "ObjectDefinition": "每个 object type 的契约：methods / parentClass / isBuiltinFeature / renderXml / readable / onClose / basicKnowledge",
+                        "ObjectDefinition": "每个 object type 的契约：methods（object method,归 executable）/ windowMethods（window method,控制展示,归 readable）/ parentClass / isBuiltinFeature / renderXml / readable / onClose / basicKnowledge",
+                        "WindowMethod": "控制 window 展示的方法（归 readable）；exec 额外接收 windowState、返回新 WindowDisplayState（immutable），不 mutate object 业务数据；set_viewport / set_range / set_transcript_window / set_results_window / set_history_window 均归此。",
+                        "WindowDisplayState": "window 展示状态对象（viewport / lines / columns / transcriptViewport / resultsViewport / historyViewport），挂为 window.state 子字段，随 thread-context 持久化；WindowMethod 写、readable/renderXml 读（向后兼容旧平铺字段）。",
                         "registerObjectType": "在 ObjectRegistry 上更新某 type 的 partial ObjectDefinition；写入时 commands/methods 双写",
                         "getObjectDefinition": "按 type 取 ObjectDefinition；未注册抛错（避免静默吞掉新 type）",
                         "WindowRegistry": "ObjectRegistry 的 @deprecated 旧名（一个 release 后移除）",
