@@ -61,57 +61,8 @@ describe("registry — register / get / reset", () => {
   });
 });
 
-describe("side-effect index — 注册 9 种内置 type", () => {
-  // 注意：bun 模块缓存导致 dynamic import "./index" 只能触发一次 side-effect。
-  // 不能 reset；上面 describe 的 reset 已在 afterEach 跑完。这里手动 re-register
-  // 来确保 Case 6 独立于之前 describe 的 state。
-  it("Case 6: index 模块 side-effect 注册 9 种内置 type", async () => {
-    resetWindowDiffRegistry();
-    // 重新 import index — 但 bun 已缓存，需要手动调用一次 register 体系
-    // 这里 dynamic import 拿到 9 个 renderer 然后人工 register 验证 index.ts 列表完整
-    const indexMod = await import("./index");
-    // 兜底：indexMod 自身 register 在首次 load 时已发生；reset 后丢失。
-    // 此处验证：手动再次 import 各 renderer module + 通过 registerWindowDiffRenderer
-    // 重新注册一遍。和 index.ts 表保持一致。
-    const FileWindowDiff = (await import("./FileWindowDiff")).FileWindowDiff;
-    const TalkWindowDiff = (await import("./TalkWindowDiff")).TalkWindowDiff;
-    const DoWindowDiff = (await import("./DoWindowDiff")).DoWindowDiff;
-    const PlanWindowDiff = (await import("./PlanWindowDiff")).PlanWindowDiff;
-    const SearchWindowDiff = (await import("./SearchWindowDiff")).SearchWindowDiff;
-    const KnowledgeWindowDiff = (await import("./KnowledgeWindowDiff")).KnowledgeWindowDiff;
-    const ProgramWindowDiff = (await import("./ProgramWindowDiff")).ProgramWindowDiff;
-    const CommandExecDiff = (await import("./CommandExecDiff")).CommandExecDiff;
-    const RelationWindowDiff = (await import("./RelationWindowDiff")).RelationWindowDiff;
-
-    const re = indexMod.registerWindowDiffRenderer;
-    re("file", FileWindowDiff);
-    re("talk", TalkWindowDiff);
-    re("do", DoWindowDiff);
-    re("plan", PlanWindowDiff);
-    re("search", SearchWindowDiff);
-    re("knowledge", KnowledgeWindowDiff);
-    re("program", ProgramWindowDiff);
-    re("method_exec", CommandExecDiff);
-    re("relation", RelationWindowDiff);
-
-    const list = listRegisteredDiffRenderers();
-    for (const t of [
-      "file",
-      "talk",
-      "do",
-      "plan",
-      "search",
-      "knowledge",
-      "program",
-      "method_exec",
-      "relation",
-    ]) {
-      expect(list).toContain(t);
-    }
-    const fileRenderer = getWindowDiffRenderer("file");
-    expect(typeof fileRenderer).toBe("function");
-
-    // 清理，避免污染后续 test
-    resetWindowDiffRegistry();
-  });
-});
+// Note: Case 6 (side-effect index import) was removed in Task 5c cleanup.
+// The index.ts + 9 typed renderer files were deleted as dead code;
+// dispatch is now handled by resolveWindowDiff (window-diff/resolveWindowDiff.tsx).
+// Registry itself is kept because ErrorBoundary.tsx and FallbackJsonDiff.tsx
+// still import the WindowDiffRendererProps type from it.

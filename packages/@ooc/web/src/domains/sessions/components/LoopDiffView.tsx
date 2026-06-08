@@ -27,7 +27,7 @@ import {
   type WindowSnapshotEntry,
 } from "./window-diff.helpers";
 import { WindowDiffRow } from "./WindowDiffRow";
-import { DiffRendererErrorBoundary } from "./window-diff-renderers";
+import { DiffRendererErrorBoundary } from "./window-diff-renderers/ErrorBoundary";
 import { WindowDiff } from "./window-diff/resolveWindowDiff";
 
 export interface LoopDiffViewProps {
