@@ -74,18 +74,23 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
 
 const COMMAND_BRIEF_MAX = 80;
 
-function renderMethodsNode(window: ContextWindow, registry: ObjectRegistry): XmlNode | null {
+export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistry): XmlNode | null {
   // fail-soft：未注册 type（peer stone 后台注册中 / 新建对象未注册 / builtin 缺失）无 methods 节点。
   // registrar 契约即「render paths handle unregistered types gracefully」——此处坐实，避免 getObjectDefinition 抛崩 think loop。
   if (!registry.has(window.type)) return null;
   const def = registry.getObjectDefinition(window.type);
-  const names = Object.keys(def.methods ?? {});
+  // object method（控制 object，归 executable）+ window method（控制展示，归 readable）
+  // 统一呈现给 LLM —— exec 入口相同，LLM 不需区分两类。
+  const names = [
+    ...Object.keys(def.methods ?? {}),
+    ...Object.keys(def.windowMethods ?? {}),
+  ];
   const isCompressed = (window.compressLevel ?? 0) >= 1;
   if (names.length === 0 && !isCompressed) return null;
   names.sort();
 
   const children: XmlNode[] = names.map((name) => {
-    const entry = def.methods[name];
+    const entry = def.methods?.[name] ?? def.windowMethods?.[name];
     const paths = entry?.paths ?? [name];
     const brief = paths.join(", ").slice(0, COMMAND_BRIEF_MAX);
     return xmlElement("command", { name }, [xmlText(brief)]);
