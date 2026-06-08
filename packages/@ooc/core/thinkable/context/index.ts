@@ -1,7 +1,8 @@
 import type { LlmInputItem, LlmMessage } from "../llm/types";
-import { objectDir, readSelf, resolveStoneIdentityRef, stoneDir, threadDir } from "../../persistable";
+import { isBuiltinObjectId, objectDir, readSelf, resolveStoneIdentityRef, stoneDir, threadDir } from "../../persistable";
 import { createDefaultPipeline } from "./pipeline.js";
 import { XmlRenderer } from "./renderers/xml.js";
+import type { ContextWindow } from "../../executable/windows/_shared/types.js";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../../_shared/types/thread.js";
 
 export type {
@@ -264,6 +265,61 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
   ];
 }
 
+// ── Peer window reconcile (per-round) ───────────────────────────────────────
+
+/**
+ * Built-in window type literals (from ContextObject discriminated union).
+ * Any window whose `type` equals `id` AND whose type is NOT in this set
+ * is treated as a peer Object window (type = peerId, id = peerId).
+ *
+ * Stone objectIds like "sentry" or "sentry/factor" do not collide with
+ * these literals, so the check is safe even for top-level peers.
+ */
+const BUILTIN_WINDOW_TYPES: ReadonlySet<string> = new Set([
+  "root", "method_exec", "do", "todo", "talk", "program", "file",
+  "knowledge", "search", "relation", "skill_index",
+  "feishu_chat", "feishu_doc", "plan", "guidance",
+]);
+
+/**
+ * Returns true if the window looks like a peer Object window:
+ * id === type (by ooc-6 Object window convention) and the type
+ * is neither a builtin window type nor a builtin Object id.
+ */
+function isPeerWindow(w: ContextWindow): boolean {
+  if (w.id !== w.type) return false;
+  if (BUILTIN_WINDOW_TYPES.has(w.type)) return false;
+  if (isBuiltinObjectId(w.type)) return false;
+  return true;
+}
+
+/**
+ * Reconcile peer-style windows from the pipeline's derived snapshot into
+ * the persisted thread.contextWindows. Idempotent — skips any id already
+ * present. This runs per-round in buildInputItems so that newly discovered
+ * peers (e.g. a child Object stone created mid-session) become immediately
+ * exec-able without waiting for the next thread restart.
+ */
+function reconcilePeerWindowsIntoContext(
+  thread: ThreadContext,
+  snapshotWindows: readonly ContextWindow[],
+): void {
+  if (!snapshotWindows.length) return;
+  const list = thread.contextWindows ?? (thread.contextWindows = []);
+  const existing = new Set(list.map((w) => w.id));
+  let appended = 0;
+  for (const w of snapshotWindows) {
+    if (!isPeerWindow(w)) continue;
+    if (existing.has(w.id)) continue;
+    list.push({ ...w } as ContextWindow);
+    existing.add(w.id);
+    appended++;
+  }
+  if (appended > 0) {
+    thread.contextWindows = list;
+  }
+}
+
 /**
  * 构造单轮 LLM 输入。
  *
@@ -284,6 +340,15 @@ export async function buildInputItems(
   // Phase F: ContextPipeline + XmlRenderer production path
   const pipeline = createDefaultPipeline();
   const snapshot = await pipeline.run(thread);
+
+  // P0 peer-window reconcile: any peer-style window the pipeline derived
+  // (id = type = objectId, type not a builtin window/Object type) that is
+  // missing from thread.contextWindows gets persisted now. This guarantees
+  // exec() → WindowManager.fromThread → requireParent succeeds for peer
+  // windows even if initContextWindows ran before the stone hierarchy was
+  // populated (dynamic child creation, etc.). Idempotent.
+  reconcilePeerWindowsIntoContext(thread, snapshot.windows);
+
   const renderer = new XmlRenderer();
   const content = await renderer.render(snapshot, thread);
 

@@ -10,7 +10,7 @@ import {
 import { loadUiServerMethods } from "@ooc/core/runtime/server-loader";
 import { enrichContextWindows } from "@ooc/core/thinkable/context/window-enrichment";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
-import { initContextWindows } from "@ooc/core/executable/windows";
+import { initContextWindows, injectPeerWindowsIfObjectThread } from "@ooc/core/executable/windows";
 import { deliverTalkMessage } from "@ooc/core/executable/windows/talk/delivery";
 import {
   ROOT_WINDOW_ID,
@@ -636,6 +636,7 @@ export function createFlowsService(deps: {
       initContextWindows(thread, {
         initialTaskTitle: initialMessage ? initialMessage.slice(0, 60) : `flow ${objectId}`,
       });
+      await injectPeerWindowsIfObjectThread(thread);
       await writeThread(initialMessage ? appendInboxMessage(thread, initialMessage) : thread);
       // 关键：只有 initialMessage 不为空才 enqueue job——
       // 空 events 的 thread 跑 LLM 会被 Claude 代理拒绝（messages 必须含 user role），

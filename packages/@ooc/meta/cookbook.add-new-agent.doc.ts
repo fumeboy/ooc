@@ -117,6 +117,12 @@ export const root: DocTreeNode = {
             - 一旦创建, objectId 即是这个 Object 的永久 ID, **不要重命名** (因为 web sidebar / Issue.createdByObjectId / talk-delivery 都按它定位)
             - displayName 通过 self.md 第一行派生, 详见 \`meta/object.doc.ts:visible.display_name_from_self_md\`; 不要在 stone 目录里另存 displayName
 
+            **⛔ 硬性禁令: 不要建 \`src/\` 子目录**
+            RPC helper、类型定义、渲染辅助等全部**内联**进 \`executable/index.ts\`（必要时可以用 \`executable/_types.ts\` / \`executable/_render.ts\` 等以下划线开头的 sibling 私有文件），但绝对不要建独立的 \`src/\` 子目录放可执行代码。原因：
+            1. 路径语义冲突：\`src/\` 是"源码"的通用根，LLM 会通过 \`glob **/<object>/**/*.ts\` 把这些 helper 当成"可直接 import 的脚本"，绕过 ObjectMethod 契约（方法签名、默认值、错误处理、UI 方法双导出）。
+            2. 权限边界破口：ObjectMethod 是 LLM 唯一合法的可编程入口，任何可被直接 import 的脚本文件都会在 Agent 出错时成为"绕过去执行"的捷径——这正是 session web-1780909890825 的触发路径（sentry 子对象的 \`src/factor-group-search.ts\` 被裸 import 导致 10,204 条因子组炸 context）。
+            3. 合规参考实现：\`packages/@ooc/builtins/file\`（canonical 样板）、sentry stone 的 4 个子对象（factor / event / strategy / lineage）都遵循此约定，没有 \`src/\`。
+
             **验证**: \`curl http://localhost:3000/api/stones\` 应在列表里看到新 objectId。
             `,
             named: {
@@ -257,6 +263,11 @@ export const root: DocTreeNode = {
             - \`ObjectMethod\` 类型来自 \`@ooc/core/executable/windows\` barrel；旧名 \`ObjectMethod\` 仍可 import 但应迁移到 \`ObjectMethod\`。
             - \`kind: "constructor"\` 的 method 必须返回 \`{ ok: true, object: ContextObject }\`；manager 自动 mount 到 thread 的 context（作为 ContextObject），不要在 exec 里直接 \`thread.contextWindows.push(...)\`。
             - \`parentClass: "root"\` 让自定义 Agent 类自动继承 root 的所有通用 method；不写也等价（registry 默认 \`undefined → "root"\`）。
+
+            **⛔ ObjectMethod 实现纪律**（三条缺一不可，违反 = 破协议）：
+            1. **不要把 RPC helper / 业务逻辑对外导出** —— 全部 module-private，只通过 \`object.methods\` + \`ui_methods\` 对外暴露。任何 LLM 能走到的接口必须走 method。对应 stone 内不允许出现独立的 \`src/\` 子目录（见 step2 的硬性禁令）。
+            2. **所有列表 / 搜索类 method**（返回集合结果的 RPC）必须在**至少两层**加默认分页：① 底层 helper 函数参数展开前注入 \`pageSize\` / \`pageNum\`（或接口惯用别名），② 对外通用入口（如 \`rpc_call\`）再查表注入一次。调用方显式传参始终优先生效，但不传时绝对不允许全表扫。
+            3. **每个 ObjectMethod.exec 返回 JSON 字符串时必须包一层大小截断**（建议 200KB 上限），防止单条过大把下一轮 LLM 请求打 413。优先尝试"解析 JSON → 切片数组字段 → 保留结构 metadata"的智能截断，解析失败再回退到 raw 切片并附机器可读 \`[truncated]\` 后缀。参考实现：\`.ooc-world-sentry/packages/sentry-core/src/truncate-result.ts\` 的 \`truncateResult()\`。
 
             **client/index.tsx** (有了它会覆盖 Stone fallback):
 

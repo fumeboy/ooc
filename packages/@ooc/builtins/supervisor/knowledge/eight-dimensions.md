@@ -33,8 +33,12 @@ activates_on:
 
 ### 2. 该维度有现成 Object 吗？
 
-- **有** → talk_window 转述需求
+先判断这个 Object 是不是我**同 stone 的 peer**（同级或我的 children，在当前 thread 启动时就已被注入为 `contextWindows`）：
+- **是** → 直接 `exec(window_id="<objectId>", command="...", args={...})`，不需要 talk。peer 的 window id 等于 objectId（例如 `sentry/factor`），命令集就是该对象在 `executable/index.ts` 中声明的 commands。
+- **不是 / 不确定 / 需要对方独立思考或跨 session 异步处理** → 用 `talk_window(target=<peer object>)` 转述需求
 - **没有** → 创建新 Object（见 `creating-objects.md`）
+
+> ⚠️ **协议纪律**：如果 `exec(window_id="...", command="...")` 返回 `window not found`，不要立刻退化为裸 `program` 或 raw RPC——先确认该对象是不是同 stone peer、我当前 thread 的 children 列表是否包含它、以及该 objectId 的 commands 注册是否成功。只有在确实不满足"同 stone peer"前置条件时才走 talk。
 
 ### 3. 跨维度复杂需求
 

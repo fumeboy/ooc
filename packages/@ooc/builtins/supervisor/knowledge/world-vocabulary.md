@@ -25,9 +25,15 @@ activates_on:
 | **relation** | 读对方 Object 对自己的认知（readable + sediment 中的 relation 文件）；只读 | `target` |
 | **command** | 调用全局命令（metaprog / write_file 等） | `command`、`args` |
 | **file** | 读 / 写 / 浏览 World 文件 | `path` |
+| **peer Object window** | 同 stone 的 sibling / level-1 children Object，**自动作为 first-class ContextWindow 注入到我的 contextWindows 中**，可直接 exec 其 commands | id = `<objectId>`，type = `<objectId>`，command 集合为该对象 `executable/index.ts` 中声明的 commands |
 
 每个 Window 都有命令集：通用的 `open` / `refine` / `submit` / `close` / `wait`，
-加上 Window 特定的 command（例如 talk 上有 `say`）。
+加上 Window 特定的 command（例如 talk 上有 `say`，peer Object window 上有 `exec`）。
+
+> **peer exec vs talk 的边界**：
+> - 同 stone peer（我身边的 sibling / children）：默认直接 `exec(window_id="<objectId>", command="...")`
+> - 跨 session / 需要对方独立思考 / 跨 stone 跨 world 对象：`talk_window(target=...)`
+> - 不要拿 peer window id 做 talk——那是把"直接调用"错当成"发消息给远方同事"，链路多 2 跳。
 
 我每轮思考都看到所有 Window 的当前状态。
 

@@ -1,0 +1,120 @@
+[2026-06-08T08:08:16.945Z] URL: https://aqomtm80.fn.bytedance.net?typ=DynamicRPC&nowrap=1&psm=ecom.governance.openmind&method=StrategyFusionDetail
+REQUEST:
+{"ruleId":"7613912755716014390","version":0,"Base":{"Extra":{"RPC_TRANSIT_USER_INFO":"{\"Id\":6706008,\"Name\":\"trae\",\"Email\":\"yaoyaqiang@bytedance.com\"}","env":"prod"}}}
+RESPONSE HEADERS:
+connection: Close
+content-length: 133
+content-type: text/html
+RESPONSE (status=403):
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<div style="text-align: center;"><h1>403 Forbidden</h1></div>
+</body>
+</html>
+---
+[2026-06-08T08:08:16.959Z] URL: https://aqomtm80.fn.bytedance.net?typ=DynamicRPC&nowrap=1&psm=ecom.governance.openmind&method=StrategyFusionDetail
+REQUEST:
+{"ruleId":"7613912755716014390","version":0,"Base":{"Extra":{"RPC_TRANSIT_USER_INFO":"{\"Id\":6706008,\"Name\":\"trae\",\"Email\":\"yaoyaqiang@bytedance.com\"}","env":"prod"}}}
+RESPONSE HEADERS:
+connection: Close
+content-length: 133
+content-type: text/html
+RESPONSE (status=403):
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<div style="text-align: center;"><h1>403 Forbidden</h1></div>
+</body>
+</html>
+---
+[2026-06-08T08:10:24.705Z] URL: https://aqomtm80.fn.bytedance.net?typ=DynamicRPC&nowrap=1&psm=ecom.governance.openmind&method=StrategyFusionDetail
+REQUEST:
+{"ruleId":"7613912755716014390","version":0,"Base":{"Extra":{"RPC_TRANSIT_USER_INFO":"{\"Id\":6706008,\"Name\":\"trae\",\"Email\":\"yaoyaqiang@bytedance.com\"}","env":"prod"}}}
+RESPONSE HEADERS:
+connection: Close
+content-length: 133
+content-type: text/html
+RESPONSE (status=403):
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<div style="text-align: center;"><h1>403 Forbidden</h1></div>
+</body>
+</html>
+---
+[2026-06-08T08:10:24.712Z] URL: https://aqomtm80.fn.bytedance.net?typ=DynamicRPC&nowrap=1&psm=ecom.governance.openmind&method=TemplateActionUsageInStrategy
+REQUEST:
+{"TemplateCode":"FakeTpl","PageNo":1,"PageSize":20}
+RESPONSE HEADERS:
+connection: Close
+content-length: 133
+content-type: text/html
+RESPONSE (status=403):
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<div style="text-align: center;"><h1>403 Forbidden</h1></div>
+</body>
+</html>
+---
+[2026-06-08T08:10:24.720Z] URL: https://aqomtm80.fn.bytedance.net?typ=DynamicRPC&nowrap=1&psm=ecom.governance.openmind&method=EventFactorList
+REQUEST:
+{"search":"user_is_new_buyer","page":1,"size":50}
+RESPONSE HEADERS:
+connection: Close
+content-length: 133
+content-type: text/html
+RESPONSE (status=403):
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<div style="text-align: center;"><h1>403 Forbidden</h1></div>
+</body>
+</html>
+---
+[2026-06-08T08:10:24.727Z] URL: https://aqomtm80.fn.bytedance.net?typ=DynamicRPC&nowrap=1&psm=ecom.governance.openmind&method=EventFactorDetail
+REQUEST:
+{"code":"user_is_new_buyer"}
+RESPONSE HEADERS:
+connection: Close
+content-length: 133
+content-type: text/html
+RESPONSE (status=403):
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<div style="text-align: center;"><h1>403 Forbidden</h1></div>
+</body>
+</html>
+---
+[2026-06-08T08:10:24.735Z] URL: https://aqomtm80.fn.bytedance.net?typ=DynamicRPC&nowrap=1&psm=ecom.governance.watchtower&method=SearchEventSnapshot
+REQUEST:
+{"beginTime":1717833600,"endTime":1717920000,"condition":{},"selectFactorList":[],"fillMeta":false,"page":1,"size":20,"forZhiliEvent":false,"user":{}}
+RESPONSE HEADERS:
+connection: Close
+content-length: 133
+content-type: text/html
+RESPONSE (status=403):
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<div style="text-align: center;"><h1>403 Forbidden</h1></div>
+</body>
+</html>
+---
+[2026-06-08T08:10:24.743Z] URL: https://aqomtm80.fn.bytedance.net?typ=DynamicRPC&nowrap=1&psm=ecom.governance.sentry_meta_relation&method=ListAllVertexWithType
+REQUEST:
+{"Items":[{"FromRefId":"not_a_real_id","FromType":"event_factor","ToTypes":["strategy","strategy_tree"],"IsReverse":true}],"Base":{"Extra":{"env":"prod"}}}
+RESPONSE HEADERS:
+connection: Close
+content-length: 133
+content-type: text/html
+RESPONSE (status=403):
+<html>
+<head><title>403 Forbidden</title></head>
+<body>
+<div style="text-align: center;"><h1>403 Forbidden</h1></div>
+</body>
+</html>
+---

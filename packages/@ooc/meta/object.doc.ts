@@ -1500,9 +1500,16 @@ export const root: DocTreeNode = {
                     - file: 文件内容窗口，支持 viewport / set_viewport / set_range（遗留）/ reload / edit / close。
                     - knowledge: 知识文档窗口，承载显式打开或协议合成的 knowledge；explicit 来源支持 viewport / set_viewport。
                     - search: glob / grep 搜索结果窗口，支持 open_match。
-                    - relation: **@deprecated** (ooc-6) 跨 Object 关系窗口；已被 peer Object 自动注入机制（derivePeerObjectWindows）替代。保留用于向后兼容已持久化的 thread 数据。
+                    - relation: **@deprecated** (ooc-6) 跨 Object 关系窗口；已被 peer Object 自动注入机制替代。
+                      peer Object（sibling + level-1 children）以 **first-class contextWindow** 形式
+                      直接进入 \`thread.contextWindows\`（init 时注入 + 每轮渲染 reconcile 补齐），
+                      id = type = objectId，可直接 \`exec(window_id='sentry/factor', command='group_search')\`。
+                      保留 relation window 仅用于向后兼容已持久化的 thread 数据。
                     - skill_index: stone skills 索引窗口；每轮由 synthesizer 派生。
-                    - user-defined: 任意 Object 以自身 id 为 type 注册的窗口；通过 executable/index.ts \`export const window\` 定义，运行时 registerNewObjectType 注册。
+                    - user-defined: 任意 Object 以自身 id 为 type 注册的窗口；通过 executable/index.ts
+                      \`export const window\` 定义，运行时 registerNewObjectType 注册。
+                      **peer Object 的 window 就是此类**：id=type=objectId，parent=root，status=open；
+                      在 context 中默认展示 readable 面（身份介绍）+ commands 面（可 exec）。
                     - feishu_chat: 飞书群会话窗口。
                     - feishu_doc: 飞书文档窗口。
                     - plan: 行动计划窗口；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread (见 B 段设计)。
@@ -2060,7 +2067,13 @@ export const root: DocTreeNode = {
                     - session: \`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md\` —— 本 session 临时认知；
                       由 relation_window.edit(scope="session") 直接落盘，不污染长期 relations。
 
-                    派生不持久化进 thread.contextWindows；id 稳定方便 UI 跨轮稳定。
+                    **持久化语义**（ooc-6 2026-06 修正）:
+                    - 旧 relation_window（此节描述的 type="relation"）派生不持久化进 thread.contextWindows；
+                      id 稳定方便 UI 跨轮稳定。
+                    - **新 peer Object window**（type=objectId, id=objectId）是 sibling + level-1 children
+                      peer 的 first-class contextWindow，**在 thread 初始化时即注入
+                      \`thread.contextWindows\` 并在每轮渲染时 reconcile 补齐**，跨轮持久化、可直接 exec。
+                      详见 thinkable.context.windows / collaborable.peer。
 
                     跳过规则（全部静默，仅 console.debug）:
                     - target === SUPER_ALIAS_TARGET（super 自反）→ 完全跳过整组派生。
@@ -2177,9 +2190,12 @@ export const root: DocTreeNode = {
                     物理嵌套在 parent 的 children/ 下）。完整语义见 root.patches.object_relations，这里只记
                     collaborable 侧的分工:
 
-                    - 可见性（已落地）: relation_window 每轮默认派生 self 的"同级 Agent"+"一级 children Agent"，
-                      让 Agent 一上场就看见身边有谁（见 relation_window；判定见
-                      src/persistable/stone-object.ts:discoverStoneHierarchicalPeers，不递归到孙）。
+                    - 可见性（已落地）: peer Object（self 的"同级 Agent" + "一级 children Agent"）
+                      以 first-class contextWindow 形式注入 thread.contextWindows（id=type=objectId），
+                      让 Agent 一上场就看见身边有谁并可直接 \`exec\`；渲染可读 readable（身份介绍）+
+                      commands（exec 面）+ relation knowledge（自动激活）。
+                      peer 发现逻辑见 src/persistable/stone-object.ts:discoverStoneHierarchicalPeers，不递归到孙。
+                      注：旧 relation_window（type="relation"）机制已废弃。
                     - 修改权: **self-scope 自治**（见 root.patches.object_relations）。object 改自己子树（含自己 seed）
                       经 stone-versioning self-scope 自治 ff-merge、不经他人 review；cross-object（如 child 改 parent）
                       才 PR。这不在 collaborable 运行时通道里——设计期改 seed 走 stone-versioning，运行时管控
@@ -4950,7 +4966,9 @@ export const root: DocTreeNode = {
             OOC 里 Object 之间有三种关系轴，各有不同的权力语义:
 
             1. 自我轴 — super（self-scoped）: Object 通过 sessionId="super" 的反思通道观察 / 修改"自己"。详见 reflectable。
-            2. peer 平等轴 — talk / do / relation_window: 同级 Agent 之间平等协作，只能 talk（说服）不能直接改对方。详见 collaborable。
+            2. peer 平等轴 — talk / exec: 同级 / children Agent 作为 first-class contextWindow
+               常驻 context（id=type=objectId），可直接 \`exec\` 调用对方方法；跨 session /
+               需要持久会话时走 talk。详见 collaborable。
             3. parent-child 层级轴: child Agent 物理嵌套在 parent 的 children/ 下（objectId 用 "/" 编码）。此轴有三个侧面:
                - knowledge 继承（已有）: child 继承祖先 seed knowledge，见 thinkable.knowledge 的 B-tree 协议。
                - 可见性（已有）: 每轮默认派生 sibling + 一级 child 的 relation_window，见 collaborable.relation_window。

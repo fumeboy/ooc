@@ -25,6 +25,11 @@ import {
 } from "./types.js";
 import { DEFAULT_TRANSCRIPT_VIEWPORT } from "./transcript-viewport.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
+import {
+  deriveStoneFromThread,
+  discoverStoneHierarchicalPeers,
+  isBuiltinObjectId,
+} from "../../../persistable/index.js";
 
 export interface InitContextWindowsOpts {
   /** thread 的 creator thread id；缺省 = SESSION_CREATOR_THREAD_ID（仅 root thread 适用）。 */
@@ -93,6 +98,10 @@ export function initContextWindows(
   // ooc-6: 当 thread 持有方是某 Object 时，幂等注入一个 self window
   // 单例作为该 Object 的"自我门面"。window id = object id（new design）。
   injectSelfWindowIfObjectThread(thread);
+
+  // Note: peer Object 注入（sibling + children）是 async IO，不走同步 init。
+  // 调用方在 thread 后自行 await injectPeerWindowsIfObjectThread(thread)
+  // 或在每轮渲染 buildInputItems 里由 pipeline 补齐。
 
   if (isUserRootThread(thread)) {
     thread.contextWindows = thread.contextWindows ?? [];
@@ -179,4 +188,66 @@ function injectSelfWindowIfObjectThread(thread: ThreadContext): void {
 
   // 紧跟 root 之后；creator window 仍由后续路径插到这之前/之后均可
   thread.contextWindows = [selfWindow, ...list];
+}
+
+// ── Peer windows (sibling + level-1 children) ──────────────────────────────
+
+/**
+ * ooc-6 Peer First-Class Window —— 把同级 sibling 与直属 children peer Object
+ * 作为真实可 exec 的 ContextWindow 注入 thread.contextWindows。
+ *
+ * 设计依据：object.doc.ts § thinkable.context.windows —— OOC Object 的 context
+ * 默认"身边"就是它的同级/子级 Object，这些 Object 应当以 first-class window
+ * 形式存在，而不是仅作为渲染期派生的 observability mirror（_renderedWindows）。
+ *
+ * 语义：
+ * - window id = peer objectId（稳定，跨 session 不变）
+ * - window type = peer objectId（每个 object 注册自己的 type；PeerProcessor 每轮补注册）
+ * - parentWindowId = "root"
+ * - 幂等：已存在则跳过（按 id 去重）
+ * - 不做 peer type 的 registry 注册——那是每轮渲染期 PeerProcessor 的职责
+ *   （因为 type 注册依赖 executable/index.ts 的方法表，可能在运行期热更新）
+ * - IO 失败时静默吞掉（debug log），不阻塞 thread 启动
+ */
+export async function injectPeerWindowsIfObjectThread(thread: ThreadContext): Promise<void> {
+  const selfId = thread.persistence?.objectId;
+  if (!selfId || selfId === "user") return;
+  if (isBuiltinObjectId(selfId)) return;
+
+  const list = thread.contextWindows ?? (thread.contextWindows = []);
+  let peers: string[];
+  try {
+    const { siblings, children } = await discoverStoneHierarchicalPeers(
+      deriveStoneFromThread(thread.persistence),
+    );
+    peers = [...siblings, ...children].filter((p) => p !== selfId && p !== "user");
+  } catch (err) {
+    console.debug(
+      `[peer-windows] discover io_error self=${selfId} msg=${(err as Error).message}`,
+    );
+    return;
+  }
+
+  if (peers.length === 0) return;
+
+  const now = Date.now();
+  const existingIds = new Set(list.map((w) => w.id));
+  const newWindows: ContextWindow[] = [];
+  for (const peerId of peers) {
+    if (existingIds.has(peerId)) continue;
+    newWindows.push({
+      id: peerId,
+      type: peerId as any,
+      parentWindowId: ROOT_WINDOW_ID,
+      title: `peer: ${peerId}`,
+      status: "open",
+      createdAt: now,
+    } as ContextWindow);
+  }
+  if (newWindows.length > 0) {
+    // 位置：放在 self window 之后、creator window 之前；与 self window 同属
+    // "Object 身份/环境层"。这里简单 push 到尾部即可——creator window 通常是
+    // prepend，self window 也是 prepend；实际显示顺序由 XmlRenderer 按语义排序。
+    thread.contextWindows = [...list, ...newWindows];
+  }
 }
