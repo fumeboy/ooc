@@ -42,8 +42,8 @@ export async function runControlPlane(): Promise<StoryResult> {
         (text ?? "").includes("会思考"), `selfLen=${(text ?? "").length}`);
     }
 
-    // TC-THINK-03: LLM input 的 <commands> 渲染 method 的语义 description（非仅 name/paths）。
-    // 回归守卫：曾经只渲 paths.join(",")（≈ method 名），LLM 看不懂每个 command 含义。
+    // TC-THINK-03: LLM input 的 <methods> 渲染 method 的语义 description（非仅 name/paths）。
+    // 回归守卫：曾经只渲 paths.join(",")（≈ method 名），LLM 看不懂每个 method 含义。
     {
       await import("@ooc/core/executable/windows/index.js"); // boot builtin registry
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
@@ -71,7 +71,7 @@ export async function runControlPlane(): Promise<StoryResult> {
       const descRendered = descMethod !== "" && snippet.length > 0 && serialized.includes(snippet);
       rec.ok(
         "TC-THINK-03",
-        "LLM input 的 <commands> 渲染 method 语义 description（非仅 name/paths，防回归）",
+        "LLM input 的 <methods> 渲染 method 语义 description（非仅 name/paths，防回归）",
         descRendered,
         `method=${descMethod || "<none-with-desc>"}, snippet=${JSON.stringify(snippet)}, rendered=${descRendered}`,
       );

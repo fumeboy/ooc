@@ -68,7 +68,7 @@ feishu_doc.read 把飞书文档内容拉到 window.content（覆盖式）。
   - markdown：把文档转 markdown 文本（lark-cli markdown +fetch；适合 docx / drive_md / wiki 中的 docx 子节点）
   - blocks：拉块结构（lark-cli docs +read --include-blocks）；适合 patch_block 前确认 block_id
 
-调用：open(parent_window_id="<feishu_doc_window_id>", command="read", args={ format: "markdown" })
+调用：open(parent_window_id="<feishu_doc_window_id>", method="read", args={ format: "markdown" })
 
 副作用：仅本地 window 字段更新；不修改飞书一侧。
 `.trim();
@@ -145,7 +145,7 @@ feishu_doc.close 释放 window；不影响飞书一侧的文档。
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): onFormChange 的 form 契约层是 base ContextWindow；本 helper 只读
   // base `id` + 具体 form 的 command（作 provenance 标签），在此唯一处 narrow 回 MethodExecWindow。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -171,7 +171,7 @@ function guidanceWindows(form: BaseContextWindow, entries: Record<string, string
   return out;
 }
 
-const readCommand: ObjectMethod = {
+const readMethod: ObjectMethod = {
   paths: ["read"],
   intent: (): Intent[] => [],
   onFormChange(change, { form, intents }) {
@@ -182,7 +182,7 @@ const readCommand: ObjectMethod = {
   exec: (ctx) => executeRead(ctx),
 };
 
-const searchInDocCommand: ObjectMethod = {
+const searchInDocMethod: ObjectMethod = {
   paths: ["search_in_doc"],
   intent: (): Intent[] => [],
   onFormChange(change, { form, intents }) {
@@ -193,7 +193,7 @@ const searchInDocCommand: ObjectMethod = {
   exec: (ctx) => executeSearchInDoc(ctx),
 };
 
-const appendCommand: ObjectMethod = {
+const appendMethod: ObjectMethod = {
   paths: ["append"],
   intent: (args) => (args.confirm === true ? [{ name: "append.confirmed" }] : []),
   onFormChange(change, { form, intents }) {
@@ -210,7 +210,7 @@ const appendCommand: ObjectMethod = {
   exec: (ctx) => executeAppend(ctx),
 };
 
-const patchBlockCommand: ObjectMethod = {
+const patchBlockMethod: ObjectMethod = {
   paths: ["patch_block"],
   intent: (args) => (args.confirm === true ? [{ name: "patch_block.confirmed" }] : []),
   onFormChange(change, { form, intents }) {
@@ -227,7 +227,7 @@ const patchBlockCommand: ObjectMethod = {
   exec: (ctx) => executePatchBlock(ctx),
 };
 
-const shareLinkCommand: ObjectMethod = {
+const shareLinkMethod: ObjectMethod = {
   paths: ["share_link"],
   intent: (): Intent[] => [],
   onFormChange(change, { form, intents }) {
@@ -238,7 +238,7 @@ const shareLinkCommand: ObjectMethod = {
   exec: (ctx) => executeShareLink(ctx),
 };
 
-const attachToChatCommand: ObjectMethod = {
+const attachToChatMethod: ObjectMethod = {
   paths: ["attach_to_chat"],
   intent: (args) => (args.confirm === true ? [{ name: "attach_to_chat.confirmed" }] : []),
   onFormChange(change, { form, intents }) {
@@ -255,7 +255,7 @@ const attachToChatCommand: ObjectMethod = {
   exec: (ctx) => executeAttachToChat(ctx),
 };
 
-const closeCommand: ObjectMethod = {
+const closeMethod: ObjectMethod = {
   paths: ["close"],
   intent: (): Intent[] => [],
   onFormChange(change, { form, intents }) {
@@ -566,13 +566,13 @@ function renderFeishuDoc(ctx: RenderContext): XmlNode[] {
 
 builtinRegistry.registerObjectType("feishu_doc", {
   methods: {
-    read: readCommand,
-    search_in_doc: searchInDocCommand,
-    append: appendCommand,
-    patch_block: patchBlockCommand,
-    share_link: shareLinkCommand,
-    attach_to_chat: attachToChatCommand,
-    close: closeCommand,
+    read: readMethod,
+    search_in_doc: searchInDocMethod,
+    append: appendMethod,
+    patch_block: patchBlockMethod,
+    share_link: shareLinkMethod,
+    attach_to_chat: attachToChatMethod,
+    close: closeMethod,
   },
   renderXml: renderFeishuDoc,
   basicKnowledge: PROTOCOL_KNOWLEDGE,

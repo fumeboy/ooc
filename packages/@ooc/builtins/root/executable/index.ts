@@ -14,23 +14,23 @@
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
 import type { ContextObject } from "@ooc/core/executable/windows/_shared/types.js";
-import { doCommand } from "./method.do.js";
-import { endCommand } from "./method.end.js";
-import { globCommand } from "./method.glob.js";
-import { grepCommand } from "./method.grep.js";
+import { doMethod } from "./method.do.js";
+import { endMethod } from "./method.end.js";
+import { globMethod } from "./method.glob.js";
+import { grepMethod } from "./method.grep.js";
 import {
-  openFeishuChatCommand,
-  openFeishuDocCommand,
+  openFeishuChatMethod,
+  openFeishuDocMethod,
 } from "@ooc/core/extendable/lark/index.js";
-import { openFileCommand } from "./method.open-file.js";
-import { openKnowledgeCommand } from "./method.open-knowledge.js";
-import { planCommand } from "./method.plan.js";
-import { programCommand } from "./method.program.js";
-import { talkCommand } from "./method.talk.js";
-import { todoCommand } from "./method.todo.js";
-import { writeFileCommand } from "./method.write-file.js";
-import { metaprogCommand } from "./method.metaprog.js";
-import { evolveSelfCommand } from "./method.evolve-self.js";
+import { openFileMethod } from "./method.open-file.js";
+import { openKnowledgeMethod } from "./method.open-knowledge.js";
+import { planMethod } from "./method.plan.js";
+import { programMethod } from "./method.program.js";
+import { talkMethod } from "./method.talk.js";
+import { todoMethod } from "./method.todo.js";
+import { writeFileMethod } from "./method.write-file.js";
+import { metaprogMethod } from "./method.metaprog.js";
+import { evolveSelfMethod } from "./method.evolve-self.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 
@@ -48,25 +48,25 @@ import "@ooc/builtins/todo";
 /**
  * Root window 上注册的 method 清单（核心数据；2026-05-28 ooc-6 Object Unification 改名）。
  *
- * 当前所有 method 都允许通过 `open(parent_window_id?, command="X", ...)` 调用。
+ * 当前所有 method 都允许通过 `open(parent_window_id?, method="X", ...)` 调用。
  * window-level 命令（如 do_window 上的 continue）由各自 windows/X.ts 注册到对应 type 上。
  */
 export const ROOT_METHODS: Record<string, ObjectMethod> = {
-  talk: talkCommand,
-  do: doCommand,
-  program: programCommand,
-  plan: planCommand,
-  todo: todoCommand,
-  end: endCommand,
-  open_file: openFileCommand,
-  open_knowledge: openKnowledgeCommand,
-  write_file: writeFileCommand,
-  glob: globCommand,
-  grep: grepCommand,
-  metaprog: metaprogCommand,
-  evolve_self: evolveSelfCommand,
-  open_feishu_chat: openFeishuChatCommand,
-  open_feishu_doc: openFeishuDocCommand,
+  talk: talkMethod,
+  do: doMethod,
+  program: programMethod,
+  plan: planMethod,
+  todo: todoMethod,
+  end: endMethod,
+  open_file: openFileMethod,
+  open_knowledge: openKnowledgeMethod,
+  write_file: writeFileMethod,
+  glob: globMethod,
+  grep: grepMethod,
+  metaprog: metaprogMethod,
+  evolve_self: evolveSelfMethod,
+  open_feishu_chat: openFeishuChatMethod,
+  open_feishu_doc: openFeishuDocMethod,
 };
 
 /** Protocol knowledge path（与 plan.ts 等命令文件的 *_BASIC_PATH 形态一致）。 */
@@ -83,7 +83,7 @@ export const ROOT_BASIC_PATH = "internal/windows/root/basic";
  */
 export const ROOT_KNOWLEDGE = `
 root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 列表如下，
-通过 open(command="<name>", title="...", args={...}) 调用（args 给齐时部分 command 会立即提交 form
+通过 open(method="<name>", title="...", args={...}) 调用（args 给齐时部分 command 会立即提交 form
 而无需再额外 submit；这由各个具体 command 的实现自行控制）：
 
 | command         | 作用                                          | 主要副作用                                 |

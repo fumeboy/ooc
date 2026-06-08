@@ -55,7 +55,7 @@ describe("openai provider", () => {
               type: "function_call",
               call_id: "call_1",
               name: "exec",
-              arguments: "{\"command\":\"plan\"}"
+              arguments: "{\"method\":\"plan\"}"
             }
           ]
         }))
@@ -78,9 +78,9 @@ describe("openai provider", () => {
             inputSchema: {
               type: "object",
               properties: {
-                command: { type: "string" }
+                method: { type: "string" }
               },
-              required: ["command"]
+              required: ["method"]
             }
           }
         ]
@@ -92,7 +92,7 @@ describe("openai provider", () => {
       {
         id: "call_1",
         name: "exec",
-        arguments: { command: "plan" }
+        arguments: { method: "plan" }
       }
     ]);
     expect(result.outputItems).toEqual([
@@ -105,7 +105,7 @@ describe("openai provider", () => {
         type: "function_call",
         call_id: "call_1",
         name: "exec",
-        arguments: { command: "plan" }
+        arguments: { method: "plan" }
       }
     ]);
   });

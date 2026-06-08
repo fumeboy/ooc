@@ -20,7 +20,7 @@ import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 /**
  * 验证 knowledge 自动激活闭环：
- * - 预置一篇 knowledge 文档（activates_on: { "command::root::program": "show_content" }）
+ * - 预置一篇 knowledge 文档（activates_on: { "method::root::program": "show_content" }）
  * - Agent open program(language=shell) form → 下一轮 system XML 中应出现该篇正文（type=knowledge / source=activator）
  * - 用 marker-7xq9 这种中性字符串当指纹（避免 "SECRET" 触发模型 safety 模式）
  */
@@ -50,7 +50,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
         "title: Shell 速查表",
         "description: 常用 shell 模式",
         "activates_on:",
-        '  "command::root::program": "show_content"',
+        '  "method::root::program": "show_content"',
         "---",
         "",
         "## marker-7xq9",
@@ -70,11 +70,11 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
         "请帮我数一下 src/persistable/ 下有几个 .ts 文件（不含 __tests__/）。",
         "",
         "**严格分两步打开 program form**（不要一次给齐 args 让 form auto-submit）：",
-        "  step A: open(command=\"program\", title=\"统计文件\", args={ language: \"shell\" })",
+        "  step A: open(method=\"program\", title=\"统计文件\", args={ language: \"shell\" })",
         "          只声明 language，不传 code——args 不完整，form 会保持 open 状态。",
         "  step B: refine(form_id=<step A 返回的 form_id>, args={ code: \"find src/persistable -type f -name '*.ts' -not -path '*/__tests__/*' | wc -l\" })",
         "          再 submit(form_id=<同上>) 执行。",
-        "  step C: 看到 program_window.history 中有数字后，open(command=\"end\", args={ summary: \"数字是 N\" }) 结束。",
+        "  step C: 看到 program_window.history 中有数字后，open(method=\"end\", args={ summary: \"数字是 N\" }) 结束。",
         "",
         "提示：result 在 program_window.history 中可见，不需要 wait。",
       ].join("\n"),

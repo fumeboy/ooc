@@ -40,7 +40,7 @@ export type {
 export { filterMethodsByVisibility };
 
 const RENDERABLE_VISIBLE_TYPES = new Set([
-  "root", "method_exec", "command_exec", "do", "todo", "talk", "program",
+  "root", "method_exec", "do", "todo", "talk", "program",
   "file", "knowledge", "search", "relation", "skill_index",
   "feishu_chat", "feishu_doc", "plan",
 ]);
@@ -75,7 +75,6 @@ function resolveEffectiveParentClass(
 /** Base types seeded into every new ObjectRegistry. */
 const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
   ["root", { type: "root", methods: {}, parentClass: null } as ObjectDefinition],
-  ["command_exec", { type: "command_exec", methods: {}, parentClass: null } as ObjectDefinition],
   ["method_exec", { type: "method_exec", methods: {}, parentClass: null } as ObjectDefinition],
   ["do", { type: "do", methods: {} } as ObjectDefinition],
   ["todo", { type: "todo", methods: {} } as ObjectDefinition],

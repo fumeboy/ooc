@@ -56,7 +56,7 @@ program_window.exec 用于在已打开的 program_window 中再次执行一段 s
 每次 exec 都是独立 sandbox：
 - shell：起新进程
 - ts/js：每次新加载用户代码模块；可通过 self.getThreadLocal/setThreadLocal 跨 exec 共享数据；
-  ts/js 内仍可 \`await self.callCommand("custom:<self>", "<name>", {...})\` 调命令
+  ts/js 内仍可 \`await self.callMethod("custom:<self>", "<name>", {...})\` 调命令
 
 执行结果会追加到 program_window.history；窗口本身保留打开。
 
@@ -90,7 +90,7 @@ program_window.set_history_window 精细化调整 exec history 渲染视口。
 - history_start 与 history_end 必须同时出现
 
 例：
-- exec(window_id="<id>", command="set_history_window", args={ history_tail: 30 })          → 看末 30 次 exec
+- exec(window_id="<id>", method="set_history_window", args={ history_tail: 30 })          → 看末 30 次 exec
 - exec(..., args={ history_start: 0, history_end: 5 })                                     → 看前 5 次
 - exec(..., args={ history_start: 10, history_end: 20 })                                   → 看中间 10 次
 
@@ -98,7 +98,7 @@ program_window.set_history_window 精细化调整 exec history 渲染视口。
 后续 exec 仍正常追加到完整 history（不受 viewport 影响）。
 `.trim();
 
-const execCommand: ObjectMethod = {
+const execMethod: ObjectMethod = {
   paths: ["exec", "exec.shell", "exec.ts", "exec.js"],
   schema: {
     args: {
@@ -133,7 +133,7 @@ const execCommand: ObjectMethod = {
   exec: (ctx) => executeProgramWindowExec(ctx),
 };
 
-const closeCommand: ObjectMethod = {
+const closeMethod: ObjectMethod = {
   paths: ["close"],
   intent: emptyIntent,
   onFormChange(change, { form }) {
@@ -144,7 +144,7 @@ const closeCommand: ObjectMethod = {
   exec: () => undefined,
 };
 
-const setHistoryWindowCommand: WindowMethod = {
+const setHistoryWindowMethod: WindowMethod = {
   kind: "window",
   paths: ["set_history_window"],
   schema: {
@@ -187,7 +187,7 @@ export async function executeProgramWindowExec(
     code: ctx.args.code as string | undefined,
   };
   if (!(args.language && args.code)) {
-    return "[program_window.exec] 缺少执行参数。请重新 exec(window_id=\"<program_window_id>\", command=\"exec\", args={ language: \"shell\"|\"ts\"|\"js\", code: \"...\" }) 一次性给齐参数。";
+    return "[program_window.exec] 缺少执行参数。请重新 exec(window_id=\"<program_window_id>\", method=\"exec\", args={ language: \"shell\"|\"ts\"|\"js\", code: \"...\" }) 一次性给齐参数。";
   }
   const record = await runOneExec(thread, args);
 
@@ -226,18 +226,18 @@ shell 环境变量：
 - 想读写自己的 stone 目录（self.dir），用 env $OOC_SELF_DIR
 
 ts/js 上下文：
-- self.dir / self.callCommand(windowId, command, args?) / self.getData / self.setData 可用
+- self.dir / self.callMethod(windowId, command, args?) / self.getData / self.setData 可用
 - 跨 exec 共享：self.getThreadLocal(key) / self.setThreadLocal(key, value)
 - shell 之间不共享 threadLocal（OS 进程隔离），需要时自行写入 stone data
 
 后续多次执行：
-- exec(window_id="<program_window_id>", command="exec", args={ language, code })
+- exec(window_id="<program_window_id>", method="exec", args={ language, code })
 
 调用示例：
-exec(command="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
+exec(method="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
 
 要调任意 window 上的命令请直接用顶层 \`exec\` tool（不再走 program）；
-ts/js sandbox 内仍可 \`await self.callCommand("custom:<self>", "<name>", {...})\` 编排多步调用。
+ts/js sandbox 内仍可 \`await self.callMethod("custom:<self>", "<name>", {...})\` 编排多步调用。
 
 ## 建议
 
@@ -355,12 +355,12 @@ const programConstructor: ObjectMethod = {
 
 builtinRegistry.registerObjectType("program", {
   methods: {
-    exec: execCommand,
-    close: closeCommand,
+    exec: execMethod,
+    close: closeMethod,
     program: programConstructor,
   },
   windowMethods: {
-    set_history_window: setHistoryWindowCommand,
+    set_history_window: setHistoryWindowMethod,
   },
   readable,
 });

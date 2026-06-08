@@ -43,7 +43,7 @@ search_window.set_results_window 精细化调整 matches 渲染视口。
 - matches_start 与 matches_end 必须同时出现
 
 例：
-- exec(window_id="<id>", command="set_results_window", args={ matches_tail: 100 })          → 看末 100 个 match
+- exec(window_id="<id>", method="set_results_window", args={ matches_tail: 100 })          → 看末 100 个 match
 - exec(..., args={ matches_start: 0, matches_end: 30 })                                     → 看前 30 个
 - exec(..., args={ matches_start: 50, matches_end: 80 })                                    → 看中间 30 个
 

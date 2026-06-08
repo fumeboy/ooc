@@ -26,10 +26,10 @@ function callKnowledge(
     type: "method_exec",
     parentWindowId: "root",
     title: "test",
-    command: "test",
+    method: "test",
     description: "",
     accumulatedArgs: args,
-    commandPaths: [],
+    methodPaths: [],
     loadedKnowledgePaths: [],
     status,
     createdAt: 0,
@@ -103,7 +103,7 @@ describe("command execution side effects", () => {
     expect(todoWindow?.type).toBe("todo");
     expect(todoWindow && todoWindow.type === "todo" && todoWindow.content).toBe("补充 thinkloop 集成测试");
     expect(
-      todoWindow && todoWindow.type === "todo" && todoWindow.onCommandPath,
+      todoWindow && todoWindow.type === "todo" && todoWindow.onMethodPath,
     ).toEqual(["program", "exec"]);
   });
 

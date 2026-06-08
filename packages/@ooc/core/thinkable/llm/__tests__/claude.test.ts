@@ -166,7 +166,7 @@ describe("claude provider", () => {
             type: "function_call",
             call_id: "tooluse_1",
             name: "exec",
-            arguments: { command: "talk", title: "say hi" },
+            arguments: { method: "talk", title: "say hi" },
           },
           {
             type: "function_call_output",
@@ -195,7 +195,7 @@ describe("claude provider", () => {
       type: "tool_use",
       id: "tooluse_1",
       name: "exec",
-      input: { command: "talk", title: "say hi" },
+      input: { method: "talk", title: "say hi" },
     });
     expect(capturedBody.messages[2].role).toBe("user");
     expect(capturedBody.messages[2].content[0]).toEqual({

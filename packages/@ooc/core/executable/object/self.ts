@@ -10,7 +10,7 @@ import type { MethodExecutionContext } from "../windows/_shared/command-types";
  * 构造 program 模式注入的 self 对象（plan §6.5 / §5.5）。
  *
  * - dir：stone 目录绝对路径
- * - callCommand(windowId, command, args?)：在当前 thread.contextWindows 里 lookup
+ * - callMethod(windowId, command, args?)：在当前 thread.contextWindows 里 lookup
  *   window → 通过 WindowRegistry 取 commands[command] → exec(ctx)；type=custom
  *   时 dispatcher 会把 ProgramSelf 注入到 ctx.programSelf（2026-06-02 P6.§1 从 ctx.self 改名）
  * - getData/setData：读写 flow object 的 `data.json`
@@ -28,7 +28,7 @@ export function createProgramSelf(
   const dir = stoneDir(stoneRef);
   const self: ProgramSelf = {
     dir,
-    async callCommand(windowId, command, args = {}) {
+    async callMethod(windowId, command, args = {}) {
       const window = thread.contextWindows.find((w) => w.id === windowId);
       if (!window) {
         const visible = thread.contextWindows.map((w) => `${w.id}(${w.type})`).join(", ") || "(无)";

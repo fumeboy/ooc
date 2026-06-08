@@ -79,15 +79,15 @@ test("F2 用户让 assistant 通过 chat 改文件 → fs 真改", async ({ page
   const events = (calleeThread?.events ?? []) as any[];
   const openCmds = events
     .filter((e) => e.category === "llm_interaction" && e.kind === "function_call" && e.toolName === "exec")
-    .map((e) => (e.arguments?.command as string) ?? "")
+    .map((e) => (e.arguments?.method as string) ?? "")
     .filter(Boolean);
-  // LLM 实际 exec 时 args.command 是单段命令名（无 window-type 前缀）：
+  // LLM 实际 exec 时 args.method 是单段命令名（无 window-type 前缀）：
   // file_window 上的 edit → "edit"，root 上的 write_file/program → "write_file"/"program"。
   const usedFileWindowEdit = openCmds.includes("edit");
   const usedWriteFile = openCmds.includes("write_file");
   const usedShell = events.some((e) => {
     if (e.category !== "llm_interaction" || e.kind !== "function_call" || e.toolName !== "exec") return false;
-    if (e.arguments?.command !== "program") return false;
+    if (e.arguments?.method !== "program") return false;
     const lang = (e.arguments?.args?.language ?? e.arguments?.args?.lang) as string | undefined;
     return lang === "shell";
   });

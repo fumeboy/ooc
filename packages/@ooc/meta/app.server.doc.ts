@@ -391,7 +391,7 @@ worker **只跑队列**：从 jobManager 取 queued job 跑 → 成功标 done /
 - **talk-delivery**（caller talk_window.say → deliver 到 callee inbox）→ enqueue callee
 - **do_window.continue**（父→子 / 子→父 inbox 写入）→ enqueue target thread
 - **issue appendComment**（HTTP + LLM 命令两个入口都调）→ enqueue 所有订阅 thread（排除 author）
-- **end command**（无 result 时手工 notify creator；带 result 时通过内部 continue/say 自动 notify）
+- **end method**（无 result 时手工 notify creator；带 result 时通过内部 continue/say 自动 notify）
 - **resume**（HTTP resume-session）→ 显式 enqueue resume-thread job
 - **seedSession / createFlowObject(initialMessage)/ continueThread** → flows/service.ts 显式 enqueue
 - **scheduler yield**（runJob 单次跑满 \`workerMaxTicks\` 自然返回，且 thread.status 仍为 \`running\`）→

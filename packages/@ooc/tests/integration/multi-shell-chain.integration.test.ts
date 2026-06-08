@@ -26,7 +26,7 @@ describe.skipIf(!hasLlmEnv)("integration: multi-shell-chain", () => {
       [
         "请用 program command（language=shell）执行第一段 shell：找 src/ 下行数最多的 .ts 文件（不含 __tests__/）。",
         "看到 form 的 result 后再用 program command（language=shell）执行第二段：cat 那个文件的前 20 行。",
-        "最后用 end command 结束。",
+        "最后用 end method 结束。",
         "重要：每段 shell 都是 program command；result 在 contextWindows 中，不需要 wait。",
       ].join("\n")
     );

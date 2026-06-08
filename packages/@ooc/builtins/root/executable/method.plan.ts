@@ -24,9 +24,9 @@ const KNOWLEDGE = `
 plan 用于把当前任务拆成可执行步骤，并以 plan_window 形式持久挂在 context。
 
 调用形态:
-- 简单文本: open(command="plan", title="制定计划", args={ plan: "<计划描述>" })
+- 简单文本: open(method="plan", title="制定计划", args={ plan: "<计划描述>" })
   → 创建一个新的 plan_window，title 默认 "Plan"，description=<text>，steps=[]
-- 完整指定: open(command="plan", title="...", args={ title: "...", description?: "...", steps?: [{ id?, text, status? }, ...] })
+- 完整指定: open(method="plan", title="...", args={ title: "...", description?: "...", steps?: [{ id?, text, status? }, ...] })
   → 完整创建一个新的 plan_window
 
 每次 plan command 都会创建一个新 plan_window；如果想在已有 plan 上更新，请直接
@@ -44,7 +44,7 @@ const PLAN_BASIC_PATH = "internal/executable/plan/basic";
 const PLAN_INPUT_PATH = "internal/executable/plan/input";
 
 /** plan command 的可匹配路径集合。 */
-export enum PlanCommandPath {
+export enum PlanMethodPath {
   Plan = "plan",
 }
 
@@ -59,8 +59,8 @@ function hasAnyInput(args: Record<string, unknown>): boolean {
 
 
 /** plan command 表项：当前只命中基础 plan 路径。 */
-export const planCommand: ObjectMethod = {
-  paths: [PlanCommandPath.Plan],
+export const planMethod: ObjectMethod = {
+  paths: [PlanMethodPath.Plan],
   schema: {
     args: {
       plan: { type: "string", required: false, description: "计划文本（快捷方式）" },
@@ -85,12 +85,12 @@ export const planCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executePlanCommand(ctx),
+  exec: (ctx) => executePlanMethod(ctx),
 };
 
 /** P6.§4-§5 thin delegator —— 委托到 plan_window constructor。 */
-export const executePlanCommand = makeRootDelegator({
-  command: "plan",
+export const executePlanMethod = makeRootDelegator({
+  method: "plan",
   constructorKind: "plan",
   objectLabel: "plan_window",
 });

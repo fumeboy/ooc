@@ -75,7 +75,7 @@ export async function ensureSelfObjectTypeRegistered(
     const parentClass: string | null | undefined =
       objWin?.parentClass !== undefined ? objWin.parentClass : await readStoneClass(stoneRef);
     ensureBuiltinClassRegistered(registry, parentClass);
-    const mergedMethods = { ...(objWin?.methods ?? {}), ...(objWin?.commands ?? {}) };
+    const mergedMethods = { ...(objWin?.methods ?? {}) };
     registry.registerNewObjectType(selfId as any, {
       methods: mergedMethods,
       renderXml: objWin?.renderXml,
@@ -167,7 +167,7 @@ export async function derivePeerObjectWindows(
         const parentClass: string | null | undefined =
           objWin.parentClass !== undefined ? objWin.parentClass : await readStoneClass(peerStoneRef);
         ensureBuiltinClassRegistered(registry, parentClass);
-        const mergedMethods = { ...(objWin.methods ?? {}), ...(objWin.commands ?? {}) };
+        const mergedMethods = { ...(objWin.methods ?? {}) };
         registry.registerNewObjectType(peerId as any, {
           methods: mergedMethods,
           renderXml: objWin.renderXml,

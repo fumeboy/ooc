@@ -56,7 +56,7 @@ test("windowMethod-written state survives toData + re-fromThread", async () => {
   await mgr.openMethodExec({
     thread,
     parentWindowId: "f1",
-    command: "set_viewport",
+    method: "set_viewport",
     title: "set_viewport",
     args: { line_end: 42 },
   });

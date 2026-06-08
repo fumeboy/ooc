@@ -2,7 +2,7 @@
  * do_window.move 命令 —— 跨 thread 共享 / 移交 ContextWindow（plan §do_window.move）。
  *
  * 调用形态：
- *   exec(window_id=<do_window_id>, command="move", args={ window_id: <target_window>, mode: "ref" | "move" })
+ *   exec(window_id=<do_window_id>, method="move", args={ window_id: <target_window>, mode: "ref" | "move" })
  *
  * - do_window 是父子双向通道；父→子用父侧 do_window；子→父用 creator do_window（指向父）
  * - mode="ref"：对端获得只读 snapshot；自己保留 owner 继续 live
@@ -83,7 +83,7 @@ const MOVE_COMBINED_KNOWLEDGE = [
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -260,7 +260,7 @@ async function executeMove(ctx: MethodExecutionContext): Promise<string | undefi
   return `[do_window.move] 已将 window "${window_id}" 移交给 thread "${peer.id}"（你这边变为 lent_out 临时只读，等其归还）。`;
 }
 
-export const moveCommand: ObjectMethod = {
+export const moveMethod: ObjectMethod = {
   paths: ["move", "move.ref", "move.move"],
   schema: {
     args: {

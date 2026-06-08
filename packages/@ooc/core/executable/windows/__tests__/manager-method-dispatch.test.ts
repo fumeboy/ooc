@@ -91,12 +91,12 @@ describe("WindowManager.submit — P6.§3 self-type guard", () => {
       // 但更朴素的做法是用 openMethodExec 在合法 parent 上开 form 再人为换 parent。
       //
       // 简化：走 openMethodExec 在 relation_window 上开 form, 然后改 parentWindowId。
-      // 这样 form.command 能落到 registry 校验之外（用户构造的合法 form, 但被
+      // 这样 form.method 能落到 registry 校验之外（用户构造的合法 form, 但被
       // re-targeted 到错类型 parent，模拟 §3 防御场景）。
       const opened = await mgr.openMethodExec({
         thread,
         parentWindowId: `w_rel_${PEER}`,
-        command: "edit",
+        method: "edit",
         title: "edit relation",
         // 不带 args, 避免 auto-submit
       });
@@ -134,7 +134,7 @@ describe("WindowManager.submit — P6.§3 self-type guard", () => {
       const opened = await mgr.openMethodExec({
         thread,
         parentWindowId: `w_rel_${PEER}`,
-        command: "edit",
+        method: "edit",
         title: "edit relation ok",
         args: { content: "hello", scope: "session" },
         // args 给齐 + edit 不引入新 knowledge → auto-submit

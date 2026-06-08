@@ -29,10 +29,10 @@ talk 用于开启一个对外的会话窗口（talk_window），与另一个 flo
 
 submit 后副作用：
 - 在 thread.contextWindows 下挂一个 type=talk 的 window（初始 targetThreadId 为空）
-- 首次发消息：open(parent_window_id="<talk_window_id>", command="say", args={ msg: "...", wait: true|false })
+- 首次发消息：open(parent_window_id="<talk_window_id>", method="say", args={ msg: "...", wait: true|false })
   - 若 callee thread 尚未存在，系统会在 flows/{sid}/objects/{target}/threads/ 下创建一条
   - 同时把消息追加到 callee.inbox + caller.outbox，callee 自动进入 running 等待 worker 调度
-- 等待回复：open(parent_window_id="<talk_window_id>", command="wait", args={})
+- 等待回复：open(parent_window_id="<talk_window_id>", method="wait", args={})
 - 关闭窗口：close(window_id="<talk_window_id>", reason="...")
 
 **重要：talk_window 是持续会话窗口，应该复用。**
@@ -44,13 +44,13 @@ submit 后副作用：
 `.trim();
 
 
-export enum TalkCommandPath {
+export enum TalkMethodPath {
   Talk = "talk",
 }
 
 /** root.talk command：委托到 talk_window constructor。 */
-export const talkCommand: ObjectMethod = {
-  paths: [TalkCommandPath.Talk],
+export const talkMethod: ObjectMethod = {
+  paths: [TalkMethodPath.Talk],
   schema: {
     args: {
       target: { type: "string", required: true, description: "目标 flow object 的 objectId" },
@@ -78,14 +78,14 @@ export const talkCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeTalkCommand(ctx),
+  exec: (ctx) => executeTalkMethod(ctx),
 };
 
 /**
  * P6.§4-§5 thin delegator —— 委托到 talk_window constructor。
  */
-export const executeTalkCommand = makeRootDelegator({
-  command: "talk",
+export const executeTalkMethod = makeRootDelegator({
+  method: "talk",
   constructorKind: "talk",
   objectLabel: "talk_window",
 });

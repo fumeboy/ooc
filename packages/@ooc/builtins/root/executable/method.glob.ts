@@ -3,7 +3,7 @@
  *
  * 2026-06-02 P6.§4-§5: 历史 root.glob 的构造逻辑（Bun Glob scan + SearchWindow build）已迁到
  * packages/@ooc/builtins/search/executable/index.ts 的 kind="constructor" search method
- * （dispatch on form.command="glob"）。
+ * （dispatch on form.method="glob"）。
  * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("search") 委托。
  */
 
@@ -31,13 +31,13 @@ glob 用于按文件名通配符（glob pattern）查找文件，并把结果作
 行为：
 - 用 Bun 内置 Glob 扫描文件系统；只返回文件（onlyFiles=true）
 - 命中按 path 字典序排序；超过 200 条截断，search_window.truncated=true
-- 命中之后用 \`open(parent_window_id="<search_window_id>", command="open_match", args={ index: <N> })\`
+- 命中之后用 \`open(parent_window_id="<search_window_id>", method="open_match", args={ index: <N> })\`
   在该 match 对应的文件上 spawn file_window
 
 调用示例：
 
 \`\`\`
-open(command="glob", title="找全部 TS",
+open(method="glob", title="找全部 TS",
      args={ pattern: "src/**/*.ts" })
 \`\`\`
 
@@ -47,7 +47,7 @@ open(command="glob", title="找全部 TS",
 `.trim();
 
 
-export const globCommand: ObjectMethod = {
+export const globMethod: ObjectMethod = {
   paths: ["glob"],
   schema: {
     args: {
@@ -72,15 +72,15 @@ export const globCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeGlobCommand(ctx),
+  exec: (ctx) => executeGlobMethod(ctx),
 };
 
 /**
- * P6.§4-§5 thin delegator —— 委托到 search_window constructor（dispatch on form.command="glob"）。
+ * P6.§4-§5 thin delegator —— 委托到 search_window constructor（dispatch on form.method="glob"）。
  */
-export const executeGlobCommand = makeRootDelegator({
-  command: "glob",
+export const executeGlobMethod = makeRootDelegator({
+  method: "glob",
   constructorKind: "search",
   objectLabel: "search_window",
-  formCommand: "glob",
+  formMethod: "glob",
 });

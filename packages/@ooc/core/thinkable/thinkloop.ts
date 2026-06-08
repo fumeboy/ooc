@@ -57,7 +57,7 @@ function estimateWindowsTokens(
 /**
  * 把 LlmToolCall 解析成 PermissionDecider 可消费的 PendingToolCall 载荷。
  *
- * - exec: 提取 args.command 作为实际 command 路径; args.window_id 作为目标 window
+ * - exec: 提取 args.method 作为实际 command 路径; args.window_id 作为目标 window
  * - close / wait / compress: command = toolName 自身; windowId/args 视情况
  *
  * Q0b: 当前 exec 的 args 形态为 `{ command, window_id, args, ... }` (见 tools/exec.ts);
@@ -67,18 +67,18 @@ function estimateWindowsTokens(
 function buildPendingToolCall(toolCall: LlmToolCall): PendingToolCall {
   const args = toolCall.arguments ?? {};
   if (toolCall.name === "exec") {
-    const innerMethod = typeof args.command === "string" ? args.command : undefined;
+    const innerMethod = typeof args.method === "string" ? args.method : undefined;
     const windowId = typeof args.window_id === "string" ? args.window_id : undefined;
     return {
       toolName: "exec",
-      command: innerMethod ?? "exec",
+      method: innerMethod ?? "exec",
       args: args.args,
       windowId,
     };
   }
   return {
     toolName: toolCall.name,
-    command: toolCall.name,
+    method: toolCall.name,
     args,
   };
 }
@@ -180,7 +180,7 @@ async function processDecidedPermissionAsks(thread: ThreadContext): Promise<bool
           category: "permission",
           kind: "permission_denied",
           toolCallId: event.toolCallId,
-          command: event.command,
+          method: event.method,
           reason: "approve received but pendingCall missing; cannot replay",
           windowId: event.windowId,
         });
@@ -212,7 +212,7 @@ async function processDecidedPermissionAsks(thread: ThreadContext): Promise<bool
       category: "permission",
       kind: "permission_denied",
       toolCallId: event.toolCallId,
-      command: event.command,
+      method: event.method,
       reason,
       argsSummary: event.argsSummary,
       windowId: event.windowId,
@@ -303,7 +303,7 @@ async function runToolDispatchLoop(
         category: "permission",
         kind: "permission_denied",
         toolCallId: toolCall.id,
-        command: pending.command ?? toolCall.name,
+        method: pending.method ?? toolCall.name,
         reason: decision.reason,
         argsSummary: summarizeArgs(pending.args ?? toolCall.arguments),
         windowId: pending.windowId,
@@ -332,12 +332,12 @@ async function runToolDispatchLoop(
         category: "permission",
         kind: "permission_ask",
         toolCallId: toolCall.id,
-        command: pending.command ?? toolCall.name,
+        method: pending.method ?? toolCall.name,
         argsSummary: summarizeArgs(pending.args ?? toolCall.arguments),
         windowId: pending.windowId,
         pendingCall: {
           toolName: toolCall.name,
-          command: pending.command ?? toolCall.name,
+          method: pending.method ?? toolCall.name,
           args: toolCall.arguments,
           windowId: pending.windowId,
           toolCallId: toolCall.id,

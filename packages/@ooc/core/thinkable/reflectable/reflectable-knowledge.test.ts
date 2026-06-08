@@ -18,17 +18,17 @@ import { makeThread } from "../../__tests__/make-thread";
 import type { MethodExecWindow } from "../../executable/windows/_shared/types";
 
 /** 构造 command_exec window fixture（用于 G2 end-reflection-reminder 测试）。 */
-function makeMethodExecWindow(overrides: Partial<MethodExecWindow> & { command: string }): MethodExecWindow {
+function makeMethodExecWindow(overrides: Partial<MethodExecWindow> & { method: string }): MethodExecWindow {
   return {
     id: "f_test",
     type: "method_exec",
     parentWindowId: "root",
-    title: overrides.command,
+    title: overrides.method,
     status: "open",
     createdAt: 1,
     description: "",
     accumulatedArgs: {},
-    commandPaths: [overrides.command],
+    methodPaths: [overrides.method],
     loadedKnowledgePaths: [],
     ...overrides,
   };
@@ -95,7 +95,7 @@ describe("reflectable knowledge protocol injection", () => {
     expect(REFLECTABLE_KNOWLEDGE).toContain("show_description");
     expect(REFLECTABLE_KNOWLEDGE).toContain("show_content");
     expect(REFLECTABLE_KNOWLEDGE).toContain("window::");
-    expect(REFLECTABLE_KNOWLEDGE).toContain("command::");
+    expect(REFLECTABLE_KNOWLEDGE).toContain("method::");
     // 强调"没有 frontmatter = silently 失效"
     expect(REFLECTABLE_KNOWLEDGE).toMatch(/永远无法激活|永远无法被|断裂/);
     // 完整模板 fence
@@ -116,7 +116,7 @@ describe("end-reflection-reminder injection (G2)", () => {
       persistence: {
         baseDir: "/tmp/test", sessionId: "web-test", objectId: "alice", threadId: "t_end_business",
       },
-      extraWindows: [makeMethodExecWindow({ command: "end", id: "f_end" })],
+      extraWindows: [makeMethodExecWindow({ method: "end", id: "f_end" })],
     });
     const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBe(END_REFLECTION_REMINDER_KNOWLEDGE);
@@ -134,7 +134,7 @@ describe("end-reflection-reminder injection (G2)", () => {
       persistence: {
         baseDir: "/tmp/test", sessionId: "super", objectId: "alice", threadId: "t_end_super",
       },
-      extraWindows: [makeMethodExecWindow({ command: "end", id: "f_end" })],
+      extraWindows: [makeMethodExecWindow({ method: "end", id: "f_end" })],
     });
     const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();
@@ -146,7 +146,7 @@ describe("end-reflection-reminder injection (G2)", () => {
       persistence: {
         baseDir: "/tmp/test", sessionId: "web-test", objectId: "alice", threadId: "t_talk_business",
       },
-      extraWindows: [makeMethodExecWindow({ command: "talk", id: "f_talk" })],
+      extraWindows: [makeMethodExecWindow({ method: "talk", id: "f_talk" })],
     });
     const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();

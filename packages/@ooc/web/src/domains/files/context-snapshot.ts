@@ -37,12 +37,12 @@ type _ContextWindowUnion =
       parentWindowId: string;
       title: string;
       status: "open" | "executing" | "success" | "failed";
-      command: string;
+      method: string;
       description?: string;
       accumulatedArgs?: Record<string, unknown>;
-      commandPaths?: string[];
+      methodPaths?: string[];
       loadedKnowledgePaths?: string[];
-      commandKnowledgePaths?: string[];
+      methodKnowledgePaths?: string[];
       result?: string;
       createdAt?: number;
       schema?: { args: Record<string, {
@@ -77,7 +77,7 @@ type _ContextWindowUnion =
       title: string;
       status: "open" | "done";
       content: string;
-      onCommandPath?: string[];
+      onMethodPath?: string[];
       createdAt?: number;
     }
   | {
@@ -426,7 +426,7 @@ function windowBadge(window: ContextWindow): string {
 function windowSummary(window: ContextWindow): string {
   switch (window.type) {
     case "method_exec":
-      return `${window.command} (${window.status})`;
+      return `${window.method} (${window.status})`;
     case "do":
       return `→ ${window.targetThreadId}${window.isCreatorWindow ? " · creator" : ""}`;
     case "todo":
@@ -464,7 +464,7 @@ function windowCharCount(window: ContextWindow): number {
   let n = window.title.length;
   switch (window.type) {
     case "method_exec":
-      n += window.command.length;
+      n += window.method.length;
       n += jsonChars(window.accumulatedArgs ?? {});
       n += (window.result ?? "").length;
       break;
@@ -473,7 +473,7 @@ function windowCharCount(window: ContextWindow): number {
       break;
     case "todo":
       n += window.content.length;
-      n += (window.onCommandPath ?? []).join(",").length;
+      n += (window.onMethodPath ?? []).join(",").length;
       break;
     case "talk":
       n += window.target.length;

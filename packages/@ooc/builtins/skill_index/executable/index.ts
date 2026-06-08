@@ -26,7 +26,7 @@ SKILL.md + 任意辅助文件），用于复用某种操作模式或协议。
   - branch 级（公共，跨 Object 共享）：\`stones/<branch>/skills/<name>/SKILL.md\`
   - object 级（仅 self）：\`stones/<branch>/objects/<self>/skills/<name>/SKILL.md\`
 - 索引中可见 name + description（来自 SKILL.md frontmatter）+ scope 徽标（branch / object）
-- 进入某 skill：\`exec(command="open_file", args={ path: "<skillFilePath>" })\` 打开 SKILL.md
+- 进入某 skill：\`exec(method="open_file", args={ path: "<skillFilePath>" })\` 打开 SKILL.md
   阅读完整说明；按需用 \`open_file\` 继续读 references / scripts 等辅助文件
 - skills 目录变动 ≤10s 后才反映到索引（缓存 TTL）
 

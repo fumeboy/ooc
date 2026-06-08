@@ -21,11 +21,11 @@ import {
 import type { MethodExecWindow } from "../method_exec/types.js";
 import type { BaseContextWindow } from "@ooc/core/_shared";
 import type { ThreadPersistenceRef } from "../../../persistable/common.js";
-import { continueCommand } from "./command.continue.js";
-import { waitCommand } from "./command.wait.js";
-import { closeCommand } from "./command.close.js";
-import { moveCommand } from "./command.move.js";
-import { setTranscriptWindowCommandForDo } from "./command.set-transcript-window.js";
+import { continueMethod } from "./method.continue.js";
+import { waitMethod } from "./method.wait.js";
+import { closeMethod } from "./method.close.js";
+import { moveMethod } from "./method.move.js";
+import { setTranscriptWindowCommandForDo } from "./method.set-transcript-window.js";
 import { archiveDoWindowChild } from "./helpers.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
@@ -195,8 +195,8 @@ do 用于在当前对象内部派生子线程，并在父线程下产生一个 d
   内部展开为多次 do_window.move 命令；之后还可以随时通过 do_window.move 继续分享/归还
 
 示例：
-exec(command="do", title="处理告警", args={ msg: "请检查 ERROR 日志", wait: true })
-exec(command="do", title="一起读 file_x", args={
+exec(method="do", title="处理告警", args={ msg: "请检查 ERROR 日志", wait: true })
+exec(method="do", title="一起读 file_x", args={
   msg: "看 file_x 第 100-200 行",
   share_windows: [{ window_id: "w_file_abc", mode: "ref" }]
 })
@@ -204,14 +204,14 @@ exec(command="do", title="一起读 file_x", args={
 submit 后：
 - 子线程创建并 running；初始消息进 child inbox
 - 父线程下挂 do_window（type=do, targetThreadId=<childId>）
-- 后续追加消息：exec(window_id="<do_window_id>", command="continue", args={ msg: "..." })
-- 后续分享 window：exec(window_id="<do_window_id>", command="move", args={ window_id, mode })
+- 后续追加消息：exec(window_id="<do_window_id>", method="continue", args={ msg: "..." })
+- 后续分享 window：exec(window_id="<do_window_id>", method="move", args={ window_id, mode })
 - 关闭对话：close(window_id="<do_window_id>")（子线程会被标记 archived；borrowed owner 自动归还）
 `.trim();
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -516,10 +516,10 @@ const doConstructor: ObjectMethod = {
 
 builtinRegistry.registerObjectType("do", {
   methods: {
-    continue: continueCommand,
-    wait: waitCommand,
-    close: closeCommand,
-    move: moveCommand,
+    continue: continueMethod,
+    wait: waitMethod,
+    close: closeMethod,
+    move: moveMethod,
     do: doConstructor,
   },
   windowMethods: {

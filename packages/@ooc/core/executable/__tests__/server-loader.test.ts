@@ -53,7 +53,7 @@ describe("loadObjectWindow", () => {
 
     await writeExecutableSource(
       ref,
-      `export const window = { commands: { v1: { paths: ["v1"], intent: () => [], exec: async () => ({ ok: true, result: "1" }) } } };`,
+      `export const window = { methods: { v1: { paths: ["v1"], intent: () => [], exec: async () => ({ ok: true, result: "1" }) } } };`,
     );
     let win = await loadObjectWindow(ref);
     expect(Object.keys(win?.methods ?? {})).toEqual(["v1"]);
@@ -61,7 +61,7 @@ describe("loadObjectWindow", () => {
     await new Promise((r) => setTimeout(r, 5));
     await writeExecutableSource(
       ref,
-      `export const window = { commands: { v2: { paths: ["v2"], intent: () => [], exec: async () => ({ ok: true, result: "2" }) } } };`,
+      `export const window = { methods: { v2: { paths: ["v2"], intent: () => [], exec: async () => ({ ok: true, result: "2" }) } } };`,
     );
 
     win = await loadObjectWindow(ref);

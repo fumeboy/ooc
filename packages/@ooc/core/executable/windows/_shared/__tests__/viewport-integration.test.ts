@@ -91,7 +91,7 @@ describe("viewport: file_window integration", () => {
       const opened = await mgr.openMethodExec({
         thread,
         parentWindowId: fw.id,
-        command: "set_viewport",
+        method: "set_viewport",
         title: "extend",
         args: { line_end: 1000 },
       });
@@ -124,7 +124,7 @@ describe("viewport: file_window integration", () => {
       await mgr.openMethodExec({
         thread,
         parentWindowId: fw.id,
-        command: "set_viewport",
+        method: "set_viewport",
         title: "bad",
         args: { line_start: 100, line_end: 50 },
       });
@@ -134,7 +134,7 @@ describe("viewport: file_window integration", () => {
       const after = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
       expect(after.state!.viewport).toEqual(origViewport);
       const failedForm = thread.contextWindows.find(
-        (w) => w.type === "method_exec" && (w as { command?: string }).command === "set_viewport",
+        (w) => w.type === "method_exec" && (w as { method?: string }).method === "set_viewport",
       ) as { status: string; result?: string } | undefined;
       expect(failedForm?.status).toBe("failed");
       expect(failedForm?.result ?? "").toContain("line_start");
@@ -203,7 +203,7 @@ describe("viewport: knowledge_window integration", () => {
       const opened = await mgr.openMethodExec({
         thread,
         parentWindowId: kw!.id,
-        command: "set_viewport",
+        method: "set_viewport",
         title: "expand",
         args: { line_end: 500 },
       });

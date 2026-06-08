@@ -109,7 +109,7 @@ function PermissionContent({
   onReject: () => void;
   onClose: () => void;
 }) {
-  const command = typeof event.command === "string" ? event.command : "(unknown)";
+  const command = typeof event.method === "string" ? event.method : "(unknown)";
   const argsSummary = typeof event.argsSummary === "string" ? event.argsSummary : "";
   const windowId = typeof event.windowId === "string" ? event.windowId : "";
   return (

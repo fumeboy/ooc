@@ -93,7 +93,7 @@ describe("TuiBlock tool cards", () => {
           arguments: {
             title: "回复问候",
             type: "command",
-            command: "talk",
+            method: "talk",
             description: "向用户回复问候",
           },
         },

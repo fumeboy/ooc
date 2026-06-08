@@ -236,17 +236,17 @@ describe("do_window: transcript viewport render", () => {
 });
 
 describe("set_transcript_window windowMethod (talk)", () => {
-  let setCommand: NonNullable<
+  let setMethod: NonNullable<
     ReturnType<typeof builtinRegistry.getObjectDefinition>["windowMethods"]
   >[string];
   beforeAll(() => {
-    setCommand = builtinRegistry.getObjectDefinition("talk").windowMethods!["set_transcript_window"]!;
-    expect(setCommand).toBeDefined();
+    setMethod = builtinRegistry.getObjectDefinition("talk").windowMethods!["set_transcript_window"]!;
+    expect(setMethod).toBeDefined();
     expect(builtinRegistry.getObjectDefinition("talk").methods["set_transcript_window"]).toBeUndefined();
   });
 
   it("tail mode returns new state with transcriptViewport", () => {
-    const out = setCommand.exec({
+    const out = setMethod.exec({
       args: { tail: 50 },
       windowState: { transcriptViewport: { tail: 20 } },
     } as any) as any;
@@ -255,7 +255,7 @@ describe("set_transcript_window windowMethod (talk)", () => {
   });
 
   it("range mode replaces tail", () => {
-    const out = setCommand.exec({
+    const out = setMethod.exec({
       args: { range_start: 0, range_end: 10 },
       windowState: { transcriptViewport: { tail: 20 } },
     } as any) as any;
@@ -265,12 +265,12 @@ describe("set_transcript_window windowMethod (talk)", () => {
 
   it("does not mutate input windowState", () => {
     const windowState = { transcriptViewport: { tail: 20 } };
-    setCommand.exec({ args: { tail: 50 }, windowState } as any);
+    setMethod.exec({ args: { tail: 50 }, windowState } as any);
     expect(windowState.transcriptViewport).toEqual({ tail: 20 });
   });
 
   it("fail-loud: tail + range_start mutually exclusive", () => {
-    const out = setCommand.exec({
+    const out = setMethod.exec({
       args: { tail: 10, range_start: 0, range_end: 5 },
       windowState: { transcriptViewport: { tail: 20 } },
     } as any) as any;
@@ -279,7 +279,7 @@ describe("set_transcript_window windowMethod (talk)", () => {
   });
 
   it("fail-loud: invalid tail", () => {
-    const out = setCommand.exec({
+    const out = setMethod.exec({
       args: { tail: -5 },
       windowState: { transcriptViewport: { tail: 20 } },
     } as any) as any;
@@ -288,7 +288,7 @@ describe("set_transcript_window windowMethod (talk)", () => {
   });
 
   it("no viewport args returns ok with helpful result text", () => {
-    const out = setCommand.exec({ args: {}, windowState: {} } as any) as any;
+    const out = setMethod.exec({ args: {}, windowState: {} } as any) as any;
     expect(out.ok).toBe(true);
     expect(out.result).toContain("至少需要");
   });
@@ -296,10 +296,10 @@ describe("set_transcript_window windowMethod (talk)", () => {
 
 describe("set_transcript_window windowMethod (do)", () => {
   it("works on do_window via shared helper", () => {
-    const setCommand = builtinRegistry.getObjectDefinition("do").windowMethods!["set_transcript_window"]!;
-    expect(setCommand).toBeDefined();
+    const setMethod = builtinRegistry.getObjectDefinition("do").windowMethods!["set_transcript_window"]!;
+    expect(setMethod).toBeDefined();
     expect(builtinRegistry.getObjectDefinition("do").methods["set_transcript_window"]).toBeUndefined();
-    const out = setCommand.exec({
+    const out = setMethod.exec({
       args: { tail: 5 },
       windowState: { transcriptViewport: { tail: 20 } },
     } as any) as any;

@@ -87,7 +87,7 @@ export class ContextPipeline {
  * 1. SystemProcessor — protocol knowledge (basics, reflectable, type-level basics,
  *    creator-reply, end-reflection reminder) + skill_index + self-type registration
  * 2. MethodFormProcessor — enrich method_exec forms (effectiveVisibleType,
- *    commandKnowledgePaths) + derive form-scoped knowledge windows
+ *    methodKnowledgePaths) + derive form-scoped knowledge windows
  * 3. KnowledgeProcessor — intent-triggered knowledge from intentCache
  * 4. ActivatorProcessor — traditional frontmatter trigger-based knowledge activation
  * 5. PeerProcessor — peer/children Object windows

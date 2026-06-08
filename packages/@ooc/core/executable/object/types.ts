@@ -7,7 +7,7 @@
  * 的 ContextWindow 上。
  *
  * 仅保留：
- * - `ProgramSelf` —— program 模式 ts/js sandbox 注入的 self；`callCommand`
+ * - `ProgramSelf` —— program 模式 ts/js sandbox 注入的 self；`callMethod`
  *   按 windowId 查 thread.contextWindows 并执行该 window 上的 command
  * - UI 路径相关：`UiServerMethod` / `UiMethods` / `UiServerMethodContext` ——
  *   `ui_methods` 仍由 server/index.ts 平行导出（plan D3 完全保留）；HTTP
@@ -37,7 +37,7 @@ export interface ProgramSelf {
    *
    * 找不到 windowId / command 时抛清晰错误（包含当前可见 window/command 列表）。
    */
-  callCommand: (windowId: string, command: string, args?: Record<string, unknown>) => Promise<unknown>;
+  callMethod: (windowId: string, command: string, args?: Record<string, unknown>) => Promise<unknown>;
   /** 读 data.json 中的字段；不存在返回 undefined。 */
   getData: (key: string) => Promise<unknown>;
   /** 顶层 merge 写 data.json 中的字段。 */

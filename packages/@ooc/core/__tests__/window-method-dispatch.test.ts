@@ -58,7 +58,7 @@ test("windowMethod dispatch writes new state back to window", async () => {
   const opened = await mgr.openMethodExec({
     thread,
     parentWindowId: "f1",
-    command: "set_viewport",
+    method: "set_viewport",
     title: "set_viewport",
     args: { line_end: 123 },
   });
@@ -75,7 +75,7 @@ test("windowMethod failure leaves window state untouched and form failed", async
   await mgr.openMethodExec({
     thread,
     parentWindowId: "f1",
-    command: "set_bad",
+    method: "set_bad",
     title: "set_bad",
     args: { x: 1 },
   });
@@ -83,7 +83,7 @@ test("windowMethod failure leaves window state untouched and form failed", async
   expect(after.state.viewport).toBeUndefined();
   const failed = mgr
     .list()
-    .find((x: any) => x.type === "method_exec" && x.command === "set_bad") as any;
+    .find((x: any) => x.type === "method_exec" && x.method === "set_bad") as any;
   expect(failed?.status).toBe("failed");
   expect(String(failed?.result)).toContain("line_start");
 });
@@ -94,7 +94,7 @@ test("windowMethod does not mutate object business data", async () => {
   await mgr.openMethodExec({
     thread,
     parentWindowId: "f1",
-    command: "set_viewport",
+    method: "set_viewport",
     title: "set_viewport",
     args: { line_end: 5 },
   });

@@ -420,10 +420,10 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(legacyWindow.kind).toBe("object"); // auto-mapped
     expect((legacyWindow as any).objectType).toBe("todo");
 
-    const legacyCommand = parseTrigger("command::root::open_knowledge");
-    expect(legacyCommand.kind).toBe("method"); // auto-mapped
-    expect((legacyCommand as any).objectType).toBe("root");
-    expect((legacyCommand as any).method).toBe("open_knowledge");
+    const legacyMethod = parseTrigger("method::root::open_knowledge");
+    expect(legacyMethod.kind).toBe("method"); // auto-mapped
+    expect((legacyMethod as any).objectType).toBe("root");
+    expect((legacyMethod as any).method).toBe("open_knowledge");
   });
 
   it("Phase 8: new trigger format evaluates correctly against thread", async () => {

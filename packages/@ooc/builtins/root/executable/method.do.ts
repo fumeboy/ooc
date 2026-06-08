@@ -30,8 +30,8 @@ do 用于在当前对象内部派生子线程，并在父线程下产生一个 d
   内部展开为多次 do_window.move 命令；之后还可以随时通过 do_window.move 继续分享/归还
 
 示例：
-exec(command="do", title="处理告警", args={ msg: "请检查 ERROR 日志", wait: true })
-exec(command="do", title="一起读 file_x", args={
+exec(method="do", title="处理告警", args={ msg: "请检查 ERROR 日志", wait: true })
+exec(method="do", title="一起读 file_x", args={
   msg: "看 file_x 第 100-200 行",
   share_windows: [{ window_id: "w_file_abc", mode: "ref" }]
 })
@@ -39,20 +39,20 @@ exec(command="do", title="一起读 file_x", args={
 submit 后：
 - 子线程创建并 running；初始消息进 child inbox
 - 父线程下挂 do_window（type=do, targetThreadId=<childId>）
-- 后续追加消息：exec(window_id="<do_window_id>", command="continue", args={ msg: "..." })
-- 后续分享 window：exec(window_id="<do_window_id>", command="move", args={ window_id, mode })
+- 后续追加消息：exec(window_id="<do_window_id>", method="continue", args={ msg: "..." })
+- 后续分享 window：exec(window_id="<do_window_id>", method="move", args={ window_id, mode })
 - 关闭对话：close(window_id="<do_window_id>")（子线程会被标记 archived；borrowed owner 自动归还）
 `.trim();
 
 
-export enum DoCommandPath {
+export enum DoMethodPath {
   Do = "do",
   Wait = "do.wait",
 }
 
 /** root level 的 do command：委托到 do_window constructor。 */
-export const doCommand: ObjectMethod = {
-  paths: [DoCommandPath.Do, DoCommandPath.Wait],
+export const doMethod: ObjectMethod = {
+  paths: [DoMethodPath.Do, DoMethodPath.Wait],
   schema: {
     args: {
       msg: { type: "string", required: true, description: "写入子线程 inbox 的初始消息" },
@@ -62,7 +62,7 @@ export const doCommand: ObjectMethod = {
   } as MethodCallSchema,
   intent: (args): Intent[] => {
     const r: Intent[] = [];
-    if (args.wait === true) r.push({ name: DoCommandPath.Wait });
+    if (args.wait === true) r.push({ name: DoMethodPath.Wait });
     return r;
   },
   onFormChange(change, { form, intents }) {
@@ -80,14 +80,14 @@ export const doCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeDoCommand(ctx),
+  exec: (ctx) => executeDoMethod(ctx),
 };
 
 /**
  * P6.§4-§5 thin delegator —— 委托到 do_window constructor。
  */
-export const executeDoCommand = makeRootDelegator({
-  command: "do",
+export const executeDoMethod = makeRootDelegator({
+  method: "do",
   constructorKind: "do",
   objectLabel: "do_window",
 });

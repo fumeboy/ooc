@@ -7,8 +7,8 @@ export function readable(ctx: RenderContext): XmlNode[] {
   const children: XmlNode[] = [
     xmlElement("content", {}, [xmlText(window.content)]),
   ];
-  if (window.onCommandPath && window.onCommandPath.length > 0) {
-    children.push(renderPathList("on_command_path", window.onCommandPath)!);
+  if (window.onMethodPath && window.onMethodPath.length > 0) {
+    children.push(renderPathList("on_command_path", window.onMethodPath)!);
   }
   return children;
 }

@@ -2,7 +2,7 @@
  * Round 11 G2 end-reflection-reminder thread-level 集成测试
  *
  * 体验官 Round 14 报告（docs/2026-05-27-round-14-experience-report.md §Round 11）
- * 提示："本轮 LLM 没有自然调到 end command，需补 thread-level 集成测试" —— 单测覆盖
+ * 提示："本轮 LLM 没有自然调到 end method，需补 thread-level 集成测试" —— 单测覆盖
  * 了 synthesizer.collectExecutableKnowledgeEntries 单元路径，但完整路径（thread →
  * buildInputItems → input items 的 system message）从未在 e2e 跑通过。
  *
@@ -36,18 +36,18 @@ import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 import "@ooc/core/executable/windows";
 
 function makeMethodExecWindow(
-  overrides: Partial<MethodExecWindow> & { command: string },
+  overrides: Partial<MethodExecWindow> & { method: string },
 ): MethodExecWindow {
   return {
     id: "f_test",
     type: "method_exec",
     parentWindowId: "root",
-    title: overrides.command,
+    title: overrides.method,
     status: "open",
     createdAt: 1,
     description: "",
     accumulatedArgs: {},
-    commandPaths: [overrides.command],
+    methodPaths: [overrides.method],
     loadedKnowledgePaths: [],
     ...overrides,
   };
@@ -99,7 +99,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         id: ref.threadId,
         persistence: ref,
         extraWindows: [
-          makeMethodExecWindow({ command: "end", id: "f_end_biz" }),
+          makeMethodExecWindow({ method: "end", id: "f_end_biz" }),
         ],
       });
 
@@ -141,7 +141,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         id: ref.threadId,
         persistence: ref,
         extraWindows: [
-          makeMethodExecWindow({ command: "end", id: "f_end_super" }),
+          makeMethodExecWindow({ method: "end", id: "f_end_super" }),
         ],
       });
 
@@ -170,7 +170,7 @@ describe("[round-11] end-reflection-reminder thread-level integration", () => {
         id: ref.threadId,
         persistence: ref,
         extraWindows: [
-          makeMethodExecWindow({ command: "talk", id: "f_talk_biz" }),
+          makeMethodExecWindow({ method: "talk", id: "f_talk_biz" }),
         ],
       });
 

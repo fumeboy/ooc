@@ -367,7 +367,7 @@ export function listOpenedCommands(thread: ThreadContext | undefined): string[] 
   const seen: string[] = [];
   for (const e of thread.events) {
     if (!isFnCall(e) || e.toolName !== "exec") continue;
-    const cmd = (e.arguments as { command?: unknown } | undefined)?.command;
+    const cmd = (e.arguments as { method?: unknown } | undefined)?.method;
     if (typeof cmd === "string") seen.push(cmd);
   }
   return seen;
@@ -379,7 +379,7 @@ export function usedShellProgram(thread: ThreadContext | undefined): boolean {
   for (const e of thread.events) {
     if (!isFnCall(e) || e.toolName !== "exec") continue;
     const args = (e.arguments ?? {}) as Record<string, unknown>;
-    if (args.command !== "root.program") continue;
+    if (args.method !== "root.program") continue;
     const nested = (args.args as Record<string, unknown> | undefined) ?? {};
     const lang = nested.language ?? nested.lang ?? args.language ?? args.lang;
     if (lang === "shell") return true;
@@ -393,7 +393,7 @@ export function countCommandOpens(thread: ThreadContext | undefined, commandPath
   let n = 0;
   for (const e of thread.events) {
     if (!isFnCall(e) || e.toolName !== "exec") continue;
-    if ((e.arguments as { command?: unknown } | undefined)?.command === commandPath) n += 1;
+    if ((e.arguments as { method?: unknown } | undefined)?.method === commandPath) n += 1;
   }
   return n;
 }
@@ -432,17 +432,17 @@ export function userInboxIntoCallee(calleeThread: ThreadContext | undefined): Th
 export function customWindowInvocations(
   thread: ThreadContext | undefined,
   selfId: string,
-): Array<{ callId?: string; command?: string; args?: unknown }> {
+): Array<{ callId?: string; method?: string; args?: unknown }> {
   if (!thread) return [];
   const wantWindowId = `custom:${selfId}`;
-  const hits: Array<{ callId?: string; command?: string; args?: unknown }> = [];
+  const hits: Array<{ callId?: string; method?: string; args?: unknown }> = [];
   for (const e of thread.events) {
     if (!isFnCall(e) || e.toolName !== "exec") continue;
     const a = (e.arguments ?? {}) as Record<string, unknown>;
     if (a.window_id !== wantWindowId) continue;
     hits.push({
       callId: (e as { callId?: string }).callId,
-      command: typeof a.command === "string" ? a.command : undefined,
+      method: typeof a.method === "string" ? a.method : undefined,
       args: a.args,
     });
   }
@@ -571,7 +571,7 @@ export function listMemoryFiles(baseDir: string, selfId: string): string[] {
 /**
  * 粗粒度校验一篇 sediment markdown 是否含合法 frontmatter：
  * 第一行 `---`，闭合 `---`，且 block 内含 title / description / activates_on，
- * 且 activates_on 至少含一条新协议 trigger（`window::` / `command::` / `super`）。
+ * 且 activates_on 至少含一条新协议 trigger（`window::` / `method::` / `object::` / `super`）。
  *
  * 2026-05-28 切换到 trigger map 后，旧 `show_description_when:` / `show_content_when:`
  * 不再视为有效。（reflectable 协议要求：缺 frontmatter 或写错 schema 的 memory
@@ -583,7 +583,7 @@ export function hasValidFrontmatter(md: string): boolean {
   if (close === -1) return false;
   const block = md.slice(0, close);
   const hasTrigger =
-    /window::/.test(block) || /command::/.test(block) || /(^|\n)\s*super:/.test(block) || /"super"/.test(block);
+    /window::/.test(block) || /method::/.test(block) || /object::/.test(block) || /object_id::/.test(block) || /(^|\n)\s*super:/.test(block) || /"super"/.test(block);
   return (
     /(^|\n)title:/.test(block) &&
     /(^|\n)description:/.test(block) &&

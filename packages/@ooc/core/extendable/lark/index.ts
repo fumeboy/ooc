@@ -21,7 +21,7 @@ import "./feishu-doc/index.js";
 export { larkExec, larkCheckAuth, LarkCliError } from "./cli.js";
 export type { LarkExecOptions, LarkExecResult } from "./cli.js";
 
-export { openFeishuChatCommand } from "./feishu-chat/open-command.js";
-export { openFeishuDocCommand } from "./feishu-doc/open-command.js";
+export { openFeishuChatMethod } from "./feishu-chat/open-method.js";
+export { openFeishuDocMethod } from "./feishu-doc/open-method.js";
 
 export { startLarkEventRelay, maybeForwardToLark } from "./event-relay/index.js";

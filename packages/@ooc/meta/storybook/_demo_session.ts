@@ -51,7 +51,7 @@ async function processTrace(threadId: string): Promise<string[]> {
     if (e.kind === "call_started") {
       lines.push(`  · 思考一轮（loop ${e.loopIndex}）`);
     } else if (e.kind === "function_call" && e.toolName === "exec") {
-      const cmd = e.arguments?.command;
+      const cmd = e.arguments?.method;
       const a = e.arguments?.args ?? {};
       if ("msg" in a) lines.push(`  → exec say：「${String(a.msg).replace(/\s+/g, " ").slice(0, 110)}」`);
       else if (cmd === "metaprog") lines.push(`  → exec metaprog action=${a.action} ${a.objectId ?? a.name ?? ""}`);
@@ -124,7 +124,7 @@ async function main() {
       const calleeThread = (threads.json?.items ?? []).find((t: any) => t.objectId === NEW_OBJECT);
       if (calleeThread) {
         const ct = await req("GET", `/api/flows/${SESSION_ID}/${NEW_OBJECT}/threads/${calleeThread.threadId}`);
-        calleeReplied = (ct.json?.events ?? []).some((e: any) => e.kind === "function_call" && e.arguments?.command === "say");
+        calleeReplied = (ct.json?.events ?? []).some((e: any) => e.kind === "function_call" && e.arguments?.method === "say");
       }
       if (!calleeReplied) await sleep(2000);
     }

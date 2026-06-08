@@ -8,8 +8,7 @@
  *    - `object::<type>` —— 任意 open 的该类 object 出现时命中
  *      （旧格式 `window::<type>` 自动映射，向后兼容）
  *    - `method::<object_type>::<method>` —— thread 中存在 type=method_exec 的
- *      form，且其 parentObject 的 type === <object_type> 且 form.command === <method>
- *      （旧格式 `command::<window_type>::<command>` 自动映射，向后兼容）
+ *      form，且其 parentObject 的 type === <object_type> 且 form.method === <method>
  *    - `intent::<name>` —— 任一活跃 form 的 intent 集合匹配 <name> 时命中（支持 wildcard 后缀 "program.*"）
  *    - `object_id::<id>` —— 特定 objectId 的 object 出现在 context 中时命中
  *    - `super` —— `thread.persistence?.sessionId === SUPER_SESSION_ID`
@@ -22,7 +21,7 @@
  * - **fail-loud**：未知 trigger 形态在 parse 时就 throw（loader/synthesizer 上层
  *   `catch` 决定是否吞错；activator 自身在解析失败时 console.warn 并跳过该篇）
  * - **纯函数**：parseTrigger / evaluateTrigger 不读文件、不带状态
- * - **向后兼容**：旧格式 `window::` / `command::` 在 parse 时自动归一化为新的
+ * - **向后兼容**：旧格式 `window::` 在 parse 时自动归一化为新的
  *   `object::` / `method::` AST，evaluateTrigger 只需要处理新的 kind 名
  */
 
@@ -31,7 +30,7 @@ import type { MethodExecWindow, ContextWindow } from "../../executable/windows/_
 import { SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants";
 
 /** trigger 抽象语法树——parse 一次，evaluate 多次。
- *  2026-05-28 ooc-6: 旧的 `window` / `command` kind 在 parse 时自动归一化为
+ *  2026-05-28 ooc-6: 旧的 `window` kind 在 parse 时自动归一化为
  *  `object` / `method`，AST 中只保留新 kind 名。
  */
 export type Trigger =
@@ -50,11 +49,10 @@ export type Trigger =
  * - `"object_id::<id>"` — 特定 objectId,非空,不含 `::`
  * - `"super"`
  *
- * 旧格式(自动映射,不推荐用于新代码):
+ * 旧格式(自动映射):
  * - `"window::<type>"` → 映射为 `{ kind: "object", objectType: <type> }`
- * - `"command::<window_type>::<command>"` → 映射为 `{ kind: "method", objectType: <window_type>, method: <command> }`
  *
- * 任何其它形态（含旧 path 如 `"root"` / `"talk"` / `"program.shell"`）→ throw。
+ * 任何其它形态（含旧 path 如 `"root"` / `"talk"` / `"program.shell"` / `"command::"`）→ throw。
  */
 export function parseTrigger(expr: string): Trigger {
   if (typeof expr !== "string" || expr.length === 0) {
@@ -119,32 +117,10 @@ export function parseTrigger(expr: string): Trigger {
     return { kind: "object", objectType: windowType };
   }
 
-  if (expr.startsWith("command::")) {
-    const rest = expr.slice("command::".length);
-    const idx = rest.indexOf("::");
-    if (idx <= 0 || idx === rest.length - 2) {
-      throw new Error(
-        `Invalid trigger: "${expr}" — expected command::<window_type>::<command>`,
-      );
-    }
-    const windowType = rest.slice(0, idx);
-    const command = rest.slice(idx + 2);
-    if (
-      windowType.length === 0 ||
-      command.length === 0 ||
-      command.includes("::")
-    ) {
-      throw new Error(
-        `Invalid trigger: "${expr}" — expected command::<window_type>::<command>`,
-      );
-    }
-    return { kind: "method", objectType: windowType, method: command };
-  }
-
   throw new Error(
     `Unknown trigger expression: "${expr}". Supported: ` +
       `"object::<type>" | "method::<object_type>::<method>" | "intent::<name>" | "object_id::<id>" | "super" ` +
-      `(legacy: "window::<type>" | "command::<window_type>::<command>")`,
+      `(legacy: "window::<type>")`,
   );
 }
 
@@ -236,7 +212,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       for (const w of list) {
         if (w.type !== "method_exec") continue;
         const form = w as MethodExecWindow;
-        if (form.command !== trigger.method) continue;
+        if (form.method !== trigger.method) continue;
         // form 必须 open 才视为"该 method 当前活跃"——success/failed 不算
         if (!isOpen(form)) continue;
         const parentType = parentTypeOf(form, byId);

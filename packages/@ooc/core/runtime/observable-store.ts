@@ -62,7 +62,7 @@ export type RuntimePermissionDecision =
 
 export type RuntimePendingToolCall = {
   toolName: "exec" | "close" | "wait" | "compress";
-  command?: string;
+  method?: string;
   args?: unknown;
   windowId?: string;
 };

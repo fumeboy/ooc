@@ -328,8 +328,8 @@ export type ProcessEvent = ProcessEventCommon & (
       kind: "permission_ask";
       /** 触发本次 ask 的 function_call id (与 llm_interaction.function_call.callId 对齐)。 */
       toolCallId: string;
-      /** 解析后的实际 command 路径 (例如 "talk", "write_file" 或 "exec" / "close" 等 tool 名)。 */
-      command: string;
+      /** 解析后的实际 method 路径 (例如 "talk", "write_file" 或 "exec" / "close" 等 tool 名)。 */
+      method: string;
       /** args 摘要 (截断到 200 字以内, 防止 events 流爆炸)。 */
       argsSummary?: string;
       /** exec 时目标 window id。 */
@@ -352,7 +352,7 @@ export type ProcessEvent = ProcessEventCommon & (
        */
       pendingCall?: {
         toolName: "exec" | "close" | "wait" | "compress";
-        command: string;
+        method: string;
         args: Record<string, unknown>;
         windowId?: string;
         toolCallId: string;
@@ -371,8 +371,8 @@ export type ProcessEvent = ProcessEventCommon & (
       kind: "permission_denied";
       /** 被拒绝的 function_call id。 */
       toolCallId: string;
-      /** 实际 command 路径。 */
-      command: string;
+      /** 实际 method 路径。 */
+      method: string;
       /** 拒绝原因 (来自 PermissionDecision.reason 或默认描述)。 */
       reason: string;
       /** args 摘要 (截断到 200 字)。 */
@@ -471,7 +471,7 @@ export type ThreadContext = {
    * 父 thread 反向引用（运行时设置，不持久化）。
    *
    * 用于 do_window.move 等命令需要从子 thread 访问父 thread 的场景；
-   * 由 fork 路径（root.do executeDoCommand）在创建 child 时建立。
+   * 由 fork 路径（root.do executeDoMethod）在创建 child 时建立。
    * thread.json 序列化时被 strip（避免循环引用）。
    */
   _parentThreadRef?: ThreadContext;
@@ -491,9 +491,9 @@ export type ThreadContext = {
    * （spec § program_window 的"跨 exec 数据传递"段）。Step 1 仅占位、不读不写。
    */
   threadLocalData?: Record<string, unknown>;
-  /** end command 写入的结束原因。 */
+  /** end method 写入的结束原因。 */
   endReason?: string;
-  /** end command 写入的最终摘要。 */
+  /** end method 写入的最终摘要。 */
   endSummary?: string;
   /**
    * 结构化失败原因（observability 根因 #4，2026-05-27）。

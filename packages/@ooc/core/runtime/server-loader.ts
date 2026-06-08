@@ -103,18 +103,7 @@ export class ServerLoader {
       readable,
     };
 
-    if (entry.window) {
-      const winDef = entry.window;
-      const hasMethods = winDef.methods && Object.keys(winDef.methods).length > 0;
-      const hasCommands = winDef.commands && Object.keys(winDef.commands).length > 0;
-      if (hasMethods && !hasCommands) {
-        winDef.commands = winDef.methods;
-      } else if (hasMethods && hasCommands) {
-        winDef.commands = { ...winDef.methods, ...winDef.commands };
-      } else if (!hasMethods && hasCommands) {
-        winDef.methods = winDef.commands;
-      }
-    }
+    // methods is the canonical field; no merging needed
 
     this.cache.set(serverFile, entry);
     return entry;

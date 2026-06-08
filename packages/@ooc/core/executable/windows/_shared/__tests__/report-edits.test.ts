@@ -115,7 +115,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
     await mgr.openMethodExec({
       thread,
       parentWindowId: ROOT_WINDOW_ID,
-      command: "do",
+      method: "do",
       title: "派生",
       description: "fork",
     });
@@ -180,7 +180,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", command: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.type === "method_exec",
@@ -204,7 +204,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
       arguments: {
         title: "累积",
         window_id: formId,
-        command: "refine",
+        method: "refine",
         args: { msg: "hello-from-refine" },
       },
     });

@@ -98,7 +98,7 @@ describe("classifyLoopEvent — type-dispatch 表", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "write_file",
+      method: "write_file",
     };
     const spec = classifyLoopEvent(evt);
     expect(spec).toBeDefined();
@@ -126,7 +126,7 @@ describe("classifyLoopEvent — type-dispatch 表", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
       decided: { action: "approve", at: Date.now() },
     };
     const spec = classifyLoopEvent(evt);
@@ -138,7 +138,7 @@ describe("classifyLoopEvent — type-dispatch 表", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
       decided: { action: "reject", at: Date.now(), reason: "out-of-policy" },
     };
     const spec = classifyLoopEvent(evt);
@@ -150,7 +150,7 @@ describe("classifyLoopEvent — type-dispatch 表", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_denied",
-      command: "exec",
+      method: "exec",
       reason: "blocked",
     };
     const spec = classifyLoopEvent(evt);
@@ -233,8 +233,8 @@ describe("isKeyEvent — 噪音过滤", () => {
     const keys: LoopEvent[] = [
       { category: "context_change", kind: "context_compressed", reason: "user-compress" } as LoopEvent,
       { category: "context_change", kind: "events_summary", count: 1, summary: "x" } as LoopEvent,
-      { category: "permission", kind: "permission_ask", command: "x" } as LoopEvent,
-      { category: "permission", kind: "permission_denied", command: "x", reason: "y" } as LoopEvent,
+      { category: "permission", kind: "permission_ask", method: "x" } as LoopEvent,
+      { category: "permission", kind: "permission_denied", method: "x", reason: "y" } as LoopEvent,
       { category: "tool_runtime", kind: "function_call_output", toolName: "exec", ok: false } as LoopEvent,
     ];
     for (const evt of keys) {
@@ -247,7 +247,7 @@ describe("R0c integration scenarios", () => {
   it("Case 4 (combined): thread.events 含 permission_ask + context_compressed → 在 timeline 中可被 partition + classify", () => {
     const loops = [loop(1)];
     const events: LoopEvent[] = [
-      { category: "permission", kind: "permission_ask", command: "edit" } as LoopEvent,
+      { category: "permission", kind: "permission_ask", method: "edit" } as LoopEvent,
       {
         category: "context_change",
         kind: "context_compressed",

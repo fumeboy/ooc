@@ -50,7 +50,7 @@ async function executeRefine(ctx: MethodExecutionContext): Promise<string | unde
   // snapshot reflects the edit immediately. Fixes "refine 不写盘" in the plan.
   await ctx.reportContextEdit?.();
   const updated = manager.get(form.id);
-  const paths = updated && updated.type === "method_exec" ? updated.commandPaths.join(", ") : "";
+  const paths = updated && updated.type === "method_exec" ? updated.methodPaths.join(", ") : "";
   // Round 13: 如果是从 failed 复活, 标注一下让 LLM 知道 form 已切回 open。
   const revived = form.status === "failed" ? "（form 从 failed 复活, 已切回 open, 可 submit）" : "";
   return `Form ${form.id} 已累积参数${revived}。当前路径：${paths}。`;
@@ -58,7 +58,7 @@ async function executeRefine(ctx: MethodExecutionContext): Promise<string | unde
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -92,7 +92,7 @@ export const refineMethod: ObjectMethod = {
     return guidanceWindows(form, {
       "internal/windows/method_exec/refine/basic": [
         "method_exec.refine 用于向 form 累积参数；ctx.args 整体作为要累积的键值对。",
-        "调用：exec(window_id=<form_id>, command=\"refine\", args={ <要累积的键值对> })",
+        "调用：exec(window_id=<form_id>, method=\"refine\", args={ <要累积的键值对> })",
         "多次调用会叠加；填齐参数后用 exec(form_id, \"submit\") 触发执行。",
         "Round 13: refine 也接受 status=failed 的 form (submit 失败后); 调 refine 会自动把 form 切回 open + 清旧 result, 可重 submit。这是首选的失败修复路径 (保留 form 上下文)。",
       ].join("\n"),

@@ -32,7 +32,7 @@ export interface LoopEvent {
   count?: number;
   summary?: string;
   /** permission_ask / permission_denied */
-  command?: string;
+  method?: string;
   argsSummary?: string;
   decided?: { action: "approve" | "reject"; at: number; reason?: string };
   /** tool_runtime.function_call_output */
@@ -150,7 +150,7 @@ export function classifyLoopEvent(event: LoopEvent): LoopEventBadgeSpec | undefi
   }
 
   if (event.category === "permission" && event.kind === "permission_ask") {
-    const command = (event.command ?? "(unknown)").toString();
+    const command = (event.method ?? "(unknown)").toString();
     if (!event.decided) {
       return {
         icon: "⏸️",

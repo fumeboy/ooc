@@ -29,10 +29,10 @@ function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
     title: "x",
     status: "open",
     createdAt: 0,
-    command: "x",
+    method: "x",
     description: "",
     accumulatedArgs: {},
-    commandPaths: [],
+    methodPaths: [],
     loadedKnowledgePaths: [],
     ...overrides,
   };
@@ -94,17 +94,9 @@ describe("parseTrigger", () => {
     expect(parseTrigger("window::do")).toEqual({ kind: "object", objectType: "do" });
   });
 
-  test("command::<window_type>::<command> (legacy) maps to method kind", () => {
-    expect(parseTrigger("command::root::talk")).toEqual({
-      kind: "method",
-      objectType: "root",
-      method: "talk",
-    });
-    expect(parseTrigger("command::talk::say")).toEqual({
-      kind: "method",
-      objectType: "talk",
-      method: "say",
-    });
+  test("command:: is no longer supported (use method:: instead)", () => {
+    expect(() => parseTrigger("command::root::talk")).toThrow(/Unknown trigger/);
+    expect(() => parseTrigger("command::talk::say")).toThrow(/Unknown trigger/);
   });
 
   test("super", () => {
@@ -126,7 +118,7 @@ describe("parseTrigger", () => {
     expect(() => parseTrigger("window::foo::bar")).toThrow();
   });
 
-  test("rejects malformed command:: (legacy)", () => {
+  test("rejects command:: (no longer supported)", () => {
     expect(() => parseTrigger("command::")).toThrow();
     expect(() => parseTrigger("command::root")).toThrow();
     expect(() => parseTrigger("command::root::")).toThrow();
@@ -166,23 +158,23 @@ describe("parseActivatesOn", () => {
     ]);
   });
 
-  test("legacy window::/command:: formats auto-map to new AST kinds", () => {
+  test("legacy window:: format auto-maps to new AST kinds", () => {
     const out = parseActivatesOn(
       {
         "window::root": "show_description",
-        "command::root::talk": "show_content",
+        "method::root::talk": "show_content",
       },
       "legacy.md",
     );
     expect(out).toHaveLength(2);
     // expr keeps original string for diagnostics, but AST uses new kind names
     const windowEntry = out.find((e) => e.expr === "window::root")!;
-    const commandEntry = out.find((e) => e.expr === "command::root::talk")!;
+    const methodEntry = out.find((e) => e.expr === "method::root::talk")!;
     expect(windowEntry.trigger.kind).toBe("object");
     expect((windowEntry.trigger as any).objectType).toBe("root");
-    expect(commandEntry.trigger.kind).toBe("method");
-    expect((commandEntry.trigger as any).objectType).toBe("root");
-    expect((commandEntry.trigger as any).method).toBe("talk");
+    expect(methodEntry.trigger.kind).toBe("method");
+    expect((methodEntry.trigger as any).objectType).toBe("root");
+    expect((methodEntry.trigger as any).method).toBe("talk");
   });
 
   test("legacy show_description_when key fails loud with migration hint", () => {
@@ -326,15 +318,15 @@ describe("evaluateTrigger", () => {
   // ── method:: 新格式 ─────────────────────────────────────────────
   test("method::root::program hits when form on root with command=program is open", () => {
     const t = parseTrigger("method::root::program");
-    const f = form({ command: "program", parentWindowId: "root" });
+    const f = form({ method: "program", parentWindowId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [f] }))).toBe(true);
 
     // wrong command
-    const otherForm = form({ command: "talk", parentWindowId: "root" });
+    const otherForm = form({ method: "talk", parentWindowId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [otherForm] }))).toBe(false);
 
     // failed form does not count as active
-    const failedForm = form({ command: "program", parentWindowId: "root", status: "failed" });
+    const failedForm = form({ method: "program", parentWindowId: "root", status: "failed" });
     expect(evaluateTrigger(t, thread({ contextWindows: [failedForm] }))).toBe(false);
   });
 
@@ -349,18 +341,18 @@ describe("evaluateTrigger", () => {
       createdAt: 0,
       target: "alice",
     } as ContextWindow;
-    const sayOnTalk = form({ id: "fs1", command: "say", parentWindowId: "wt" });
+    const sayOnTalk = form({ id: "fs1", method: "say", parentWindowId: "wt" });
     expect(evaluateTrigger(t, thread({ contextWindows: [talkW, sayOnTalk] }))).toBe(true);
 
-    const sayOnRoot = form({ id: "fs2", command: "say", parentWindowId: "root" });
+    const sayOnRoot = form({ id: "fs2", method: "say", parentWindowId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [sayOnRoot] }))).toBe(false);
   });
 
-  // ── command:: 旧格式（向后兼容,parse 阶段已映射为 method kind） ──
-  test("command::root::program (legacy) also hits via auto-map", () => {
-    const t = parseTrigger("command::root::program");
-    expect(t.kind).toBe("method"); // 已归一化
-    const f = form({ command: "program", parentWindowId: "root" });
+  // ── method:: triggers correctly evaluate ──
+  test("method::root::program hits when form on root with method=program is open", () => {
+    const t = parseTrigger("method::root::program");
+    expect(t.kind).toBe("method");
+    const f = form({ method: "program", parentWindowId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [f] }))).toBe(true);
   });
 });

@@ -45,9 +45,9 @@ session 内即时生效，但 main（canonical 权威自我）不变。
 
 ## 用法
 
-- **看 diff**（无参）：\`open(command="evolve_self")\`
+- **看 diff**（无参）：\`open(method="evolve_self")\`
   → 列出 creator session worktree 改了哪些 stone 文件（你这次试验改了身份的哪些部分）。
-- **合入**：\`open(command="evolve_self", args={ message: "为什么改" })\`
+- **合入**：\`open(method="evolve_self", args={ message: "为什么改" })\`
   - message 必填（commit 说明）。
   - 成功返回 \`{ ok:true, commitSha, files }\`，main 已更新——下一轮新 session 见新身份；
     worktree 已 GC（移除目录 + 删分支）。
@@ -73,7 +73,7 @@ function asStringArray(v: unknown): string[] | undefined {
   return out;
 }
 
-export const evolveSelfCommand: ObjectMethod = {
+export const evolveSelfMethod: ObjectMethod = {
   paths: ["evolve_self"],
   schema: {
     args: {

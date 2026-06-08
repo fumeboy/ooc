@@ -21,7 +21,7 @@ export function extractBasicDescription(entry: DescribableMethod): string | unde
   if (!entry.onFormChange) return undefined;
   const stubForm = {
     id: "__describe__",
-    command: "describe",
+    method: "describe",
     accumulatedArgs: {},
     status: "open",
   } as MethodExecWindow;

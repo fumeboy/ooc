@@ -12,8 +12,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
-import { executeWriteFileCommand } from "@ooc/builtins/root/executable/method.write-file";
-import { executeOpenFileCommand } from "@ooc/builtins/root/executable/method.open-file";
+import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
+import { executeOpenFileMethod } from "@ooc/builtins/root/executable/method.open-file";
 import { executeFileWindowEdit } from "@ooc/builtins/file/executable/index";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 import type { FileWindow } from "@ooc/builtins/file/types";
@@ -84,7 +84,7 @@ function asFileWindow(out: unknown): FileWindow {
 describe("file worktree redirect (P2)", () => {
   test("write_file own stone → worktree; main unchanged", async () => {
     const baseDir = await newWorld(["alice"]);
-    const out = await executeWriteFileCommand(
+    const out = await executeWriteFileMethod(
       ctxFor(baseDir, "alice", "s1", {
         path: "stones/alice/self.md",
         content: "alice v2 (worktree)\n",
@@ -104,12 +104,12 @@ describe("file worktree redirect (P2)", () => {
   test("open_file own stone with prior worktree write → window points at worktree", async () => {
     const baseDir = await newWorld(["alice"]);
     // 先在 s1 写 → lazy 建 worktree
-    await executeWriteFileCommand(
+    await executeWriteFileMethod(
       ctxFor(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "WORKTREE\n" }),
     );
     // open_file 同 session → 命中 worktree
     const opened = asFileWindow(
-      await executeOpenFileCommand(ctxFor(baseDir, "alice", "s1", { path: "stones/alice/self.md" })),
+      await executeOpenFileMethod(ctxFor(baseDir, "alice", "s1", { path: "stones/alice/self.md" })),
     );
     expect(opened.path).toBe(join(worktreeObjDir(baseDir, "s1", "alice"), "self.md"));
     expect(await readFile(opened.path, "utf8")).toBe("WORKTREE\n");
@@ -118,7 +118,7 @@ describe("file worktree redirect (P2)", () => {
   test("open_file own stone WITHOUT prior write → canonical main（read 不主动建 worktree）", async () => {
     const baseDir = await newWorld(["alice"]);
     const opened = asFileWindow(
-      await executeOpenFileCommand(ctxFor(baseDir, "alice", "s2", { path: "stones/alice/self.md" })),
+      await executeOpenFileMethod(ctxFor(baseDir, "alice", "s2", { path: "stones/alice/self.md" })),
     );
     expect(opened.path).toBe(join(mainObjectsDir(baseDir), "alice", "self.md"));
     expect(await readFile(opened.path, "utf8")).toBe("alice v1\n");

@@ -19,7 +19,7 @@ export async function runControlPlane(): Promise<StoryResult> {
       const id = "calc";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const ui_methods = { add: { fn: (_c, a) => ({ sum: a.x + a.y }) } };\nexport const window = { commands: {} };`);
+        `export const ui_methods = { add: { fn: (_c, a) => ({ sum: a.x + a.y }) } };\nexport const window = { methods: {} };`);
       await sleep(350);
       const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "add", args: { x: 2, y: 3 } });
       rec.eq("TC-EXEC-01", "ui_methods 在 ContextObject 上执行并返回结果", r.json?.returnValue, { sum: 5 });
@@ -30,7 +30,7 @@ export async function runControlPlane(): Promise<StoryResult> {
       const id = "cmd_obj";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { commands: { run: { paths: ["run"], intent: () => [], exec: async () => ({ ok: true }) } } };\nexport const ui_methods = {};`);
+        `export const window = { methods: { run: { paths: ["run"], intent: () => [], exec: async () => ({ ok: true }) } } };\nexport const ui_methods = {};`);
       const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
       const win = await loadObjectWindow({ baseDir, objectId: id });
       rec.ok("TC-EXEC-02", "window.commands（LLM 路径命令）经 loader 可加载",

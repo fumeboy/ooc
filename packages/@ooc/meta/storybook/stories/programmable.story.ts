@@ -11,7 +11,7 @@ import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/c
 import { seedTask, waitJob, processTrace, req } from "../_harness/agent-native";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
-const EXEC = (body: string) => `${body}\nexport const window = { commands: {} };`;
+const EXEC = (body: string) => `${body}\nexport const window = { methods: {} };`;
 /** dev hot-reload（fs.watch）失效有 debounce —— 改 executable 源码后等其生效再调用。 */
 const HOT = 350;
 
@@ -49,7 +49,7 @@ export async function runControlPlane(): Promise<StoryResult> {
       const id = "cmd_demo";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { commands: { greet: { paths: ["greet"], intent: () => [], exec: async () => ({ reply: "hi" }) } } };\nexport const ui_methods = {};`);
+        `export const window = { methods: { greet: { paths: ["greet"], intent: () => [], exec: async () => ({ reply: "hi" }) } } };\nexport const ui_methods = {};`);
       const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
       const win = await loadObjectWindow({ baseDir, objectId: id });
       const ok = !!win?.methods?.greet && JSON.stringify(win?.methods?.greet?.paths) === JSON.stringify(["greet"]);

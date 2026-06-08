@@ -5,7 +5,7 @@
  * 放置在 packages/@ooc/builtins/knowledge/。
  *
  * 三种 source：
- * - explicit  ：LLM 显式 \`open(command="open_knowledge")\` 创建；持久化；可 close
+ * - explicit  ：LLM 显式 \`open(method="open_knowledge")\` 创建；持久化；可 close
  * - protocol  ：每轮自动注入的协议常量（KNOWLEDGE）+ 各 command_exec form 的 knowledge() 派生
  * - activator ：stones/{id}/knowledge/*.md 经 commandPaths 命中合成；带 presentation
  *
@@ -79,7 +79,7 @@ knowledge_object.set_viewport 精细化调整渲染窗口（行+列）。
 protocol / activator / relation 来源的 knowledge_object 由系统按 description / full / summary 决定展示形态。
 `.trim();
 
-const reloadCommand: ObjectMethod = {
+const reloadMethod: ObjectMethod = {
   paths: ["reload"],
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
@@ -89,7 +89,7 @@ const reloadCommand: ObjectMethod = {
   exec: () => undefined,
 };
 
-const closeCommand: ObjectMethod = {
+const closeMethod: ObjectMethod = {
   paths: ["close"],
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
@@ -99,7 +99,7 @@ const closeCommand: ObjectMethod = {
   exec: () => undefined,
 };
 
-const setViewportCommand: WindowMethod = {
+const setViewportMethod: WindowMethod = {
   kind: "window",
   paths: ["set_viewport"],
   schema: {
@@ -166,7 +166,7 @@ open_knowledge 用于显式打开一个 knowledge doc，作为 knowledge_window 
 - 关闭：close(window_id="<knowledge_window_id>")
 
 调用示例：
-open(command="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
+open(method="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
 `.trim();
 
 /**
@@ -248,12 +248,12 @@ const knowledgeConstructor: ObjectMethod = {
 
 builtinRegistry.registerObjectType("knowledge", {
   methods: {
-    reload: reloadCommand,
-    close: closeCommand,
+    reload: reloadMethod,
+    close: closeMethod,
     open_knowledge: knowledgeConstructor,
   },
   windowMethods: {
-    set_viewport: setViewportCommand,
+    set_viewport: setViewportMethod,
   },
   onClose: onCloseKnowledgeWindow,
   readable,

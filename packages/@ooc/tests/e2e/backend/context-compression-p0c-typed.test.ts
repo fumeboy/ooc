@@ -13,7 +13,7 @@
  * 额外 case:
  *   - talk_window 截断 + 总数:构造 10 条消息,Level 1 后 XML 里只剩最近 2 条 + total_messages="10"
  *
- * 不走真 LLM:直接调 dispatchToolCall(compress) / dispatchToolCall(exec, command="expand")。
+ * 不走真 LLM:直接调 dispatchToolCall(compress) / dispatchToolCall(exec, method="expand")。
  */
 
 import { describe, expect, it } from "bun:test";
@@ -72,7 +72,7 @@ async function compressWindow(
   expect(parsed.ok).toBe(true);
 }
 
-/** 用 exec(command="expand") 恢复 window。 */
+/** 用 exec(method="expand") 恢复 window。 */
 async function expandWindow(
   thread: ThreadContext,
   windowId: string,
@@ -83,7 +83,7 @@ async function expandWindow(
     name: "exec",
     arguments: {
       window_id: windowId,
-      command: "expand",
+      method: "expand",
       title: `expand ${windowId}`,
     },
   });

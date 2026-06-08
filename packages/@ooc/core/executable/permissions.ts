@@ -42,18 +42,18 @@ export type PermissionDecision =
 /**
  * thinkloop 在分派 tool call 前组装的待审计载荷。
  *
- * - exec: command = args.command (实际 OOC command 名); windowId = args.window_id (目标 window);
- *   args = args.args (command 的业务参数)
+ * - exec: command = args.method (实际 OOC command 名); windowId = args.window_id (目标 window);
+ *   args = args.args (method 的业务参数)
  * - close / wait / compress: command = toolName 自身; windowId / args 视情况填
  */
 export type PendingToolCall = {
   /** 触发的 LLM tool 原语名。 */
   toolName: "exec" | "close" | "wait" | "compress";
   /**
-   * 对 exec: 解析自 args.command 的 command 路径 (例如 "talk", "write_file")。
+   * 对 exec: 解析自 args.method 的 command 路径 (例如 "talk", "write_file")。
    * 对 close/wait/compress: 等于 toolName。
    */
-  command?: string;
+  method?: string;
   /** 调用的原始 args (透传给 decider, 便于 escape hatch 做精细判断)。 */
   args?: unknown;
   /** 对 exec: 目标 window id (例如 "root" 或 form_id); 其他 tool 视情况填。 */
@@ -67,7 +67,7 @@ export type PermissionDecider = (
 ) => PermissionDecision | Promise<PermissionDecision>;
 
 interface PoliciesFile {
-  commands?: Record<string, unknown>;
+  methods?: Record<string, unknown>;
 }
 
 /**
@@ -105,7 +105,7 @@ export function loadPoliciesJson(thread: ThreadContext): Record<string, Permissi
 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
   const file = parsed as PoliciesFile;
-  const commands = file.commands;
+  const commands = file.methods;
   if (!commands || typeof commands !== "object" || Array.isArray(commands)) return {};
 
   const result: Record<string, PermissionLevel> = {};
@@ -122,7 +122,7 @@ export function loadPoliciesJson(thread: ThreadContext): Record<string, Permissi
  *
  * 查找路径 (优先匹配可能的具体 window type, 失败则尝试 root):
  * - 如果 call 指定了 windowId 且能在 thread.contextWindows 中找到该 window,
- *   优先查它的 type definition.methods[command].permission
+ *   优先查它的 type definition.methods[method].permission
  * - 否则查 root 的 commands[command].permission
  * - 找不到 entry / 字段缺失 → undefined (调用方 fallback 到 allow)
  */
@@ -131,7 +131,7 @@ function lookupDeclaredPermission(
   call: PendingToolCall,
   registry: ObjectRegistry,
 ): PermissionLevel | undefined {
-  const command = call.command;
+  const command = call.method;
   if (!command) return undefined;
 
   const tryWindow = (windowType: string): PermissionLevel | undefined => {
@@ -193,9 +193,9 @@ export async function decidePermission(
   }
 
   // 2. policies.json 覆盖
-  if (call.command) {
+  if (call.method) {
     const policies = loadPoliciesJson(thread);
-    const fromPolicies = policies[call.command];
+    const fromPolicies = policies[call.method];
     if (fromPolicies) {
       return levelToDecision(fromPolicies, "policies.json");
     }

@@ -26,7 +26,7 @@ import {
   programSetHistoryViewport,
   hasAnyHistoryViewportField,
 } from "@ooc/builtins/program";
-import { executeProgramCommand } from "@ooc/builtins/root/executable/method.program.js";
+import { executeProgramMethod } from "@ooc/builtins/root/executable/method.program.js";
 import { executeProgramWindowExec } from "@ooc/builtins/program";
 import { makeThread } from "../../../__tests__/make-thread.js";
 
@@ -336,7 +336,7 @@ describe("program_window.exec is not affected by historyViewport", () => {
 describe("root.program creates program_window with DEFAULT_HISTORY_VIEWPORT", () => {
   it("new program_window has historyViewport = { tail: 10 }", async () => {
     const thread = makeThread({ id: "t_root_program" });
-    const out = await executeProgramCommand({
+    const out = await executeProgramMethod({
       thread,
       args: { language: "shell", code: "echo hi" },
     });

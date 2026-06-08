@@ -76,7 +76,7 @@ export class ObjectTypeRegistrar {
       }
 
       // registerObjectType = merge into existing; registerNewObjectType = create new
-      const mergedMethods = { ...(windowDef?.methods ?? {}), ...(windowDef?.commands ?? {}) };
+      const mergedMethods = { ...(windowDef?.methods ?? {}) };
       if (this.deps.registry.has(objectId)) {
         this.deps.registry.registerObjectType(objectId as any, {
           methods: mergedMethods,

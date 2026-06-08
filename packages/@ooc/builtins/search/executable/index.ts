@@ -11,7 +11,7 @@
  * - open_match — 在指定 match 的 path 上 spawn 一个 file_window，让结果可被进一步操作
  *
  * 该 window 不持有可被 LLM mutate 的状态：query / matches 在创建时定型；想换条件
- * 重新 open(command="glob"|"grep") 即可。
+ * 重新 open(method="glob"|"grep") 即可。
  */
 
 import type {
@@ -61,7 +61,7 @@ search_window 是一次 glob 或 grep 搜索的结果窗口，由 \`root.glob\` 
 每条 match 有一个稳定的 \`index\`，可以通过
 
 \`\`\`
-open(parent_window_id="<search_window_id>", command="open_match", args={ index: <N> })
+open(parent_window_id="<search_window_id>", method="open_match", args={ index: <N> })
 \`\`\`
 
 在该 match 对应的文件上 spawn 一个 file_window，便于继续阅读 / 编辑。
@@ -94,7 +94,7 @@ search_window.open_match 在指定 match 对应的路径上 spawn 一个 file_wi
 
 调用：
 \`\`\`
-open(parent_window_id="<search_window_id>", command="open_match",
+open(parent_window_id="<search_window_id>", method="open_match",
      title="open match #2", args={ index: 2 })
 \`\`\`
 
@@ -105,7 +105,7 @@ open(parent_window_id="<search_window_id>", command="open_match",
 - 索引越界 / 缺 index 等错误返回字符串
 `.trim();
 
-const closeCommand: ObjectMethod = {
+const closeMethod: ObjectMethod = {
   paths: ["close"],
   intent: emptyIntent,
   onFormChange(change, { form }) {
@@ -118,7 +118,7 @@ const closeCommand: ObjectMethod = {
   exec: () => undefined,
 };
 
-const openMatchCommand: ObjectMethod = {
+const openMatchMethod: ObjectMethod = {
   paths: ["open_match"],
   schema: {
     args: {
@@ -164,7 +164,7 @@ export async function executeSearchOpenMatch(
   const window = ctx.self as SearchWindow;
   const indexArg = ctx.args.index;
   if (typeof indexArg !== "number") {
-    return "[search_window.open_match] 缺少 index 参数（应是整数）。submit 后 form 已 executed, 请 close(form_id) 后重新 open(parent_window_id=\"<search_window_id>\", command=\"open_match\", args={ index: <整数> }) 一次性给齐; index 取自当前 search_window.matches[].index; 下次 open 时直接附 args 可避免失败回路。";
+    return "[search_window.open_match] 缺少 index 参数（应是整数）。submit 后 form 已 executed, 请 close(form_id) 后重新 open(parent_window_id=\"<search_window_id>\", method=\"open_match\", args={ index: <整数> }) 一次性给齐; index 取自当前 search_window.matches[].index; 下次 open 时直接附 args 可避免失败回路。";
   }
   const sw = window as SearchWindow;
   const match = sw.matches.find((m) => m.index === indexArg);
@@ -258,8 +258,8 @@ function compressSearchWindow(
 
 builtinRegistry.registerObjectType("search", {
   methods: {
-    close: closeCommand,
-    open_match: openMatchCommand,
+    close: closeMethod,
+    open_match: openMatchMethod,
   },
   windowMethods: {
     set_results_window: setResultsWindowCommandForSearch,
@@ -286,13 +286,13 @@ glob 用于按文件名通配符（glob pattern）查找文件，并把结果作
 行为：
 - 用 Bun 内置 Glob 扫描文件系统；只返回文件（onlyFiles=true）
 - 命中按 path 字典序排序；超过 200 条截断，search_window.truncated=true
-- 命中之后用 \`open(parent_window_id="<search_window_id>", command="open_match", args={ index: <N> })\`
+- 命中之后用 \`open(parent_window_id="<search_window_id>", method="open_match", args={ index: <N> })\`
   在该 match 对应的文件上 spawn file_window
 
 调用示例：
 
 \`\`\`
-open(command="glob", title="找全部 TS",
+open(method="glob", title="找全部 TS",
      args={ pattern: "src/**/*.ts" })
 \`\`\`
 
@@ -313,7 +313,7 @@ grep 用于按文件**内容**（regex）搜索代码或文档，并把命中作
 行为：
 - 优先调 ripgrep（rg --json）；失败回退到内置 JS 实现
 - 命中按 (path, line) 排序；超过 200 条截断
-- 命中通过 \`open(parent_window_id="<search_window_id>", command="open_match", args={ index })\` 直开 file_window
+- 命中通过 \`open(parent_window_id="<search_window_id>", method="open_match", args={ index })\` 直开 file_window
 `.trim();
 
 const SEARCH_MAX_MATCHES = 200;
@@ -321,7 +321,7 @@ const SEARCH_MAX_MATCHES = 200;
 /**
  * P6.§4-§5 constructor —— 创建 search_window（glob 或 grep）。
  *
- * dispatch 通过 ctx.form?.command:
+ * dispatch 通过 ctx.form?.method:
  *  - "glob"：调 Bun Glob，匹配文件名
  *  - "grep"：先 runRipgrep，失败回退 runJsFallback
  *
@@ -378,7 +378,7 @@ const searchConstructor: ObjectMethod = {
     const thread = ctx.thread;
     if (!thread) return { ok: false, error: "[search] 缺少 thread context。" };
     // batch C narrowing(N1): ctx.form 契约层是 base ContextWindow，narrow 回 MethodExecWindow 读 command。
-    const command = (ctx.form as MethodExecWindow | undefined)?.command ?? "glob";
+    const command = (ctx.form as MethodExecWindow | undefined)?.method ?? "glob";
     const pattern = typeof ctx.args.pattern === "string" ? ctx.args.pattern : "";
     if (!pattern) return { ok: false, error: `[${command}] 缺少 pattern 参数。` };
 
@@ -468,8 +468,8 @@ const searchConstructor: ObjectMethod = {
 // windowMethods 已在首次注册携带，registerObjectType 未传时保留 existing）。
 builtinRegistry.registerObjectType("search", {
   methods: {
-    close: closeCommand,
-    open_match: openMatchCommand,
+    close: closeMethod,
+    open_match: openMatchMethod,
     glob: searchConstructor,
     grep: searchConstructor,
   },

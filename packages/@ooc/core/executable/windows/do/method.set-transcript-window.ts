@@ -1,5 +1,5 @@
 /**
- * talk_window.set_transcript_window — transcript 渲染窗口精细化调整。
+ * do_window.set_transcript_window — transcript 渲染窗口精细化调整。
  *
  * - 默认 viewport = { tail: 20 } —— 仅渲染末 20 条 transcript
  * - 通过 set_transcript_window 切换：
@@ -19,13 +19,13 @@ import {
   hasAnyTranscriptViewportField,
 } from "../_shared/transcript-viewport.js";
 
-const TALK_SET_TRANSCRIPT_BASIC = "internal/windows/talk/set_transcript_window/basic";
-const TALK_SET_TRANSCRIPT_INPUT = "internal/windows/talk/set_transcript_window/input";
+const DO_SET_TRANSCRIPT_BASIC = "internal/windows/do/set_transcript_window/basic";
+const DO_SET_TRANSCRIPT_INPUT = "internal/windows/do/set_transcript_window/input";
 
 const KNOWLEDGE = `
-talk_window.set_transcript_window 精细化调整 transcript 渲染窗口。
+do_window.set_transcript_window 精细化调整 transcript 渲染窗口。
 
-打开 talk_window 时默认 transcriptViewport = { tail: 20 } —— 只渲染末 20 条消息；
+打开 do_window 时默认 transcriptViewport = { tail: 20 } —— 只渲染末 20 条消息；
 更早的消息以 \`<transcript_viewport tail=20 total=37/>\` 形式提示前部还有多少条。
 
 参数（**择一传**，二选一）：
@@ -45,12 +45,12 @@ talk_window.set_transcript_window 精细化调整 transcript 渲染窗口。
 - refine(form, args={ range_start: 0, range_end: 30 })  → 看前 30 条
 - refine(form, args={ range_start: 5, range_end: 15 })  → 看中间 10 条
 
-**注意**：viewport 只影响**渲染**给 LLM 的内容；say / wait / close 等命令仍基于完整 transcript。
+**注意**：viewport 只影响**渲染**给 LLM 的内容；continue / wait / close / move 等命令仍基于完整 transcript。
 `.trim();
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -76,7 +76,7 @@ function guidanceWindows(form: BaseContextWindow, entries: Record<string, string
   return out;
 }
 
-export const setTranscriptWindowCommandForTalk: WindowMethod = {
+export const setTranscriptWindowCommandForDo: WindowMethod = {
   kind: "window",
   paths: ["set_transcript_window"],
   schema: {
@@ -93,14 +93,14 @@ export const setTranscriptWindowCommandForTalk: WindowMethod = {
     const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
     const formStatus = form.status;
     const entries: Record<string, string> = {
-      [TALK_SET_TRANSCRIPT_BASIC]: KNOWLEDGE,
+      [DO_SET_TRANSCRIPT_BASIC]: KNOWLEDGE,
     };
     if (formStatus === "open" && !hasAnyTranscriptViewportField(args)) {
-      entries[TALK_SET_TRANSCRIPT_INPUT] =
+      entries[DO_SET_TRANSCRIPT_INPUT] =
         "set_transcript_window 至少需要传入 tail / range_start+range_end 之一。\n" +
         "tail 与 range_* 互斥，请 refine 后 submit。";
     }
     return guidanceWindows(form, entries);
   },
-  exec: (ctx) => windowSetTranscriptViewport(ctx, ["talk"]),
+  exec: (ctx) => windowSetTranscriptViewport(ctx, ["do"]),
 };

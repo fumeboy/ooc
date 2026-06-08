@@ -50,14 +50,14 @@ export async function continueTask(sessionId: string, text: string) {
   return { jobId: r.json?.jobId as string | undefined, raw: r };
 }
 
-/** 读某 thread 的 exec 事件（command + args + say 文本）。 */
+/** 读某 thread 的 exec 事件（method + args + say 文本）。 */
 export async function threadExecs(sessionId: string, objectId: string, threadId: string): Promise<Array<{ cmd: string; args: any; msg?: string }>> {
   const r = await req("GET", `/api/flows/${sessionId}/${objectId}/threads/${threadId}`);
   const out: Array<{ cmd: string; args: any; msg?: string }> = [];
   for (const e of (r.json?.events ?? [])) {
     if (e.kind === "function_call" && e.toolName === "exec") {
       const a = e.arguments?.args ?? {};
-      out.push({ cmd: e.arguments?.command ?? "", args: a, msg: typeof a.msg === "string" ? a.msg : undefined });
+      out.push({ cmd: e.arguments?.method ?? "", args: a, msg: typeof a.msg === "string" ? a.msg : undefined });
     }
   }
   return out;

@@ -523,10 +523,10 @@ export const root: DocTreeNode = {
             右详情按 window type 增强：
             - **file_window**：调 \`FileWindowContentView\` 实时 fetch 文件内容，按
               lines / columns 切片显示；\`.md\` 走 MarkdownContent，其它走 CodeMirror。
-            - **command_exec(command=edit)**：把 \`accumulatedArgs.{old, new}\` 渲染为
+            - **command_exec(method=edit)**：把 \`accumulatedArgs.{old, new}\` 渲染为
               \`@codemirror/merge\` 的 unifiedMergeView 红绿 diff；\`edits[]\` 多条按
               顺序展示。
-            - **command_exec(command=write_file)**：把 content 单独成大段预览。
+            - **command_exec(method=write_file)**：把 content 单独成大段预览。
             - **program**：详情平铺 history（lang / status / time + 首行 code），
               最后一次完整展开 code+args+output，前面 output 截断 200 字预览。
             - **knowledge** body 走 MarkdownContent，与 file_window 一致。

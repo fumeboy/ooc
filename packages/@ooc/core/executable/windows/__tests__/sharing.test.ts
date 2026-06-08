@@ -110,7 +110,7 @@ describe("WindowManager sharing 守门", () => {
       mgr.openMethodExec({
         thread: child,
         parentWindowId: "w_file_3",
-        command: "edit",
+        method: "edit",
         title: "尝试编辑",
       }),
     ).rejects.toThrow(/只读 ref/);
@@ -129,7 +129,7 @@ describe("WindowManager sharing 守门", () => {
       mgr.openMethodExec({
         thread: parent,
         parentWindowId: "w_file_4",
-        command: "edit",
+        method: "edit",
         title: "尝试编辑",
       }),
     ).rejects.toThrow(/已借出/);
@@ -162,7 +162,7 @@ describe("do_window.move 归还路径", () => {
       arguments: {
         title: "归还 file",
         window_id: creator!.id,
-        command: "move",
+        method: "move",
         args: { window_id: "w_file_5", mode: "move" },
       },
     });

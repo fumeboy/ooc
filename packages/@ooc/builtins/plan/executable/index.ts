@@ -154,7 +154,7 @@ function updatePlanWindow(ctx: MethodExecutionContext, next: PlanWindow): void {
 
 // ─────────────────────────── commands ─────────────────────────────────────────
 
-const updatePlanCommand: ObjectMethod = {
+const updatePlanMethod: ObjectMethod = {
   paths: ["update_plan"],
   schema: {
     args: {
@@ -186,7 +186,7 @@ async function executeUpdatePlan(ctx: MethodExecutionContext): Promise<string | 
   return undefined;
 }
 
-const addStepCommand: ObjectMethod = {
+const addStepMethod: ObjectMethod = {
   paths: ["add_step"],
   schema: {
     args: {
@@ -221,7 +221,7 @@ async function executeAddStep(ctx: MethodExecutionContext): Promise<string | und
   return `added step ${step.id}`;
 }
 
-const updateStepCommand: ObjectMethod = {
+const updateStepMethod: ObjectMethod = {
   paths: ["update_step"],
   schema: {
     args: {
@@ -266,7 +266,7 @@ async function executeUpdateStep(ctx: MethodExecutionContext): Promise<string | 
   return undefined;
 }
 
-const expandStepCommand: ObjectMethod = {
+const expandStepMethod: ObjectMethod = {
   paths: ["expand_step"],
   schema: {
     args: {
@@ -327,7 +327,7 @@ async function executeExpandStep(ctx: MethodExecutionContext): Promise<string | 
   return `expanded step ${stepId} into sub plan ${childId}`;
 }
 
-const collapseSubplanCommand: ObjectMethod = {
+const collapseSubplanMethod: ObjectMethod = {
   paths: ["collapse_subplan"],
   schema: {
     args: {
@@ -385,7 +385,7 @@ async function executeCollapseSubplan(ctx: MethodExecutionContext): Promise<stri
   return `collapsed sub plan ${childId} from step ${stepId}`;
 }
 
-const markDoneCommand: ObjectMethod = {
+const markDoneMethod: ObjectMethod = {
   paths: ["mark_done"],
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
@@ -402,7 +402,7 @@ async function executeMarkDone(ctx: MethodExecutionContext): Promise<string | un
   return undefined;
 }
 
-const closeCommand: ObjectMethod = {
+const closeMethod: ObjectMethod = {
   paths: ["close"],
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
@@ -478,7 +478,7 @@ const PLAN_BASIC_KNOWLEDGE = `
 plan_window 是 thread 的行动计划窗口（first-class ContextWindow）。
 由 root.plan command 创建/更新；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread。
 
-在 plan_window 上可调命令（通过 exec(parent_window_id="<plan_window_id>", command="X", args=...) 调用）：
+在 plan_window 上可调命令（通过 exec(parent_window_id="<plan_window_id>", method="X", args=...) 调用）：
 - update_plan: 更新 plan.title / description
 - add_step: 追加 step（参数 text 必填；status 可选，默认 pending）
 - update_step: 修改某 step 的 text / status（参数 step_id 必填）
@@ -499,9 +499,9 @@ const PLAN_CONSTRUCTOR_KNOWLEDGE = `
 plan 用于把当前任务拆成可执行步骤，并以 plan_window 形式持久挂在 context。
 
 调用形态:
-- 简单文本: open(command="plan", title="制定计划", args={ plan: "<计划描述>" })
+- 简单文本: open(method="plan", title="制定计划", args={ plan: "<计划描述>" })
   → 创建一个 root plan_window（无 parentPlanWindowId），title 默认 "Plan"，description=<text>，steps=[]
-- 完整指定: open(command="plan", args={ title: "...", description?: "...", steps?: [{ id?, text, status? }, ...] })
+- 完整指定: open(method="plan", args={ title: "...", description?: "...", steps?: [{ id?, text, status? }, ...] })
   → 完整创建 root plan_window
 
 创建之后:
@@ -609,13 +609,13 @@ const planConstructor: ObjectMethod = {
 
 builtinRegistry.registerObjectType("plan", {
   methods: {
-    update_plan: updatePlanCommand,
-    add_step: addStepCommand,
-    update_step: updateStepCommand,
-    expand_step: expandStepCommand,
-    collapse_subplan: collapseSubplanCommand,
-    mark_done: markDoneCommand,
-    close: closeCommand,
+    update_plan: updatePlanMethod,
+    add_step: addStepMethod,
+    update_step: updateStepMethod,
+    expand_step: expandStepMethod,
+    collapse_subplan: collapseSubplanMethod,
+    mark_done: markDoneMethod,
+    close: closeMethod,
     plan: planConstructor,
   },
   onClose: onClosePlanWindow,

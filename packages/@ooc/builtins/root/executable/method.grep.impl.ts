@@ -24,7 +24,7 @@ grep 用于按文件内容搜索（正则），结果作为 search_window kind=g
 - 优先调用 rg --json；不可用时回退 JS 实现，输出结构一致
 - 每条 match 含 path / line(0-based) / snippet（单行 trim 到 200 字符）
 - 按 (path, line) 字典序；超过 200 条截断
-- 命中之后用 \`open(parent_window_id="<search_window_id>", command="open_match", args={ index: <N> })\`
+- 命中之后用 \`open(parent_window_id="<search_window_id>", method="open_match", args={ index: <N> })\`
   spawn file_window；grep match 自动套上 [line ± 40] 切片
 `.trim();
 

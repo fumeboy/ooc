@@ -70,7 +70,7 @@ activates_on:
 | **seed knowledge** | 写在 stone/builtin 里的初始知识库 `<stone>/knowledge/<slug>.md`，Builtin 的 seed 进源码仓 review，Stone 的 seed 进 git review。每篇带 `activates_on` frontmatter（见下文）决定何时进 LLM 视野。 |
 | **sediment knowledge** | 写在 pool 里的运行时长期记忆 `pools/<id>/knowledge/{memory,relations}/...`，不进 git。由 reflectable 维度通过 super flow 写入。 |
 | **super flow** | 一种特殊的反思 thread：在普通业务 thread 之上做经验沉淀。**唯一**合法写 sediment knowledge 的入口（直接写文件被协议拒）。 |
-| **activates_on** | seed / sediment knowledge 文件 frontmatter 中的字段，控制该篇何时被加入 LLM 视野。形态：`{ "<trigger>": "show_description" \| "show_content" }`。三类 trigger：`"window::<type>"`（任意 open 的该类 window 出现时命中；如 `"window::root"` 等价"任意线程都见"）/ `"command::<window_type>::<command>"`（某个 window 上正在开同名 command form 时命中）/ `"super"`（仅在 super flow 中命中）。多 trigger 命中取 max（show_content > show_description）。 |
+| **activates_on** | seed / sediment knowledge 文件 frontmatter 中的字段，控制该篇何时被加入 LLM 视野。形态：`{ "<trigger>": "show_description" \| "show_content" }`。三类 trigger：`"window::<type>"`（任意 open 的该类 window 出现时命中；如 `"window::root"` 等价"任意线程都见"）/ `"method::<window_type>::<method>"`（某个 window 上正在开同名 command form 时命中）/ `"super"`（仅在 super flow 中命中）。多 trigger 命中取 max（show_content > show_description）。 |
 
 ---
 

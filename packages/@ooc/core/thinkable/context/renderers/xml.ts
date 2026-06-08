@@ -99,21 +99,21 @@ export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistr
     const brief = desc
       ? conciseDescription(desc, COMMAND_DESC_MAX)
       : (entry?.paths ?? [name]).join(", ").slice(0, COMMAND_BRIEF_MAX);
-    return xmlElement("command", { name }, [xmlText(brief)]);
+    return xmlElement("method", { name }, [xmlText(brief)]);
   });
 
   if (isCompressed) {
     children.push(
-      xmlElement("command", { name: "expand" }, [
+      xmlElement("method", { name: "expand" }, [
         xmlText("expand: 把本 window 从压缩态恢复为完整态(compressLevel → 0)"),
       ]),
     );
   }
 
   return xmlElement(
-    "commands",
+    "methods",
     {
-      hint: `通过 open(parent_window_id="${window.id}", command="<name>", args={...}) 调用`,
+      hint: `通过 exec(window_id="${window.id}", method="<name>", args={...}) 调用`,
     },
     children,
   );

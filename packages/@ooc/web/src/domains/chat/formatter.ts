@@ -77,7 +77,7 @@ function buildToolSummaryFields(toolName: string, argumentsValue: unknown): Tool
     // ContextWindow 协议（spec 2026-05-14）：parent_window_id + command + args
     const parent = asDisplayText(argumentsValue.parent_window_id);
     if (parent) fields.push({ label: "parent", value: parent });
-    const command = asDisplayText(argumentsValue.command);
+    const command = asDisplayText(argumentsValue.method ?? argumentsValue.method);
     if (command) fields.push({ label: "command", value: command });
     if (isRecord(argumentsValue.args)) {
       for (const [k, v] of Object.entries(argumentsValue.args)) {
@@ -279,7 +279,7 @@ function findInboxMessage(thread: ThreadContext, msgId?: string) {
  *
  * 触发条件(全部满足才生成 message line,否则返回 undefined):
  * - toolName === "open"
- * - arguments.command === "say"
+ * - arguments.method === "say"
  * - arguments.parent_window_id 对应一个 talk_window(存在 talkWindowTargets 中)
  * - arguments.args.msg 是非空字符串
  *
@@ -292,7 +292,7 @@ function maybeBuildOutboundSayLine(
 ): ChatLine | undefined {
   if (event.toolName !== "open") return undefined;
   const args = isRecord(event.arguments) ? event.arguments : undefined;
-  if (!args || args.command !== "say") return undefined;
+  if (!args || args.method !== "say" && args.method !== "say") return undefined;
   const parentWindowId = typeof args.parent_window_id === "string" ? args.parent_window_id : undefined;
   if (!parentWindowId) return undefined;
   const target = talkWindowTargets.get(parentWindowId);
@@ -549,7 +549,7 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
 
     if (category === "permission" && kind === "permission_ask") {
       const toolCallId = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
-      const command = typeof event.command === "string" ? event.command : "(unknown)";
+      const command = typeof event.method === "string" ? event.method : "(unknown)";
       const argsSummary = typeof event.argsSummary === "string" ? event.argsSummary : undefined;
       const windowId = typeof event.windowId === "string" ? event.windowId : undefined;
       // decided 写在 same event 上 (backend mutates in place); kind=permission_denied 是另一种
@@ -564,7 +564,7 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
         kind: "permission_card",
         role: "notice",
         toolCallId,
-        command,
+        method: command,
         argsSummary,
         windowId,
         decided,

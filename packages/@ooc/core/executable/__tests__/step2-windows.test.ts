@@ -47,7 +47,7 @@ describe("Step 2 window lifecycles", () => {
       const opened = await mgr.openMethodExec({
         thread,
         parentWindowId: talkWindow!.id,
-        command: "say",
+        method: "say",
         title: "ask",
         args: { msg: "deploy tomorrow ok?" },
       });
@@ -89,7 +89,7 @@ describe("Step 2 window lifecycles", () => {
     await mgr.openMethodExec({
       thread,
       parentWindowId: programWindow!.id,
-      command: "exec",
+      method: "exec",
       title: "second",
       args: { language: "shell", code: "echo second" },
     });
@@ -104,7 +104,7 @@ describe("Step 2 window lifecycles", () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     await mgr.openMethodExec({
       thread,
-      command: "todo",
+      method: "todo",
       title: "buy milk",
       args: { content: "buy milk" },
     });
@@ -127,7 +127,7 @@ describe("Step 2 window lifecycles", () => {
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
       const opened = await mgr.openMethodExec({
         thread,
-        command: "open_file",
+        method: "open_file",
         title: "read hello",
         args: { path: file },
       });
@@ -166,7 +166,7 @@ describe("Step 2 window lifecycles", () => {
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
       const opened = await mgr.openMethodExec({
         thread,
-        command: "open_knowledge",
+        method: "open_knowledge",
         title: "pin manual",
         args: { path: "manual" },
       });
@@ -230,7 +230,7 @@ describe("Step 2 window lifecycles", () => {
       await mgr1.openMethodExec({
         thread: assistantThread,
         parentWindowId: talkToBob!.id,
-        command: "say",
+        method: "say",
         title: "ask",
         args: { msg: "hi bob" },
       });
@@ -255,7 +255,7 @@ describe("Step 2 window lifecycles", () => {
       await mgr2.openMethodExec({
         thread: bobThread,
         parentWindowId: bobCreatorTalk!.id,
-        command: "say",
+        method: "say",
         title: "reply",
         args: { msg: "hi assistant, got it" },
       });

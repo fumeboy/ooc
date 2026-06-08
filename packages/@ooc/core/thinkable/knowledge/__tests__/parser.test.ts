@@ -8,7 +8,7 @@ filename: file-ops
 title: 文件操作
 description: shell 读写文件
 activates_on:
-  "command::root::program": "show_description"
+  "method::root::program": "show_description"
   "window::program": "show_content"
 ---
 
@@ -20,7 +20,7 @@ activates_on:
     expect(frontmatter.title).toBe("文件操作");
     expect(frontmatter.description).toBe("shell 读写文件");
     expect(frontmatter.activates_on).toEqual({
-      "command::root::program": "show_description",
+      "method::root::program": "show_description",
       "window::program": "show_content",
     });
     expect(body).toContain("# 正文标题");

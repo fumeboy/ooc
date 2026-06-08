@@ -48,10 +48,10 @@ function callKnowledge(
     type: "method_exec",
     parentWindowId: "root",
     title: "test",
-    command: "test",
+    method: "test",
     description: "",
     accumulatedArgs: args,
-    commandPaths: [],
+    methodPaths: [],
     loadedKnowledgePaths: [],
     status,
     createdAt: 0,
@@ -232,7 +232,7 @@ async function runEdit(name: string, body: string, args: Record<string, unknown>
   const opened = await mgr.openMethodExec({
     thread,
     parentWindowId: fileWindow.id,
-    command: "edit",
+    method: "edit",
     title: `edit ${name}`,
     args,
   });
@@ -330,7 +330,7 @@ describe("U2: file_window.edit", () => {
       await mgr.openMethodExec({
         thread,
         parentWindowId: "root",
-        command: "edit",
+        method: "edit",
         title: "wrong parent",
         args: { old: "a", new: "b" },
       });
@@ -358,7 +358,7 @@ describe("U2: file_window.edit", () => {
     const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: fw.id,
-      command: "edit",
+      method: "edit",
       title: "edit missing",
       args: { old: "a", new: "b" },
     });
@@ -404,7 +404,7 @@ async function dispatchWriteFile(thread: ReturnType<typeof makeThread>, args: Re
     name: "exec",
     arguments: {
       title: "write file",
-      command: "write_file",
+      method: "write_file",
       args,
     },
   });
@@ -520,7 +520,7 @@ async function dispatchGlob(thread: ReturnType<typeof makeThread>, args: Record<
     name: "exec",
     arguments: {
       title: "glob",
-      command: "glob",
+      method: "glob",
       args,
     },
   });
@@ -537,7 +537,7 @@ async function dispatchOpenMatch(
     arguments: {
       title: "open match",
       window_id: searchWindowId,
-      command: "open_match",
+      method: "open_match",
       args,
     },
   });
@@ -689,7 +689,7 @@ async function dispatchGrep(thread: ReturnType<typeof makeThread>, args: Record<
     name: "exec",
     arguments: {
       title: "grep",
-      command: "grep",
+      method: "grep",
       args,
     },
   });
@@ -826,12 +826,12 @@ describe("U5: root.grep", () => {
 
 // ---------- U6: program anti-pattern note ----------
 
-import { programCommand } from "@ooc/builtins/root/executable/method.program";
+import { programMethod } from "@ooc/builtins/root/executable/method.program";
 
 describe("U6: program knowledge mentions file_window.edit", () => {
   it("program command knowledge text steers LLM toward file_window.edit + write_file", () => {
     // 用代表性 args 调 knowledge()——只需要 basic path 包含建议段落
-    const k = callKnowledge(programCommand, { language: "shell", code: "ls" }, "open");
+    const k = callKnowledge(programMethod, { language: "shell", code: "ls" }, "open");
     const text = Object.values(k).join("\n");
     expect(text).toContain("file_window.edit");
     expect(text).toContain("write_file");

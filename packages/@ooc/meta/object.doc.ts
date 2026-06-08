@@ -90,7 +90,7 @@ export const root: DocTreeNode = {
     - visible: 为自己编写 UI 页面（改自己的界面）
     - readable: 可被其他 Agent 阅读的 （能够进行自我介绍）
 
-    **extendable** 是**非维度的外接集成层**（不在 8 维度内）: 把外部世界（飞书 / notion / slack / github 等）按统一模板接入为可调用的 Window 与 command。它够的是**外部世界**，而外部系统不构成 Agent 自我，故不是维度（实现见 packages/@ooc/core/extendable/，首个 case 见 meta/case.feishu-integration.doc.ts，详见 children.extendable）。
+    **extendable** 是**非维度的外接集成层**（不在 8 维度内）: 把外部世界（飞书 / notion / slack / github 等）按统一模板接入为可调用的 Window 与 method。它够的是**外部世界**，而外部系统不构成 Agent 自我，故不是维度（实现见 packages/@ooc/core/extendable/，首个 case 见 meta/case.feishu-integration.doc.ts，详见 children.extendable）。
 
     两条贯穿全维度的横切设计:
     - 对象关系三轴（详见 patches.object_relations）: 自我(super) / peer 平等(talk) / parent-child 层级。Supervisor 即这棵 object 树的 root parent。
@@ -108,7 +108,7 @@ export const root: DocTreeNode = {
         "visible": "OOC Agent 由几个维度组合，visible 是其中之一，定义 Agent 持有/演化自身 UI 页面的能力",
         "persistable": "OOC Agent 由几个维度组合，persistable 是其中之一，定义 Agent 的持久化存储能力",
         "readable": "OOC 第 9 个概念维度（自我塑造第四件）：Object 控制自己在 Context 中如何以 XML 形式展示给其他 Agent / LLM；实现为 readable.md（静态）或 readable.ts（动态渲染函数）。除渲染外，readable 还注册 window method（windowMethods，控制 window 展示如 set_viewport）并持有 window 状态对象（WindowDisplayState，持久化在 thread-context）——window method 签名不同于 object method：额外接收 windowState、返回新 state（immutable）。当前作为 root patches.readable_concept 记录，未单独列为 children。",
-        "extendable": "非能力维度的外接集成层：把外部世界（飞书 / notion / slack 等）按统一模板接入为可调用的 Window 与 command；实现见 packages/@ooc/core/extendable/",
+        "extendable": "非能力维度的外接集成层：把外部世界（飞书 / notion / slack 等）按统一模板接入为可调用的 Window 与 method；实现见 packages/@ooc/core/extendable/",
         "stone": "OOC 持久层之一（静）：长期身份与设计源码（含 seed knowledge），进 git review",
         "pool": "OOC 持久层之一（积）：跨 session 累积的事实数据（含 sediment knowledge），不进 git",
         "flow": "OOC 持久层之一（动）：session 级临时数据与程序",
@@ -129,7 +129,7 @@ export const root: DocTreeNode = {
 
             核心组成:
             1. LLM 交互模块: 思考的核心是与 LLM 交互，常规需要适配 OpenAI 和 Claude provider，并以 Responses-first 的 item 模型表达消息、tool call 与 tool result。
-            2. ContextBuilder 模块: 设计如何构建 LLM 输入（context），通过统一的抽象信息单元 **ContextWindow** 来构建 context。**2026-05-28 ooc-6 归一化: ContextWindow 就是 OOC Object 出现在 context 中的形态**——每个 window 背后都对应一个 Object（builtin 或 user-defined），window 上挂的 command 就是 Object 的 method。
+            2. ContextBuilder 模块: 设计如何构建 LLM 输入（context），通过统一的抽象信息单元 **ContextWindow** 来构建 context。**2026-05-28 ooc-6 归一化: ContextWindow 就是 OOC Object 出现在 context 中的形态**——每个 window 背后都对应一个 Object（builtin 或 user-defined），window 上挂的 method 就是 Object 的 method。
             3. 函数调用模块: LLM 通过 4 个基础 tool 操作世界——exec（唯一的"调用 method"原语）/ close（关 window / 从 context 移除 object 引用）/ wait（等 IO）/ compress（压上下文）。exec(object_id?, method, args?) 调某 object 上的 method，object_id 缺省为 root（全局 method）。
             4. 类 SubAgent 模式支持: 思考的过程通过 thread 承载，thread 可以派生子 thread，形成一个 Thread Tree，每个 thread 可以并行思考。
 
@@ -139,13 +139,13 @@ export const root: DocTreeNode = {
             - user-defined objects（位于 \`packages/<objectId>/\`，运行时通过 registerNewObjectType 注册）
             Object 的 readable 函数控制自己如何在 context 中以 XML 形式展示给 LLM；Object 的 executable 目录提供 methods；Object 的 visible 目录提供前端 UI。
 
-            渐进式披露的多步 command 调用: LLM 调 exec(window_id, command, args)；若 args 不齐或会引入新 knowledge path，系统创建一个 command_exec form 并激活该 command 的初始知识，告诉 LLM 怎么填；LLM 通过 exec(form_id, "refine", args) 多次累积参数（每次可触发更细的知识激活），最后 exec(form_id, "submit") 执行。例如打开文件 = exec(command="open_file", args={path})，文件以 file 类型 ContextWindow 进入 LLM 输入。close 关闭一个 ContextWindow。
+            渐进式披露的多步 method 调用: LLM 调 exec(window_id, method, args)；若 args 不齐或会引入新 knowledge path，系统创建一个 command_exec form 并激活该 method 的初始知识，告诉 LLM 怎么填；LLM 通过 exec(form_id, "refine", args) 多次累积参数（每次可触发更细的知识激活），最后 exec(form_id, "submit") 执行。例如打开文件 = exec(method="open_file", args={path})，文件以 file 类型 ContextWindow 进入 LLM 输入。close 关闭一个 ContextWindow。
 
             Thinkable 围绕上述模块拆分为以下子维度:
             - identity: Object 如何认识自己，以及如何被其他 Object 认识。
             - llm: 如何把 OOC 的内部消息模型适配到 OpenAI / Claude 等 provider。
             - context: Object 本轮能看见的全部世界，由若干 ContextWindow 组成。
-            - knowledge: Object 拥有什么知识，以及知识如何按 command path 渐进激活。
+            - knowledge: Object 拥有什么知识，以及知识如何按 method path 渐进激活。
             - thread: Object 的思考过程如何被拆成一棵可并行、可等待、可恢复的 Thread Tree。
             - thinkloop: 单个 thread 内一轮 "构造 context -> 调用 LLM -> 执行 tool -> 写入事件" 的循环。
             `,
@@ -156,7 +156,7 @@ export const root: DocTreeNode = {
                 "Context": "Object 每一轮思考时能看见的全部信息，是 Object 的世界边界",
                 "ContextWindow": "Context 的统一抽象信息单元，**本质是 OOC Object 出现在 context 中的形态**，既是信息展示单元，也是可操作对象，挂载 Object 的 method 供 LLM 交互",
                 "ContextObject": "ContextWindow 的别名，强调 window = object in context；同时也是 Object 自身（object 维度，persist 到 state.json）；constructor 返回 ContextObject，manager 再把它 mount 为 thread context 中的 ContextObject",
-                "Knowledge": "Object 持有的 markdown 知识文档，可按 command path 渐进激活进入 Context",
+                "Knowledge": "Object 持有的 markdown 知识文档，可按 method path 渐进激活进入 Context",
                 "Thread": "Object 思考过程的运行时节点，多个 thread 组成 Thread Tree",
                 "Thread Tree": "thread 派生子 thread 形成的树形结构，多个 thread 可并行思考",
                 "ThinkLoop": "单个 thread 内的一轮思考循环",
@@ -213,7 +213,7 @@ export const root: DocTreeNode = {
                     - Claude Messages API 需要 transport 层把 function_call 翻译成 tool_use，把 function_call_output 翻译成 tool_result。
 
                     LLM 模块只负责 "如何请求模型"，不负责 "模型能做什么"。
-                    模型能做什么由 executable 暴露的 tool / command 决定。
+                    模型能做什么由 executable 暴露的 tool / method 决定。
                     `,
                     named: {
                         "Responses-first": "OOC 内部优先采用 OpenAI Responses 风格的 item 模型表达 LLM 输入输出",
@@ -365,16 +365,16 @@ export const root: DocTreeNode = {
                           - \`"super"\` — 仅在 super flow 中命中
                         - 旧格式（兼容）:
                           - \`"window::<type>"\` → 自动映射为 \`object::<type>\`
-                          - \`"command::<window_type>::<command>"\` → 自动映射为 \`method::<type>::<command>\`
+                          - \`"window::<type>"\` → 已在上一行；\`"command::"\` 格式已移除
                         多 trigger 命中取 **max**（show_content > show_description）。
                     - markdown body: frontmatter 之外的正文，构成 KnowledgeDoc.body。
 
                     Knowledge 的核心设计是渐进式激活:
                     LLM 还没进入某个行动路径时，只看到少量描述或完全看不到。
-                    当 LLM 打开某个 command_exec window，并逐步 refine 参数时，系统逐条 evaluate 各篇 knowledge 的 trigger map，命中级别取 max。
+                    当 LLM 打开某个 method_exec window，并逐步 refine 参数时，系统逐条 evaluate 各篇 knowledge 的 trigger map，命中级别取 max。
 
                     例如:
-                    - 在 root 上打开 program method form 时，\`"method::root::program"\` 命中（旧格式 \`"command::root::program"\` 仍兼容）。
+                    - 在 root 上打开 program method form 时，\`"method::root::program"\` 命中（旧格式 \`"method::root::program"\` 仍兼容）。
                     - 任何 talk_object open 时，\`"object::talk"\` 命中——seed 的"我跟人 talk 该露面"类型 knowledge 持续可见。
                     - 显式 open_knowledge 时，把某篇知识作为 knowledge_object 打开（force-full）。
 
@@ -390,7 +390,7 @@ export const root: DocTreeNode = {
                     named: {
                         "frontmatter": "markdown 文档头部的结构化元信息",
                         "activates_on": "knowledge 声明自身何时进入 Context 的激活规则（trigger map: 表达式 → 级别）",
-                        "trigger": "activates_on 中的 key 表达式，新格式三类：object::<type> / method::<object_type>::<method> / object_id::<id>；旧格式 window::/command:: 兼容到迁移完成",
+                        "trigger": "activates_on 中的 key 表达式，新格式三类：object::<type> / method::<object_type>::<method> / object_id::<id>；旧格式 window:: 仍兼容",
                         "show_description / show_content": "activates_on 的两种激活级别；多 trigger 命中取 max",
                         "knowledge_object": "把 knowledge 正文作为 ContextObject 展示给 LLM 的对象（原 knowledge_window）",
                         "knowledge_window": "knowledge_object 的旧称",
@@ -402,7 +402,7 @@ export const root: DocTreeNode = {
                         "activation_scope": {
                             title: "自动激活知识的生命周期",
                             content: `
-                            由 command_exec window 自动激活的 knowledge 应该跟随这次 command 生命周期。
+                            由 command_exec window 自动激活的 knowledge 应该跟随这次 method 生命周期。
 
                             当 command_exec window 关闭或执行结束后，本次自动激活的知识不应永久堆在 Context 里。
                             如果 LLM 希望长期保留某篇知识，应通过显式 open_knowledge 打开 knowledge_window。
@@ -411,13 +411,13 @@ export const root: DocTreeNode = {
                         "domain_axis": {
                             title: "B-tree 协议：领域父子继承",
                             content: `
-                            **背景**：现有 \`activates_on\` 提供的是"任务进度轴"——根据 LLM 当前 command path 渐进激活；
+                            **背景**：现有 \`activates_on\` 提供的是"任务进度轴"——根据 LLM 当前 method path 渐进激活；
                             但**领域层级轴**（从大领域到子领域）此前没有协议表达，导致 sentry/* 类一组同领域 Agent
                             的公共知识无处放：放 \`stones/main/knowledge/\` 全局可见但其实没人加载、放每个子 Agent 自己的
                             \`knowledge/\` 又会重复 N 份。
 
                             **协议**：knowledge 激活的实际是二维 grid：
-                            - 横轴 = 任务进度（command path / form refinement）—— 既有 \`activates_on\`
+                            - 横轴 = 任务进度（method path / form refinement）—— 既有 \`activates_on\`
                             - 纵轴 = 领域层级（B-tree 父子继承）—— 本协议新增
 
                             纵轴通过**物理嵌套** + **frontmatter 显式声明** 两件事解决：
@@ -533,7 +533,7 @@ export const root: DocTreeNode = {
                     - failed: 发生严重错误，后续消息也可以让它重新进入 running。
                     - paused: 被控制面暂停，等待人工检查或 resume。
 
-                    子线程通常由 do command 创建。
+                    子线程通常由 do method 创建。
                     父线程通过 do_window 观察子线程状态，子线程完成后通过 creator window 把结果回报给父线程。
                     `,
                     named: {
@@ -563,7 +563,7 @@ export const root: DocTreeNode = {
                             升级路径: plan 升格为 first-class plan_window (详见 executable.children.context_window.children.plan_window)。
 
                             迁移规则:
-                            - 新代码: **绝不**读写 thread.plan; 完全走 root.plan command 创建 plan_window
+                            - 新代码: **绝不**读写 thread.plan; 完全走 root.plan method 创建 plan_window
                             - 旧代码 (如有): 在 B2 实施时一并扫除; ThreadContext type 中 plan 字段移除
                             - thread.json 历史数据: 历史 plan 字符串数据丢弃 (无迁移; OOC 当前不承诺历史 thread 兼容)
 
@@ -581,7 +581,7 @@ export const root: DocTreeNode = {
                             content: `
                             "让别的执行体替我干活"在 OOC 里有两种机制，性质和代价完全不同，doc 别处分散在 thinkable / persistable，这里集中对比:
 
-                            - fork sub-thread（同 object，do command + do_window）: 把自己"分身"成并行子线程。子 thread **共享我这个 object 的 seed / pool**，只有 session / thread-local 状态独立。临时，session 结束即归档，无独立身份。分的是**算力**。
+                            - fork sub-thread（同 object，do method + do_window）: 把自己"分身"成并行子线程。子 thread **共享我这个 object 的 seed / pool**，只有 session / thread-local 状态独立。临时，session 结束即归档，无独立身份。分的是**算力**。
                             - 建 child Agent（跨 object，物理嵌套在 stones/.../<self>/children/<child>/）: 一个**独立 object**，有自己的 stone(seed) / pool(sediment) / 自己的 super / 自己的 self.md，通过 talk 协作。持久、跨 session，可被别的 Agent 独立发现 / 引用。分的是**身份与经验**。
 
                             分界线: 是否需要**跨 session 的持久身份 + 独立经验积累**。
@@ -593,7 +593,7 @@ export const root: DocTreeNode = {
                             一句话: sub-thread 分"算力"，child Agent 分"身份与经验"。parent-child 的修改权 / 治理见 root.patches.object_relations。
                             `,
                             named: {
-                                "sub-thread": "同 object 内 do command 派生的临时子线程，共享 seed/pool，无独立身份",
+                                "sub-thread": "同 object 内 do method 派生的临时子线程，共享 seed/pool，无独立身份",
                                 "child Agent": "跨 object 的持久下属，物理嵌套在 parent/children/<child>/，有独立 seed/pool/super",
                                 "固化触发器": "同类 sub-thread 任务多 session 反复 + 重喂领域知识 → 升级为 child Agent",
                             },
@@ -726,7 +726,7 @@ export const root: DocTreeNode = {
                             content: `
                             压缩协议必须满足:
                             1. 可见性: 每次压缩落 ProcessEvent (type=context_compressed); silent-swallow ban 同样适用。
-                            2. 可逆性: 所有 level≥1 window 自动挂 expand command; exec(window_id, "expand") 恢复 level 0。
+                            2. 可逆性: 所有 level≥1 window 自动挂 expand method; exec(window_id, "expand") 恢复 level 0。
                             3. type-dispatch 不破: 不允许 render.ts 出现 switch-by-case; compress 只走 compressView hook。
                             4. 持久化不丢: compressLevel 字段进 thread.json (默认值 0 时不序列化); 原 events fold 后留盘。
                             5. 无幽灵 LLM 流量: events 摘要由 LLM 在 compress 调用中主动产出, 系统不偷偷调用 LLM 生成摘要。
@@ -750,7 +750,7 @@ export const root: DocTreeNode = {
 
             **2026-05-28 ooc-6 归一化: Command 与 Object Method 合并**
             原 "Window Command" 与 "Object Method" 两个概念合并，统一称为 **Method**:
-            - 原 window 上注册的 command 现在是 builtin object 的 method
+            - 原 window 上注册的 method 现在是 builtin object 的 method
             - 原 stone object executable/index.ts 中定义的方法现在也是 object 的 method
             - Method 有两个可见性标记: \`public?: boolean\`（对其他 Object 是否可见）、\`for_ui_access?: boolean\`（对前端 API 是否可调用）
 
@@ -775,7 +775,7 @@ export const root: DocTreeNode = {
                 "ContextWindow": "ContextObject 的旧称（2026-05-28 前），概念已统一为 ContextObject",
                 "ObjectType": "ContextObject 的类型分支，如 root/file/program/talk/do/knowledge/search/plan，以及运行时通过 registerNewObjectType 注册的任意字符串类型",
                 "WindowType": "ObjectType 的旧称（2026-05-28 前）",
-                "CommandExec": "一次 method 调用过程对应的临时对象（canonical type=\"method_exec\"，旧名 \"command_exec\" 仍以 alias 注册以兼容已落盘 form）；自身注册 refine/submit method",
+                "MethodExec": "一次 method 调用过程对应的临时对象（type=\"method_exec\"；2026-06-08 method 概念移除，旧别名 command_exec 已删除）；自身注册 refine/submit method",
                 "ObjectRegistry": "注册各类 object type 行为的机制（原 WindowRegistry）",
                 "ObjectManager": "管理 thread context objects 增删改查和生命周期的机制（原 WindowManager）",
                 "WindowRegistry": "ObjectRegistry 的旧称",
@@ -788,10 +788,10 @@ export const root: DocTreeNode = {
                     Tool 是 LLM 直接看见和调用的稳定接口。
 
                     OOC 不鼓励为每个能力都暴露一个新 tool。
-                    相反，tool 集合尽量保持稳定，新的能力通过 command 和 window type 扩展。
+                    相反，tool 集合尽量保持稳定，新的能力通过 method 和 window type 扩展。
 
                     基础 tool（当前实现 4 个，src/executable/tools/index.ts OOC_TOOLS）:
-                    - exec: 在某 window 上调用一条 command。args 齐全 + 不引入新 path/knowledge 时立即执行；
+                    - exec: 在某 window 上调用一条 method。args 齐全 + 不引入新 path/knowledge 时立即执行；
                       否则创建 command_exec form 让 LLM 后续推进。
                     - close: 关闭一个 ContextWindow（form / do_window / todo_window 等）。
                     - wait: 声明当前 thread 等待某个 talk_window / do_window 的未来 IO。
@@ -803,7 +803,7 @@ export const root: DocTreeNode = {
                     - 没有未来输入就 end，有未来输入才 wait。
                     `,
                     named: {
-                        "exec": "在某 window 上调用一条 command 的工具原语；可能立即执行或创建 form",
+                        "exec": "在某 window 上调用一条 method 的工具原语；可能立即执行或创建 form",
                         "close": "关闭 window 或取消行动入口的工具原语",
                         "wait": "让当前 thread 等待未来 IO 的工具原语",
                         "compress": "控制 thread 上下文体积的元 tool；见 children.compress",
@@ -832,15 +832,15 @@ export const root: DocTreeNode = {
                             都在那里定义。compress 是 LLM 视野内的 first-class action, 让 "控制自身上下文体积"
                             不再是会话外的指令。
 
-                            为什么 compress 是 tool 而非 command (与 stable_tool_surface patch 不冲突):
-                            command 挂在某 window 上, 操纵 window-local 状态; compress 操纵 thread 自身的 windows[] +
+                            为什么 compress 是 tool 而非 method (与 stable_tool_surface patch 不冲突):
+                            method 挂在某 window 上, 操纵 window-local 状态; compress 操纵 thread 自身的 windows[] +
                             events[] 集合, 没有合适的 window 可挂。这是与 close/wait 一样的"操纵 thread 自身"类元 tool。
                             `,
                             named: {
                                 "scope=windows": "主动折叠指定 window 集合",
                                 "scope=events": "LLM 自写 summary fold events 中段",
                                 "scope=auto": "让系统按 budget 自动决策",
-                                "expand": "level≥1 window 自动挂载的恢复 command; exec(window_id, \"expand\") 复位 level 0",
+                                "expand": "level≥1 window 自动挂载的恢复 method; exec(window_id, \"expand\") 复位 level 0",
                             },
                             sources: [["src/executable/tools/compress.ts", "compress 已实现（OOC 第 4 个 LLM tool, 注册于 src/executable/tools/index.ts OOC_TOOLS）; 当前仅 scope=windows 落地, scope=events/auto 抛 not-implemented; 完整协议见 docs/2026-05-25-context-compression-design.md §4.5"]],
                         },
@@ -852,7 +852,7 @@ export const root: DocTreeNode = {
                             LLM 直接学习的是 tool 原语。
                             如果每新增一个能力就新增一个 tool，模型的行动面会不断变化，调试和知识激活也会复杂化。
 
-                            因此新能力应优先表现为新的 command 或新的 window type，而不是新的顶层 tool。
+                            因此新能力应优先表现为新的 method 或新的 window type，而不是新的顶层 tool。
                             `,
                         },
                         "form_lifecycle_via_commands": {
@@ -860,26 +860,26 @@ export const root: DocTreeNode = {
                             content: `
                             旧版本曾有 5 个原语 open/refine/submit/close/wait，其中 refine/submit 仅服务 form lifecycle。
 
-                            迁移后：open 并入 exec（exec 是唯一"调 command"原语）；refine/submit 不再是顶层 tool，
-                            而是 CommandExecWindow 上注册的两条命令；通过 \`exec(form_id, "refine", args={...})\` /
+                            迁移后：open 并入 exec（exec 是唯一"调 method"原语）；refine/submit 不再是顶层 tool，
+                            而是 MethodExecWindow 上注册的两条 method；通过 \`exec(form_id, "refine", args={...})\` /
                             \`exec(form_id, "submit")\` 调用，与 do_window.continue / talk_window.say / custom 命令同构。
                             LLM tool surface = exec / close / wait / compress（4 个），但行为表达力不变。
                             `,
                         },
                     },
                 },
-                "commands": {
-                    title: "methods - 具体行动单元（原称 commands）",
+                "methods": {
+                    title: "methods - 具体行动单元（原称 methods）",
                     content: `
-                    Method 是 LLM 通过 exec 间接调用的具体行动（2026-05-28 ooc-6 命名归一前称 command；
-                    原 \`ObjectDefinition.methods\` 字段已重命名为 \`methods\`，旧名以 \`@deprecated\` alias 保留）。
+                    Method 是 LLM 通过 exec 间接调用的具体行动（2026-05-28 ooc-6 命名归一前称 method；
+                    原 \`ObjectDefinition.methods\` 字段已于 2026-06-08 重命名为 \`methods\`——method 概念移除，无 alias）。
 
                     LLM 通常不是直接 "调用 program 函数"，而是:
-                    1. exec(command="program", args={ language: "shell", code: "..." }) → args 齐全立即执行
-                    2. 或 exec(command="program") → 系统创建 form（type="method_exec"，旧名 "command_exec"），后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
+                    1. exec(method="program", args={ language: "shell", code: "..." }) → args 齐全立即执行
+                    2. 或 exec(method="program") → 系统创建 form（type="method_exec"，旧名 "command_exec"），后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
                     3. method 产生副作用，比如创建 program_window 或派生 plan_window。
 
-                    root window 注册一组顶层 command（与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致）:
+                    root window 注册一组顶层 method（与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致）:
                     - do: 派生子 thread，创建 do_window。
                     - talk: 与 user 或其他 Object 对话，创建 talk_window。
                     - program: 执行 shell / javascript / typescript 程序，创建 program_window。
@@ -900,7 +900,7 @@ export const root: DocTreeNode = {
                     - open_feishu_chat: 把飞书群会话作为 feishu_chat_window 引入 Context。
                     - open_feishu_doc: 把飞书文档作为 feishu_doc_window 引入 Context。
 
-                    （共 14 个全局 command，与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致。）
+                    （共 14 个全局 method，与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致。）
 
                     其它 window 上也注册命令（do_window: continue/wait/close；talk_window: say/wait/close；
                     file_window: edit/reload/set_range/close；method_exec（旧名 command_exec）: refine/submit；user-defined object: 自定义 methods ...）。
@@ -908,27 +908,27 @@ export const root: DocTreeNode = {
 
                     Command 与 knowledge 通过 trigger 协议协作：
                     每个 command_exec form 在 thread 中处于 open 状态时，对应的
-                    \`"command::<parent_window_type>::<command>"\` trigger 进入命中状态；
+                    \`"method::<parent_window_type>::<method>"\` trigger 进入命中状态；
                     knowledge 的 frontmatter \`activates_on\` 中声明同样表达式即按需激活。
-                    （历史上 command 还会派生 commandPaths 子路径如 program.shell，但新 trigger
-                    模型只到 command 粒度；语言/参数分支由 knowledge 正文自己分支，不再走 path。）
+                    （历史上 method 还会派生 commandPaths 子路径如 program.shell，但新 trigger
+                    模型只到 method 粒度；语言/参数分支由 knowledge 正文自己分支，不再走 path。）
                     `,
                     named: {
-                        "root window": "每个 thread 隐含存在的根窗口，注册顶层 command",
-                        "do": "派生子 thread 的 command",
-                        "talk": "开启或继续对话的 command",
-                        "program": "执行程序的 command",
-                        "plan": "创建 / 更新 plan_window 的 command（root.plan）",
-                        "todo": "创建待办窗口的 command",
-                        "end": "结束当前 thread 的 command",
-                        "open_file": "把文件载入 Context 的 command",
-                        "open_knowledge": "把知识文档载入 Context 的 command",
-                        "write_file": "写入文件的 command",
-                        "glob": "按路径模式查找文件的 command",
-                        "grep": "按内容正则查找文件的 command",
-                        "metaprog": "开元编程 worktree 沙箱自改自身 stone 的 command",
-                        "open_feishu_chat": "把飞书群会话载入 Context 的 command",
-                        "open_feishu_doc": "把飞书文档载入 Context 的 command",
+                        "root window": "每个 thread 隐含存在的根窗口，注册顶层 method",
+                        "do": "派生子 thread 的 method",
+                        "talk": "开启或继续对话的 method",
+                        "program": "执行程序的 method",
+                        "plan": "创建 / 更新 plan_window 的 method（root.plan）",
+                        "todo": "创建待办窗口的 method",
+                        "end": "结束当前 thread 的 method",
+                        "open_file": "把文件载入 Context 的 method",
+                        "open_knowledge": "把知识文档载入 Context 的 method",
+                        "write_file": "写入文件的 method",
+                        "glob": "按路径模式查找文件的 method",
+                        "grep": "按内容正则查找文件的 method",
+                        "metaprog": "开元编程 worktree 沙箱自改自身 stone 的 method",
+                        "open_feishu_chat": "把飞书群会话载入 Context 的 method",
+                        "open_feishu_doc": "把飞书文档载入 Context 的 method",
                         "refine / submit": "command_exec window 上注册的两条命令；用 exec(form_id, ...) 触发",
                         "do_window.move": "do_window 上注册的命令；通过本 do_window 把 ContextWindow 以 ref / move 模式分享给对端 thread；归还路径按 id 自动识别 lent_out ↔ owner 配对",
                     },
@@ -936,10 +936,10 @@ export const root: DocTreeNode = {
                         "command_path_activation": {
                             title: "Command Path 驱动知识激活",
                             content: `
-                            command path 是一种渐进式语义披露机制。
+                            method path 是一种渐进式语义披露机制。
 
                             例:
-                            - exec(command="talk") 时，只激活 talk 基础知识。
+                            - exec(method="talk") 时，只激活 talk 基础知识。
                             - refine({ context: "continue" }) 后，激活 talk.continue 知识。
                             - refine({ type: "relation_update" }) 后，再激活 talk.relation_update 知识。
 
@@ -950,7 +950,7 @@ export const root: DocTreeNode = {
                             title: "do_window.move - 跨 thread 共享 ContextWindow 的统一通道",
                             content: `
                             do_window 上注册的 \`move\` 命令，是父子双向传递 ContextWindow（ref / move 两种模式）的唯一机制；
-                            形态为 \`exec(window_id=<do_window_id>, command="move", args={ window_id: <target>, mode: "ref" | "move" })\`。
+                            形态为 \`exec(window_id=<do_window_id>, method="move", args={ window_id: <target>, mode: "ref" | "move" })\`。
                             root.do.share_windows 是其语法糖（创建 do_window 后顺序调 move，一次性带走多个 windows）。
 
                             完整的 ref / move / 归还语义、多层嵌套、自动归还、id 配对协议、可分享 window 类型，
@@ -960,10 +960,10 @@ export const root: DocTreeNode = {
                     },
                 },
                 "permission": {
-                    title: "permission - command 级三档准入控制",
+                    title: "permission - method 级三档准入控制",
                     content: `
                     OOC 元编程闭环让 Agent 可以改自己的 server / self / 文件系统;
-                    每条 command 必须有"该不该让 LLM 直接执行"的三档判定。
+                    每条 method 必须有"该不该让 LLM 直接执行"的三档判定。
                     按 OOC 本性,
                     permission 是 ObjectMethod 上的一个声明字段, 与 description / params / knowledge
                     / fn 同层级, runtime 在 thinkloop 分派 tool call 之前查询。
@@ -974,8 +974,8 @@ export const root: DocTreeNode = {
                     - **Deny**: 系统直接拒绝, 在 events 流写一条 function_call_output, 让 LLM 看见原因。适合"永远不该让 LLM 直接干"的事 (本轮: 程序自改 executable/index.ts; 未来 plan mode 通过后再放开)。
 
                     声明 + 配置 = 最终决定:
-                    - **声明**: ObjectMethod.permission 字段, 由 command 作者填写。
-                    - **配置**: stones/<self>/objects/<id>/config/policies.json 可 override 任意 command 的 permission (用户/Supervisor 微调)。
+                    - **声明**: ObjectMethod.permission 字段, 由 method 作者填写。
+                    - **配置**: stones/<self>/objects/<id>/config/policies.json 可 override 任意 method 的 permission (用户/Supervisor 微调)。
                     - **runtime 决定**: policies.json 优先, 否则用 ObjectMethod 声明; 都没填默认 Allow (向后兼容)。
 
                     设计原则:
@@ -984,17 +984,17 @@ export const root: DocTreeNode = {
                     - **Deny 信息流**: 拒绝必须写 function_call_output, 让 LLM 看见原因; 不能让 LLM "以为成功"。
                     - **演化 PauseChecker, 不替换**: 旧 setPauseChecker (thread => bool) 全局开关保留向后兼容; 新 setPermissionDecider (thread, call) => Decision 是细粒度入口, thinkloop 优先用 decider, 没注入则 fallback 到默认 policy 表 + PauseChecker。
 
-                    完整 design (含分阶段实施 + command 默认 policy 表 + 风险清单) 见
+                    完整 design (含分阶段实施 + method 默认 policy 表 + 风险清单) 见
                     docs/2026-05-25-permission-model-design.md。
 
                     与 agent-native parity 的关系: Ask 档的 approve/reject 当前是纯**人类面**（控制面 HITL）。
                     按 root.patches.agent_native_parity，它的 **agent 面**（如 Supervisor / parent 作为 agent
-                    审批 children 的高赌注 command，呼应 root.patches.object_relations 的 cross-object PR review）是
+                    审批 children 的高赌注 method，呼应 root.patches.object_relations 的 cross-object PR review）是
                     演化方向，当前尚未实现——属 parity 公理下的显式缺口。
                     `,
                     named: {
                         "PermissionLevel": "\"allow\" | \"ask\" | \"deny\"",
-                        "ObjectMethod.permission": "command 的声明字段; 缺省 allow",
+                        "ObjectMethod.permission": "method 的声明字段; 缺省 allow",
                         "policies.json": "stones/<self>/objects/<id>/config/policies.json; runtime 覆盖声明",
                         "PermissionDecider": "(thread, call) => Decision | Promise<Decision>; 通过 setPermissionDecider 注入",
                         "permission_denied / permission_ask": "ProcessEvent type; 落盘 + visibility-first",
@@ -1034,14 +1034,14 @@ export const root: DocTreeNode = {
                             `,
                         },
                         "command_default_table": {
-                            title: "command 默认 permission 表 (草案)",
+                            title: "method 默认 permission 表 (草案)",
                             content: `
                             allow (纯读 / 控制流):
                             - open_file / glob / grep / open_knowledge
                             - compress / expand / close / wait / end
                             - plan / todo.*
-                            - do (fork 子线程; 子线程的 root command 各自 gate)
-                            - talk / talk_window.say (协作主线; 内部副作用 command 自有 gate)
+                            - do (fork 子线程; 子线程的 root method 各自 gate)
+                            - talk / talk_window.say (协作主线; 内部副作用 method 自有 gate)
 
                             ask (写副作用):
                             - write_file
@@ -1053,14 +1053,14 @@ export const root: DocTreeNode = {
                             deny (本轮硬拦):
                             - 程序自改 stones/<self>/executable/index.ts (元编程闭环未成熟前)
 
-                            这是 design 草案; 具体 command 名以仓库实际注册为准, 实施期 (Q0d) 校准。
-                            未在表中的 command 默认 allow。
+                            这是 design 草案; 具体 method 名以仓库实际注册为准, 实施期 (Q0d) 校准。
+                            未在表中的 method 默认 allow。
                             `,
                         },
                         "invariants": {
                             title: "不变量 - permission 协议硬约束",
                             content: `
-                            1. 向后兼容: 未声明 permission 的 command 默认 allow; 旧 setPauseChecker 保留。
+                            1. 向后兼容: 未声明 permission 的 method 默认 allow; 旧 setPauseChecker 保留。
                             2. 可见性: ask / deny 必落 ProcessEvent; allow 不必 (是默认)。
                             3. 可恢复: approve 后 thread 必须真正执行原 tool call (不是"批准了但跳过")。
                             4. Deny 信息流: 必写 function_call_output, 让 LLM 看见拒绝原因。
@@ -1071,12 +1071,12 @@ export const root: DocTreeNode = {
                     },
                     sources: [["docs/2026-05-25-permission-model-design.md", "完整 design (含 Q0a~Q0d 分阶段 + 默认 policy 草案 + 风险清单 + Supervisor 拍板记录)"]],
                     todo: [
-                        "Q0e 抽专用 program_self_modify command 或在 write_file exec 中加路径前缀检查 (stones/*/executable/index.ts → deny); Plan Mode 落地前保持 deny",
+                        "Q0e 抽专用 program_self_modify method 或在 write_file exec 中加路径前缀检查 (stones/*/executable/index.ts → deny); Plan Mode 落地前保持 deny",
                         "Q0e Stone 作者的 permission 声明传递: programmable.loader 把 ObjectWindowDefinition.methods[*].permission 透传到 ObjectMethod (custom window proxy 当前一律缺省 allow, 由 stone 作者自行声明)",
                         "远景: Auto Mode (AI 分类器) / Plan Mode (LLM plan + user approve) / OS-level Sandbox 集成——本轮全部不做",
                     ],
                     warnings: [
-                        "Q0d 截止 2026-05-25 状态: 6 项 command 已填 ask (write_file / root.program / program_window.exec / file_window.edit / relation.edit / metaprog); deny 0 项 (列 Q0e); 其余 command 缺省 allow",
+                        "Q0d 截止 2026-05-25 状态: 6 项 method 已填 ask (write_file / root.program / program_window.exec / file_window.edit / relation.edit / metaprog); deny 0 项 (列 Q0e); 其余 method 缺省 allow",
                         "自改 stones/<self>/executable/index.ts 当前**没有硬拦** — 通过 metaprog 整族 ask + write_file ask 形成弱约束; Q0e 需补硬 deny",
                     ],
                 },
@@ -1086,7 +1086,7 @@ export const root: DocTreeNode = {
                     ContextWindow 是 thread 持有的上下文单元。
 
                     它既是信息展示单元，也是行动挂载点。
-                    一个 window 可以被渲染进 Context，让 LLM 看见；也可以注册自己的 command，让 LLM 对它继续操作。
+                    一个 window 可以被渲染进 Context，让 LLM 看见；也可以注册自己的 method，让 LLM 对它继续操作。
 
                     所有 ContextWindow 至少具有以下语义字段:
                     - id: window 的唯一标识。
@@ -1099,7 +1099,7 @@ export const root: DocTreeNode = {
                     ContextWindow 的设计意义:
                     1. 统一 Context 中的可见实体: 文件、知识、搜索结果、对话、子线程、程序执行都可以是 window。
                     2. 统一 LLM 的操作对象: LLM 不直接改 thread 字段，而是 open/close/refine/submit 某个 window。
-                    3. 统一渲染和生命周期: 每种 window type 自己定义如何展示、如何关闭、有哪些 command。
+                    3. 统一渲染和生命周期: 每种 window type 自己定义如何展示、如何关闭、有哪些 method。
                     `,
                     named: {
                         "id": "ContextWindow 的唯一标识",
@@ -1112,7 +1112,7 @@ export const root: DocTreeNode = {
                         "command_exec_window": {
                             title: "command_exec window - 一次行动调用的表单窗口",
                             content: `
-                            command_exec window 是 LLM 调用 command 时产生的临时窗口。
+                            command_exec window 是 LLM 调用 method 时产生的临时窗口。
 
                             它类似一个 form。**四态状态机**（open / executing / success / failed）：
 
@@ -1192,8 +1192,8 @@ export const root: DocTreeNode = {
                             **调度器职责**（src/thinkable/context/render.ts）：
                             - 通用外壳：\`<window id type status [sharing read_only]>\` + \`<title>\`
                             - 调度到 \`def.renderXml(ctx)\` 取 type-specific 子节点（XmlNode[]）
-                            - 通用尾部：每个 window 末尾输出 \`<commands hint="...">\` 节点（列出该 type 注册的
-                              command 名 + 调用形态），让 LLM 直接看到当前 window 上可调命令，无需翻 knowledge 猜
+                            - 通用尾部：每个 window 末尾输出 \`<methods hint="...">\` 节点（列出该 type 注册的
+                              method 名 + 调用形态），让 LLM 直接看到当前 window 上可调命令，无需翻 knowledge 猜
                             - 子 window 折叠（按 parentWindowId 嵌套到 \`<sub_windows>\`）
 
                             **启动期 fail-loud**：windows/index.ts 在所有 side-effect import 完成后调用
@@ -1203,10 +1203,10 @@ export const root: DocTreeNode = {
                             named: {
                                 "ObjectTypeDefinition.renderXml": "RenderHook 类型 (ctx) => XmlNode[] | Promise<XmlNode[]>，注册到 ObjectRegistry（P6 后 canonical 名为 ObjectDefinition.renderXml）",
                                 "调度器": "src/thinkable/context/render.ts:renderWindowNode；无 switch，按 def.renderXml 调度",
-                                "<commands> 节点": "通用层为每个 window 输出的命令面索引；空 commands 表的 window 跳过该节点",
+                                "<methods> 节点": "通用层为每个 window 输出的命令面索引；空 methods 表的 window 跳过该节点",
                                 "assertAllObjectDefinitionsRegistered": "src/executable/windows/_shared/registry.ts；启动期校验所有 type 已配齐 renderXml（P6 后由 assertAllObjectDefinitionsRegistered 替代，readable 也算配齐）",
                             },
-                            sources: [["src/thinkable/context/render.ts", "调度器实现 + commands 元数据节点；接口契约（缺 hook 抛错）"]],
+                            sources: [["src/thinkable/context/render.ts", "调度器实现 + methods 元数据节点；接口契约（缺 hook 抛错）"]],
                         },
                         "skill_index_window": {
                             title: "skill_index window - stone skills 索引",
@@ -1226,11 +1226,11 @@ export const root: DocTreeNode = {
                             - **空时不注入**：如果两层目录都没有 skill，skill_index 不出现在 contextWindows 里
                             - 不持久化（thread.json 中不出现）；reload 后由 synthesizer 重新派生
 
-                            **使用协议**：LLM 通过 \`exec(command="open_file", args={ path: "<skillFilePath>" })\` 打开
+                            **使用协议**：LLM 通过 \`exec(method="open_file", args={ path: "<skillFilePath>" })\` 打开
                             具体 SKILL.md 阅读完整说明；OOC 不实现 SKILL.md 内的字段（user-invocable / allowed-tools 等）；
                             那些字段是 SKILL.md 自由约定，由 LLM 自行处理。
 
-                            不注册任何 command；onClose 拒绝（与 root 同级，理论不会被 close）。
+                            不注册任何 method；onClose 拒绝（与 root 同级，理论不会被 close）。
                             `,
                             named: {
                                 "SkillEntry": "{ name, description, skillFilePath, scope: \"branch\" | \"object\" }",
@@ -1244,7 +1244,7 @@ export const root: DocTreeNode = {
                         "plan_window": {
                             title: "plan_window - 行动计划窗口（支持 sub plan + share to sub thread）",
                             content: `
-                            plan_window 是 thread 的行动计划窗口，由 root.plan command 创建。
+                            plan_window 是 thread 的行动计划窗口，由 root.plan method 创建。
                             plan 升格为 first-class ContextWindow（不再是 thread.plan 字符串字段；详见 patches.thread_plan_deprecated）。
 
                             **数据形态**（src/executable/windows/plan/types.ts）:
@@ -1266,7 +1266,7 @@ export const root: DocTreeNode = {
                             }
                             \`\`\`
 
-                            **commands**（注册到 plan_window）:
+                            **methods**（注册到 plan_window）:
                             - update_plan: 更新 title / description
                             - add_step: 在 steps 末尾追加一个 step
                             - update_step: 修改某 step 的 text / status
@@ -1281,14 +1281,14 @@ export const root: DocTreeNode = {
                             - 嵌套深度无硬限制，但 renderXml 默认不内联渲染 sub plan（避免无限嵌套），LLM 通过 subPlanWindowId 单独 open
 
                             **跨 thread sharing**（与 do_window.move 同协议）:
-                            - 父 thread 通过 \`exec(command="do", args={ task, share_windows: ["plan-window-abc"] })\` 派生子 thread
+                            - 父 thread 通过 \`exec(method="do", args={ task, share_windows: ["plan-window-abc"] })\` 派生子 thread
                             - 复用现有 sharing kind="ref" / "lent_out"（meta/object.doc.ts:executable.context_window.children.sharing）
                             - **ref 模式**: 子 thread 只读看父 plan（不能 exec 命令），适合"子看父 plan 但不改"
                             - **move 模式**: 子拿 owner，父变 lent_out（临时只读）；子可 update_step + expand_step；do_window archive 时自动归还
                             - **进度回流**: move 模式自动归还时父收到子改动后的最新 plan；ref 模式靠子用 talk 报告再让父自己 update_step
 
                             **renderXml**（与 file / talk / do 同协议）:
-                            - level 0 (live): <plan_window id status><title/><description/><steps count><step id status sub_plan_window_id?/>...</steps><commands/></plan_window>
+                            - level 0 (live): <plan_window id status><title/><description/><steps count><step id status sub_plan_window_id?/>...</steps><methods/></plan_window>
                             - level 1 (folded): title + status + step count + done/total 比例
                             - level 2 (snapshot): title + status
 
@@ -1299,10 +1299,10 @@ export const root: DocTreeNode = {
                             `,
                             named: {
                                 "PlanWindowStep": "plan 内单个 step；含 id / text / status / subPlanWindowId?",
-                                "expand_step": "把某 step 展开为 child plan_window 的 command；写回 subPlanWindowId",
+                                "expand_step": "把某 step 展开为 child plan_window 的 method；写回 subPlanWindowId",
                                 "share_to_sub_thread": "通过 do.share_windows 把 plan_window 以 ref/move 模式传给子 thread；归还后父见到进度",
                             },
-                            sources: [["src/executable/windows/plan/", "plan_window 实现；renderXml / commands / compressView 与 file/talk/do 同协议"]],
+                            sources: [["src/executable/windows/plan/", "plan_window 实现；renderXml / methods / compressView 与 file/talk/do 同协议"]],
                         },
                     },
                     patches: {
@@ -1326,7 +1326,7 @@ export const root: DocTreeNode = {
                             \`WindowDisplayState\`（挂 \`window.state\`，随 thread-context 持久化）；\`set_viewport\`
                             等是 **readable 维度的 window method**（不是 executable 的 object method），exec 读
                             \`ctx.windowState\` 返回新 state（immutable），由 manager 写回 \`window.state\`。exec 调用
-                            入口不变（\`exec(window_id, command="set_viewport", args={...})\`），改的是 window 状态对象而非 object 业务数据。
+                            入口不变（\`exec(window_id, method="set_viewport", args={...})\`），改的是 window 状态对象而非 object 业务数据。
 
                             **当前已实施**（file_window / knowledge_window / talk_window / do_window / search_window / program_window）：
 
@@ -1337,7 +1337,7 @@ export const root: DocTreeNode = {
                             调整：
 
                             \`\`\`
-                            exec(window_id="<id>", command="set_viewport",
+                            exec(window_id="<id>", method="set_viewport",
                                  args={ line_end: 1000 })            # 看前 1000 行
                             exec(..., args={ line_start: 200, line_end: 400 })  # 看 200-400 行
                             exec(..., args={ column_end: 500 })       # 行宽扩到 500 字符
@@ -1363,7 +1363,7 @@ export const root: DocTreeNode = {
                             \`set_transcript_window\` 命令切换：
 
                             \`\`\`
-                            exec(window_id="<id>", command="set_transcript_window",
+                            exec(window_id="<id>", method="set_transcript_window",
                                  args={ tail: 50 })                          # 看末 50 条
                             exec(..., args={ range_start: 0, range_end: 30 }) # 看固定区间 [0, 30)
                             \`\`\`
@@ -1386,7 +1386,7 @@ export const root: DocTreeNode = {
                             命令切换：
 
                             \`\`\`
-                            exec(window_id="<id>", command="set_results_window",
+                            exec(window_id="<id>", method="set_results_window",
                                  args={ matches_tail: 100 })                          # 看末 100 个 match
                             exec(..., args={ matches_start: 0, matches_end: 30 })     # 看固定区间 [0, 30)
                             \`\`\`
@@ -1415,7 +1415,7 @@ export const root: DocTreeNode = {
                             命令切换：
 
                             \`\`\`
-                            exec(window_id="<id>", command="set_history_window",
+                            exec(window_id="<id>", method="set_history_window",
                                  args={ history_tail: 30 })                          # 看末 30 次 exec
                             exec(..., args={ history_start: 0, history_end: 5 })     # 看固定区间 [0, 5)
                             \`\`\`
@@ -1491,8 +1491,8 @@ export const root: DocTreeNode = {
                     OOC 内置多种 ContextWindow type。
 
                     这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（共 14 种，与 src/executable/windows/_shared/types.ts ObjectType 联合一致）:
-                    - root: 每个 thread 隐含存在的根 window，注册顶层 command。
-                    - command_exec: 一次 command 调用的临时 form window。
+                    - root: 每个 thread 隐含存在的根 window，注册顶层 method。
+                    - command_exec: 一次 method 调用的临时 form window。
                     - do: 子 thread 的父侧窗口，展示子任务状态与 transcript。
                     - talk: 与 user 或其他 Object 的持续会话窗口。
                     - todo: 可见待办窗口。
@@ -1503,26 +1503,26 @@ export const root: DocTreeNode = {
                     - relation: **@deprecated** (ooc-6) 跨 Object 关系窗口；已被 peer Object 自动注入机制替代。
                       peer Object（sibling + level-1 children）以 **first-class contextWindow** 形式
                       直接进入 \`thread.contextWindows\`（init 时注入 + 每轮渲染 reconcile 补齐），
-                      id = type = objectId，可直接 \`exec(window_id='sentry/factor', command='group_search')\`。
+                      id = type = objectId，可直接 \`exec(window_id='sentry/factor', method='group_search')\`。
                       保留 relation window 仅用于向后兼容已持久化的 thread 数据。
                     - skill_index: stone skills 索引窗口；每轮由 synthesizer 派生。
                     - user-defined: 任意 Object 以自身 id 为 type 注册的窗口；通过 executable/index.ts
                       \`export const window\` 定义，运行时 registerNewObjectType 注册。
                       **peer Object 的 window 就是此类**：id=type=objectId，parent=root，status=open；
-                      在 context 中默认展示 readable 面（身份介绍）+ commands 面（可 exec）。
+                      在 context 中默认展示 readable 面（身份介绍）+ methods 面（可 exec）。
                     - feishu_chat: 飞书群会话窗口。
                     - feishu_doc: 飞书文档窗口。
                     - plan: 行动计划窗口；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread (见 B 段设计)。
 
                     每个 window type 都应该回答四个问题:
                     1. 它在 Context 中如何渲染给 LLM？
-                    2. 它支持哪些 command？
+                    2. 它支持哪些 method？
                     3. 它何时可以 close，close 时有什么副作用？
                     4. 它需要向 LLM 注入什么 basicKnowledge？
                     `,
                     named: {
-                        "root": "thread 的隐含根窗口，提供顶层 command",
-                        "command_exec": "一次 command 调用的临时窗口",
+                        "root": "thread 的隐含根窗口，提供顶层 method",
+                        "command_exec": "一次 method 调用的临时窗口",
                         "do_window": "父 thread 观察和继续子 thread 的窗口；注册 continue/wait/close/move 命令；archive 时自动归还所有 borrowed owner windows（plan §do_window.move）",
                         "talk_window": "与 user 或其他 Object 对话的窗口",
                         "todo_window": "可见待办窗口",
@@ -1544,7 +1544,7 @@ export const root: DocTreeNode = {
                     公共 API \`registerObjectType\` / \`getObjectDefinition\` / \`listRegisteredObjectTypes\` /
                     \`lookupMethod\` / \`lookupMethodEntry\` / \`lookupConstructor\` / \`resolveMethod\`）
                     负责注册每种 ObjectType 的契约 \`ObjectDefinition\`:
-                    - **methods**: 这个 object 注册的 \`ObjectMethod\` 字典（**object method**，控制 object 自身业务数据，归 executable；旧名 \`commands\` 是 @deprecated alias，registry 内部双写以保持读取兼容）。
+                    - **methods**: 这个 object 注册的 \`ObjectMethod\` 字典（**object method**，控制 object 自身业务数据，归 executable；原名 \`methods\`，2026-06-08 重命名为 \`methods\` 并移除旧名）。
                     - **windowMethods**: \`WindowMethod\` 字典（控制 window 展示如 set_viewport，归 readable，与 methods 物理分离）。dispatch 时 object method 缺席才查此表；命中时注入 window 状态对象（\`WindowDisplayState\`）、exec 返回新 state 写回 \`window.state\`。同名禁止（注册期 fail-loud）。解析入口 \`lookupWindowMethod\`（沿 parentClass 链）。
                     - **parentClass**: 父类 id；method 解析在 self.type miss 后沿父类链向上回退（详见 children.parent_class_inheritance）。
                     - **isBuiltinFeature**: 该 type 是 Object 内置特性还是独立 flow object，决定持久化分支（详见 children.builtin_feature_split）。
@@ -1568,7 +1568,7 @@ export const root: DocTreeNode = {
                         "ObjectDefinition": "每个 object type 的契约：methods（object method,归 executable）/ windowMethods（window method,控制展示,归 readable）/ parentClass / isBuiltinFeature / renderXml / readable / onClose / basicKnowledge",
                         "WindowMethod": "控制 window 展示的方法（归 readable）；exec 额外接收 windowState、返回新 WindowDisplayState（immutable），不 mutate object 业务数据；set_viewport / set_range / set_transcript_window / set_results_window / set_history_window 均归此。",
                         "WindowDisplayState": "window 展示状态对象（viewport / lines / columns / transcriptViewport / resultsViewport / historyViewport），挂为 window.state 子字段，随 thread-context 持久化；WindowMethod 写、readable/renderXml 读（向后兼容旧平铺字段）。",
-                        "registerObjectType": "在 ObjectRegistry 上更新某 type 的 partial ObjectDefinition；写入时 commands/methods 双写",
+                        "registerObjectType": "在 ObjectRegistry 上更新某 type 的 partial ObjectDefinition；写入时 methods/methods 双写",
                         "getObjectDefinition": "按 type 取 ObjectDefinition；未注册抛错（避免静默吞掉新 type）",
                         "WindowRegistry": "ObjectRegistry 的 @deprecated 旧名（一个 release 后移除）",
                         "ObjectTypeDefinition": "ObjectDefinition 的 @deprecated 旧名",
@@ -1607,7 +1607,7 @@ export const root: DocTreeNode = {
                                 "lookupConstructor": "在指定 ObjectType 的定义中按 kind === \"constructor\" 标记索引构造方法",
                                 "constructor delegation": "root.talk/do/todo/... 退化为 lookupConstructor(<type>).exec(ctx) 的薄分发器",
                             },
-                            sources: [["packages/@ooc/core/executable/windows/_shared/command-types.ts:63 (kind field), :42 (MethodOutcome union)", "ObjectMethod.kind 标记 + MethodOutcome 三态联合（含 { ok: true, object }）"]],
+                            sources: [["packages/@ooc/core/executable/windows/_shared/method-types.ts:63 (kind field), :42 (MethodOutcome union)", "ObjectMethod.kind 标记 + MethodOutcome 三态联合（含 { ok: true, object }）"]],
                         },
                         "parent_class_inheritance": {
                             title: "parentClass + class chain inheritance - method 解析沿父类链回退",
@@ -1753,15 +1753,15 @@ export const root: DocTreeNode = {
                     content: `
                     Executable 与 Knowledge 的连接点是 knowledge activation。
 
-                    当 LLM 打开 command_exec window 时，对应的 \`command::<window_type>::<command>\`
+                    当 LLM 打开 method_exec window 时，对应的 \`method::<window_type>::<method>\`
                     trigger 进入命中状态；当任何 type 的 window 处于 open 时，对应的
                     \`window::<type>\` trigger 持续命中。
 
                     激活出来的 knowledge 会进入 Context，指导 LLM 如何继续填写参数或执行动作。
 
                     这形成一个闭环:
-                    1. LLM open 一个 command。
-                    2. 系统展示该 command 的基础知识（command trigger 命中）。
+                    1. LLM exec 一个 method。
+                    2. 系统展示该 method 的基础知识（method trigger 命中）。
                     3. LLM refine 参数。
                     4. 系统逐条 evaluate 各篇 knowledge 的 trigger map，max 出最终激活级别。
                     5. LLM submit 执行。
@@ -1778,14 +1778,14 @@ export const root: DocTreeNode = {
                     三类 trigger：
                     - \`"window::<type>"\` — \`thread.contextWindows\` 含 status="open" 且 type === <type> 的 window 时命中。
                       root window 每个 thread 都有，故 \`"window::root"\` 等价"任何时候"——这是旧 \`[root]\` 的自然替代。
-                    - \`"command::<window_type>::<command>"\` — \`thread.contextWindows\` 含 type="command_exec" 的 open form，
-                      其 self.type === <window_type> 且 form.command === <command> 时命中。
+                    - \`"method::<window_type>::<method>"\` — \`thread.contextWindows\` 含 type="method_exec" 的 open form，
+                      其 self.type === <window_type> 且 form.method === <method> 时命中。
                     - \`"super"\` — \`thread.persistence?.sessionId === SUPER_SESSION_ID\` 时命中（仅 super flow）。
                     `,
                     named: {
                         "knowledge activation": "根据 trigger map 把相关 knowledge 注入 Context 的过程",
                         "progressive disclosure": "渐进式披露，只在需要时展示更具体的信息",
-                        "trigger": "activates_on 的 key 表达式；三类：window::<type> / command::<window_type>::<command> / super",
+                        "trigger": "activates_on 的 key 表达式；新格式：object::<type> / method::<window_type>::<method> / object_id::<id> / super；旧格式：window::<type>",
                         "evaluateTrigger": "纯函数：(trigger, thread) -> boolean；activator 内部对每篇 knowledge 多 trigger 取 max",
                     },
                 },
@@ -1903,16 +1903,16 @@ export const root: DocTreeNode = {
                       creator window 是 talk_window，target 指向 caller object。
 
                     do_window:
-                    - 由 root.do command 派生子 thread 时创建。
-                    - 注册的 command: continue（向子线程追加消息）/ wait / close / move / set_transcript_window。
+                    - 由 root.do method 派生子 thread 时创建。
+                    - 注册的 method: continue（向子线程追加消息）/ wait / close / move / set_transcript_window。
                     - 消息 source = "do"。
                     - close 时把子线程切到 archived（initial creator do_window 拒绝 close）。
                     - transcriptViewport 字段控制 transcript 渲染量；默认 { tail: 20 }；
                       详见 executable.context_window.patches.viewport_protocol。
 
                     talk_window:
-                    - 由 root.talk command 创建，target 是对端 flow object id（"user" 也是一个 flow object）。
-                    - 注册的 command: say / wait / close / set_transcript_window。
+                    - 由 root.talk method 创建，target 是对端 flow object id（"user" 也是一个 flow object）。
+                    - 注册的 method: say / wait / close / set_transcript_window。
                     - 消息 source = "talk"（LLM 发）或 "user"（控制面代用户发）。
                     - 同一对端复用同一 talk_window，不要每发一条消息就 close 再重开。
                     - close 时不通知对端，仅释放本地窗口；initial creator talk_window 拒绝 close。
@@ -1921,9 +1921,9 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "isCreatorSelf": "判定 thread 的 creator 是否与自己同 object 的逻辑",
-                        "continue": "do_window 上向子线程追加消息的 command",
-                        "say": "talk_window 上向对端发消息的 command",
-                        "set_transcript_window": "talk/do_window 上调整 transcript 渲染窗口的 command（tail / range 互斥；默认 tail=20）",
+                        "continue": "do_window 上向子线程追加消息的 method",
+                        "say": "talk_window 上向对端发消息的 method",
+                        "set_transcript_window": "talk/do_window 上调整 transcript 渲染窗口的 method（tail / range 互斥；默认 tail=20）",
                         "transcriptViewport": "talk/do_window 的 transcript 渲染窗口字段；详见 _shared/transcript-viewport.ts",
                     },
                 },
@@ -1994,14 +1994,14 @@ export const root: DocTreeNode = {
                     上调 \`continue\`（do_window）或 \`say\`（talk_window），写入 transcript；这条消息会自动
                     deliver 到父 thread 的 inbox。
 
-                    **禁止依赖 \`end({result})\` 隐式回报**——end command 的 result 参数（若存在）只用于
+                    **禁止依赖 \`end({result})\` 隐式回报**——end method 的 result 参数（若存在）只用于
                     auto-archive 触发器，不是 reply 通道；result 内容会被自动作为最后一条 continue 写入
                     creator window transcript（详见 root.end children/result_auto_continue）。
 
                     子线程 LLM 在 basicKnowledge 里看到的 creator window 段必须**显式说明**：
                     > 你的 creator window 是 \`<window_id>\`。**若想把结果 / 状态带回父线程，调
-                    > \`exec(window_id="<creator_id>", command="continue", args={msg:"..."})\` 写入 transcript**。
-                    > end command 只用于声明本轮自己结束，不是回报通道。
+                    > \`exec(window_id="<creator_id>", method="continue", args={msg:"..."})\` 写入 transcript**。
+                    > end method 只用于声明本轮自己结束，不是回报通道。
 
                     没有这条 prompt，子 LLM 会 hallucinate \`end({result})\` 等非协议参数，导致 result
                     被静默吞、父侧 do_window 永不 archive。
@@ -2021,7 +2021,7 @@ export const root: DocTreeNode = {
                     每轮 render 时由 synthesizer 自动派生 RelationWindow，承载"你对该 peer 的关系认知":
 
                     **RelationWindow**（type="relation"，id 稳定 \`w_rel_<peerId>\`）：
-                    专属 window type，注册 \`edit\` command（详见 children/edit_command）。
+                    专属 window type，注册 \`edit\` method（详见 children/edit_command）。
                     这是 relation 的命令面入口——LLM 想更新 relation 不再依赖 write_file 弱 prompt。
 
                     **default visibility 扩展**：
@@ -2091,7 +2091,7 @@ export const root: DocTreeNode = {
                         "edit_command": {
                             title: "relation_window.edit - 双 scope 编辑",
                             content: `
-                            relation_window 注册唯一一个 command \`edit\`，参数:
+                            relation_window 注册唯一一个 method \`edit\`，参数:
                             - \`content\`: 必填，relation 文件完整正文（整文件替换语义，与 write_file 一致）
                             - \`scope\`: 必填，\`"session"\` | \`"long_term"\`
 
@@ -2120,10 +2120,10 @@ export const root: DocTreeNode = {
                                 "scope=long_term": "派给 super flow，由 super 写 pool 层 knowledge/relations",
                                 "临时 TalkWindow": "不挂到 thread 的一次性派送载体；避免 super 通道常驻 contextWindows",
                             },
-                            sources: [["src/executable/windows/relation/index.ts", "RelationWindow + edit command 注册与 executeRelationEdit；派送复用 src/executable/windows/talk/delivery.ts:deliverTalkMessage；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation"]],
+                            sources: [["src/executable/windows/relation/index.ts", "RelationWindow + edit method 注册与 executeRelationEdit；派送复用 src/executable/windows/talk/delivery.ts:deliverTalkMessage；scope=session 写盘 src/persistable/flow-relation.ts:writeFlowRelation"]],
                         },
                     },
-                    sources: [["src/executable/windows/relation/index.ts", "RelationWindow 与 edit command；派生函数 deriveRelationWindow（含 peer readme 注入）见 src/thinkable/knowledge/synthesizer.ts（deriveRelationCompanionKnowledge 已 @deprecated 返回空——KnowledgeWindow 合并进 RelationWindow 字段）；flow 层文件 IO 见 src/persistable/flow-relation.ts"]],
+                    sources: [["src/executable/windows/relation/index.ts", "RelationWindow 与 edit method；派生函数 deriveRelationWindow（含 peer readme 注入）见 src/thinkable/knowledge/synthesizer.ts（deriveRelationCompanionKnowledge 已 @deprecated 返回空——KnowledgeWindow 合并进 RelationWindow 字段）；flow 层文件 IO 见 src/persistable/flow-relation.ts"]],
                 },
             },
             patches: {
@@ -2193,7 +2193,7 @@ export const root: DocTreeNode = {
                     - 可见性（已落地）: peer Object（self 的"同级 Agent" + "一级 children Agent"）
                       以 first-class contextWindow 形式注入 thread.contextWindows（id=type=objectId），
                       让 Agent 一上场就看见身边有谁并可直接 \`exec\`；渲染可读 readable（身份介绍）+
-                      commands（exec 面）+ relation knowledge（自动激活）。
+                      methods（exec 面）+ relation knowledge（自动激活）。
                       peer 发现逻辑见 src/persistable/stone-object.ts:discoverStoneHierarchicalPeers，不递归到孙。
                       注：旧 relation_window（type="relation"）机制已废弃。
                     - 修改权: **self-scope 自治**（见 root.patches.object_relations）。object 改自己子树（含自己 seed）
@@ -2573,7 +2573,7 @@ export const root: DocTreeNode = {
                     - 写到 pools/objects/<self>/knowledge/memory/<slug>.md（slug 用 kebab-case 概括主题）。
                     - 必要时（caller 明确要求改身份）允许写 stones/<self>/self.md / readable.md。
                     - 通过 creator talk_window 回复结论 (say + close)。
-                    - 用 end command 结束本轮 super 思考。
+                    - 用 end method 结束本轮 super 思考。
 
                     这条协议知识只在 super flow 注入，普通业务线程不会看见。
                     `,
@@ -2586,17 +2586,17 @@ export const root: DocTreeNode = {
                 "end_reflection_reminder": {
                     title: "end_reflection_reminder - 业务 thread 调 end 时的反思提醒",
                     content: `
-                    **触发**: 当 OOC agent 在**非 super flow** 的业务 thread 中创建 \`command="end"\` 的
+                    **触发**: 当 OOC agent 在**非 super flow** 的业务 thread 中创建 \`method="end"\` 的
                     command_exec form 时, synthesizer 注入一段简短的 reflection reminder knowledge。
 
                     **目的**: 让 agent 在结束业务 thread 之前自觉考虑 — 本次工作是否产生了值得沉淀的认知 /
                     经验 / 对 peer 的认识更新 / 反复犯的错。如果有, 建议在 end 之前开 super flow 走一次反思:
-                    \`exec(command="talk", args={ target: "super", initialMessage: "请帮我沉淀 ..." })\`。
+                    \`exec(method="talk", args={ target: "super", initialMessage: "请帮我沉淀 ..." })\`。
 
                     **门控条件** (synthesizer 内):
                     - \`thread.persistence?.sessionId !== SUPER_SESSION_ID\` — super flow 内 end 是反思自身的结束,
                       不该再提示反思 (避免无限套娃)
-                    - form.command === "end" — 只在 end 的 form 被打开 / 持续展示时激活
+                    - form.method === "end" — 只在 end 的 form 被打开 / 持续展示时激活
                     - 可选: \`thread.events.length > N\` (阈值默认未启用; 简单 thread 也允许提示, LLM 自己决定是否触发)
 
                     **不强制反思**: knowledge 只是 hint, 不是 deny gate。LLM 看完之后:
@@ -2610,7 +2610,7 @@ export const root: DocTreeNode = {
 
                     **实现位置**:
                     - 常量在 packages/@ooc/core/thinkable/reflectable/reflectable-knowledge.ts (与 REFLECTABLE_KNOWLEDGE 同文件)
-                    - 注入在 packages/@ooc/core/thinkable/knowledge/synthesizer.ts (检查 form.command === "end" + super 门控)
+                    - 注入在 packages/@ooc/core/thinkable/knowledge/synthesizer.ts (检查 form.method === "end" + super 门控)
 
                     完整 design / harness 循环优化记录见 docs/2026-05-27-end-reflection-reminder-design.md。
                     `,
@@ -2646,7 +2646,7 @@ export const root: DocTreeNode = {
                     - 业务代码（program shell / file_window.edit 业务文件）
                     - pool 的 data/ 与 files/（业务数据由 stone executable method 维护，不由反思直接写）
 
-                    写入方式: 通过 exec(command="write_file", path="...", content="...") 命令；
+                    写入方式: 通过 exec(method="write_file", path="...", content="...") 命令；
                     已存在的文件可用 open_file + edit 增量更新。
 
                     **sediment write contract（dogfooding 闭环关键）**：
@@ -2667,7 +2667,7 @@ export const root: DocTreeNode = {
 
                     activates_on 是 trigger map：key 是 trigger 表达式，value 是激活级别。
                     新格式三类：\`"object::<type>"\` / \`"method::<object_type>::<method>"\` / \`"object_id::<id>"\`；
-                    旧格式 \`"window::<type>"\` / \`"command::<window_type>::<command>"\` 自动映射兼容
+                    旧格式 \`"window::<type>"\` 自动映射兼容
                     （详见 thinkable.knowledge.named.trigger）。多 trigger 命中取 max。
 
                     没有 frontmatter / 写错 schema 的 sediment 会被 thinkable.knowledge synthesizer 加载但
@@ -2738,7 +2738,7 @@ export const root: DocTreeNode = {
                     不允许在 super flow 里:
                     - 跑 program shell 改外部文件。
                     - 用 file_window.edit 改业务代码。
-                    - 开任何 do command 派生子任务去执行业务。
+                    - 开任何 do method 派生子任务去执行业务。
 
                     super flow 默认仅写 stone 中的 self.md / readable.md（身份）与 pool 中的
                     sediment knowledge（knowledge/memory/* / knowledge/relations/*，长期事实）。
@@ -3253,7 +3253,7 @@ export const root: DocTreeNode = {
                             - LLM 可通过 \`file_window.open path="pools/<self>/data/<name>.csv"\` 直接读 csv；
                               也可通过 \`file_window.edit\` 编辑（小批量写）。
                             - 大批量写 / 复杂查询应包装为 stone server method（语义化命令，如
-                              \`exec(command="upsert_factor", args={...})\` / \`query_factors_by_psm\`），
+                              \`exec(method="upsert_factor", args={...})\` / \`query_factors_by_psm\`），
                               method 内部用 fs API + csv 解析库读写。
                             - 与 knowledge md 同属 pool 路径暴露例外（详见 patches.llm_access_via_server_method）。
 
@@ -3496,8 +3496,8 @@ export const root: DocTreeNode = {
                             pool 的物理路径默认不应出现在 LLM 的视野里——LLM 应通过 stone server method 间接访问。
 
                             访问规则（默认）:
-                            - LLM 通过 \`exec(window_id="custom:<self>", command="<name>", args={...})\` 调用 stone server method。
-                            - 或 program.callCommand 在 ts/js sandbox 里 \`await self.callCommand("custom:<self>", "<name>", {...})\`。
+                            - LLM 通过 \`exec(window_id="custom:<self>", method="<name>", args={...})\` 调用 stone server method。
+                            - 或 program.callMethod 在 ts/js sandbox 里 \`await self.callMethod("custom:<self>", "<name>", {...})\`。
                             - server method 内部使用 fs API（含 csv 解析）操作 pool 文件。
 
                             **合法例外清单**（这些 pool 子树的路径/文件 LLM 直接可见，且这是有意为之）:
@@ -3720,7 +3720,7 @@ export const root: DocTreeNode = {
                             title: "R12 supervisor-only 校验必须在 persistable 层",
                             content: `
                             rollback() 函数自身强制 supervisorAuthor === SUPERVISOR_OBJECT_ID（src/persistable/stone-versioning.ts，
-                            返回 { ok: false, code: "FORBIDDEN", ... }）；LLM 命令层（src/executable/windows/root/command.metaprog.ts:188）/
+                            返回 { ok: false, code: "FORBIDDEN", ... }）；LLM 命令层（src/executable/windows/root/method.metaprog.ts:188）/
                             HTTP route / 测试夹具的校验是补充防御，不是唯一防线。
 
                             任何新入口（cron / 未来子模块 / 工具脚本）调 rollback 时都自动得到边界保护，
@@ -3754,35 +3754,35 @@ export const root: DocTreeNode = {
             Object 在自己的 stone 里有一份 \`executable/index.ts\`，导出 \`window: ObjectWindowDefinition\`
             （type=\`"custom"\` 的 self window 定义）+ 可选的 \`ui_methods\` 字典（visible 维度的 UI 入口）。
             \`window.methods\` 是标准 \`ObjectMethod\` 字典；LLM 通过
-            \`exec(window_id="custom:<self>", command="<name>", args={...})\` 直接调用，
+            \`exec(window_id="custom:<self>", method="<name>", args={...})\` 直接调用，
             与调 do_window.continue / talk_window.say 完全同构。
             UI / agent-native 客户端通过 HTTP \`callMethod\` 调用 \`ui_methods\`（与 LLM 路径完全解耦）。
 
             核心组成（plan §6.2 / §6.5）:
-            1. ObjectWindowDefinition 形状: { title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }；
-               commands 字典里每条 entry 是头等的 ObjectMethod，与内置 window 上的命令同构。
+            1. ObjectWindowDefinition 形状: { title?, description?, renderXml?, basicKnowledge?, onClose?, methods? }；
+               methods 字典里每条 entry 是头等的 ObjectMethod，与内置 window 上的命令同构。
             2. type=custom dispatcher: WindowRegistry 注册一份固定 type=custom 的契约，行为按 \`window.objectId\`
-               路由到对应 Object 的 ObjectWindowDefinition；commands dispatcher 在 entry.exec 包装层注入 self。
+               路由到对应 Object 的 ObjectWindowDefinition；methods dispatcher 在 entry.exec 包装层注入 self。
             3. 单例注入: 仅当 thread.persistence?.objectId 存在（thread 由该 Object 自己持有，见
                src/executable/windows/_shared/init.ts）时由 initContextWindows
                幂等注入一个 \`custom:<objectId>\` window。
-            4. ProgramSelf 注入: program ts/js sandbox 收到 self = { dir, callCommand, getData, setData, getThreadLocal, setThreadLocal }；
-               \`callCommand(windowId, command, args?)\` 可调任意 thread 内 window 上的任意已注册命令。
+            4. ProgramSelf 注入: program ts/js sandbox 收到 self = { dir, callMethod, getData, setData, getThreadLocal, setThreadLocal }；
+               \`callMethod(windowId, method, args?)\` 可调任意 thread 内 window 上的任意已注册命令。
             5. 动态加载与热更: loader 按 \`executable/index.ts\` 的 mtime 缓存；写文件后下一次调用自动重新 import。
             6. 元编程闭环（与 reflectable 配合）: super flow 通过 write_file 写 executable/index.ts → 下一次调命令时看到新形态。
 
             Programmable 不是新增 LLM tool 面，而是给 Object 一个**"自我门面 window"+其上一组命令**，
             让它把高频动作或复杂逻辑封装成命名命令；LLM 通过统一的 exec 协议直接调用，
-            或在 ts/js sandbox 里 \`await self.callCommand("custom:<self>", "<name>", {...})\` 触发。
+            或在 ts/js sandbox 里 \`await self.callMethod("custom:<self>", "<name>", {...})\` 触发。
             旧 \`llm_methods\` 字典已硬切删除（plan D6）。
             `,
             named: {
                 "Programmable": "Object 持有/演化自身自定义 ContextWindow + 命令表的能力维度",
-                "ObjectWindowDefinition": "executable/index.ts 中 export const window 的形状：{ title?, description?, renderXml?, basicKnowledge?, onClose?, commands? }",
+                "ObjectWindowDefinition": "executable/index.ts 中 export const window 的形状：{ title?, description?, renderXml?, basicKnowledge?, onClose?, methods? }",
                 "ui_methods": "executable/index.ts 导出的、给 UI/agent-native 通过 HTTP callMethod 调用的方法字典（plan D3 完全保留）",
-                "ProgramSelf": "program ts/js sandbox 注入的 self 对象，承载 callCommand / getData / setData / getThreadLocal",
+                "ProgramSelf": "program ts/js sandbox 注入的 self 对象，承载 callMethod / getData / setData / getThreadLocal",
                 "loadObjectWindow / loadUiServerMethods": "按 mtime 缓存、自动热更的 server 加载器",
-                "CustomCommandContext": "custom window 命令 exec 收到的 ctx：MethodExecutionContext + self: ProgramSelf",
+                "CustomMethodContext": "custom window 命令 exec 收到的 ctx：MethodExecutionContext + self: ProgramSelf",
             },
             children: {
                 "object_window_definition": {
@@ -3794,7 +3794,7 @@ export const root: DocTreeNode = {
                       title: "<self>",
                       description: "...",
                       basicKnowledge: ({ self }) => "...",
-                      commands: {
+                      methods: {
                         <name>: {
                           paths: ["<name>"],
                           intent: (args) => [],
@@ -3811,9 +3811,9 @@ export const root: DocTreeNode = {
                     - renderXml?: 渲染该 window 为 context XML（同 WindowRegistry.renderXml）
                     - basicKnowledge?: 该 window 出现时合成的协议知识；可静态字符串或 ({ self }) => string
                     - onClose?: close 触发 hook（同 WindowRegistry.OnCloseHook）
-                    - commands?: Record<string, ObjectMethod> —— 命令字典；exec ctx 由 dispatcher 注入 self
+                    - methods?: Record<string, ObjectMethod> —— 命令字典；exec ctx 由 dispatcher 注入 self
 
-                    custom window 上的 commands 与内置 window（do/talk/...）上的命令完全同构：paths / intent(args) /
+                    custom window 上的 methods 与内置 window（do/talk/...）上的命令完全同构：paths / intent(args) /
                     onFormChange(change, { form, intents }) / exec(ctx)。
                     `,
                     named: {
@@ -3899,10 +3899,10 @@ export const root: DocTreeNode = {
                     src/executable/server/self.ts createProgramSelf(stoneRef, thread) 构造一个 ProgramSelf 对象:
 
                     - dir: stone 目录绝对路径，用于在 ts/js sandbox 里拼相对路径。
-                    - callCommand(windowId, command, args?): 在 thread.contextWindows 里 lookup window → 通过
-                      WindowRegistry 取该 window type 的 commands[command] → exec(ctx)。type=custom 时
-                      dispatcher 自带 self 注入；其它 type 由调用方按需补 ctx.self。找不到 windowId / command
-                      时抛清晰错误（含当前可见 window/command 列表）。
+                    - callMethod(windowId, method, args?): 在 thread.contextWindows 里 lookup window → 通过
+                      WindowRegistry 取该 window type 的 methods[method] → exec(ctx)。type=custom 时
+                      dispatcher 自带 self 注入；其它 type 由调用方按需补 ctx.self。找不到 windowId / method
+                      时抛清晰错误（含当前可见 window/method 列表）。
                     - getData(key) / setData(key, value): 读写 \`flows/<sid>/objects/<self>/data.json\`
                       (session 级数据；2026-05-23 起从 stone 迁到 flow，详见 persistable.flow.session_data)。
                       setData 是顶层 spread merge 而非整体覆盖（API 形状保留）。
@@ -3912,13 +3912,13 @@ export const root: DocTreeNode = {
                       跨 exec 共享（程序窗口同一线程内的 ts/js exec 之间），但不持久化（重启即丢）。
 
                     ProgramSelf 在两条路径上被使用:
-                    - program command ts/js exec: sandbox 把 self 注入到用户代码（详见 executable.methods.program 与 src/executable/program/sandbox/）。
-                    - program.callCommand exec: runCallCommandProgram(thread, windowId, command, args) 构造 self 后调
+                    - program method ts/js exec: sandbox 把 self 注入到用户代码（详见 executable.methods.program 与 src/executable/program/sandbox/）。
+                    - program.callMethod exec: runCallCommandProgram(thread, windowId, method, args) 构造 self 后调
                       \`entry.exec(ctx)\` 拿返回值。
                     `,
                     named: {
                         "createProgramSelf": "构造 ProgramSelf 的工厂函数",
-                        "self.callCommand": "调任意 window 上任意命令的入口；自动 lazy load + 按 mtime reload",
+                        "self.callMethod": "调任意 window 上任意命令的入口；自动 lazy load + 按 mtime reload",
                         "threadLocalData": "thread 级共享数据；ts/js exec 间通过 self.getThreadLocal/setThreadLocal 传值",
                     },
                 },
@@ -3927,31 +3927,31 @@ export const root: DocTreeNode = {
                     content: `
                     LLM 通过两种入口调 custom window 上的命令:
 
-                    **路径 A: 直接 open custom window 的 command（推荐）**
+                    **路径 A: 直接 open custom window 的 method（推荐）**
                     \`\`\`
-                    exec(window_id="custom:<self>", command="<name>", args={ ... })
+                    exec(window_id="custom:<self>", method="<name>", args={ ... })
                     refine(...)
                     submit(...)
                     \`\`\`
-                    与调 do_window.continue / talk_window.say 完全同构。custom dispatcher 在 commands[<name>].exec
+                    与调 do_window.continue / talk_window.say 完全同构。custom dispatcher 在 methods[<name>].exec
                     被取出时包一层 self 注入，对 manager.submit 完全透明。
 
-                    **路径 B: program.callCommand 通用元操作通道**
+                    **路径 B: program.callMethod 通用元操作通道**
                     \`\`\`
-                    exec(command="program", args={ window_id: "custom:<self>", command: "<name>", args: {...} })
+                    exec(method="program", args={ window_id: "custom:<self>", method: "<name>", args: {...} })
                     \`\`\`
                     或 ts/js exec 里:
                     \`\`\`
-                    exec(command="program", args={ language: "ts", code: "return await self.callCommand('custom:<self>', '<name>', { ... });" })
+                    exec(method="program", args={ language: "ts", code: "return await self.callMethod('custom:<self>', '<name>', { ... });" })
                     \`\`\`
-                    callCommand 不仅可调 custom window 的命令，也可调 do_window/talk_window/file_window 等任意 window
-                    上的已注册命令——把"调 commands"统一成 \`(window_id, command, args)\` 一个签名。
+                    callMethod 不仅可调 custom window 的命令，也可调 do_window/talk_window/file_window 等任意 window
+                    上的已注册命令——把"调 methods"统一成 \`(window_id, method, args)\` 一个签名。
 
                     两条路径共享同一份 ObjectWindowDefinition.methods 字典；只是入口形态不同。
                     `,
                     named: {
-                        "program.callCommand": "program command 的 callCommand 模式；一行直接调任意 window 上的命令",
-                        "runCallCommandProgram": "callCommand 路径的执行入口",
+                        "program.callMethod": "program method 的 callMethod 模式；一行直接调任意 window 上的命令",
+                        "runCallCommandProgram": "callMethod 路径的执行入口",
                         "formatProgramResult": "把 result / error 包成可读字符串的格式化函数",
                     },
                 },
@@ -3961,13 +3961,13 @@ export const root: DocTreeNode = {
                     Object 演化自身 self window 的标准路径:
 
                     1. 触发点（典型: reflectable.metaprogramming 的反思请求）。
-                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/executable/index.ts", content="...")\` 重写 self window 源码。
-                    3. 下一次 \`exec(window_id="custom:<self>", command=<new>)\` 或 \`self.callCommand(...)\` 触发时，
+                    2. super flow 中通过 \`exec(method="write_file", path="stones/<self>/executable/index.ts", content="...")\` 重写 self window 源码。
+                    3. 下一次 \`exec(window_id="custom:<self>", method=<new>)\` 或 \`self.callMethod(...)\` 触发时，
                        loader 看到 mtime 变化 → ?t=mtime 强制重新 import → 新形态立刻生效。
                     4. 不需要重启进程、不需要重新部署。
 
                     写新命令时需要遵守 ObjectMethod 形状（exec 必填）；paths / match / knowledge 可选但建议补全，
-                    因为 LLM 在 callCommand 模式下会看见对应的 knowledge entry，写得清楚直接影响调用质量。
+                    因为 LLM 在 callMethod 模式下会看见对应的 knowledge entry，写得清楚直接影响调用质量。
 
                     更细的边界（路径权限、是否允许 super flow 自动写 server）由 reflectable.business_task_isolation 与
                     caller 的显式请求共同决定；programmable 本身只描述 *如何写* 才能生效，不规定 *谁可以写*。
@@ -3980,12 +3980,12 @@ export const root: DocTreeNode = {
             },
             patches: {
                 "custom_window_vs_ui_methods": {
-                    title: "custom window commands 与 ui_methods 的分流",
+                    title: "custom window methods 与 ui_methods 的分流",
                     content: `
                     同一份 executable/index.ts 中两个导出服务不同调用方（plan D3）:
 
                     - \`window.methods\` (custom dispatcher 路由): 给 LLM 通过 \`exec(window_id="custom:<self>", ...)\`
-                      或 \`program.callCommand\` 调用。入参由 LLM 在 form 里填，返回值进 program_window.history 或
+                      或 \`program.callMethod\` 调用。入参由 LLM 在 form 里填，返回值进 program_window.history 或
                       form.result 让 LLM 看到。
                     - \`ui_methods\`: 给 UI / agent-native 客户端通过 HTTP 调用；由 app/server flows.callMethod 或
                       stones.callMethod 路径走 loadUiServerMethods 拿到方法字典并执行。
@@ -4046,11 +4046,11 @@ export const root: DocTreeNode = {
                 "pool_methods": {
                     title: "pool_methods - server 暴露 pool 数据访问的命令形状",
                     content: `
-                    executable/index.ts 里访问 pool 数据的 commands 遵循统一约束（2026-05-24 起 csv 替代 sql）：
+                    executable/index.ts 里访问 pool 数据的 methods 遵循统一约束（2026-05-24 起 csv 替代 sql）：
 
                     **1. 命名语义化**：
                     \`\`\`
-                    commands: {
+                    methods: {
                       upsert_factor: { ... },
                       query_factors_by_psm: { ... },
                       list_recent_memories: { ... },
@@ -4079,10 +4079,10 @@ export const root: DocTreeNode = {
                     简单的"查看 / 偶尔小改"，LLM 直接 file_window.open / edit 即可，无需 server method 包装。
 
                     **5. params schema 校验是 todo**：当前 ObjectMethod 没强制 schema；
-                    如未来要支持自动参数检查 / 转换，需在 callCommand 路径 + ui callMethod 路径都加上（见 programmable.todo）。
+                    如未来要支持自动参数检查 / 转换，需在 callMethod 路径 + ui callMethod 路径都加上（见 programmable.todo）。
                     `,
                     named: {
-                        "pool method": "executable/index.ts 中 commands 字典里访问 pool 数据的语义命令",
+                        "pool method": "executable/index.ts 中 methods 字典里访问 pool 数据的语义命令",
                         "csv-based pool method": "用 fs + csv 解析库读写 pool/data/<name>.csv 的 server method",
                         "enqueueSessionWrite('data:...')": "csv 整文件写串行化键",
                     },
@@ -4090,7 +4090,7 @@ export const root: DocTreeNode = {
                 },
             },
             todo: [
-                "params schema 校验当前未实现。如果未来要支持自动参数检查/转换，需要在 callCommand 路径 + ui callMethod 路径都加上。",
+                "params schema 校验当前未实现。如果未来要支持自动参数检查/转换，需要在 callMethod 路径 + ui callMethod 路径都加上。",
                 "Object 注册多个自定义 window 类型（不仅仅 self window）：本轮 export const window 是单数。后续可演化为复数 windows 字典。",
             ],
         },
@@ -4176,7 +4176,7 @@ export const root: DocTreeNode = {
                     - 方法不存在 → \`METHOD_NOT_FOUND\`。
                     - 执行抛错 → 由 service 层兜底转 AppServerError 返回给 HTTP 调用方。
 
-                    这条路径与 LLM 的 \`program.callCommand\` 路径在同一份 executable/index.ts 上分流（按 \`window.methods\` vs \`ui_methods\`），
+                    这条路径与 LLM 的 \`program.callMethod\` 路径在同一份 executable/index.ts 上分流（按 \`window.methods\` vs \`ui_methods\`），
                     互不干扰。
                     `,
                     named: {
@@ -4191,8 +4191,8 @@ export const root: DocTreeNode = {
                     Object 演化自身 UI 的标准路径:
 
                     1. 触发点（典型: caller 明确要求 'UI 需要加一个 X 视图' 类反思请求）。
-                    2. super flow 中通过 \`exec(command="write_file", path="stones/<self>/visible/index.tsx", content="...")\` 重写 stone client；
-                       或写 flow 级 page \`exec(command="write_file", path="flows/<sid>/objects/<obj>/client/pages/<page>.tsx", content="...")\`。
+                    2. super flow 中通过 \`exec(method="write_file", path="stones/<self>/visible/index.tsx", content="...")\` 重写 stone client；
+                       或写 flow 级 page \`exec(method="write_file", path="flows/<sid>/objects/<obj>/client/pages/<page>.tsx", content="...")\`。
                     3. 下次客户端加载该路径时拿到新 tsx 源码（具体打包/渲染管线由消费方实现）。
                     4. 如果新 UI 要调用新方法，需要先把对应 ui_methods 写到 executable/index.ts（程序面与界面面分别演化）。
 
@@ -4758,25 +4758,25 @@ export const root: DocTreeNode = {
             title: "extendable - 外接外部世界的集成层（非能力维度）",
             content: `
             extendable 不是 Agent 的内在能力维度（与上面 8 个并列），而是 OOC 触达外部系统的**扩展层**:
-            把外部世界（飞书 / notion / slack / github 等）按统一模板接入为 Object 可调用的 ContextWindow 与 command。
+            把外部世界（飞书 / notion / slack / github 等）按统一模板接入为 Object 可调用的 ContextWindow 与 method。
 
             为什么不是维度: 它够的是外部世界、不构成 Agent 自我（判据见 root.patches.dimension_criterion）。"寄生于 executable"只是物理挂载事实，非排除理由。代码隔离在 src/extendable/ 下，避免外部 OAPI 细节污染 executable 核心。
 
             统一模板:
             1. OAPI 调用收口到 \`src/extendable/lark/cli.ts\` 的 larkExec helper（凭据 / 超时 / as-user 统一处理）。
-            2. 每个外部系统建 \`src/extendable/<name>/\`，barrel（index.ts）自注册 ObjectType + open command。
-            3. executable 侧（src/executable/windows/root/index.ts）通过 extendable barrel 拉 open command，不反向依赖。
+            2. 每个外部系统建 \`src/extendable/<name>/\`，barrel（index.ts）自注册 ObjectType + open method。
+            3. executable 侧（src/executable/windows/root/index.ts）通过 extendable barrel 拉 open method，不反向依赖。
 
             新接一个外部世界（notion / slack / github）按相同模板建 \`src/extendable/<name>/\` 即可，不触碰 executable 核心（除非要新增 ObjectType 字面量）。
             完整 case 见 meta/case.feishu-integration.doc.ts。
             `,
             named: {
-                "extendable": "非能力维度的外接集成层：把外部世界按统一模板接入为可调用的 Window 与 command",
+                "extendable": "非能力维度的外接集成层：把外部世界按统一模板接入为可调用的 Window 与 method",
                 "larkExec": "所有飞书 OAPI 调用的收口 helper，定义于 src/extendable/lark/cli.ts",
-                "barrel 自注册": "每个 src/extendable/<name>/index.ts 导出 ObjectType + open command，由 executable root 拉取注册",
+                "barrel 自注册": "每个 src/extendable/<name>/index.ts 导出 ObjectType + open method，由 executable root 拉取注册",
             },
             relations: [
-                [{ title: "executable", content: "extendable 寄生于 executable：新增 ObjectType + open command 经 executable root 注册" }, "extendable 是 executable 的扩展点，物理隔离但逻辑挂载"],
+                [{ title: "executable", content: "extendable 寄生于 executable：新增 ObjectType + open method 经 executable root 注册" }, "extendable 是 executable 的扩展点，物理隔离但逻辑挂载"],
             ],
             sources: [["src/extendable/", "外接集成层实现根目录；lark barrel 见 src/extendable/lark/index.ts，OAPI helper 见 src/extendable/lark/cli.ts:larkExec；case 见 meta/case.feishu-integration.doc.ts"]],
         },
@@ -4789,7 +4789,7 @@ export const root: DocTreeNode = {
 
             概念合并:
             1. ContextWindow 不再是独立于 Object 的临时数据结构，每个 window 背后都对应一个 Object（builtin 或 user-defined）
-            2. Window command 与 Object method 合并，统一称为 **Method**
+            2. Window method 与 Object method 合并，统一称为 **Method**
             3. 原 \`src/executable/windows/\` 下的各 window type 改为 builtin objects，位于 \`packages/@ooc/builtins/<type>/\`
             4. 原 stone object 的 \`server/\` → \`executable/\`（方法实现），\`client/\` → \`visible/\`（UI 实现），\`readme.md\` → \`readable.md\`（静态展示）
             5. 新增 \`readable.ts\`：动态上下文渲染函数，控制 Object 如何以 XML 形式展示给 LLM
@@ -4946,7 +4946,7 @@ export const root: DocTreeNode = {
             - observable: 人类在控制面看 debug/timeline；agent 自查自己历史（当前仍是缺口）。
             - visible: 人类通过 HTTP callMethod 调 ui_methods；agent 端等价 tool 路径（当前仍是缺口，见 visible.warnings）。
             - collaborable: agent 用 talk_window.say；人类用 app.client ChatPanel——同一件"发消息"两条通道。
-            - executable.permission: agent 发起 command；人类在控制面 approve/reject。
+            - executable.permission: agent 发起 method；人类在控制面 approve/reject。
 
             边界（对称的是"能不能做"，不是"看到的体量"）:
             - 对称的: 能否做某动作（发消息 / 调方法 / 查状态 / 反思）。

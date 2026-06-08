@@ -13,12 +13,12 @@ function makeThread(events: unknown[]): ThreadContext {
   } as ThreadContext;
 }
 
-const callOpen = (callId: string, opts: { command?: string; title?: string }) => ({
+const callOpen = (callId: string, opts: { method?: string; title?: string }) => ({
   category: "llm_interaction",
   kind: "function_call",
   callId,
   toolName: "open",
-  arguments: { command: opts.command ?? "talk", title: opts.title ?? "open card" },
+  arguments: { command: opts.method ?? "talk", title: opts.title ?? "open card" },
 });
 
 const callOpenOutput = (callId: string, windowId: string, ok: boolean = true) => ({
@@ -247,7 +247,7 @@ describe("formatThread: groupConsecutiveToolLines", () => {
           kind: "function_call",
           callId: "c1",
           toolName: "open",
-          arguments: { title: "汇总查询结果", command: "program" },
+          arguments: { title: "汇总查询结果", method: "program" },
         },
         {
           category: "tool_runtime",

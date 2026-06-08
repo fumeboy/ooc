@@ -24,12 +24,12 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
 export interface MethodExecWindow extends BaseContextWindow {
   type: "method_exec";
   parentWindowId: string;
-  command: string;
+  method: string;
   description: string;
   accumulatedArgs: Record<string, unknown>;
-  commandPaths: string[];
+  methodPaths: string[];
   loadedKnowledgePaths: string[];
-  commandKnowledgePaths?: string[];
+  methodKnowledgePaths?: string[];
   status: "open" | "executing" | "success" | "failed";
   result?: string;
   /** Optional schema (from ObjectMethod.schema). Undefined if the method doesn't declare one. */

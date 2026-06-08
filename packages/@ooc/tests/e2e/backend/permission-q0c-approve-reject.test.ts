@@ -155,7 +155,7 @@ describe("[q0c] permission HITL — A. approve 闭环", () => {
       const ref = setupPersistence(tmpRoot, sessionId, "obj_q0c_a", "t_q0c_a");
       writePoliciesJson(
         ref,
-        JSON.stringify({ commands: { _test_q0c_safe: "ask" } }),
+        JSON.stringify({ methods: { _test_q0c_safe: "ask" } }),
       );
 
       // 1) 构造 paused thread (跑一次 think 让它进入 ask + paused 状态)
@@ -168,7 +168,7 @@ describe("[q0c] permission HITL — A. approve 闭环", () => {
         name: "exec",
         arguments: {
           title: "ask-then-approve",
-          command: "_test_q0c_safe",
+          method: "_test_q0c_safe",
           args: { foo: "bar" },
         },
       };
@@ -265,7 +265,7 @@ describe("[q0c] permission HITL — B. reject 闭环", () => {
       const ref = setupPersistence(tmpRoot, sessionId, "obj_q0c_b", "t_q0c_b");
       writePoliciesJson(
         ref,
-        JSON.stringify({ commands: { _test_q0c_safe: "ask" } }),
+        JSON.stringify({ methods: { _test_q0c_safe: "ask" } }),
       );
 
       const thread = makeThread({
@@ -277,7 +277,7 @@ describe("[q0c] permission HITL — B. reject 闭环", () => {
         name: "exec",
         arguments: {
           title: "ask-then-reject",
-          command: "_test_q0c_safe",
+          method: "_test_q0c_safe",
           args: { dangerous: true },
         },
       };
@@ -444,7 +444,7 @@ describe("[q0c] permission HITL — C. 错误路径", () => {
             category: "permission",
             kind: "permission_ask",
             toolCallId: "tc_x",
-            command: "_test_q0c_safe",
+            method: "_test_q0c_safe",
             id: "ask_real",
           },
         ],
@@ -479,7 +479,7 @@ describe("[q0c] permission HITL — C. 错误路径", () => {
             category: "permission",
             kind: "permission_ask",
             toolCallId: "tc_y",
-            command: "_test_q0c_safe",
+            method: "_test_q0c_safe",
             id: "already_decided",
             decided: { action: "approve", at: 1, reason: "" },
           },
@@ -513,7 +513,7 @@ describe("[q0c] permission HITL — D. 渲染区分 pending / approved / rejecte
           category: "permission",
           kind: "permission_ask",
           toolCallId: "tc_pending",
-          command: "cmd_a",
+          method: "cmd_a",
           id: "ev_pending",
         },
         // approved
@@ -521,7 +521,7 @@ describe("[q0c] permission HITL — D. 渲染区分 pending / approved / rejecte
           category: "permission",
           kind: "permission_ask",
           toolCallId: "tc_appr",
-          command: "cmd_b",
+          method: "cmd_b",
           id: "ev_appr",
           decided: { action: "approve", at: 12345 },
         },
@@ -530,7 +530,7 @@ describe("[q0c] permission HITL — D. 渲染区分 pending / approved / rejecte
           category: "permission",
           kind: "permission_ask",
           toolCallId: "tc_rej",
-          command: "cmd_c",
+          method: "cmd_c",
           id: "ev_rej",
           decided: { action: "reject", at: 67890, reason: "no thanks" },
         },

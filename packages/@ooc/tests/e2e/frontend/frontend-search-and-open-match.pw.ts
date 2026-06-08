@@ -68,14 +68,14 @@ test("F3 grep → search_window 出现在 ContextSnapshotViewer", async ({ page,
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const events = (calleeThread?.events ?? []) as any[];
-  // LLM 实际 exec 时 args.command 是单段命令名（无 window-type 前缀）：
+  // LLM 实际 exec 时 args.method 是单段命令名（无 window-type 前缀）：
   // root 上的 grep → "grep"。
   const usedGrep = events.some(
     (e) =>
       e.category === "llm_interaction" &&
       e.kind === "function_call" &&
       e.toolName === "exec" &&
-      e.arguments?.command === "grep",
+      e.arguments?.method === "grep",
   );
 
   // 观察孔 B（thread state）：thread.contextWindows 中有 type=search 的 window 即证明走过 grep 路径。

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { ROOT_METHODS, getOpenableMethods, deriveRootMethodPaths } from "../windows";
-import { programCommand } from "@ooc/builtins/root/executable/method.program";
+import { programMethod } from "@ooc/builtins/root/executable/method.program";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
@@ -26,10 +26,10 @@ function callKnowledge(
     type: "method_exec",
     parentWindowId: "root",
     title: "test",
-    command: "test",
+    method: "test",
     description: "",
     accumulatedArgs: args,
-    commandPaths: [],
+    methodPaths: [],
     loadedKnowledgePaths: [],
     status,
     createdAt: 0,
@@ -151,23 +151,23 @@ describe("executable commands", () => {
   });
 
   it("should expose dynamic program knowledge entries", () => {
-    expect(callKnowledge(programCommand, {}, "open")).toEqual(
+    expect(callKnowledge(programMethod, {}, "open")).toEqual(
       expect.objectContaining({
         "internal/executable/program/basic": expect.any(String),
         "internal/executable/program/input": expect.any(String),
       })
     );
     expect(
-      callKnowledge(programCommand, { language: "shell", code: "ls" }, "executing")["internal/executable/program/form-status"]
+      callKnowledge(programMethod, { language: "shell", code: "ls" }, "executing")["internal/executable/program/form-status"]
     ).toContain("executing 状态的 form");
   });
 
   it("should describe program executing and failed knowledge without relying on inline form wording (Round 13)", () => {
     expect(
-      callKnowledge(programCommand, { language: "shell", code: "ls" }, "executing")["internal/executable/program/form-status"]
+      callKnowledge(programMethod, { language: "shell", code: "ls" }, "executing")["internal/executable/program/form-status"]
     ).toContain("对于 command program 的 executing 状态的 form");
     expect(
-      callKnowledge(programCommand, { function: "readFile", args: { path: "a" } }, "failed")["internal/executable/program/form-status"]
+      callKnowledge(programMethod, { function: "readFile", args: { path: "a" } }, "failed")["internal/executable/program/form-status"]
     ).toContain("对于 command program 的 failed 状态的 form");
   });
 });

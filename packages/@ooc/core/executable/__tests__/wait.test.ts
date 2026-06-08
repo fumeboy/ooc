@@ -95,7 +95,7 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     const thread = makeThread({ skipCreatorWindow: true });
     const out = await callWaitAsync(thread, { on: "anything" });
     expect(out.ok).toBe(false);
-    expect(out.error).toMatch(/没有.*可等待|end command/);
+    expect(out.error).toMatch(/没有.*可等待|end method/);
   });
 
   it("happy: on=<creator do_window> → status=waiting, waitingOn 写入", async () => {

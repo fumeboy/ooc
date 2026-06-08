@@ -56,7 +56,7 @@ const SEED_SELF = `你是用户的 CodeAgent，遵循 OOC 协议。
 
 你具备 programmable 能力：你在自己的 stone 里有一份 \`stones/${SELF_ID}/server/index.ts\`，
 可以 \`export const window: ObjectWindowDefinition\` 给自己注册自定义命令（commands 字典）。
-写好后，你可以通过 \`exec(window_id="custom:${SELF_ID}", command="<名字>", args={...})\` 直接调用它们。
+写好后，你可以通过 \`exec(window_id="custom:${SELF_ID}", method="<名字>", args={...})\` 直接调用它们。
 
 工作守则：
 - 写自定义命令时用 write_file 写 \`stones/${SELF_ID}/server/index.ts\`。
@@ -120,7 +120,7 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
         handle.app,
         seeded.sessionId,
         `现在调用你刚写的 \`add\` 命令：` +
-          `\`exec(window_id="custom:${SELF_ID}", command="add", args={ a: 2, b: 3 })\`，` +
+          `\`exec(window_id="custom:${SELF_ID}", method="add", args={ a: 2, b: 3 })\`，` +
           `把它返回的结果告诉我。`,
       );
       const job2 = await waitForJob(handle.app, cont.jobId, { timeoutMs: 300_000 });
@@ -149,7 +149,7 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S6 programmable-self-comman
       // ── 观察孔 B：机制 ──────────────────────────────────────────────
       // ③ 第二轮 custom window 调用记录 + 对应输出
       const invocations = customWindowInvocations(calleeAfterTurn2, SELF_ID);
-      const addInvocations = invocations.filter((i) => i.command === "add");
+      const addInvocations = invocations.filter((i) => i.method === "add");
       const addOutputs = addInvocations
         .map((i) => functionOutputFor(calleeAfterTurn2, i.callId))
         .filter((o) => o.output !== undefined);

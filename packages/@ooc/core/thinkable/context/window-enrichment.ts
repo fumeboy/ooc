@@ -3,7 +3,7 @@
  *
  * Handles:
  * - effectiveVisibleType resolution (parentClass inheritance chain fallback)
- * - method_exec form enrichment (commandKnowledgePaths from onFormChange guidance)
+ * - method_exec form enrichment (methodKnowledgePaths from onFormChange guidance)
  * - Form knowledge entry extraction (from onFormChange guidance windows)
  */
 import type { ContextWindow, MethodExecWindow, GuidanceWindow } from "../../executable/windows/_shared/types.js";
@@ -27,11 +27,11 @@ function lookupFormEntry(
 ): import("../../executable/windows/_shared/command-types.js").ObjectMethod | undefined {
   const parentId = form.parentWindowId;
   if (!parentId || parentId === "root") {
-    return ROOT_METHODS[form.command];
+    return ROOT_METHODS[form.method];
   }
   const parent = (thread.contextWindows ?? []).find((w) => w.id === parentId);
   if (!parent) return undefined;
-  return registry.lookupMethod(parent, form.command);
+  return registry.lookupMethod(parent, form.method);
 }
 
 /**
@@ -54,7 +54,7 @@ export async function computeFormKnowledgeEntries(
     changed: [],
     args,
   };
-  const defaultIntent: Intent = { name: form.command };
+  const defaultIntent: Intent = { name: form.method };
   const intents = [defaultIntent, ...entry.intent(args)];
   const guidance = entry.onFormChange(change, { form, intents }) ?? [];
 
@@ -70,7 +70,7 @@ export async function computeFormKnowledgeEntries(
 }
 
 /**
- * Update a method_exec form's commandKnowledgePaths to match current derived entries.
+ * Update a method_exec form's methodKnowledgePaths to match current derived entries.
  * Returns the form (possibly a new object if keys changed).
  */
 export async function enrichFormMethodKnowledge(
@@ -80,16 +80,16 @@ export async function enrichFormMethodKnowledge(
 ): Promise<MethodExecWindow> {
   const knowledgeEntries = await computeFormKnowledgeEntries(form, thread, registry);
   const methodKnowledgePaths = Object.keys(knowledgeEntries);
-  if (samePaths(form.commandKnowledgePaths, methodKnowledgePaths)) {
+  if (samePaths(form.methodKnowledgePaths, methodKnowledgePaths)) {
     return form;
   }
-  return { ...form, commandKnowledgePaths: methodKnowledgePaths };
+  return { ...form, methodKnowledgePaths: methodKnowledgePaths };
 }
 
 /**
  * Enrich all context windows:
  * - Resolve effectiveVisibleType for every window (along parentClass chain)
- * - For method_exec forms: compute commandKnowledgePaths + derive knowledge entries
+ * - For method_exec forms: compute methodKnowledgePaths + derive knowledge entries
  * - Skip sharing-state forms (ref / lent_out) for knowledge derivation
  *
  * Returns { enrichedWindows, formKnowledgeEntries }.

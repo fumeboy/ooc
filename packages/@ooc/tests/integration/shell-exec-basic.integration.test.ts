@@ -26,7 +26,7 @@ describe.skipIf(!hasLlmEnv)("integration: shell-exec-basic", () => {
       [
         "请用 program command（language=shell）执行 shell 命令，",
         "查 src/persistable/ 下有几个 .ts 文件（不含 __tests__/ 子目录）。",
-        "看到 form 的 result 字段后，把数字写进 end command 的 summary 然后 end。",
+        "看到 form 的 result 字段后，把数字写进 end method 的 summary 然后 end。",
         "重要：执行 shell 必须用 program command；result 会出现在 contextWindows 对应 form 的 result 字段，不需要 wait。",
       ].join("\n")
     );

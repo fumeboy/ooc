@@ -64,7 +64,7 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
       "**想把结果 / 状态 / 中间进展带回父线程，唯一通道**：",
       "",
       "```",
-      `exec(window_id="${window.id}", command="continue", args={ msg: "<结果或状态描述>" })`,
+      `exec(window_id="${window.id}", method="continue", args={ msg: "<结果或状态描述>" })`,
       "```",
       "",
       "这条消息会被自动 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。",
@@ -85,7 +85,7 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
     "**想给 caller 回信，唯一通道**：",
     "",
     "```",
-    `exec(window_id="${window.id}", command="say", args={ msg: "<回复内容>", wait: false|true })`,
+    `exec(window_id="${window.id}", method="say", args={ msg: "<回复内容>", wait: false|true })`,
     "```",
     "",
     "这条消息会通过 talk-delivery 派送到 caller object 的对端 thread；caller 下一轮就能看到。",
@@ -153,7 +153,7 @@ export function buildProtocolKnowledgeWindows(
     if (w.type !== "method_exec") continue;
     const form = w as MethodExecWindow;
     try {
-      const isEndForm = form.command === "end";
+      const isEndForm = form.method === "end";
       const inSuperSession = thread.persistence?.sessionId === SUPER_SESSION_ID;
       if (isEndForm && !inSuperSession && !entries.has(END_REFLECTION_REMINDER_PATH)) {
         entries.set(END_REFLECTION_REMINDER_PATH, END_REFLECTION_REMINDER_KNOWLEDGE);

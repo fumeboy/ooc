@@ -16,10 +16,10 @@ function makeForm(overrides: Partial<MethodExecWindow> = {}): MethodExecWindow {
     title: "test",
     status: "open",
     createdAt: 1,
-    command: "program",
+    method: "program",
     description: "test",
     accumulatedArgs: {},
-    commandPaths: ["program"],
+    methodPaths: ["program"],
     loadedKnowledgePaths: [],
     ...overrides,
   };
@@ -27,11 +27,11 @@ function makeForm(overrides: Partial<MethodExecWindow> = {}): MethodExecWindow {
 
 describe("enrichFormMethodKnowledge", () => {
   test("enriches command knowledge paths even when command is not program", async () => {
-    const form = makeForm({ command: "plan" });
+    const form = makeForm({ method: "plan" });
     const thread = makeThread({ id: "t" });
     const result = await enrichFormMethodKnowledge(form, thread);
     expect(result).not.toBe(form);
-    expect(result.commandKnowledgePaths).toEqual([
+    expect(result.methodKnowledgePaths).toEqual([
       "internal/executable/plan/basic",
       "internal/executable/plan/input",
     ]);
@@ -41,7 +41,7 @@ describe("enrichFormMethodKnowledge", () => {
     const form = makeForm({ accumulatedArgs: { language: "shell", code: "ls" } });
     const thread = makeThread({ id: "t" });
     const result = await enrichFormMethodKnowledge(form, thread);
-    expect(result.commandKnowledgePaths).toEqual([
+    expect(result.methodKnowledgePaths).toEqual([
       "internal/executable/program/basic",
       "internal/executable/program/input",
     ]);
@@ -51,7 +51,7 @@ describe("enrichFormMethodKnowledge", () => {
     const form = makeForm({ accumulatedArgs: {} });
     const thread = makeThread({ id: "t" });
     const result = await enrichFormMethodKnowledge(form, thread);
-    expect(result.commandKnowledgePaths).toEqual([
+    expect(result.methodKnowledgePaths).toEqual([
       "internal/executable/program/basic",
       "internal/executable/program/input",
     ]);

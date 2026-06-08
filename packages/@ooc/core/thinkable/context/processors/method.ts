@@ -3,7 +3,7 @@
  *
  * This processor:
  * 1. Mutates ctx.windows in-place: for each method_exec form, it computes
- *    effectiveVisibleType + commandKnowledgePaths (from onFormChange guidance)
+ *    effectiveVisibleType + methodKnowledgePaths (from onFormChange guidance)
  * 2. Produces additional KnowledgeWindow entries derived from each form's
  *    onFormChange guidance output.
  *
@@ -18,7 +18,7 @@ import { enrichContextWindows } from "../window-enrichment.js";
 export const MethodFormProcessor: PipelinePhase = {
   name: "MethodFormProcessor",
   async run(thread: ThreadContext, ctx: PipelineContext): Promise<ContextWindow[]> {
-    // Enrich existing windows (effectiveVisibleType + commandKnowledgePaths on forms)
+    // Enrich existing windows (effectiveVisibleType + methodKnowledgePaths on forms)
     const { enrichedWindows, formKnowledgeEntries } = await enrichContextWindows(
       ctx.windows,
       thread,

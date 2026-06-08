@@ -78,15 +78,15 @@ function findChildCreatorDoWindow(child: ThreadContext): DoWindow {
 async function execOnPlanWindow(
   thread: ThreadContext,
   planWindowId: string,
-  command: string,
+  method: string,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
   const mgr = WindowManager.fromThread(thread, builtinRegistry);
   const result = await mgr.openMethodExec({
     thread,
     parentWindowId: planWindowId,
-    command,
-    title: `[test] ${command}`,
+    method,
+    title: `[test] ${method}`,
     args,
   });
   thread.contextWindows = mgr.toData();
@@ -153,7 +153,7 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
       parentMgr.openMethodExec({
         thread: parent,
         parentWindowId: PW1,
-        command: "add_step",
+        method: "add_step",
         title: "[test] 父尝试改 lent_out",
         args: { text: "不应该成功" },
       }),
@@ -207,7 +207,7 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
       arguments: {
         title: "[test] 归还 plan",
         window_id: childCreator.id,
-        command: "move",
+        method: "move",
         args: { window_id: PW1, mode: "move" },
       },
     });
@@ -275,7 +275,7 @@ describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () 
       childMgr.openMethodExec({
         thread: child,
         parentWindowId: PW1,
-        command: "update_step",
+        method: "update_step",
         title: "[test] 子尝试改 ref",
         args: { step_id: stepsBefore[0]!, status: "done" },
       }),
@@ -286,7 +286,7 @@ describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () 
     await closeMgr.openMethodExec({
       thread: child,
       parentWindowId: PW1,
-      command: "close",
+      method: "close",
       title: "[test] release ref",
     });
     // close 后通过 mgr.close 释放本地 ref；这里 close command 在 plan_window 上注册了；
@@ -354,7 +354,7 @@ describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
       arguments: {
         title: "[test] 重复 share",
         window_id: parentDo.id,
-        command: "move",
+        method: "move",
         args: { window_id: PW1, mode: "move" },
       },
     });

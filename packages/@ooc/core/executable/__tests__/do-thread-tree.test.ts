@@ -67,7 +67,7 @@ describe("do command (ContextWindow model)", () => {
     const opened = await mgr.openMethodExec({
       thread: parent,
       parentWindowId: doWindowId,
-      command: "continue",
+      method: "continue",
       title: "追加任务",
       args: { msg: "继续处理 WARN" },
     });
@@ -107,7 +107,7 @@ describe("do command (ContextWindow model)", () => {
     const mgr = WindowManager.fromThread(parent, builtinRegistry);
     const opened = await mgr.openMethodExec({
       thread: parent,
-      command: "do",
+      method: "do",
       title: "fork 子线程并等待",
       args: { msg: "处理告警", wait: true },
     });

@@ -62,13 +62,13 @@ describe.skipIf(!shouldRunRealTest)("real thinkloop integration", () => {
               "你是一个严格遵守工具调用要求的测试助手。",
               "本轮只允许调用一次 open 工具。",
               "请调用一次 open 工具，并且只调用这一次。",
-              "参数必须等价于：command=\"end\", title=\"结束线程\", args={ reason: \"done\", summary: \"结束线程\" }。",
+              "参数必须等价于：method=\"end\", title=\"结束线程\", args={ reason: \"done\", summary: \"结束线程\" }。",
               "不要输出任何多余解释。"
             ].join("\n")
           },
           {
             role: "user",
-            content: "请先打开 end command form。"
+            content: "请先打开 end method form。"
           }
         ];
       }

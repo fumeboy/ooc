@@ -34,18 +34,18 @@ shell 环境变量：
 - 想读写自己的 stone 目录（self.dir），用 env $OOC_SELF_DIR
 
 ts/js 上下文：
-- self.dir / self.callCommand(windowId, command, args?) / self.getData / self.setData 可用
+- self.dir / self.callMethod(windowId, command, args?) / self.getData / self.setData 可用
 - 跨 exec 共享：self.getThreadLocal(key) / self.setThreadLocal(key, value)
 - shell 之间不共享 threadLocal（OS 进程隔离），需要时自行写入 stone data
 
 后续多次执行：
-- exec(window_id="<program_window_id>", command="exec", args={ language, code })
+- exec(window_id="<program_window_id>", method="exec", args={ language, code })
 
 调用示例：
-exec(command="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
+exec(method="program", title="统计 ts 文件数量", args={ language: "shell", code: "find src -name '*.ts' | wc -l" })
 
 要调任意 window 上的命令请直接用顶层 \`exec\` tool（不再走 program）；
-ts/js sandbox 内仍可 \`await self.callCommand("custom:<self>", "<name>", {...})\` 编排多步调用。
+ts/js sandbox 内仍可 \`await self.callMethod("custom:<self>", "<name>", {...})\` 编排多步调用。
 
 ## 建议
 
@@ -55,7 +55,7 @@ ts/js sandbox 内仍可 \`await self.callCommand("custom:<self>", "<name>", {...
 - \`program(language="shell")\` 适合临时计算 / 不修改 worktree 的探查（统计、查询版本、跑测试）；**不要用 shell sed / awk / cat-redirect 改文件**——会失去 file_window 的版本可见性，且转义容易出错
 `.trim();
 
-export enum ProgramCommandPath {
+export enum ProgramMethodPath {
   Program = "program",
   Shell = "program.shell",
   TypeScript = "program.typescript",
@@ -63,12 +63,12 @@ export enum ProgramCommandPath {
 }
 
 
-export const programCommand: ObjectMethod = {
+export const programMethod: ObjectMethod = {
   paths: [
-    ProgramCommandPath.Program,
-    ProgramCommandPath.Shell,
-    ProgramCommandPath.TypeScript,
-    ProgramCommandPath.JavaScript,
+    ProgramMethodPath.Program,
+    ProgramMethodPath.Shell,
+    ProgramMethodPath.TypeScript,
+    ProgramMethodPath.JavaScript,
   ],
   schema: {
     args: {
@@ -80,9 +80,9 @@ export const programCommand: ObjectMethod = {
   intent: (args): Intent[] => {
     const r: Intent[] = [];
     const lang = (args.language ?? args.lang) as string | undefined;
-    if (lang === "shell") r.push({ name: ProgramCommandPath.Shell });
-    if (lang === "ts" || lang === "typescript") r.push({ name: ProgramCommandPath.TypeScript });
-    if (lang === "js" || lang === "javascript") r.push({ name: ProgramCommandPath.JavaScript });
+    if (lang === "shell") r.push({ name: ProgramMethodPath.Shell });
+    if (lang === "ts" || lang === "typescript") r.push({ name: ProgramMethodPath.TypeScript });
+    if (lang === "js" || lang === "javascript") r.push({ name: ProgramMethodPath.JavaScript });
     return r;
   },
   onFormChange(change, { form, intents }) {
@@ -122,14 +122,14 @@ export const programCommand: ObjectMethod = {
       "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeProgramCommand(ctx),
+  exec: (ctx) => executeProgramMethod(ctx),
 };
 
 /**
  * P6.§4-§5 thin delegator —— 委托到 program_window constructor。
  */
-export const executeProgramCommand = makeRootDelegator({
-  command: "program",
+export const executeProgramMethod = makeRootDelegator({
+  method: "program",
   constructorKind: "program",
   objectLabel: "program_window",
 });

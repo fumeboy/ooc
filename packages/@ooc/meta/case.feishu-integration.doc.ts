@@ -7,7 +7,7 @@
  *
  * 维护原则：
  * 1. 本 case 只描述**裁决与边界**——为什么是 Window 而不是 Agent、为什么强制 dry-run、
- *    身份默认为什么是 bot 等。具体 command 参数与 cli 拼装由 src/executable/windows/feishu_chat
+ *    身份默认为什么是 bot 等。具体 method 参数与 cli 拼装由 src/executable/windows/feishu_chat
  *    与 feishu_doc 自己的 KNOWLEDGE 字符串维护，本文档不复述。
  * 2. 当 lark-cli 子命令名 / 输出 schema 变化（larksuite/cli 升级）导致 normalizeMessages
  *    或 extractBlocks 失配时，第一时间核对 README，必要时回到本文档更新 §risks。
@@ -45,9 +45,9 @@ export const root: DocTreeNode = {
     本 case 把飞书 (Lark Suite) 的群聊与文档作为一等 ContextWindow 引入 OOC。
     实现形态是**单层 Window**：
 
-    - \`feishu_chat_window\` — 飞书群聊 / 单聊 / 话题；commands: refresh / search / send / reply / subscribe / close
-    - \`feishu_doc_window\`  — 飞书 doc / docx / sheet / base / wiki / drive_md；commands: read / search_in_doc / append / patch_block / share_link / attach_to_chat / close
-    - root commands 入口：\`open_feishu_chat\` / \`open_feishu_doc\`
+    - \`feishu_chat_window\` — 飞书群聊 / 单聊 / 话题；methods: refresh / search / send / reply / subscribe / close
+    - \`feishu_doc_window\`  — 飞书 doc / docx / sheet / base / wiki / drive_md；methods: read / search_in_doc / append / patch_block / share_link / attach_to_chat / close
+    - root methods 入口：\`open_feishu_chat\` / \`open_feishu_doc\`
 
     所有飞书 OAPI 调用收口到 \`src/extendable/lark/cli.ts\` 的 \`larkExec\` helper，
     通过子进程方式调用官方 \`@larksuite/cli\`（Go 二进制，带 OS keychain 凭证存储 + OAuth device-code 流）。
@@ -122,12 +122,12 @@ export const root: DocTreeNode = {
         },
 
         windows: {
-            title: "feishu_chat / feishu_doc Window 的 command 分布",
+            title: "feishu_chat / feishu_doc Window 的 method 分布",
             content: `
-            两个 Window type 的 command 表（详细 KNOWLEDGE 见 src 内的 \`*_KNOWLEDGE\` 常量）：
+            两个 Window type 的 method 表（详细 KNOWLEDGE 见 src 内的 \`*_KNOWLEDGE\` 常量）：
 
             **feishu_chat_window**:
-            | command | 副作用 | dry-run gate | 默认身份 |
+            | method | 副作用 | dry-run gate | 默认身份 |
             |---|---|---|---|
             | refresh | 无（仅本地 buffer 更新） | — | user |
             | search | 无 | — | user |
@@ -137,7 +137,7 @@ export const root: DocTreeNode = {
             | close | 仅释放 window | — | — |
 
             **feishu_doc_window**:
-            | command | 副作用 | dry-run gate | 默认身份 |
+            | method | 副作用 | dry-run gate | 默认身份 |
             |---|---|---|---|
             | read | 无（覆盖 window.content） | — | user |
             | search_in_doc | 无（在本地 content 内查） | — | — |
@@ -147,7 +147,7 @@ export const root: DocTreeNode = {
             | attach_to_chat | **有**（发链接到群） | **强制** | bot |
             | close | 仅释放 window | — | — |
 
-            **打开 Window 的入口**（root commands）：
+            **打开 Window 的入口**（root methods）：
             - \`open_feishu_chat\` — 给 chat_id 即建 window，不立即 refresh；建议第一步 refresh 验证拉取链路。
             - \`open_feishu_doc\` — 给 doc_token 即建 window，不立即 read；建议第一步 read 验证。
 
@@ -159,13 +159,13 @@ export const root: DocTreeNode = {
         dry_run_implementation: {
             title: "强制 dry-run gate 的实现细节",
             content: `
-            dry-run gate 在 command 实现里通过两个 args 字段驱动：
+            dry-run gate 在 method 实现里通过两个 args 字段驱动：
 
             1. \`args.confirm: boolean\` — 必须 \`=== true\` 才真发。
-            2. command.match() 在 confirm=true 时追加一条 path（如 \`["send", "send.confirmed"]\`）；
+            2. method.match() 在 confirm=true 时追加一条 path（如 \`["send", "send.confirmed"]\`）；
                这条额外 path 用于 knowledge 层判别"已确认 vs 未确认"，但当前实现尚未挂额外知识激活
                规则（见 §future.confirmed_path_knowledge）。
-            3. command.knowledge() 在 \`formStatus === "open" && args.confirm !== true\` 时
+            3. method.knowledge() 在 \`formStatus === "open" && args.confirm !== true\` 时
                追加 \`*_DRY_RUN_REQUIRED\` 知识条目，提示 LLM 当前必须先 dry-run。
 
             exec 流程：
@@ -194,8 +194,8 @@ export const root: DocTreeNode = {
                - feishu_chat.search：~~"messages-list + 客户端过滤"~~ → **\`im +messages-search --query <q> --chat-id <chat>\`**（cli 已有原生 search）
                - feishu_chat.send / reply：\`im +messages-send\` / \`im +messages-reply\` ✓ 一致
                - feishu_doc.read：~~\`markdown +fetch --token\`~~ / ~~\`docs +read --token --include-blocks\`~~ → **\`docs +fetch --api-version v2 --doc <token> [--doc-format markdown | --detail with-ids]\`**
-               - feishu_doc.append：~~\`markdown +patch --mode append\`~~ → **\`docs +update --api-version v2 --doc <token> --command append --doc-format markdown --content <text>\`**
-               - feishu_doc.patch_block：~~\`docs +patch-block --op replace_text/insert_after/delete\`~~ → **\`docs +update --api-version v2 --doc <token> --command block_replace|block_insert_after|block_delete --block-id <bid>\`**
+               - feishu_doc.append：~~\`markdown +patch --mode append\`~~ → **\`docs +update --api-version v2 --doc <token> --method append --doc-format markdown --content <text>\`**
+               - feishu_doc.patch_block：~~\`docs +patch-block --op replace_text/insert_after/delete\`~~ → **\`docs +update --api-version v2 --doc <token> --method block_replace|block_insert_after|block_delete --block-id <bid>\`**
 
             3. **\`--format json\` 不能盲传** — lark-cli 的 mutation 命令（\`im +messages-send\` / \`docs +update\` 等）不接受 \`--format\` flag。
                原 \`larkExec\` 无条件附加 \`--format json\` 会让所有写命令报 \`unknown flag: --format\`。
@@ -234,13 +234,13 @@ export const root: DocTreeNode = {
             2. **凭证就绪自检 UI** — 在 web 控制面加"飞书凭证状态"卡片，跑 \`auth status\` 透传结果。
                当前体验路径是用户在终端跑 \`lark-cli auth status\`。
 
-            3. **confirmed path 激活差异化知识** — \`send.confirmed\` / \`append.confirmed\` / \`patch_block.confirmed\` 等 path 已经在 command.match() 输出，
+            3. **confirmed path 激活差异化知识** — \`send.confirmed\` / \`append.confirmed\` / \`patch_block.confirmed\` 等 path 已经在 method.match() 输出，
                但还没挂额外知识（如"text 长度超 4096 时警示"、"patch_block 在 docx 与 docs v1 行为差异"）。
                作为 reflectable 沉淀的安全网，第二期补。
 
             4. **富文本 / 卡片 / 文件 send** — 当前 send 仅支持纯文本。
                \`im +messages-send\` 已支持 \`--markdown\` / \`--image\` / \`--file\` 等 flag（见 \`messages-send --help\`），
-               未来扩成 feishu_chat.send_markdown / send_card / send_file 单独 command，或在 send 现有 args 上加 mode 字段。
+               未来扩成 feishu_chat.send_markdown / send_card / send_file 单独 method，或在 send 现有 args 上加 mode 字段。
 
             5. **多租户 / 多账号** — 当前 lark-cli 单实例 = 单凭证；多租户切换涉及 \`auth list\` 与 \`--profile\` 透传，\`larkExec\` 还没做。
             `,
@@ -296,23 +296,23 @@ export const root: DocTreeNode = {
                 ├── cli.ts                        # larkExec / larkCheckAuth / LarkCliError
                 ├── feishu-chat/
                 │   ├── types.ts                  # FeishuChatWindow / FeishuChatMessage 接口
-                │   ├── index.ts                  # registerObjectType + 6 个 command 实现 + render hook
-                │   └── open-command.ts           # root.open_feishu_chat
+                │   ├── index.ts                  # registerObjectType + 6 个 method 实现 + render hook
+                │   └── open-method.ts           # root.open_feishu_chat
                 └── feishu-doc/
                     ├── types.ts                  # FeishuDocWindow / FeishuDocBlock 接口
-                    ├── index.ts                  # registerObjectType + 7 个 command 实现 + render hook
-                    └── open-command.ts           # root.open_feishu_doc
+                    ├── index.ts                  # registerObjectType + 7 个 method 实现 + render hook
+                    └── open-method.ts           # root.open_feishu_doc
             \`\`\`
 
             **与 OOC core 的接口面**：
             - \`src/executable/windows/_shared/types.ts\` — \`ObjectType\` union 含 \`"feishu_chat" | "feishu_doc"\` 字面量；\`ContextWindow\` union 引用从 extendable 路径 re-export 的 FeishuChatWindow / FeishuDocWindow；\`generateWindowId\` 前缀表含两类。
-            - \`src/executable/windows/_shared/registry.ts\` — \`REGISTRY.set("feishu_chat" | "feishu_doc", { commands: {} })\` 占位（registerObjectType 要求 type 已存在；这是现有契约，未做更大重构）。
+            - \`src/executable/windows/_shared/registry.ts\` — \`REGISTRY.set("feishu_chat" | "feishu_doc", { methods: {} })\` 占位（registerObjectType 要求 type 已存在；这是现有契约，未做更大重构）。
             - \`src/executable/windows/index.ts\` — barrel 末尾 \`import "../../extendable/index.js"\` 拉起所有 extendable 子系统。
-            - \`src/executable/windows/root/index.ts\` — 通过 \`extendable/lark\` barrel 拉 \`openFeishuChatCommand\` / \`openFeishuDocCommand\`。
+            - \`src/executable/windows/root/index.ts\` — 通过 \`extendable/lark\` barrel 拉 \`openFeishuChatMethod\` / \`openFeishuDocMethod\`。
 
             **未新增**：
             - \`stones/<...>/agent_of_feishu/\` — 按 §decisions.1 不建。
-            - 单独的知识 markdown 文件 — 知识全部以 inline string 形式落在各 command 文件的 \`*_KNOWLEDGE\` / \`basicKnowledge\`，符合 OOC 现有 file/talk/program 等 builtin window 的惯例。
+            - 单独的知识 markdown 文件 — 知识全部以 inline string 形式落在各 method 文件的 \`*_KNOWLEDGE\` / \`basicKnowledge\`，符合 OOC 现有 file/talk/program 等 builtin window 的惯例。
 
             **后续扩展点**：新接外部世界（如 notion、slack、github）按相同模板建 \`src/extendable/<name>/\`，barrel 自注册即可，不需要触碰 \`executable/windows/_shared\`（除非要新增 ObjectType 字面量）。
             `,

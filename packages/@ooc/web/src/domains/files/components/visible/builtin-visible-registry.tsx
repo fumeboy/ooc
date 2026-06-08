@@ -43,7 +43,7 @@ export const BUILTIN_VISIBLE: Record<string, ComponentType<{ window: ContextWind
   plan: PlanWindowDetail as ComponentType<{ window: ContextWindow }>,
   program: ProgramWindowDetail as ComponentType<{ window: ContextWindow }>,
   root: RootWindowDetail as ComponentType<{ window: ContextWindow }>,
-  method_exec: MethodExecWindowDetail as ComponentType<{ window: ContextWindow }>,
+  method_exec: MethodExecWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   relation: RelationWindowDetail,
   feishu_chat: FeishuChatWindowDetail,
   feishu_doc: FeishuDocWindowDetail,

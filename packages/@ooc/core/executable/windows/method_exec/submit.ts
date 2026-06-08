@@ -1,5 +1,5 @@
 /**
- * method_exec.submit —— 触发 form.command.exec。
+ * method_exec.submit —— 触发 form.method.exec。
  *
  * 调用形态：exec(<form_id>, "submit")
  *
@@ -39,7 +39,7 @@ async function executeSubmit(ctx: MethodExecutionContext): Promise<string | unde
     const result = await manager.submit(form.id, ctx.thread);
     const after = manager.get(form.id);
     const removed = !after;
-    const title = form.command;
+    const title = form.method;
     // Round 13: removed = success 路径 (form 已自动从 contextWindows 移除);
     // 留下来的必然是 failed 状态 (open → executing → failed)。
     const messageBase = removed
@@ -53,7 +53,7 @@ async function executeSubmit(ctx: MethodExecutionContext): Promise<string | unde
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -86,8 +86,8 @@ export const submitMethod: ObjectMethod = {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     return guidanceWindows(form, {
       "internal/windows/method_exec/submit/basic": [
-        "method_exec.submit 触发 form.command 真正执行；不接受新业务参数。",
-        "调用：exec(window_id=<form_id>, command=\"submit\")",
+        "method_exec.submit 触发 form.method 真正执行；不接受新业务参数。",
+        "调用：exec(window_id=<form_id>, method=\"submit\")",
         "成功执行后系统自动从 context 移除该 form；失败则保留 result 字段，需要 close。",
       ].join("\n"),
     });

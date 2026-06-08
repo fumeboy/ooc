@@ -21,12 +21,12 @@ function execForm(overrides: Partial<MethodExecWindow>): MethodExecWindow {
     title: overrides.title ?? "form",
     status: overrides.status ?? "open",
     createdAt: overrides.createdAt ?? 1,
-    command: overrides.command ?? "program",
+    method: overrides.method ?? "program",
     description: overrides.description ?? "form description",
     accumulatedArgs: overrides.accumulatedArgs ?? {},
-    commandPaths: overrides.commandPaths ?? [overrides.command ?? "program"],
+    methodPaths: overrides.methodPaths ?? [overrides.method ?? "program"],
     loadedKnowledgePaths: overrides.loadedKnowledgePaths ?? [],
-    commandKnowledgePaths: overrides.commandKnowledgePaths,
+    methodKnowledgePaths: overrides.methodKnowledgePaths,
     result: overrides.result,
   };
 }
@@ -235,7 +235,7 @@ describe("buildContext (ContextWindow model)", () => {
           kind: "function_call",
           callId: "call_1",
           toolName: "exec",
-          arguments: { command: "talk", title: "向用户回复" },
+          arguments: { method: "talk", title: "向用户回复" },
         },
         {
           category: "tool_runtime",
@@ -370,7 +370,7 @@ describe("buildContext (ContextWindow model)", () => {
           status: "open",
           createdAt: 1,
           content: "记得加单测",
-          onCommandPath: ["program.shell"],
+          onMethodPath: ["program.shell"],
         },
       ] as ContextWindow[],
     });
@@ -439,7 +439,7 @@ describe("buildContext (ContextWindow model)", () => {
           category: "llm_interaction",
           kind: "tool_use",
           toolName: "exec",
-          arguments: { command: "todo" },
+          arguments: { method: "todo" },
         },
         {
           category: "context_change",
@@ -479,21 +479,21 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain("wait(on");
     // 关键提示：思考空间 + talk 是与 user 唯一通道
     expect(xml).toContain("思考空间");
-    expect(xml).toContain('command="talk"');
+    expect(xml).toContain('method="talk"');
   });
 
   it("deduplicates identical knowledge entries across multiple forms", async () => {
     const f1 = execForm({
       id: "f_1",
-      command: "program",
+      method: "program",
       accumulatedArgs: { language: "shell", code: "pwd" },
-      commandPaths: ["program", "program.shell"],
+      methodPaths: ["program", "program.shell"],
     });
     const f2 = execForm({
       id: "f_2",
-      command: "program",
+      method: "program",
       accumulatedArgs: { language: "shell", code: "ls" },
-      commandPaths: ["program", "program.shell"],
+      methodPaths: ["program", "program.shell"],
     });
     const thread = makeThread({ id: "t_dedupe", extraWindows: [f1, f2] });
     const messages = await buildContext(thread);
@@ -509,9 +509,9 @@ describe("buildContext (ContextWindow model)", () => {
       extraWindows: [
         execForm({
           id: "f_cdata",
-          command: "talk",
+          method: "talk",
           accumulatedArgs: { msg: 'say "hello" & <tag>' },
-          commandPaths: ["talk"],
+          methodPaths: ["talk"],
         }),
       ],
     });
@@ -540,13 +540,13 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     const root = poolKnowledgeDir(poolRef);
     await writeFile(
       join(root, "summary-only.md"),
-      `---\ndescription: 仅描述\nactivates_on:\n  "command::root::program": "show_description"\n---\nbody summary-only`,
+      `---\ndescription: 仅描述\nactivates_on:\n  "method::root::program": "show_description"\n---\nbody summary-only`,
     );
 
     const thread = makeThread({
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
-      extraWindows: [execForm({ id: "f1", command: "program", commandPaths: ["program"] })],
+      extraWindows: [execForm({ id: "f1", method: "program", methodPaths: ["program"] })],
     });
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
@@ -564,14 +564,14 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     const root = poolKnowledgeDir(poolRef);
     await writeFile(
       join(root, "full-doc.md"),
-      `---\ndescription: 全文\nactivates_on:\n  "command::root::program": "show_content"\n---\n这是 full-doc 正文`,
+      `---\ndescription: 全文\nactivates_on:\n  "method::root::program": "show_content"\n---\n这是 full-doc 正文`,
     );
 
     const thread = makeThread({
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
       extraWindows: [
-        execForm({ id: "f1", command: "program", commandPaths: ["program", "program.shell"] }),
+        execForm({ id: "f1", method: "program", methodPaths: ["program", "program.shell"] }),
       ],
     });
     const messages = await buildContext(thread);

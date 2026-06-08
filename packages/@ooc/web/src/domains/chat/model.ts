@@ -35,12 +35,12 @@ export type ContextWindow =
       parentWindowId: string;
       title: string;
       status: "open" | "executing" | "success" | "failed";
-      command: string;
+      method: string;
       description?: string;
       accumulatedArgs?: Record<string, unknown>;
-      commandPaths?: string[];
+      methodPaths?: string[];
       loadedKnowledgePaths?: string[];
-      commandKnowledgePaths?: string[];
+      methodKnowledgePaths?: string[];
       result?: string;
       createdAt?: number;
     }
@@ -61,7 +61,7 @@ export type ContextWindow =
       title: string;
       status: "open" | "done";
       content: string;
-      onCommandPath?: string[];
+      onMethodPath?: string[];
       createdAt?: number;
     }
   | {
@@ -225,7 +225,7 @@ export type ChatLine =
       role: "notice";
       /** 触发本次 ask 的 function_call id (与 backend permission_ask.toolCallId 对齐, 用于拼 eventId)。 */
       toolCallId?: string;
-      command: string;
+      method: string;
       argsSummary?: string;
       windowId?: string;
       /** 同一条 permission_ask event 的 decided 字段镜像 (backend 在 approve / reject 后回写此字段)。 */

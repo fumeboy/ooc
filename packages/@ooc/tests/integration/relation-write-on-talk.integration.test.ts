@@ -14,7 +14,7 @@
  * |---|---|
  * | Good | thread.status=done;stones/assistant/knowledge/relations/critic.md
  *         存在且非空;LLM 用 write_file 创建(从轨迹可见 toolName=open,
- *         args.command=write_file, path 落在 stones/assistant/knowledge/relations/) |
+ *         args.method=write_file, path 落在 stones/assistant/knowledge/relations/) |
  * | OK   | 文件存在但内容只是回写占位文案,或路径轻微偏离(仍在 relations/ 下) |
  * | Bad  | 文件不存在,或 thread 卡 running/waiting,或文件落在错路径
  *         (如 stones/critic/... 反向写入) |
@@ -141,7 +141,7 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
         e.kind === "function_call_output" &&
         e.toolName === "exec" &&
         e.ok &&
-        // open 的 arguments 含 command:"write_file";由于 output 是字符串,稍微宽松一点匹配
+        // open 的 arguments 含 method: "write_file";由于 output 是字符串,稍微宽松一点匹配
         typeof e.output === "string" &&
         e.output.includes("write_file"),
     );
@@ -152,7 +152,7 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
         e.toolName === "exec" &&
         typeof e.arguments === "object" &&
         e.arguments !== null &&
-        (e.arguments as Record<string, unknown>).command === "write_file" &&
+        (e.arguments as Record<string, unknown>).method === "write_file" &&
         typeof ((e.arguments as Record<string, unknown>).args as Record<string, unknown> | undefined)?.path === "string" &&
         (
           ((e.arguments as Record<string, unknown>).args as Record<string, unknown>).path as string

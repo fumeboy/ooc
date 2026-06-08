@@ -77,7 +77,7 @@ function computeMethodPaths(
  * 从 entry.onFormChange() 派生"knowledge path keys"。
  *
  * 旧设计：entry.knowledge(args, status) 返回 Record<string, string>，Object.keys() 即
- *   knowledge path 集合（用于 auto-submit guard 和 commandKnowledgePaths 引用计数）。
+ *   knowledge path 集合（用于 auto-submit guard 和 methodKnowledgePaths 引用计数）。
  * 新设计：entry.onFormChange() 返回 GuidanceWindow[]，其 title 即原 knowledge key。
  */
 function deriveKnowledgeKeys(
@@ -93,7 +93,7 @@ function deriveKnowledgeKeys(
     changed: [],
     args,
   };
-  const defaultIntent: Intent = { name: form.command };
+  const defaultIntent: Intent = { name: form.method };
   const intents = [defaultIntent, ...entry.intent(args)];
   try {
     const windows = entry.onFormChange(change, { form, intents }) ?? [];
@@ -316,7 +316,7 @@ export class WindowManager {
     methodEntry: ObjectMethod,
   ): void {
     const cache: IntentCache | undefined = (thread as any).intentCache;
-    let intents: Intent[] = [{ name: toForm.command }];
+    let intents: Intent[] = [{ name: toForm.method }];
     if (cache) {
       const existing = cache.get(toForm.id);
       if (existing?.intents) intents = existing.intents;
@@ -362,7 +362,7 @@ export class WindowManager {
   async openMethodExec(opts: {
     thread: ThreadContext;
     parentWindowId?: string;
-    command: string;
+    method: string;
     title: string;
     description?: string;
     args?: Record<string, unknown>;
@@ -374,11 +374,11 @@ export class WindowManager {
     // - ref：只允许 close（释放本地 ref 引用）
     // - lent_out：所有命令拒绝（含 close），等归还后才能操作
     if (parent.sharing) {
-      const isCloseOnRef = parent.sharing.kind === "ref" && opts.command === "close";
+      const isCloseOnRef = parent.sharing.kind === "ref" && opts.method === "close";
       if (!isCloseOnRef) {
         const reason =
           parent.sharing.kind === "ref"
-            ? `window ${parent.id} 是只读 ref（owner 在 thread "${parent.sharing.ownerThreadId}"），不允许执行命令 "${opts.command}"。仅可 close 释放本地 ref 引用。`
+            ? `window ${parent.id} 是只读 ref（owner 在 thread "${parent.sharing.ownerThreadId}"），不允许执行命令 "${opts.method}"。仅可 close 释放本地 ref 引用。`
             : `window ${parent.id} 已借出给 thread "${parent.sharing.borrowerThreadId}"，等其归还后才能执行命令。`;
         throw new Error(`openMethodExec: ${reason}`);
       }
@@ -387,28 +387,28 @@ export class WindowManager {
     // object method 优先；其次 window method（控制展示，归 readable）。两者都用于
     // 构造 form（computeMethodPaths / deriveKnowledgeKeys 只读 .intent / .onFormChange，
     // WindowMethod 同样具备）。真正的 dispatch 分流在 submit()。
-    const objectEntry = this.lookupMethodEntry(parent, opts.command);
+    const objectEntry = this.lookupMethodEntry(parent, opts.method);
     const windowEntry = objectEntry
       ? undefined
-      : this.registry.lookupWindowMethod(parent, opts.command);
+      : this.registry.lookupWindowMethod(parent, opts.method);
     if (!objectEntry && !windowEntry) {
       throw new Error(
-        `openMethodExec: command "${opts.command}" not registered on window "${parent.type}" (id=${parent.id})`,
+        `openMethodExec: command "${opts.method}" not registered on window "${parent.type}" (id=${parent.id})`,
       );
     }
     const entry = (objectEntry ?? windowEntry) as ObjectMethod;
 
     const formId = generateWindowId("method_exec");
     const baselineArgs: Record<string, unknown> = {};
-    const baselinePaths = computeMethodPaths(entry, opts.command, baselineArgs);
+    const baselinePaths = computeMethodPaths(entry, opts.method, baselineArgs);
 
     const args = opts.args ?? {};
-    const methodPaths = computeMethodPaths(entry, opts.command, args);
+    const methodPaths = computeMethodPaths(entry, opts.method, args);
 
     // Stub form for deriveKnowledgeKeys (only needs id/command/accumulatedArgs)
     const stubForm = {
       id: formId,
-      command: opts.command,
+      method: opts.method,
       accumulatedArgs: args,
       status: "open",
     } as MethodExecWindow;
@@ -426,12 +426,12 @@ export class WindowManager {
       title: opts.title,
       status: "open",
       createdAt: Date.now(),
-      command: opts.command,
+      method: opts.method,
       description: opts.description ?? opts.title,
       accumulatedArgs: { ...args },
-      commandPaths: methodPaths,
+      methodPaths: methodPaths,
       loadedKnowledgePaths: [],
-      commandKnowledgePaths: deriveKnowledgeKeys(entry, stubForm, args),
+      methodKnowledgePaths: deriveKnowledgeKeys(entry, stubForm, args),
     };
     this.windows.set(formId, form);
     this.recordKnowledgeRefs(form);
@@ -439,7 +439,7 @@ export class WindowManager {
     this.writeContextObjectForWindow(opts.thread, form).catch(() => {});
 
     // ── P4 schema/fill + P5 intentCache write ──
-    const methodResolved = this.registry.lookupMethodEntry(parent, opts.command);
+    const methodResolved = this.registry.lookupMethodEntry(parent, opts.method);
     if (methodResolved?.entry.schema) {
       form.schema = methodResolved.entry.schema;
       form.fill = this.buildFillState(form.schema, form.accumulatedArgs);
@@ -447,7 +447,7 @@ export class WindowManager {
     // Write initial intent cache entry
     {
       const cache: IntentCache = ((opts.thread as any).intentCache ??= new Map());
-      const defaultIntent: Intent = { name: opts.command };
+      const defaultIntent: Intent = { name: opts.method };
       const extraIntents = methodResolved?.entry.intent(form.accumulatedArgs) ?? [];
       const intents = [defaultIntent, ...extraIntents];
       cache.set(formId, {
@@ -520,7 +520,7 @@ export class WindowManager {
     if (!form || form.type !== "method_exec") return false;
     if (form.status !== "open" && form.status !== "failed") return false;
     const parent = this.requireParent(form.parentWindowId);
-    const entry = this.lookupMethodEntry(parent, form.command);
+    const entry = this.lookupMethodEntry(parent, form.method);
     if (!entry) return false;
 
     // Diff args first — no actual change means no cache invalidation
@@ -531,7 +531,7 @@ export class WindowManager {
       return true;
     }
 
-    const nextPaths = computeMethodPaths(entry, form.command, nextArgs);
+    const nextPaths = computeMethodPaths(entry, form.method, nextArgs);
     // failed → open 复活: 清 result, 把 status 切回 "open"。
     // open → open: 仅累积 args / 重算 paths。
     const next: MethodExecWindow = {
@@ -539,7 +539,7 @@ export class WindowManager {
       status: "open",
       result: undefined,
       accumulatedArgs: nextArgs,
-      commandPaths: nextPaths,
+      methodPaths: nextPaths,
     };
 
     // ── P4: recompute fill_state ──
@@ -552,12 +552,12 @@ export class WindowManager {
 
     // ── P5: intentCache update + onFormChange dispatch ──
     const threadRef = this.getThread();
-    const methodResolved = this.registry.lookupMethodEntry(parent, form.command);
+    const methodResolved = this.registry.lookupMethodEntry(parent, form.method);
     if (methodResolved && threadRef) {
       const cache: IntentCache = ((threadRef as any).intentCache ??= new Map());
       const oldEntry = cache.get(form.id);
       const newArgsHash = hashArgs(nextArgs);
-      const defaultIntent: Intent = { name: form.command };
+      const defaultIntent: Intent = { name: form.method };
       const newIntents = [defaultIntent, ...methodResolved.entry.intent(nextArgs)];
       const intentsChanged =
         JSON.stringify(oldEntry?.intents ?? []) !== JSON.stringify(newIntents);
@@ -641,14 +641,14 @@ export class WindowManager {
     }
 
     const parent = this.requireParent(form.parentWindowId);
-    const resolved = this.registry.lookupMethodEntry(parent, form.command);
+    const resolved = this.registry.lookupMethodEntry(parent, form.method);
     // window method 分流（控制展示，归 readable）：object method 缺席时查 window method 表。
     const windowEntry = resolved
       ? undefined
-      : this.registry.lookupWindowMethod(parent, form.command);
+      : this.registry.lookupWindowMethod(parent, form.method);
     if (!resolved && !windowEntry) {
       throw new Error(
-        `submit: command "${form.command}" not registered on parent window type "${parent.type}"`,
+        `submit: command "${form.method}" not registered on parent window type "${parent.type}"`,
       );
     }
     // P6.§3 + §7 (2026-06-02): 校验由 lookupMethodEntry 完成——它沿 parentClass 链
@@ -1154,7 +1154,7 @@ function isLegacyErrorResult(result: string): boolean {
 function collectKnowledgePathsOf(window: ContextWindow): string[] {
   if (window.type === "method_exec") {
     return [
-      ...(window.commandKnowledgePaths ?? []),
+      ...(window.methodKnowledgePaths ?? []),
       ...(window.loadedKnowledgePaths ?? []),
       ...(window.windowKnowledgePaths ?? []),
     ];

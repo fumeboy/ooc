@@ -73,7 +73,7 @@ feishu_chat.refresh 拉取本群最近的消息到 window.buffer。
 - count: 可选，期望条数，1..${MAX_TAIL}，缺省 ${DEFAULT_TAIL}
 - since_message_id: 可选，从该 id **之后**增量拉（用于轮询订阅）
 
-调用：open(parent_window_id="<feishu_chat_window_id>", command="refresh", args={ count: 50 })
+调用：open(parent_window_id="<feishu_chat_window_id>", method="refresh", args={ count: 50 })
 
 副作用：仅本地 window 字段更新；不发飞书消息。
 `.trim();
@@ -85,7 +85,7 @@ feishu_chat.search 在本群范围内按关键字搜索消息，临时把 window
 - query: 必填，搜索关键字（飞书算子如 from: / has:link / time:YYYY-MM-DD 可用）
 - limit: 可选，最多返回条数，1..${MAX_TAIL}，缺省 30
 
-调用：open(parent_window_id="<feishu_chat_window_id>", command="search", args={ query: "OOC 灰度", limit: 20 })
+调用：open(parent_window_id="<feishu_chat_window_id>", method="search", args={ query: "OOC 灰度", limit: 20 })
 
 切回最近消息：refresh（任意参数）。
 `.trim();
@@ -108,7 +108,7 @@ feishu_chat.send 在本群发一条新消息。**强制 dry-run gate**（supervi
 - msg_type: 可选，缺省 "text"；如需富文本卡片走 raw API，本 command 暂不直接支持
 
 调用流程：
-1. open(parent_window_id="<feishu_chat_window_id>", command="send", args={ text: "..." })
+1. open(parent_window_id="<feishu_chat_window_id>", method="send", args={ text: "..." })
 2. submit(form_id) → 看 dry_run 预览
 3. refine(form_id, { confirm: true }) → submit(form_id) → 真发
 `.trim();
@@ -146,7 +146,7 @@ feishu_chat.close 释放 window；不影响飞书一侧的消息或会话。
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -174,7 +174,7 @@ function guidanceWindows(form: BaseContextWindow, entries: Record<string, string
 
 // ─────────────────────────── command 实现 ────────────────────────────
 
-const refreshCommand: ObjectMethod = {
+const refreshMethod: ObjectMethod = {
   paths: ["refresh"],
   intent: (): Intent[] => [],
   onFormChange(change, { form }) {
@@ -184,7 +184,7 @@ const refreshCommand: ObjectMethod = {
   exec: (ctx) => executeRefresh(ctx),
 };
 
-const searchCommand: ObjectMethod = {
+const searchMethod: ObjectMethod = {
   paths: ["search"],
   intent: (): Intent[] => [],
   onFormChange(change, { form }) {
@@ -194,7 +194,7 @@ const searchCommand: ObjectMethod = {
   exec: (ctx) => executeSearch(ctx),
 };
 
-const sendCommand: ObjectMethod = {
+const sendMethod: ObjectMethod = {
   paths: ["send"],
   intent: (args) => (args.confirm === true ? [{ name: "send.confirmed" }] : []),
   onFormChange(change, { form }) {
@@ -209,7 +209,7 @@ const sendCommand: ObjectMethod = {
   exec: (ctx) => executeSend(ctx),
 };
 
-const replyCommand: ObjectMethod = {
+const replyMethod: ObjectMethod = {
   paths: ["reply"],
   intent: (args) => (args.confirm === true ? [{ name: "reply.confirmed" }] : []),
   onFormChange(change, { form }) {
@@ -224,7 +224,7 @@ const replyCommand: ObjectMethod = {
   exec: (ctx) => executeReply(ctx),
 };
 
-const subscribeCommand: ObjectMethod = {
+const subscribeMethod: ObjectMethod = {
   paths: ["subscribe"],
   intent: (): Intent[] => [],
   onFormChange(change, { form }) {
@@ -234,7 +234,7 @@ const subscribeCommand: ObjectMethod = {
   exec: (ctx) => executeSubscribe(ctx),
 };
 
-const closeCommand: ObjectMethod = {
+const closeMethod: ObjectMethod = {
   paths: ["close"],
   intent: (): Intent[] => [],
   onFormChange(change, { form }) {
@@ -555,12 +555,12 @@ function formatMessageLine(m: FeishuChatMessage): string {
 
 builtinRegistry.registerObjectType("feishu_chat", {
   methods: {
-    refresh: refreshCommand,
-    search: searchCommand,
-    send: sendCommand,
-    reply: replyCommand,
-    subscribe: subscribeCommand,
-    close: closeCommand,
+    refresh: refreshMethod,
+    search: searchMethod,
+    send: sendMethod,
+    reply: replyMethod,
+    subscribe: subscribeMethod,
+    close: closeMethod,
   },
   renderXml: renderFeishuChat,
   basicKnowledge: PROTOCOL_KNOWLEDGE,

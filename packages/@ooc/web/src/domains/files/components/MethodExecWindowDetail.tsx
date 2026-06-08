@@ -18,7 +18,7 @@ export default function MethodExecWindowDetail({ window }: { window: MethodExecW
       <div className="llm-input-attrs">
         <div className="llm-input-attr-row">
           <span className="llm-input-attr-key">command</span>
-          <span className="llm-input-attr-value">{window.command}</span>
+          <span className="llm-input-attr-value">{window.method}</span>
         </div>
         {window.description && (
           <div className="llm-input-attr-row">
@@ -26,10 +26,10 @@ export default function MethodExecWindowDetail({ window }: { window: MethodExecW
             <span className="llm-input-attr-value">{window.description}</span>
           </div>
         )}
-        {window.commandPaths && window.commandPaths.length > 0 && (
+        {window.methodPaths && window.methodPaths.length > 0 && (
           <div className="llm-input-attr-row">
             <span className="llm-input-attr-key">paths</span>
-            <span className="llm-input-attr-value">{window.commandPaths.join(", ")}</span>
+            <span className="llm-input-attr-value">{window.methodPaths.join(", ")}</span>
           </div>
         )}
       </div>
@@ -102,8 +102,8 @@ export default function MethodExecWindowDetail({ window }: { window: MethodExecW
       )}
       {(() => {
         const args = window.accumulatedArgs ?? {};
-        const isEdit = window.command === "edit";
-        const isWriteFile = window.command === "write_file";
+        const isEdit = window.method === "edit";
+        const isWriteFile = window.method === "write_file";
         if (isEdit) {
           const pairs = parseEditArgs(args);
           if (pairs) {

@@ -29,7 +29,7 @@ function buildCopyText(line: ChatLine) {
   if (line.kind === "message") return line.content;
   if (line.kind === "notice") return `${line.title}\n${line.content}`;
   if (line.kind === "permission_card") {
-    return `permission_ask command=${line.command}${line.argsSummary ? `\nargs=${line.argsSummary}` : ""}${line.windowId ? `\nwindow=${line.windowId}` : ""}`;
+    return `permission_ask command=${line.method}${line.argsSummary ? `\nargs=${line.argsSummary}` : ""}${line.windowId ? `\nwindow=${line.windowId}` : ""}`;
   }
   return JSON.stringify(
     {
@@ -509,8 +509,8 @@ function PermissionCard({
       </div>
       <div className="tui-notice-body tui-permission-body">
         <dl className="tui-permission-meta">
-          <dt>command</dt>
-          <dd><code>{line.command}</code></dd>
+          <dt>method</dt>
+          <dd><code>{line.method}</code></dd>
           {line.argsSummary && (
             <>
               <dt>args</dt>

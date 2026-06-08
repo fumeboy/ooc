@@ -130,7 +130,7 @@ file_window 上下次 render 自然出现）、并且支持原子多点修改。
 ### 单次替换
 
 \`\`\`
-open(parent_window_id="<file_window_id>", command="edit",
+open(parent_window_id="<file_window_id>", method="edit",
      title="rename helper",
      args={ old: "function helperA(", new: "function helperB(" })
 \`\`\`
@@ -138,7 +138,7 @@ open(parent_window_id="<file_window_id>", command="edit",
 ### 一次提交多点替换（MultiEdit 风格，atomic-or-fail）
 
 \`\`\`
-open(parent_window_id="<file_window_id>", command="edit",
+open(parent_window_id="<file_window_id>", method="edit",
      title="batch rename",
      args={ edits: [
        { old: "function helperA(", new: "function helperB(" },
@@ -176,7 +176,7 @@ open(parent_window_id="<file_window_id>", command="edit",
 - 不要用 \`write_file\` 做"修改局部"——write_file 是整文件覆盖语义，详见 root.write_file 的 KNOWLEDGE
 `.trim();
 
-const setRangeCommand: WindowMethod = {
+const setRangeMethod: WindowMethod = {
   kind: "window",
   paths: ["set_range"],
   schema: {
@@ -193,7 +193,7 @@ const setRangeCommand: WindowMethod = {
   exec: (ctx) => fileWindowSetRange(ctx),
 };
 
-const setViewportCommand: WindowMethod = {
+const setViewportMethod: WindowMethod = {
   kind: "window",
   paths: ["set_viewport"],
   schema: {
@@ -223,7 +223,7 @@ const setViewportCommand: WindowMethod = {
   exec: (ctx) => windowSetViewport(ctx, "file"),
 };
 
-const reloadCommand: ObjectMethod = {
+const reloadMethod: ObjectMethod = {
   paths: ["reload"],
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
@@ -233,7 +233,7 @@ const reloadCommand: ObjectMethod = {
   exec: () => undefined, // render 层每轮都会重读
 };
 
-const closeCommand: ObjectMethod = {
+const closeMethod: ObjectMethod = {
   paths: ["close"],
   intent: emptyIntent,
   onFormChange: (change, { form }) => {
@@ -243,7 +243,7 @@ const closeCommand: ObjectMethod = {
   exec: () => undefined,
 };
 
-const editCommand: ObjectMethod = {
+const editMethod: ObjectMethod = {
   paths: ["edit"],
   schema: {
     args: {
@@ -533,7 +533,7 @@ async function compressFileWindow(
  *  - `open_file` — read-only window pointing at an existing file (path / lines / columns)
  *  - `write_file` — write content to disk (with optional stone versioning) then spawn a window
  *
- * Dispatch on `ctx.form?.command`:
+ * Dispatch on `ctx.form?.method`:
  *  - command === "write_file": validate path + content, perform write (versioned for stones,
  *    direct for non-stone), then construct a FileWindow.
  *  - command === "open_file" (or anything else): validate path exists, then construct.
@@ -567,7 +567,7 @@ const fileConstructor: ObjectMethod = {
     const thread = ctx.thread;
     if (!thread) return { ok: false, error: "[file] 缺少 thread context。" };
     // batch C narrowing(N1): ctx.form 契约层是 base ContextWindow，narrow 回 MethodExecWindow 读 command。
-    const command = (ctx.form as MethodExecWindow | undefined)?.command ?? "open_file";
+    const command = (ctx.form as MethodExecWindow | undefined)?.method ?? "open_file";
 
     if (command === "write_file") {
       const rawPath = isString(ctx.args.path) ? ctx.args.path : "";
@@ -704,7 +704,7 @@ const fileConstructor: ObjectMethod = {
             text:
               `[write_file hint] 你刚整文件覆盖了已有文件 ${path}。如果你的意图是"修改局部"` +
               `（而不是完整重写），下次请改走 file_window.edit：先 open_file 把文件载入 file_window，` +
-              `再 open(parent_window_id=<file_window_id>, command="edit", args={ old, new })。` +
+              `再 open(parent_window_id=<file_window_id>, method="edit", args={ old, new })。` +
               `write_file 适合新建文件或确实要丢弃整个旧版本的场景。`,
           });
         }
@@ -749,14 +749,14 @@ const fileConstructor: ObjectMethod = {
 
 builtinRegistry.registerObjectType("file", {
   methods: {
-    reload: reloadCommand,
-    edit: editCommand,
-    close: closeCommand,
+    reload: reloadMethod,
+    edit: editMethod,
+    close: closeMethod,
     file: fileConstructor,
   },
   windowMethods: {
-    set_range: setRangeCommand,
-    set_viewport: setViewportCommand,
+    set_range: setRangeMethod,
+    set_viewport: setViewportMethod,
   },
   readable,
   compressView: compressFileWindow,

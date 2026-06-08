@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests, readSelf } from "@ooc/core/persistable";
-import { executeWriteFileCommand } from "@ooc/builtins/root/executable/method.write-file";
+import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import { executeEvolveSelf } from "@ooc/builtins/root/executable/method.evolve-self";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 
@@ -95,7 +95,7 @@ describe("evolve_self (P3)", () => {
     const baseDir = await newWorld(["alice"]);
 
     // 1. 业务 session s1 改 self.md → worktree
-    await executeWriteFileCommand(
+    await executeWriteFileMethod(
       bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "alice v2 (evolved)\n" }),
     );
     // main 未变
@@ -135,10 +135,10 @@ describe("evolve_self (P3)", () => {
 
   test("merge 合入整个 session 的多文件改动（session 分支即演化单元）", async () => {
     const baseDir = await newWorld(["alice"]);
-    await executeWriteFileCommand(
+    await executeWriteFileMethod(
       bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "self v2\n" }),
     );
-    await executeWriteFileCommand(
+    await executeWriteFileMethod(
       bizCtx(baseDir, "alice", "s1", {
         path: "stones/alice/executable/index.ts",
         content: "export const methods = {};\n",
@@ -165,7 +165,7 @@ describe("evolve_self (P3)", () => {
 
   test("fail-loud: not in super flow → error, main unchanged", async () => {
     const baseDir = await newWorld(["alice"]);
-    await executeWriteFileCommand(
+    await executeWriteFileMethod(
       bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "v2\n" }),
     );
     const out = await executeEvolveSelf(bizCtx(baseDir, "alice", "s1", { message: "x" }));

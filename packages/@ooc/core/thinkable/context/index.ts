@@ -176,7 +176,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
         type: "message",
         role: "system",
         content:
-          `[permission:permission_ask] tool_call_id=${event.toolCallId} command=${event.command}${windowTag}` +
+          `[permission:permission_ask] tool_call_id=${event.toolCallId} command=${event.method}${windowTag}` +
           `${argsTag}\n${statusLine}`,
       },
     ];
@@ -192,7 +192,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
         type: "message",
         role: "system",
         content:
-          `[permission:permission_denied] tool_call_id=${event.toolCallId} command=${event.command}${windowTag}` +
+          `[permission:permission_denied] tool_call_id=${event.toolCallId} command=${event.method}${windowTag}` +
           `\n  reason: ${event.reason}${argsTag}`,
       },
     ];

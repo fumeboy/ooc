@@ -33,11 +33,11 @@ open_knowledge 用于显式打开一个 knowledge doc，作为 knowledge_window 
 - 关闭：close(window_id="<knowledge_window_id>")
 
 调用示例：
-open(command="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
+open(method="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
 `.trim();
 
 
-export const openKnowledgeCommand: ObjectMethod = {
+export const openKnowledgeMethod: ObjectMethod = {
   paths: ["open_knowledge"],
   schema: {
     args: {
@@ -61,14 +61,14 @@ export const openKnowledgeCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeOpenKnowledgeCommand(ctx),
+  exec: (ctx) => executeOpenKnowledgeMethod(ctx),
 };
 
 /**
  * P6.§4-§5 thin delegator —— 委托到 knowledge_window constructor。
  */
-export const executeOpenKnowledgeCommand = makeRootDelegator({
-  command: "open_knowledge",
+export const executeOpenKnowledgeMethod = makeRootDelegator({
+  method: "open_knowledge",
   constructorKind: "knowledge",
   objectLabel: "knowledge_window",
 });

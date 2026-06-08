@@ -59,13 +59,13 @@ describe("R0d-1: planBadgeClickAction — badge 单击意图分发", () => {
     const approved: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
       decided: { action: "approve", at: Date.now() },
     };
     const rejected: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
       decided: { action: "reject", at: Date.now(), reason: "x" },
     };
     expect(planBadgeClickAction(approved).type).toBe("scroll");
@@ -76,7 +76,7 @@ describe("R0d-1: planBadgeClickAction — badge 单击意图分发", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_denied",
-      command: "exec",
+      method: "exec",
       reason: "blocked",
     };
     expect(planBadgeClickAction(evt).type).toBe("scroll");
@@ -88,7 +88,7 @@ describe("R0d-2: approve/reject 流程", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
       toolCallId: "call_42",
       argsSummary: "rm -rf /",
     };
@@ -106,7 +106,7 @@ describe("R0d-2: approve/reject 流程", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
       toolCallId: "call_42",
     };
     await executeDecide({
@@ -138,7 +138,7 @@ describe("R0d-2: approve/reject 流程", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
       id: "evt_abc",
       toolCallId: "call_99",
     };
@@ -161,7 +161,7 @@ describe("R0d-2: approve/reject 流程", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
       toolCallId: "c1",
     };
     expect(buildDecideBody(evt, { action: "reject", reason: "" }).reason).toBeUndefined();
@@ -172,7 +172,7 @@ describe("R0d-2: approve/reject 流程", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
     };
     const body = buildDecideBody(evt, { action: "approve" });
     expect(body.eventId).toBeUndefined();
@@ -205,7 +205,7 @@ describe("R0d-5: 错误路径", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "exec",
+      method: "exec",
       toolCallId: "c1",
     };
     let caught: Error | undefined;
@@ -231,7 +231,7 @@ describe("R0d-6: loopEventAnchorId 优先级", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "x",
+      method: "x",
       id: "evt_xyz",
       toolCallId: "call_1",
     };
@@ -242,7 +242,7 @@ describe("R0d-6: loopEventAnchorId 优先级", () => {
     const evt: LoopEvent = {
       category: "permission",
       kind: "permission_ask",
-      command: "x",
+      method: "x",
       toolCallId: "call_42",
     };
     expect(loopEventAnchorId(evt, 3, 0)).toBe("loop-event-call_42");

@@ -38,7 +38,7 @@ import type { ProgramSelf } from "./types.js";
  * 由于 `self` 已被 receiver 占用，`programSelf` 不再以 `self` 作 alias——TS 编译会指出迁移点。
  */
 export interface CustomMethodContext extends MethodExecutionContext {
-  /** P6.§1: Program object 的自我数据（dir / callCommand / getData / setData / getThreadLocal / setThreadLocal）。 */
+  /** P6.§1: Program object 的自我数据（dir / callMethod / getData / setData / getThreadLocal / setThreadLocal）。 */
   programSelf: ProgramSelf;
 }
 
@@ -74,11 +74,6 @@ export interface StoneObjectDeclaration {
    *   - string → 沿指定父类继续继承
    */
   parentClass?: string | null;
-  /** Object 自定义命令字典（2026-05-28 更新为 ObjectMethod，支持 public/for_ui_access）。 */
-  commands?: Record<string, ObjectMethod>;
-  /**
-   * Alias for commands（2026-05-28 ooc-6 过渡期间支持 `methods` 作为 `commands` 别名）。
-   * 某些已迁移 stones 使用 methods 字段；加载时会合并到 commands。
-   */
+  /** Object 自定义方法字典（2026-05-28 更新为 ObjectMethod，支持 public/for_ui_access）。 */
   methods?: Record<string, ObjectMethod>;
 }

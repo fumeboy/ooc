@@ -27,15 +27,15 @@ do_window.continue 用于向 do_window 关联的对端线程追加消息。
 - wait: 可选，true 时本 thread 进入 waiting，等对端回写消息再唤醒
 
 示例（父向子追加）：
-open(parent_window_id="<do_window_id>", command="continue", title="追加任务", args={ msg: "再处理一批", wait: true })
+open(parent_window_id="<do_window_id>", method="continue", title="追加任务", args={ msg: "再处理一批", wait: true })
 
 示例（子向父回报）：
-open(parent_window_id="<creator_do_window_id>", command="continue", args={ msg: "已处理完毕：见 memo/x.md" })
+open(parent_window_id="<creator_do_window_id>", method="continue", args={ msg: "已处理完毕：见 memo/x.md" })
 `.trim();
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -103,7 +103,7 @@ async function executeDoWindowContinue(ctx: MethodExecutionContext): Promise<str
   return undefined;
 }
 
-export const continueCommand: ObjectMethod = {
+export const continueMethod: ObjectMethod = {
   paths: ["continue", "continue.wait"],
   schema: {
     args: {

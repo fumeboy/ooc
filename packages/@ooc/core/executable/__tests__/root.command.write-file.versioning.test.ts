@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
-import { executeWriteFileCommand } from "@ooc/builtins/root/executable/method.write-file";
+import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 
 let tempRoots: string[] = [];
@@ -88,7 +88,7 @@ describe("write_file stone-versioning routing", () => {
       content: "agent_of_x v2 via write_file\n",
     });
 
-    const out = await executeWriteFileCommand(ctx);
+    const out = await executeWriteFileMethod(ctx);
     // 成功 outcome（constructor object outcome；P6.§4-§5）
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === true && "object" in out) {
@@ -127,7 +127,7 @@ describe("write_file stone-versioning routing", () => {
       path: "stones/agent_of_x/server/index.ts",
       content: "export const methods = {};\n",
     });
-    const out = await executeWriteFileCommand(ctx);
+    const out = await executeWriteFileMethod(ctx);
     expect(typeof out === "object" && out !== null && out !== undefined && out.ok === true).toBe(true);
     const onWorktree = await readFile(
       join(baseDir, "stones", "session-s", "objects", "agent_of_x", "server", "index.ts"),
@@ -149,7 +149,7 @@ describe("write_file stone-versioning routing", () => {
     });
     (ctx.thread as unknown as { persistence: { sessionId: string } }).persistence.sessionId = "super";
 
-    const out = await executeWriteFileCommand(ctx);
+    const out = await executeWriteFileMethod(ctx);
     expect(typeof out === "object" && out !== null && out.ok === true).toBe(true);
 
     // main 已反映新内容
@@ -168,7 +168,7 @@ describe("write_file stone-versioning routing", () => {
       content: "agent_of_y edited by x\n",
     });
 
-    const out = await executeWriteFileCommand(ctx);
+    const out = await executeWriteFileMethod(ctx);
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === true && "object" in out) {
       expect(out.object.type).toBe("file");
@@ -187,7 +187,7 @@ describe("write_file stone-versioning routing", () => {
       path: "pools/agent_of_x/data/events.csv",
       content: "a,b\n1,2\n",
     });
-    const out = await executeWriteFileCommand(ctx);
+    const out = await executeWriteFileMethod(ctx);
     // non-stone 新建：constructor outcome { ok: true, object } (P6.§4-§5)
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === true && "object" in out) {
@@ -211,7 +211,7 @@ describe("write_file stone-versioning routing", () => {
       path: "stones/main/.gitignore",
       content: "node_modules\n",
     });
-    const out = await executeWriteFileCommand(ctx);
+    const out = await executeWriteFileMethod(ctx);
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === false) {
       expect(out.error).toContain("workspace-level");
@@ -277,7 +277,7 @@ describe("write_file stone-versioning routing", () => {
       path: "stones/parent/children/child/self.md",
       content: "child v2 via write_file\n",
     });
-    const out = await executeWriteFileCommand(ctx);
+    const out = await executeWriteFileMethod(ctx);
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === true && "object" in out) {
       expect(out.object.type).toBe("file");
@@ -321,7 +321,7 @@ describe("write_file stone-versioning routing", () => {
       args: { path: "stones/agent_of_x/self.md", content: "x\n" },
     } as unknown as MethodExecutionContext;
 
-    const out = await executeWriteFileCommand(ctx);
+    const out = await executeWriteFileMethod(ctx);
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === false) {
       expect(out.error).toContain("persistence.objectId");

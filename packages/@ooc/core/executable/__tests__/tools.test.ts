@@ -36,7 +36,7 @@ describe("executable tools (ContextWindow model)", () => {
       name: "exec",
       arguments: {
         title: "制定计划",
-        command: "plan",
+        method: "plan",
         description: "拆解迁移工作",
       },
     });
@@ -48,7 +48,7 @@ describe("executable tools (ContextWindow model)", () => {
 
     const forms = (thread.contextWindows as ContextWindow[]).filter((w) => w.type === "method_exec");
     expect(forms).toHaveLength(1);
-    expect(forms[0]?.command).toBe("plan");
+    expect(forms[0]?.method).toBe("plan");
   });
 
   it("args 给齐时 exec 立即执行：plan 给齐 plan 字段一次到位执行", async () => {
@@ -58,7 +58,7 @@ describe("executable tools (ContextWindow model)", () => {
       name: "exec",
       arguments: {
         title: "立刻设定计划",
-        command: "plan",
+        method: "plan",
         args: { plan: "先 reshape，再迁移测试" },
       },
     });
@@ -77,7 +77,7 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生子线程", command: "do", description: "fork" },
+      arguments: { title: "派生子线程", method: "do", description: "fork" },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
@@ -86,14 +86,14 @@ describe("executable tools (ContextWindow model)", () => {
       arguments: {
         title: "补 wait",
         window_id: formId,
-        command: "refine",
+        method: "refine",
         args: { wait: true },
       },
     });
 
     const form = (thread.contextWindows as ContextWindow[]).find((w) => w.id === formId);
     expect(form && form.type === "method_exec" && form.accumulatedArgs).toEqual({ wait: true });
-    expect(form && form.type === "method_exec" && form.commandPaths).toContain("do.wait");
+    expect(form && form.type === "method_exec" && form.methodPaths).toContain("do.wait");
     expect(JSON.parse(output).ok).toBe(true);
   });
 
@@ -102,7 +102,7 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", command: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork" },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec")?.id ?? "";
     await dispatchToolCall(thread, {
@@ -111,14 +111,14 @@ describe("executable tools (ContextWindow model)", () => {
       arguments: {
         title: "补 msg",
         window_id: formId,
-        command: "refine",
+        method: "refine",
         args: { msg: "处理日志" },
       },
     });
     const output = await dispatchToolCall(thread, {
       id: "call_3",
       name: "exec",
-      arguments: { title: "执行 fork", window_id: formId, command: "submit" },
+      arguments: { title: "执行 fork", window_id: formId, method: "submit" },
     });
 
     const parsed = JSON.parse(output);
@@ -132,13 +132,13 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", command: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork" },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec")?.id ?? "";
     await dispatchToolCall(thread, {
       id: "call_2",
       name: "exec",
-      arguments: { title: "执行", window_id: formId, command: "submit" },
+      arguments: { title: "执行", window_id: formId, method: "submit" },
     });
     const form = (thread.contextWindows as ContextWindow[]).find((w) => w.id === formId);
     expect(form?.type).toBe("method_exec");
@@ -151,7 +151,7 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", command: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork" },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {

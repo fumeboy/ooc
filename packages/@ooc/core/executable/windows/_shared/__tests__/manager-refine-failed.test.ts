@@ -29,7 +29,7 @@ async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string
   await dispatchToolCall(thread, {
     id: "call_1",
     name: "exec",
-    arguments: { title: "派生", command: "do", description: "fork" },
+    arguments: { title: "派生", method: "do", description: "fork" },
   });
   const form = thread.contextWindows.find(
     (w): w is MethodExecWindow => w.type === "method_exec",
@@ -39,7 +39,7 @@ async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string
   await dispatchToolCall(thread, {
     id: "call_2",
     name: "exec",
-    arguments: { title: "执行", window_id: form.id, command: "submit" },
+    arguments: { title: "执行", window_id: form.id, method: "submit" },
   });
   return { thread, formId: form.id };
 }
@@ -50,7 +50,7 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", command: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.type === "method_exec",
@@ -105,7 +105,7 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", command: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.type === "method_exec",

@@ -25,11 +25,11 @@ talk_window.say 用于向 talk 对端发送一条消息。
 - 对端 thread 自动进入 running，由 worker 调度
 
 推荐用法（一步到位，args 给齐时 open 立即提交 form）：
-  open(parent_window_id="<talk_window_id>", command="say", title="询问发布时间",
+  open(parent_window_id="<talk_window_id>", method="say", title="询问发布时间",
        args={ msg: "明天可以发布吗？", wait: true })
 
 如果选择分步（先 open 不带 args，再 refine，再 submit）：
-  1) open(parent_window_id="<talk_window_id>", command="say", title="...")
+  1) open(parent_window_id="<talk_window_id>", method="say", title="...")
      → 返回 form_id，比如 f_abc123
   2) refine(form_id="f_abc123", args={ msg: "Hi! How can I help?", wait: false })
      —— **必须带 args 字段且非空**；空 refine 会被拒绝
@@ -41,7 +41,7 @@ talk_window.say 用于向 talk 对端发送一条消息。
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -96,7 +96,7 @@ async function executeTalkWindowSay(ctx: MethodExecutionContext): Promise<string
   return undefined;
 }
 
-export const sayCommand: ObjectMethod = {
+export const sayMethod: ObjectMethod = {
   paths: ["say", "say.wait"],
   schema: {
     args: {

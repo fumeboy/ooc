@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("createProgramSelf", () => {
-  test("callCommand resolves and runs custom command on the self window", async () => {
+  test("callMethod resolves and runs custom command on the self window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
@@ -71,14 +71,14 @@ describe("createProgramSelf", () => {
     };
 
     const self = createProgramSelf(ref, thread);
-    const result = await self.callCommand(objectId, "whoAmI", {});
+    const result = await self.callMethod(objectId, "whoAmI", {});
     expect(typeof result).toBe("object");
     const outcome = result as { ok: boolean; result: string };
     expect(outcome.result).toContain(ref.objectId);
     expect(outcome.result).toContain("t1");
   });
 
-  test("callCommand throws when command not found on the self window", async () => {
+  test("callMethod throws when command not found on the self window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
     await writeExecutableSource(
@@ -114,7 +114,7 @@ describe("createProgramSelf", () => {
       threadId: "t1",
     };
     const self = createProgramSelf(ref, thread);
-    await expect(self.callCommand(objectId, "nope", {})).rejects.toThrow(/不存在/);
+    await expect(self.callMethod(objectId, "nope", {})).rejects.toThrow(/不存在/);
   });
 
   test("setData/getData round trip via flow-data mergeData (session-scoped)", async () => {

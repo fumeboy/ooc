@@ -22,10 +22,10 @@ import {
 } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
 import type { BaseContextWindow } from "@ooc/core/_shared";
-import { sayCommand } from "./command.say.js";
-import { waitCommand } from "./command.wait.js";
-import { closeCommand } from "./command.close.js";
-import { setTranscriptWindowCommandForTalk } from "./command.set-transcript-window.js";
+import { sayMethod } from "./method.say.js";
+import { waitMethod } from "./method.wait.js";
+import { closeMethod } from "./method.close.js";
+import { setTranscriptWindowCommandForTalk } from "./method.set-transcript-window.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   applyTranscriptViewport,
@@ -115,12 +115,12 @@ function renderTalkWindow(ctx: RenderContext): XmlNode[] {
  */
 const TALK_WINDOW_BASIC_KNOWLEDGE = `
 talk_window 是与一个对端 flow object 的持续会话窗口。它注册的 command 不在 root 上，
-要通过 open(parent_window_id="<talk_window_id>", command="...", args={...}) 调用：
+要通过 open(parent_window_id="<talk_window_id>", method="...", args={...}) 调用：
 
 | command | 作用 | 典型用法 |
 |---------|------|----------|
-| say     | 发一条消息给对端，并可选地把本线程切到 waiting | open(parent_window_id="<talk_window_id>", command="say", args={ msg: "...", wait: true|false }) |
-| wait    | 不发消息、仅切到 waiting 等下一条 inbox        | open(parent_window_id="<talk_window_id>", command="wait") |
+| say     | 发一条消息给对端，并可选地把本线程切到 waiting | open(parent_window_id="<talk_window_id>", method="say", args={ msg: "...", wait: true|false }) |
+| wait    | 不发消息、仅切到 waiting 等下一条 inbox        | open(parent_window_id="<talk_window_id>", method="wait") |
 | close   | 结束本对话主题                                  | close(window_id="<talk_window_id>", reason="...") |
 
 **关键提醒**：
@@ -139,8 +139,8 @@ talk_window 是与一个对端 flow object 的持续会话窗口。它注册的 
 - \`pools/<self>/knowledge/relations/<peer>.md\` —— 你对该 peer 的认知
 
 如果你**还没**对该 peer 写过 relation，第二条会显示一段占位提示，告诉你按上述
-路径写入。形成新认知后通过 \`open(command="write_file", path="pools/<self>/knowledge/relations/<peer>.md", content="...")\`
-（或 \`open(command="open_file") + edit\` 增量更新）即可。下次再与该 peer 对话时，
+路径写入。形成新认知后通过 \`open(method="write_file", path="pools/<self>/knowledge/relations/<peer>.md", content="...")\`
+（或 \`open(method="open_file") + edit\` 增量更新）即可。下次再与该 peer 对话时，
 文件会自动作为 knowledge 出现在你的 context。
 `.trim();
 
@@ -228,10 +228,10 @@ talk 用于开启一个对外的会话窗口（talk_window），与另一个 flo
 
 submit 后副作用：
 - 在 thread.contextWindows 下挂一个 type=talk 的 window（初始 targetThreadId 为空）
-- 首次发消息：open(parent_window_id="<talk_window_id>", command="say", args={ msg: "...", wait: true|false })
+- 首次发消息：open(parent_window_id="<talk_window_id>", method="say", args={ msg: "...", wait: true|false })
   - 若 callee thread 尚未存在，系统会在 flows/{sid}/objects/{target}/threads/ 下创建一条
   - 同时把消息追加到 callee.inbox + caller.outbox，callee 自动进入 running 等待 worker 调度
-- 等待回复：open(parent_window_id="<talk_window_id>", command="wait", args={})
+- 等待回复：open(parent_window_id="<talk_window_id>", method="wait", args={})
 - 关闭窗口：close(window_id="<talk_window_id>", reason="...")
 
 **重要：talk_window 是持续会话窗口，应该复用。**
@@ -244,7 +244,7 @@ submit 后副作用：
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -363,9 +363,9 @@ const talkConstructor: ObjectMethod = {
 
 builtinRegistry.registerObjectType("talk", {
   methods: {
-    say: sayCommand,
-    wait: waitCommand,
-    close: closeCommand,
+    say: sayMethod,
+    wait: waitMethod,
+    close: closeMethod,
     talk: talkConstructor,
   },
   windowMethods: {

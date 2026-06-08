@@ -18,8 +18,8 @@ import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 
 /** root delegator 工厂的配置项。 */
 export interface RootDelegatorSpec {
-  /** root command 名——用于错误信息前缀 `[<command>]`。 */
-  command: string;
+  /** root method 名——用于错误信息前缀 `[<method>]`。 */
+  method: string;
   /** lookupConstructor 的目标 kind（被委托的 constructor method 名）。 */
   constructorKind: string;
   /**
@@ -28,14 +28,14 @@ export interface RootDelegatorSpec {
    */
   objectLabel: string;
   /**
-   * 若设置，则在 ctx 缺 form 时注入一个最小 form shim `{ command: formCommand }`，
+   * 若设置，则在 ctx 缺 form 时注入一个最小 form shim `{ command: formMethod }`，
    * 让 constructor 的 command 分发分支拿到正确名字（生产链路里 manager.submit 会
    * 传完整 form；只有直调路径需要这个 shim）。
    *
    * 多个 root command 共用同一 constructor 时（grep/glob→search，
    * open_file/write_file→file）必须用它消歧；一对一的 constructor 不需要。
    */
-  formCommand?: string;
+  formMethod?: string;
 }
 
 /**
@@ -54,13 +54,13 @@ export function makeRootDelegator(
     const manager = ctx.manager as { registry?: typeof builtinRegistry } | undefined;
     const ctor = (manager?.registry ?? builtinRegistry).lookupConstructor(spec.constructorKind);
     if (!ctor) {
-      return `[${spec.command}] ${spec.objectLabel} constructor 未注册（registry 期望 kind="constructor" 的 ${spec.constructorKind} method）。`;
+      return `[${spec.method}] ${spec.objectLabel} constructor 未注册（registry 期望 kind="constructor" 的 ${spec.constructorKind} method）。`;
     }
-    // 直调路径的最小 form shim：只携带 command 供 constructor 分发消歧；
+    // 直调路径的最小 form shim：只携带 method 供 constructor 分发消歧；
     // 经 unknown 转换（partial form，runtime 链路才有完整 form）。
     const target =
-      spec.formCommand && !ctx.form
-        ? ({ ...ctx, form: { command: spec.formCommand } } as unknown as MethodExecutionContext)
+      spec.formMethod && !ctx.form
+        ? ({ ...ctx, form: { method: spec.formMethod } } as unknown as MethodExecutionContext)
         : ctx;
     return await ctor.exec(target);
   };

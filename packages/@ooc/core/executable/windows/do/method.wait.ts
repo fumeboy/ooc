@@ -7,16 +7,16 @@ import type { ContextWindow } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
 import type { BaseContextWindow } from "@ooc/core/_shared";
 
-const TALK_WINDOW_WAIT_BASIC = "internal/windows/talk/wait/basic";
+const DO_WINDOW_WAIT_BASIC = "internal/windows/do/wait/basic";
 const WAIT_KNOWLEDGE = `
-talk_window.wait：不发消息，仅把当前父线程切到 waiting，等对端下一条回复。
+do_window.wait：不向子线程发消息，仅把当前父线程切到 waiting 直到子线程回写。
 
 参数：无
 `.trim();
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
-  const sourceId = (form as MethodExecWindow).command;
+  const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
     const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
@@ -42,22 +42,22 @@ function guidanceWindows(form: BaseContextWindow, entries: Record<string, string
   return out;
 }
 
-async function executeTalkWindowWait(ctx: MethodExecutionContext): Promise<string | undefined> {
+async function executeDoWindowWait(ctx: MethodExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
-  if (!thread) return "[talk_window.wait] 缺少 thread context。";
+  if (!thread) return undefined;
   thread.status = "waiting";
   thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
   thread.waitingOn = ctx.self?.id;
   return undefined;
 }
 
-export const waitCommand: ObjectMethod = {
+export const waitMethod: ObjectMethod = {
   paths: ["wait"],
   intent: (): Intent[] => [],
   onFormChange(change, { form }) {
     if (change.kind === "status_changed" && change.to !== "open") return [];
-    const entries: Record<string, string> = { [TALK_WINDOW_WAIT_BASIC]: WAIT_KNOWLEDGE };
+    const entries: Record<string, string> = { [DO_WINDOW_WAIT_BASIC]: WAIT_KNOWLEDGE };
     return guidanceWindows(form, entries);
   },
-  exec: (ctx) => executeTalkWindowWait(ctx),
+  exec: (ctx) => executeDoWindowWait(ctx),
 };

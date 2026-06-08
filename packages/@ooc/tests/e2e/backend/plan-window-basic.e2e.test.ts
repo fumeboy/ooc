@@ -48,15 +48,15 @@ function findPlanWindowById(thread: ThreadContext, id: string): PlanWindow | und
 async function execOnWindow(
   thread: ThreadContext,
   parentWindowId: string,
-  command: string,
+  method: string,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
   const mgr = WindowManager.fromThread(thread, builtinRegistry);
   const result = await mgr.openMethodExec({
     thread,
     parentWindowId,
-    command,
-    title: `test ${command}`,
+    method,
+    title: `test ${method}`,
     args,
   });
   // 把 mgr 写回 thread（与 thinkloop 路径一致）

@@ -3,7 +3,7 @@
  *
  * 2026-06-02 P6.§4-§5: 历史 root.write_file 的构造逻辑（path/content 校验 + versioned/non-versioned
  * 写盘 + spawn FileWindow + preExisted hint）已迁到 packages/@ooc/builtins/file/executable/index.ts
- * 的 kind="constructor" file method（dispatch on form.command="write_file"）。
+ * 的 kind="constructor" file method（dispatch on form.method="write_file"）。
  * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("file") 委托。
  */
 
@@ -36,7 +36,7 @@ write_file = **整文件覆盖**。只在下列两种场景使用：
 
 典型反模式（**不要这样做**）：
 - 用户说"把 src/foo.ts 里第一处 X 改成 Y" → 你 open_file 后直接 write_file 整篇
-  → 应该 \`open_file\` → \`open(parent_window_id=<file_window>, command="edit",
+  → 应该 \`open_file\` → \`open(parent_window_id=<file_window>, method="edit",
   args={old: "X 的局部唯一上下文", new: "Y 的对应上下文"})\`
 
 ## 参数
@@ -52,7 +52,7 @@ write_file = **整文件覆盖**。只在下列两种场景使用：
 ## 调用示例（合法场景：新建）
 
 \`\`\`
-open(command="write_file", title="新建测试文件",
+open(method="write_file", title="新建测试文件",
      args={ path: "tests/foo.test.ts", content: "import { it } from 'bun:test'; ..." })
 \`\`\`
 
@@ -73,7 +73,7 @@ file_window 的版本可见性，且转义容易出错。
 `.trim();
 
 
-export const writeFileCommand: ObjectMethod = {
+export const writeFileMethod: ObjectMethod = {
   paths: ["write_file"],
   schema: {
     args: {
@@ -102,18 +102,18 @@ export const writeFileCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeWriteFileCommand(ctx),
+  exec: (ctx) => executeWriteFileMethod(ctx),
 };
 
 /**
- * P6.§4-§5 thin delegator —— 委托到 file_window constructor（dispatch on form.command="write_file"）。
+ * P6.§4-§5 thin delegator —— 委托到 file_window constructor（dispatch on form.method="write_file"）。
  *
- * 注入一个最小 form shim（{ command: "write_file" }）到 ctx，让 constructor 的
+ * 注入一个最小 form shim（{ method: "write_file" }）到 ctx，让 constructor 的
  * dispatch 分支拿到正确的 command 名（生产链路里 manager.submit 会传完整 form）。
  */
-export const executeWriteFileCommand = makeRootDelegator({
-  command: "write_file",
+export const executeWriteFileMethod = makeRootDelegator({
+  method: "write_file",
   constructorKind: "file",
   objectLabel: "file_window",
-  formCommand: "write_file",
+  formMethod: "write_file",
 });

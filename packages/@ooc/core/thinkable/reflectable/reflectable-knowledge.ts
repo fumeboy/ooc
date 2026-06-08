@@ -33,7 +33,7 @@ export const REFLECTABLE_KNOWLEDGE = `
 2. **写到 \`pools/<self>/knowledge/memory/<slug>.md\`** —— 这是你的长期记忆
    仓库。每条记忆一个文件,slug 用 kebab-case 概括主题(如
    \`ooc-collaboration-framework.md\` / \`tool-error-handling.md\`)。
-   用 \`open(command="write_file", path="pools/<self>/knowledge/memory/<slug>.md",
+   用 \`open(method="write_file", path="pools/<self>/knowledge/memory/<slug>.md",
    content="...")\` 写入。已存在的文件可以用 open_file + edit 增量更新。
 3. 必要时(caller 明确要求改身份/对外说明) 也允许写
    \`stones/<self>/self.md\`(内部第一人称叙述)或 \`stones/<self>/readable.md\`
@@ -70,7 +70,7 @@ export const REFLECTABLE_KNOWLEDGE = `
 | trigger 形态 | 含义 | 例子 |
 |---|---|---|
 | \`"window::<type>"\` | 该 type 的 window 处于 open 时命中（root window 每个 thread 都有，故 \`"window::root"\` 等价"任何时候"） | \`"window::talk"\` / \`"window::root"\` |
-| \`"command::<window_type>::<command>"\` | 在 \`<window_type>\` 上打开同名 command form 时命中 | \`"command::root::talk"\` / \`"command::root::program"\` |
+| \`"method::<window_type>::<method>"\` | 在 \`<window_type>\` 上打开同名 method form 时命中 | \`"method::root::talk"\` / \`"method::root::program"\` |
 | \`"super"\` | 仅在 super flow（反思 session）中命中 | \`"super"\` |
 
 value 取值：
@@ -100,14 +100,14 @@ activates_on:
 title: 与 alice 协作时的对齐节奏
 description: alice 偏好先看小步原型再聊设计；先丢草稿再讨论效果好
 activates_on:
-  "command::root::talk": "show_description"
+  "method::root::talk": "show_description"
   "window::talk": "show_content"
 ---
 
 每次跟 alice 起新讨论前，先用 program 跑一个最小可执行 demo……
 \`\`\`
 
-**自检**：写完 .md 之后，回想一下"下次哪个 window / command form 出现时
+**自检**：写完 .md 之后，回想一下"下次哪个 window / method form 出现时
 我希望 LLM 想起这条沉淀？"——把它填进 activates_on。如果都填空，等于白写。
 `.trim();
 
@@ -153,7 +153,7 @@ export const REFLECTABLE_METAPROG_KNOWLEDGE = `
 ### 1. 开 worktree
 
 \`\`\`
-open(command="metaprog", args={ action: "open_worktree" })
+open(method="metaprog", args={ action: "open_worktree" })
 \`\`\`
 
 返回 \`{ branch: "metaprog/<self>/<token>", path: "<absolute>" }\`。把 branch
@@ -183,9 +183,9 @@ bun run packages/@ooc/core/app/server/index.ts \\
 ### 4. commit + merge
 
 \`\`\`
-open(command="metaprog", args={ action: "commit", branch: "<from step 1>",
+open(method="metaprog", args={ action: "commit", branch: "<from step 1>",
                                  intent: "为什么改的简短说明" })
-open(command="metaprog", args={ action: "merge", branch: "<branch>" })
+open(method="metaprog", args={ action: "merge", branch: "<branch>" })
 \`\`\`
 
 merge 返回四种 kind：
@@ -211,10 +211,10 @@ supervisor 把 PR-Issue 标 \`reject\` 时，你的整个 branch 被存档到
 ## supervisor 专属（你不是 supervisor 时跳过本节）
 
 - \`metaprog\` action \`resolve\` —— 评审一个 PR-Issue
-  \`open(command="metaprog", args={ action:"resolve", issueId: <N>,
+  \`open(method="metaprog", args={ action:"resolve", issueId: <N>,
                                     decision: "merge" | "reject" | "request-changes" })\`
 - \`metaprog\` action \`rollback\` —— 把某个 Object 的 stone 回滚到先前 commit
-  \`open(command="metaprog", args={ action:"rollback", objectId: "agent_of_x",
+  \`open(method="metaprog", args={ action:"rollback", objectId: "agent_of_x",
                                     targetCommit: "<sha>" })\`
   典型场景：启动期看到 \`[recovery-needed] agent_of_x stone unloadable\` PR-Issue。
   回滚 commit 由你（supervisor）署名（R4 例外）。
@@ -230,12 +230,12 @@ supervisor 把 PR-Issue 标 \`reject\` 时，你的整个 branch 被存档到
  * 沉淀经验。
  *
  * 注入条件（参见 synthesizer.collectExecutableKnowledgeEntries）：
- * - thread 中存在 form.command === "end" 的 method_exec window
+ * - thread 中存在 form.method === "end" 的 method_exec window
  * - thread.persistence?.sessionId !== SUPER_SESSION_ID（避免 super flow 内
  *   end 时套娃提醒）
  *
  * 注入档次：protocolEntries（与 REFLECTABLE_KNOWLEDGE 同档），不是 form-scoped
- * commandKnowledgePaths——reminder 是 protocol 级别提示，与 end 自身用法描述独立。
+ * methodKnowledgePaths——reminder 是 protocol 级别提示，与 end 自身用法描述独立。
  *
  * 设计原则：非阻塞 hint，LLM 自由判断是否需要反思；不是强制反思 gate。
  */
@@ -259,7 +259,7 @@ export const END_REFLECTION_REMINDER_KNOWLEDGE = `
 
 **步骤 1**: 在你当前 thread 内创建一个指向 super 的 talk_window:
 \`\`\`
-exec(command="talk", args={
+exec(method="talk", args={
   target: "super",        // 自指别名: 派送到自己的 super 分身, 不是另一个叫 super 的 Object
   title: "<反思主题简述>"
 })
@@ -297,5 +297,5 @@ super 分身 (同一身份, 另一脉络) 会看到 REFLECTABLE_KNOWLEDGE 指引
 1. **close 当前 end form** (\`close(form_id)\`)
 2. 跑上面的 talk + say(wait=true) 流程
 3. 看到 super reply 后 close talk_window
-4. 重新 \`open(command="end", args={...})\` 结束业务 thread
+4. 重新 \`open(method="end", args={...})\` 结束业务 thread
 `.trim();

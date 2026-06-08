@@ -3,7 +3,7 @@
  *
  * 2026-06-02 P6.§4-§5: 历史 root.grep 的构造逻辑（runRipgrep + runJsFallback + SearchWindow build）
  * 已迁到 packages/@ooc/builtins/search/executable/index.ts 的 kind="constructor" search method
- * （dispatch on form.command="grep"）。
+ * （dispatch on form.method="grep"）。
  * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("search") 委托。
  */
 
@@ -24,7 +24,7 @@ import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 import "@ooc/builtins/search";
 
 
-export const grepCommand: ObjectMethod = {
+export const grepMethod: ObjectMethod = {
   paths: ["grep"],
   schema: {
     args: {
@@ -50,15 +50,15 @@ export const grepCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeGrepCommand(ctx),
+  exec: (ctx) => executeGrepMethod(ctx),
 };
 
 /**
- * P6.§4-§5 thin delegator —— 委托到 search_window constructor（dispatch on form.command="grep"）。
+ * P6.§4-§5 thin delegator —— 委托到 search_window constructor（dispatch on form.method="grep"）。
  */
-export const executeGrepCommand = makeRootDelegator({
-  command: "grep",
+export const executeGrepMethod = makeRootDelegator({
+  method: "grep",
   constructorKind: "search",
   objectLabel: "search_window",
-  formCommand: "grep",
+  formMethod: "grep",
 });

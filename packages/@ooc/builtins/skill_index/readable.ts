@@ -14,7 +14,7 @@ export function readable(ctx: RenderContext): XmlNode[] {
   return [
     xmlElement("hint", {}, [
       xmlText(
-        '使用 exec(command="open_file", args={ path: "<skillFilePath>" }) 打开具体 SKILL.md 阅读完整说明',
+        '使用 exec(method="open_file", args={ path: "<skillFilePath>" }) 打开具体 SKILL.md 阅读完整说明',
       ),
     ]),
     xmlElement(

@@ -105,7 +105,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: ROOT_WINDOW_ID,
-      command: "talk",
+      method: "talk",
       title: "open talk to peer",
       args: { target: "peer_alice", title: "hi alice" },
     });
@@ -173,7 +173,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     await mgr.openMethodExec({
       thread,
       parentWindowId: ROOT_WINDOW_ID,
-      command: "talk",
+      method: "talk",
       title: "trigger ctx flush",
       args: { target: "peer_alice", title: "hi" },
     });
@@ -196,7 +196,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: ROOT_WINDOW_ID,
-      command: "plan",
+      method: "plan",
       title: "make a plan",
       args: { plan: "do the thing" },
     });
@@ -371,7 +371,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: stubParent.id,
-      command: "talk",
+      method: "talk",
       title: "stub talks alice",
       args: { target: "peer_alice", title: "stub-to-alice" },
     });
@@ -420,7 +420,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
       await mgr.openMethodExec({
         thread,
         parentWindowId: planWindow.id,
-        command: "stub_only",
+        method: "stub_only",
         title: "wrong parent",
       });
     } catch (e) {
