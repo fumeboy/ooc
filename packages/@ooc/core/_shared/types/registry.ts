@@ -13,6 +13,7 @@ import type { ContextObject, ObjectType } from "./context-window.js";
 import type { ThreadContext } from "./thread.js";
 import type { XmlNode } from "./xml.js";
 import type { ObjectMethod } from "./method.js";
+import type { WindowMethod } from "./window-method.js";
 
 export interface OnCloseContext {
   thread: ThreadContext;
@@ -57,6 +58,11 @@ export type ConsumedMessageIdsHook = (
 export interface ObjectDefinition {
   type: ObjectType;
   methods: Record<string, ObjectMethod>;
+  /**
+   * Window method 表（归 readable 维度，控制 window 展示）。与 methods（object method,
+   * 归 executable）物理分离。dispatch 时优先查此表。
+   */
+  windowMethods?: Record<string, WindowMethod>;
   onClose?: OnCloseHook;
   renderXml?: RenderHook;
   compressView?: CompressViewHook;

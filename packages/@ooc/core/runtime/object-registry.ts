@@ -21,6 +21,7 @@ import type {
 } from "../_shared/types/registry.js";
 import { filterMethodsByVisibility } from "../_shared/types/registry.js";
 import type { ObjectMethod } from "../_shared/types/method.js";
+import type { WindowMethod } from "../_shared/types/window-method.js";
 import type { ContextWindow, ObjectType } from "../_shared/types/context-window.js";
 
 export type {
@@ -43,6 +44,25 @@ const RENDERABLE_VISIBLE_TYPES = new Set([
   "file", "knowledge", "search", "relation", "skill_index",
   "feishu_chat", "feishu_doc", "plan",
 ]);
+
+/**
+ * exec 名字全局唯一：同一 type 上同名 method 不能既是 object method 又是 window method。
+ * dispatch 入口统一（exec by name），重名会导致优先级歧义。注册期 fail-loud。
+ */
+function assertNoMethodNameCollision(
+  type: string,
+  methods: Record<string, unknown> | undefined,
+  windowMethods: Record<string, unknown> | undefined,
+): void {
+  if (!methods || !windowMethods) return;
+  for (const name of Object.keys(windowMethods)) {
+    if (name in methods) {
+      throw new Error(
+        `Method name "${name}" registered as both object method and window method on "${type}"`,
+      );
+    }
+  }
+}
 
 function resolveEffectiveParentClass(
   input: { parentClass?: string | null },
@@ -84,10 +104,13 @@ export class ObjectRegistry {
     const existing = this.store.get(type);
     if (!existing) throw new Error(`registerObjectType: unknown object type "${type}"`);
     const nextMethods = partial.methods !== undefined ? partial.methods : existing.methods;
+    const nextWindowMethods = partial.windowMethods ?? existing.windowMethods;
+    assertNoMethodNameCollision(type, nextMethods, nextWindowMethods);
     const nextParentClass = resolveEffectiveParentClass(partial, existing);
     this.store.set(type, {
       ...existing,
       methods: nextMethods,
+      windowMethods: nextWindowMethods,
       onClose: partial.onClose ?? existing.onClose,
       renderXml: partial.renderXml ?? existing.renderXml,
       compressView: partial.compressView ?? existing.compressView,
@@ -104,6 +127,7 @@ export class ObjectRegistry {
     definition: Partial<ObjectDefinition> & { methods?: Record<string, any> },
   ): void {
     const entries = definition.methods ?? {};
+    assertNoMethodNameCollision(type, entries, definition.windowMethods);
     const effectiveParentClass = resolveEffectiveParentClass(definition, undefined);
     this.store.set(type, {
       type,
@@ -189,6 +213,22 @@ export class ObjectRegistry {
     return undefined;
   }
 
+  /** 沿 parentClass 继承链查 window method（控制展示）。镜像 resolveMethod。 */
+  lookupWindowMethod(self: { type: ObjectType }, name: string): WindowMethod | undefined {
+    return this.resolveWindowMethod(self.type, name);
+  }
+
+  private resolveWindowMethod(type: string, name: string): WindowMethod | undefined {
+    const selfDef = this.store.get(type as ObjectType);
+    const own = selfDef?.windowMethods?.[name];
+    if (own) return own;
+    for (const ancestor of this.resolveParentClassChain(type as ObjectType)) {
+      const inherited = this.store.get(ancestor as ObjectType)?.windowMethods?.[name];
+      if (inherited) return inherited;
+    }
+    return undefined;
+  }
+
   lookupConstructor(type: ObjectType): ObjectMethod | undefined {
     const def = this.store.get(type);
     if (!def) return undefined;
@@ -249,6 +289,10 @@ export class ObjectRegistry {
         this.store.set(type, {
           ...existing,
           methods: { ...existing.methods, ...def.methods },
+          windowMethods:
+            existing.windowMethods || def.windowMethods
+              ? { ...existing.windowMethods, ...def.windowMethods }
+              : undefined,
           onClose: def.onClose ?? existing.onClose,
           renderXml: def.renderXml ?? existing.renderXml,
           compressView: def.compressView ?? existing.compressView,
