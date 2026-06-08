@@ -3,13 +3,6 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
 /**
  * MethodExec form — 调用某 method 时的临时 sub-window。
  *
- * P6.§9 (2026-06-02): 类型定义从 `@ooc/builtins/command_exec/types.ts` 搬到这里——form
- * 是 Object 内置特性的 lifecycle 抽象，不应当成独立 builtin object 维护。
- *
- * 命名归一（P6.§1 + §9 + Phase H cleanup）：
- * - canonical type 字符串 = "method_exec"
- * - "command_exec" 已移除为 ObjectType literal；旧持久化数据在 thread-json.ts 读路径迁移
- *
  * 字段（与 ActiveForm 一一对应；plan §exec 升级后）：
  * - 由 `exec` tool 在 args 不齐全 / 引入新 path/knowledge 时创建
  * - 自身注册了两条命令 `refine` / `submit`，LLM 通过
@@ -37,7 +30,7 @@ export interface MethodExecWindow extends BaseContextWindow {
   /**
    * Structured fill state derived from accumulatedArgs + schema.
    * Undefined if schema is not declared.
-   * Populated by WindowManager.openCommandExec / refine / submit.
+   * Populated by WindowManager.openMethodExec / refine / submit.
    */
   fill?: Record<string, {
     status: "missing" | "provided" | "invalid";

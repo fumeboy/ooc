@@ -7,7 +7,7 @@
  *
  * 设计依据:plan witty-bubbling-pebble.md / spec 2026-05-20 relation-window-design。
  *
- * 注册的 command:
+ * 注册的 method:
  * - edit:整文件替换语义,通过 scope 路由到 session 层(flow) 或 long_term 层(super flow)
  *
  * 不注册 close hook:relation_window 是每轮 derive 出来的,不持久化;LLM 显式 close
@@ -18,7 +18,7 @@
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "../_shared/command-types.js";
+} from "../_shared/method-types.js";
 import { builtinRegistry, type RenderContext } from "../_shared/registry.js";
 import { writeFlowRelation } from "../../../persistable/index.js";
 import { deliverTalkMessage } from "../talk/delivery.js";
@@ -38,12 +38,12 @@ const RELATION_EDIT_LONGTERM = "internal/windows/relation/edit/long_term_detail"
 /** relation_window 的 type-level basicKnowledge。 */
 const RELATION_WINDOW_BASIC_KNOWLEDGE = `
 relation_window 是 self 对某 peer object 的关系窗口,自动按 thread 中存在的
-talk_window(target=peerId) 派生一条,id 稳定为 \`w_rel_<peerId>\`。它注册的 command 不在
-root 上,要通过 open(parent_window_id="<rel_window_id>", method="edit", args={...}) 调用:
+talk_window(target=peerId) 派生一条,id 稳定为 \`w_rel_<peerId>\`。它注册的 method 不在
+root 上,要通过 exec(window_id="<rel_window_id>", method="edit", args={...}) 调用:
 
-| command | 作用 | 典型用法 |
-|---------|------|----------|
-| edit    | 整文件替换 relation 文件;scope 决定写 session 层还是 long_term 层 | open(parent_window_id="<rel_window_id>", method="edit", args={ content: "...", scope: "session" }) |
+| method | 作用 | 典型用法 |
+|--------|------|----------|
+| edit    | 整文件替换 relation 文件;scope 决定写 session 层还是 long_term 层 | exec(window_id="<rel_window_id>", method="edit", args={ content: "...", scope: "session" }) |
 
 **两个 scope**:
 - **session**:写 \`flows/<sid>/<self>/knowledge/relations/<peer>.md\`——只在
@@ -83,11 +83,11 @@ scope="long_term" 的路径详解:
 
 1. 本调用不直接写 relation 文件——它会派一条 talk message 到 super flow(self-reflection 分身);
 2. super flow 会作为另一个 thread 收到这条消息,自行决定如何处理(典型:用 write_file 写 pools/<self>/knowledge/relations/<peer>.md);
-3. 因此 long_term edit 是**异步**的:本 command 返回成功只代表消息已派送,文件落盘要等 super flow 跑完那一轮。
+3. 因此 long_term edit 是**异步**的:本 method 返回成功只代表消息已派送,文件落盘要等 super flow 跑完那一轮。
 `.trim();
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
   const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {

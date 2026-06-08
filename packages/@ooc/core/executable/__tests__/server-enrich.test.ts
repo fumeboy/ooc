@@ -26,7 +26,7 @@ function makeForm(overrides: Partial<MethodExecWindow> = {}): MethodExecWindow {
 }
 
 describe("enrichFormMethodKnowledge", () => {
-  test("enriches command knowledge paths even when command is not program", async () => {
+  test("enriches method knowledge paths even when method is not program", async () => {
     const form = makeForm({ method: "plan" });
     const thread = makeThread({ id: "t" });
     const result = await enrichFormMethodKnowledge(form, thread);

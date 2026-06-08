@@ -1,15 +1,15 @@
 /**
- * GET /api/windows/_shared/types — 列出所有已注册 window type 与其上的 commands。
+ * GET /api/windows/_shared/types — 列出所有已注册 window type 与其上的 methods。
  * GET /api/objects/_shared/types — 别名(2026-05-28 ooc-6 Object Unification):window 语义
  *   正在被 object 语义替代,两个路径返回相同内容。新代码优先使用 /api/objects/_shared/types。
  *
- * 用途:前端 WindowDetail 想展示某 window type 上能用的 command 清单(每个 type 不同),
+ * 用途:前端 WindowDetail 想展示某 window type 上能用的 method 清单(每个 type 不同),
  * 一次性拉到 catalog 后客户端按 type 索引即可,无需每次 getThread 都嵌入。
  *
- * 数据来源:src/executable/windows/_shared/registry.ts 里 registerObjectType 注入的 commands,
+ * 数据来源:src/executable/windows/_shared/registry.ts 里 registerObjectType 注入的 methods,
  * 加上 root window 的 ROOT_METHODS。两边都是静态注册,服务启动后不变。
  *
- * 每条 command 的 description:从 `entry.knowledge({}, "open")` 取 `*_BASIC` 路径的值
+ * 每条 method 的 description:从 `entry.knowledge({}, "open")` 取 `*_BASIC` 路径的值
  * (按"path 以 /basic 结尾"约定挑;不命中时退化为返回值最长的那条)。description 是
  * 完整 markdown,前端 hover 时可截断后展示。
  */

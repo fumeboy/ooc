@@ -7,7 +7,7 @@
  * - Form knowledge entry extraction (from onFormChange guidance windows)
  */
 import type { ContextWindow, MethodExecWindow, GuidanceWindow } from "../../executable/windows/_shared/types.js";
-import type { MethodKnowledgeEntries } from "../../executable/windows/_shared/command-types.js";
+import type { MethodKnowledgeEntries } from "../../executable/windows/_shared/method-types.js";
 import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
 import { ROOT_METHODS } from "@ooc/builtins/root";
@@ -24,7 +24,7 @@ function lookupFormEntry(
   form: MethodExecWindow,
   thread: ThreadContext,
   registry: ObjectRegistry,
-): import("../../executable/windows/_shared/command-types.js").ObjectMethod | undefined {
+): import("../../executable/windows/_shared/method-types.js").ObjectMethod | undefined {
   const parentId = form.parentWindowId;
   if (!parentId || parentId === "root") {
     return ROOT_METHODS[form.method];

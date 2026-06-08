@@ -23,7 +23,7 @@ function indexOf(...docs: KnowledgeDoc[]): KnowledgeIndex {
   return { byPath: new Map(docs.map((d) => [d.path, d])) };
 }
 
-/** 构造 command_exec window 的辅助；activator 内部走 evaluateTrigger，需 parentWindowId + command 字段。 */
+/** 构造 method_exec window 的辅助；activator 内部走 evaluateTrigger，需 parentWindowId + method 字段。 */
 function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
   return {
     id: "f",
@@ -60,7 +60,7 @@ describe("computeActivations (trigger map)", () => {
     expect(out).toEqual([]);
   });
 
-  test("command trigger matches when form on root with same command exists → full", () => {
+  test("method trigger matches when form on root with same method exists → full", () => {
     const index = indexOf(doc("a", "A", { "method::root::program": "show_content" }));
     const out = computeActivations(
       thread({ contextWindows: [form({ method: "program" })] }),
@@ -71,7 +71,7 @@ describe("computeActivations (trigger map)", () => {
     expect(out[0]?.reason).toBe("trigger_full");
   });
 
-  test("command trigger matches → show_description level renders as summary", () => {
+  test("method trigger matches → show_description level renders as summary", () => {
     const index = indexOf(doc("a", "A", { "method::root::program": "show_description" }));
     const out = computeActivations(
       thread({ contextWindows: [form({ method: "program" })] }),
@@ -90,7 +90,7 @@ describe("computeActivations (trigger map)", () => {
       }),
     );
     // 既有 root window（隐式由 contextWindows 中含 root window 模拟，但这里没显式塞 root window）
-    // 让 program command trigger 命中即可
+    // 让 program method trigger 命中即可
     const out = computeActivations(
       thread({ contextWindows: [form({ method: "program" })] }),
       index,
@@ -139,8 +139,8 @@ describe("computeActivations (trigger map)", () => {
     expect(inSuper[0]?.presentation).toBe("full");
   });
 
-  test("command trigger requires matching parent window type", () => {
-    // command::talk::say should match form { method: "say", parent.type === "talk" }
+  test("method trigger requires matching parent window type", () => {
+    // method::talk::say should match form { method: "say", parent.type === "talk" }
     const index = indexOf(doc("a", "A", { "method::talk::say": "show_content" }));
     const talkWindow: ContextWindow = {
       id: "w_talk",

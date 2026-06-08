@@ -17,7 +17,7 @@ import {
 import { makeThread } from "../../__tests__/make-thread";
 import type { MethodExecWindow } from "../../executable/windows/_shared/types";
 
-/** 构造 command_exec window fixture（用于 G2 end-reflection-reminder 测试）。 */
+/** 构造 method_exec window fixture（用于 G2 end-reflection-reminder 测试）。 */
 function makeMethodExecWindow(overrides: Partial<MethodExecWindow> & { method: string }): MethodExecWindow {
   return {
     id: "f_test",
@@ -152,7 +152,7 @@ describe("end-reflection-reminder injection (G2)", () => {
     expect(out.knowledgeEntries[END_REFLECTION_REMINDER_PATH]).toBeUndefined();
   });
 
-  it("does NOT inject when business thread has no command_exec form", async () => {
+  it("does NOT inject when business thread has no method_exec form", async () => {
     const thread = makeThread({
       id: "t_no_form",
       persistence: {

@@ -208,7 +208,7 @@ describe("program_window render: last_output unaffected by viewport", () => {
   });
 });
 
-// ─────────────────────────── command: set_history_window ────────────
+// ─────────────────────────── method: set_history_window ────────────
 
 describe("set_history_window window method", () => {
   it("history_tail returns new state with historyViewport", () => {
@@ -307,7 +307,7 @@ describe("set_history_window registered as windowMethod on program", () => {
   });
 });
 
-// ─────────────────────────── exec command unaffected by viewport ────
+// ─────────────────────────── exec method unaffected by viewport ────
 
 describe("program_window.exec is not affected by historyViewport", () => {
   it("exec append to full history regardless of viewport setting", async () => {

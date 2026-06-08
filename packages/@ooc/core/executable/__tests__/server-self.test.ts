@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("createProgramSelf", () => {
-  test("callMethod resolves and runs custom command on the self window", async () => {
+  test("callMethod resolves and runs custom method on the self window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
@@ -78,12 +78,12 @@ describe("createProgramSelf", () => {
     expect(outcome.result).toContain("t1");
   });
 
-  test("callMethod throws when command not found on the self window", async () => {
+  test("callMethod throws when method not found on the self window", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
     await writeExecutableSource(
       ref,
-      `export const window = { commands: {} }; export const ui_methods = {};`,
+      `export const window = { methods: {} }; export const ui_methods = {};`,
     );
     const thread: ThreadContext = makeThread({ id: "t1" });
     // ooc-6 new design: window id = object id, window type = object id

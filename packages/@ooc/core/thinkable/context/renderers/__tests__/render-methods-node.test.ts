@@ -6,7 +6,7 @@ import { renderMethodsNode } from "../xml.js";
 
 /**
  * 回归守卫：window method（控制展示，归 readable 的 windowMethods）迁出 methods 后，
- * 必须仍出现在给 LLM 的 <commands> 节点，否则 LLM 看不到 set_viewport（功能消失）。
+ * 必须仍出现在给 LLM 的 <methods> 节点，否则 LLM 看不到 set_viewport（功能消失）。
  * 这是「测试全绿但功能没了」的盲区——迁移前后都缺此覆盖。
  */
 test("window method (set_viewport) still rendered in <commands> for file window", () => {

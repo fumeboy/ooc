@@ -8,7 +8,7 @@
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "../../../executable/windows/_shared/command-types.js";
+} from "../../../executable/windows/_shared/method-types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -40,7 +40,7 @@ open(method="open_feishu_chat", title="工程进展群", args={ chat_id: "oc_xxx
 `.trim();
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
   const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
@@ -141,5 +141,5 @@ export async function executeOpenFeishuChat(
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), window];
   }
-  return `已创建 feishu_chat_window（id=${window.id}, chat=${chatId}）；建议立即 open command=refresh 验证拉取链路。`;
+  return `已创建 feishu_chat_window（id=${window.id}, chat=${chatId}）；建议立即 open method=refresh 验证拉取链路。`;
 }

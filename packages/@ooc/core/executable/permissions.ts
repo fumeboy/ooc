@@ -1,5 +1,5 @@
 /**
- * Permission 模型 (Q0b) — command 级三档准入控制。
+ * Permission 模型 (Q0b) — method 级三档准入控制。
  *
  * Design:        docs/2026-05-25-permission-model-design.md
  * Meta 概念:     meta/object.doc.ts:executable.children.permission
@@ -11,14 +11,14 @@
  *
  * 决策链 (优先级从高到低):
  * 1. PermissionDecider (escape hatch; 由测试 fixture 或控制面通过 setPermissionDecider 注入)
- * 2. stones/<self>/objects/<id>/config/policies.json -> commands[<command>]
- * 3. ObjectMethod.permission (各 command 作者声明)
+ * 2. stones/<self>/objects/<id>/config/policies.json -> methods[<method>]
+ * 3. ObjectMethod.permission (各 method 作者声明)
  * 4. 缺省 → "allow"
  *
  * 不变量:
  * - 配置文件错误容错: 缺失 / JSON 错 / 字段拼错 → 全部 fallback, 永不抛崩溃
  * - silent-swallow ban: 调用方 (thinkloop) 必须把每条 ask / deny 决策落 ProcessEvent
- * - 向后兼容: 未声明 permission 的 command 维持原 allow 行为
+ * - 向后兼容: 未声明 permission 的 method 维持原 allow 行为
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -42,15 +42,15 @@ export type PermissionDecision =
 /**
  * thinkloop 在分派 tool call 前组装的待审计载荷。
  *
- * - exec: command = args.method (实际 OOC command 名); windowId = args.window_id (目标 window);
+ * - exec: method = args.method (实际 OOC method 名); windowId = args.window_id (目标 window);
  *   args = args.args (method 的业务参数)
- * - close / wait / compress: command = toolName 自身; windowId / args 视情况填
+ * - close / wait / compress: method = toolName 自身; windowId / args 视情况填
  */
 export type PendingToolCall = {
   /** 触发的 LLM tool 原语名。 */
   toolName: "exec" | "close" | "wait" | "compress";
   /**
-   * 对 exec: 解析自 args.method 的 command 路径 (例如 "talk", "write_file")。
+   * 对 exec: 解析自 args.method 的 method 路径 (例如 "talk", "write_file")。
    * 对 close/wait/compress: 等于 toolName。
    */
   method?: string;
@@ -71,13 +71,13 @@ interface PoliciesFile {
 }
 
 /**
- * 读取 stone 上的 policies.json; 返回 command -> level 的扁平 map。
+ * 读取 stone 上的 policies.json; 返回 method -> level 的扁平 map。
  *
  * - thread.persistence 缺失 → {}
  * - 路径不存在 → {}
  * - JSON 解析失败 → {}
- * - commands 字段拼错或类型错 → {}
- * - 单个 command 的 level 不是合法 PermissionLevel → 跳过该项
+ * - methods 字段拼错或类型错 → {}
+ * - 单个 method 的 level 不是合法 PermissionLevel → 跳过该项
  *
  * 永不抛错 (invariant #5)。
  */
@@ -123,7 +123,7 @@ export function loadPoliciesJson(thread: ThreadContext): Record<string, Permissi
  * 查找路径 (优先匹配可能的具体 window type, 失败则尝试 root):
  * - 如果 call 指定了 windowId 且能在 thread.contextWindows 中找到该 window,
  *   优先查它的 type definition.methods[method].permission
- * - 否则查 root 的 commands[command].permission
+ * - 否则查 root 的 methods[method].permission
  * - 找不到 entry / 字段缺失 → undefined (调用方 fallback 到 allow)
  */
 function lookupDeclaredPermission(
@@ -131,13 +131,13 @@ function lookupDeclaredPermission(
   call: PendingToolCall,
   registry: ObjectRegistry,
 ): PermissionLevel | undefined {
-  const command = call.method;
-  if (!command) return undefined;
+  const methodName = call.method;
+  if (!methodName) return undefined;
 
   const tryWindow = (windowType: string): PermissionLevel | undefined => {
     try {
       const def = registry.getObjectDefinition(windowType as never);
-      const entry = def.methods[command];
+      const entry = def.methods[methodName];
       const fn = entry?.permission;
       if (!fn) return undefined;
       try {
@@ -169,7 +169,7 @@ function lookupDeclaredPermission(
  *
  * 决策链 (优先级从高到低):
  * 1. PermissionDecider (若已通过 setPermissionDecider 注入)
- * 2. policies.json 中的 commands[<command>]
+ * 2. policies.json 中的 methods[<method>]
  * 3. ObjectMethod.permission
  * 4. 默认 "allow"
  */

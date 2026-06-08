@@ -12,7 +12,7 @@ import { describe, expect, test } from "bun:test";
 // from registry.ts:207 and "talk" lookups miss.
 import "@ooc/builtins/root/executable/index.js";
 import { builtinRegistry } from "../registry";
-import type { ObjectMethod } from "../command-types";
+import type { ObjectMethod } from "../method-types";
 
 const fakeMethod: ObjectMethod = {
   paths: ["dummy"],

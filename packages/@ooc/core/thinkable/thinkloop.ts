@@ -57,11 +57,11 @@ function estimateWindowsTokens(
 /**
  * 把 LlmToolCall 解析成 PermissionDecider 可消费的 PendingToolCall 载荷。
  *
- * - exec: 提取 args.method 作为实际 command 路径; args.window_id 作为目标 window
- * - close / wait / compress: command = toolName 自身; windowId/args 视情况
+ * - exec: 提取 args.method 作为实际 method 路径; args.window_id 作为目标 window
+ * - close / wait / compress: method = toolName 自身; windowId/args 视情况
  *
- * Q0b: 当前 exec 的 args 形态为 `{ command, window_id, args, ... }` (见 tools/exec.ts);
- * 解析失败 / 字段缺失时退化为 command=toolName, 由后续 decidePermission 走 ObjectMethod
+ * Q0b: 当前 exec 的 args 形态为 `{ method, window_id, args, ... }` (见 tools/exec.ts);
+ * 解析失败 / 字段缺失时退化为 method=toolName, 由后续 decidePermission 走 ObjectMethod
  * fallback 链。
  */
 function buildPendingToolCall(toolCall: LlmToolCall): PendingToolCall {

@@ -65,7 +65,7 @@ export type {
   MethodExecutionContext,
   MethodKnowledgeEntries,
   MethodOutcome,
-} from "./_shared/command-types.js";
+} from "./_shared/method-types.js";
 
 export { WindowManager } from "./_shared/manager.js";
 
@@ -80,7 +80,7 @@ export {
   execRootMethod,
 } from "@ooc/builtins/root";
 
-// Side-effect imports: each window type module 通过 builtinRegistry.registerObjectType 注入 commands / hooks。
+// Side-effect imports: each window type module 通过 builtinRegistry.registerObjectType 注入 methods / hooks。
 // 这些 import 必须在 WindowManager 之后 load，确保使用时表已就绪。
 //
 // root 必须最先 load。

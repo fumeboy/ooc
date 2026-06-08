@@ -413,7 +413,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     thread.contextWindows = [planWindow];
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
 
-    // openMethodExec will refuse to register the form because lookupCommandEntry can't find
+    // openMethodExec will refuse to register the form because lookupMethodEntry can't find
     // "stub_only" on plan's chain (plan → root → null, neither has stub_only).
     let caught: Error | undefined;
     try {

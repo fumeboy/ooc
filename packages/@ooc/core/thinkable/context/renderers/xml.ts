@@ -93,7 +93,7 @@ export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistr
 
   const children: XmlNode[] = names.map((name) => {
     const entry = def.methods?.[name] ?? def.windowMethods?.[name];
-    // 优先展示语义描述（method 的 *_BASIC 知识），让 LLM 看懂每个 command 的含义；
+    // 优先展示语义描述（method 的 *_BASIC 知识），让 LLM 看懂每个 method 的含义；
     // 无描述时退回 paths 简述（仅别名，价值低）。
     const desc = entry ? extractBasicDescription(entry) : undefined;
     const brief = desc

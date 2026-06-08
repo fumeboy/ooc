@@ -1,7 +1,7 @@
 /**
  * Bootstrap migration: state (object dim) vs context (thread dim) split — P6.§6.
  *
- * Pre-P6, ContextWindow features (talk/do/method_exec/command_exec/todo) were
+ * Pre-P6, ContextWindow features (talk/do/method_exec/todo) were
  * sometimes persisted as their own `flows/<sid>/<wid>/state.json` directories,
  * and some real flow-object state.json files carried a `contextWindows` field
  * that conflated state (object dim, cross-thread) with context (thread dim,

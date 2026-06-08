@@ -1,5 +1,5 @@
 /**
- * root.metaprog command —— 元编程协议入口集合（U6）。
+ * root.metaprog method —— 元编程协议入口集合（U6）。
  *
  * 单一命令名 `metaprog`，通过 `action` 参数分发。把 stone-versioning 的高层
  * 编排（openMetaprogWorktree / commitWorktree / tryMergeSelf / requestPrIssueReview /

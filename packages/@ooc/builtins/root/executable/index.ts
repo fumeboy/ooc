@@ -1,5 +1,5 @@
 /**
- * Root window registration — 把 root window 上注册的所有 command 集中在此处。
+ * Root window registration — 把 root window 上注册的所有 method 集中在此处。
  *
  * Step 2 重构（spec 2026-05-14）：
  * - 旧 src/executable/commands/index.ts 拆分到这里 + windows/_shared/registry.ts；
@@ -73,20 +73,20 @@ export const ROOT_METHODS: Record<string, ObjectMethod> = {
 export const ROOT_BASIC_PATH = "internal/windows/root/basic";
 
 /**
- * Root window 上可用 command 的清单 + 一行用途说明。
+ * Root window 上可用 method 的清单 + 一行用途说明。
  *
  * 每轮自动作为 protocol knowledge_window 注入，让 LLM 在没有任何 form 时也清楚
- * "我能在 root 上 open 哪些 command、每个 command 大致是干什么的"。
+ * "我能在 root 上 exec 哪些 method、每个 method 大致是干什么的"。
  *
  * 形态对应 plan.ts 的 KNOWLEDGE：纯文本，由 collectExecutableKnowledgeEntries 包成
  * KnowledgeWindow（path=ROOT_BASIC_PATH, source=protocol）。
  */
 export const ROOT_KNOWLEDGE = `
-root window 是每个 thread 隐含的根窗口。在 root 上可用的 command 列表如下，
-通过 open(method="<name>", title="...", args={...}) 调用（args 给齐时部分 command 会立即提交 form
-而无需再额外 submit；这由各个具体 command 的实现自行控制）：
+root window 是每个 thread 隐含的根窗口。在 root 上可用的 method 列表如下，
+exec(method="<name>", title="...", args={...}) 调用（args 给齐时部分 method 会立即提交 form
+而无需再额外 submit；这由各个具体 method 的实现自行控制）：
 
-| command         | 作用                                          | 主要副作用                                 |
+| method          | 作用                                          | 主要副作用                                 |
 |-----------------|-----------------------------------------------|--------------------------------------------|
 | do              | 派生子线程                                    | 创建 child thread + do_window              |
 | talk            | 与其它对象（含人类 user 与其它 flow object）持续会话；同一对象复用同一 talk_window | 创建 talk_window；发消息走 talk_window.say |

@@ -25,7 +25,7 @@ import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../_shared/super-constants
 import { initContextWindows } from "../_shared/init";
 import { ROOT_WINDOW_ID, type RelationWindow, type TalkWindow } from "../_shared/types";
 import type { ThreadContext } from "../../../thinkable/context";
-import type { MethodExecutionContext } from "../_shared/command-types";
+import type { MethodExecutionContext } from "../_shared/method-types";
 
 const SELF = "alice";
 const PEER = "critic";

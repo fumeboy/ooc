@@ -1,5 +1,5 @@
 /**
- * root.glob command — 委托到 search_window constructor。
+ * root.glob method — 委托到 search_window constructor。
  *
  * 2026-06-02 P6.§4-§5: 历史 root.glob 的构造逻辑（Bun Glob scan + SearchWindow build）已迁到
  * packages/@ooc/builtins/search/executable/index.ts 的 kind="constructor" search method

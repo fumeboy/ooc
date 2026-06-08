@@ -3,7 +3,7 @@
  *
  * 验证：
  * 1. reportStateEdit(ref) on a non-builtin (plan) flow object → state.json 反映内存里的最新状态
- * 2. reportStateEdit(ref) on a builtin feature (command_exec form) → 是 no-op；state.json 不存在
+ * 2. reportStateEdit(ref) on a builtin feature (method_exec form) → 是 no-op；state.json 不存在
  * 3. reportContextEdit(thread) → thread-context.json 反映当前 contextWindows
  * 4. dispatch wiring: 通过 exec→openMethodExec(refine, args=...) auto-submit refine 后，
  *    thread-context.json 中对应 form 项的 accumulatedArgs 已含 refine 的新参数
@@ -109,9 +109,9 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
     expect("contextWindows" in parsed).toBe(false);
   });
 
-  it("Test 2: reportStateEdit(ref) on builtin feature (command_exec form) → no-op, no state.json", async () => {
+  it("Test 2: reportStateEdit(ref) on builtin feature (method_exec form) → no-op, no state.json", async () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
-    // open a real form via openMethodExec (parent=root, command=do; not auto-submit because no args.msg)
+    // open a real form via openMethodExec (parent=root, method=do; not auto-submit because no args.msg)
     await mgr.openMethodExec({
       thread,
       parentWindowId: ROOT_WINDOW_ID,
@@ -135,7 +135,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
       objectId: liveForm.id,
     });
     // give any pending flushes a chance (but there should be none for the form's own state.json
-    // because command_exec is a builtin feature)
+    // because method_exec is a builtin feature)
     await Bun.sleep(80);
 
     // reportStateEdit on the form's ref → no-op

@@ -43,7 +43,7 @@ export function buildGuidanceWindows(
   entries: Record<string, string>,
 ): ContextWindow[] {
   // batch C 集成：onFormChange/exec 的 form 在零依赖层退化为 base ContextWindow；
-  // guidance 只读 base `id` + 具体 form 的 `command`（仅作 provenance 标签），
+  // guidance 只读 base `id` + 具体 form 的 `method`（仅作 provenance 标签），
   // 在此唯一处 narrow 回 MethodExecWindow（runtime 保证 form 即 method_exec form）。
   const sourceId = (form as MethodExecWindow).method;
   const out: GuidanceWindow[] = [];

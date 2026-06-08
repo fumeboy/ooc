@@ -191,10 +191,7 @@ export const root: DocTreeNode = {
             如果新 Agent 需要被 LLM 或 UI 主动调用方法, 写 \`server/index.ts\` (方法库)。详见 \`meta/object.doc.ts:programmable\`。
             如果新 Agent 需要自己的 UI 页面 (而不是用 Stone fallback), 写 \`client/index.tsx\`. 详见 \`meta/object.doc.ts:visible.stone_client\`。
 
-            **2026-06-02 ooc-6 P6 命名归一**: \`commands\` 字段已重命名为 \`methods\`；\`ObjectMethod\` 类型重命名为 \`ObjectMethod\`。
-            旧名 \`commands\` / \`ObjectMethod\` 仍以 \`@deprecated\` alias 形式存在一个 release，新代码应直接用 \`methods\` / \`ObjectMethod\`。
-
-            **server/index.ts 模板** (P6 形态):
+            **server/index.ts 模板**:
 
             \`\`\`ts
             // stones/agent_of_monitor/server/index.ts
@@ -259,8 +256,8 @@ export const root: DocTreeNode = {
             \`\`\`
 
             **关键点**:
-            - \`methods\` 字段是 canonical 名（\`commands\` 是 @deprecated alias，registry 内部双写以保持读取兼容）。
-            - \`ObjectMethod\` 类型来自 \`@ooc/core/executable/windows\` barrel；旧名 \`ObjectMethod\` 仍可 import 但应迁移到 \`ObjectMethod\`。
+            - \`methods\` 字段是 canonical 名。
+            - \`ObjectMethod\` 类型来自 \`@ooc/core/executable/windows\` barrel。
             - \`kind: "constructor"\` 的 method 必须返回 \`{ ok: true, object: ContextObject }\`；manager 自动 mount 到 thread 的 context（作为 ContextObject），不要在 exec 里直接 \`thread.contextWindows.push(...)\`。
             - \`parentClass: "root"\` 让自定义 Agent 类自动继承 root 的所有通用 method；不写也等价（registry 默认 \`undefined → "root"\`）。
 

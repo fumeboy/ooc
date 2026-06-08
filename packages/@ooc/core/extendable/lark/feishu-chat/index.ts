@@ -10,7 +10,7 @@
  * - close：释放 window
  *
  * 不在本类型职责内：
- * - 创建群 / 加成员 / 撤回消息（走 raw `lark-cli api` 临时，不上升为 first-class command）
+ * - 创建群 / 加成员 / 撤回消息（走 raw `lark-cli api` 临时，不上升为 first-class method）
  * - 跨群转发（由 feishu_doc.attach_to_chat 等做引用，群聊 send 不直接搬内容）
  *
  * 鉴权：默认 send/reply 用 `--as bot`（supervisor 决策 §七.2），其它命令用 user。
@@ -19,7 +19,7 @@
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "../../../executable/windows/_shared/command-types.js";
+} from "../../../executable/windows/_shared/method-types.js";
 import { builtinRegistry, type RenderContext } from "../../../executable/windows/_shared/registry.js";
 import type { FeishuChatWindow, FeishuChatMessage } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
@@ -48,9 +48,9 @@ const PROTOCOL_KNOWLEDGE = `
 feishu_chat_window 是 OOC 与飞书群聊 / 单聊之间的 ContextWindow。
 
 每个 chat_id 对应一个 window 实例。窗口持有最近 buffer（messages 切片），
-LLM 通过下列 command 操作；窗口本身不直接显示历史消息全文，过长会截断。
+LLM 通过下列 method 操作；窗口本身不直接显示历史消息全文，过长会截断。
 
-可用 command：
+可用 method：
 - refresh：拉最新 N 条（无副作用；改 mode=tail）
 - search：本群关键字搜索（无副作用；切 mode=search）
 - send：发新消息（**有副作用，强制 dry-run gate**）
@@ -105,7 +105,7 @@ feishu_chat.send 在本群发一条新消息。**强制 dry-run gate**（supervi
 - text: 必填，纯文本（飞书 markdown 子集；@ 用 <at user_id="..."> ... </at>，详见 feishu_message_grammar 知识）
 - as: 可选，"bot" | "user"，缺省 bot
 - confirm: 必须 true 才真发；首次 submit 通常省略以触发 dry-run 预览
-- msg_type: 可选，缺省 "text"；如需富文本卡片走 raw API，本 command 暂不直接支持
+- msg_type: 可选，缺省 "text"；如需富文本卡片走 raw API，本 method 暂不直接支持
 
 调用流程：
 1. open(parent_window_id="<feishu_chat_window_id>", method="send", args={ text: "..." })
@@ -145,7 +145,7 @@ feishu_chat.close 释放 window；不影响飞书一侧的消息或会话。
 // ─────────────────────────── guidance helper ────────────────────────────
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
   const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {
@@ -172,7 +172,7 @@ function guidanceWindows(form: BaseContextWindow, entries: Record<string, string
   return out;
 }
 
-// ─────────────────────────── command 实现 ────────────────────────────
+// ─────────────────────────── method 实现 ────────────────────────────
 
 const refreshMethod: ObjectMethod = {
   paths: ["refresh"],

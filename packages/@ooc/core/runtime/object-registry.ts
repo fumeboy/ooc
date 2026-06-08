@@ -7,7 +7,7 @@
  *   - 已删除 deprecated 方法：registerObjectType / getObjectDefinition /
  *     listRegisteredObjectTypes / assertAllObjectDefinitionsRegistered
  *   - 内部统一使用 ObjectType / ObjectDefinition / ObjectMethod
- *   - ObjectDefinition 内部字段统一使用 methods / parentClass（不再兼容 commands / prototype）
+ *   - ObjectDefinition 内部字段统一使用 methods / parentClass（旧 commands 字段已弃用）
  */
 import type {
   CompressViewHook,
@@ -312,7 +312,7 @@ export class ObjectRegistry {
 /**
  * Module-level singleton holding builtin object type definitions (root, file,
  * plan, program, todo, search, knowledge, skill_index, do, talk, method_exec,
- * command_exec, feishu_chat, feishu_doc, relation).
+ * feishu_chat, feishu_doc, relation).
  *
  * Builtin modules populate this via side-effect imports at module load time
  * (e.g. `builtinRegistry.registerObjectType("file", {...})`).

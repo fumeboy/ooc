@@ -36,7 +36,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
     await cleanup();
   });
 
-  test("knowledge file with command::root::program activates_on auto-activates", async () => {
+  test("knowledge file with method::root::program activates_on auto-activates", async () => {
     await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
     const poolRef = await createPoolObject({ baseDir: tempRoot, objectId: "agent" });
     const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
@@ -62,7 +62,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
     );
 
     // 关键：用两步 open + refine + submit，不一次给齐 args。否则 form 在 open 同一 tick
-    // 内 auto-submit 后立即移除，下一轮 render 时 contextWindows 已无 commandPath="program.shell"，
+    // 内 auto-submit 后立即移除，下一轮 render 时 contextWindows 已无 methodPath="program.shell"，
     // activator 永远不会在 LLM 视野里命中。这就是 show_content_when=[program.shell] 这种
     // 「在 form 打开期间显示」语义的本意。
     const { inbox, events } = bootstrapInboxFromPrompt(

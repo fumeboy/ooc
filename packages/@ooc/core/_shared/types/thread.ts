@@ -250,7 +250,7 @@ export type ProcessEvent = ProcessEventCommon & (
       /**
        * 事件来源：context 压缩档位变化。
        *
-       * 由 compress tool / expand command / 后续 phase 的自然衰减 + emergency guard 触发,
+       * 由 compress tool / expand method / 后续 phase 的自然衰减 + emergency guard 触发,
        * design: docs/2026-05-25-context-compression-design.md §F(silent-swallow ban) /
        * §4.5 / §4.4。每次压缩档位切换写一条本事件,与现有 ProcessEvent 同序进 thread.json /
        * debug 落盘 / contextSnapshot,LLM 视野中也可见。
@@ -347,7 +347,7 @@ export type ProcessEvent = ProcessEventCommon & (
        * Q0c: 完整序列化的原 pending tool call。approve 路径用它直接 dispatchToolCall,
        * 不依赖 LLM 重新发起 (LLM 可能换 args 或干脆不发了)。
        *
-       * 字段冗余 (toolCallId / command / windowId 已经在外层) 是为了一站式重建 LlmToolCall,
+       * 字段冗余 (toolCallId / method / windowId 已经在外层) 是为了一站式重建 LlmToolCall,
        * 避免 resume 路径再次推断。
        */
       pendingCall?: {
@@ -533,7 +533,7 @@ export type ThreadContext = {
   waitingOn?: string;
   /**
    * P5: Intent cache keyed by formId. Populated by WindowManager write path
-   * (openCommandExec / refine / submit) and read by ContextPipeline processors.
+   * (openMethodExec / refine / submit) and read by ContextPipeline processors.
    * Stored on ThreadContext as a runtime-only field; not persisted to disk.
    */
   intentCache?: IntentCache;

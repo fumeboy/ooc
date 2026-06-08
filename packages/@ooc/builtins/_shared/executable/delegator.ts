@@ -1,11 +1,11 @@
 /**
- * Shared root-command delegator factory.
+ * Shared root-method delegator factory.
  *
- * Batch B3 (2026-06-04): the 10 root.* command files (grep/glob/open_file/
+ * Batch B3 (2026-06-04): the 10 root.* method files (grep/glob/open_file/
  * write_file/plan/todo/talk/program/do/open_knowledge) each carried a
- * near-identical `execute<X>Command` thin delegator: look up the target
- * constructor via the registry, fail-loud if unregistered, optionally inject a
- * `{ command }` form shim, then forward to `ctor.exec`.
+ * near-identical thin delegator: look up the target constructor via the
+ * registry, fail-loud if unregistered, optionally inject a form shim, then
+ * forward to `ctor.exec`.
  *
  * `makeRootDelegator` collapses all 10 into one parameterised factory.
  */
@@ -28,18 +28,18 @@ export interface RootDelegatorSpec {
    */
   objectLabel: string;
   /**
-   * 若设置，则在 ctx 缺 form 时注入一个最小 form shim `{ command: formMethod }`，
-   * 让 constructor 的 command 分发分支拿到正确名字（生产链路里 manager.submit 会
+   * 若设置，则在 ctx 缺 form 时注入一个最小 form shim `{ method: formMethod }`，
+   * 让 constructor 的 method 分发分支拿到正确名字（生产链路里 manager.submit 会
    * 传完整 form；只有直调路径需要这个 shim）。
    *
-   * 多个 root command 共用同一 constructor 时（grep/glob→search，
+   * 多个 root method 共用同一 constructor 时（grep/glob→search，
    * open_file/write_file→file）必须用它消歧；一对一的 constructor 不需要。
    */
   formMethod?: string;
 }
 
 /**
- * 构造一个 root 命令的 thin delegator exec。
+ * 构造一个 root method 的 thin delegator exec。
  *
  * 行为：从 `ctx.manager?.registry ?? builtinRegistry` 取 `constructorKind` 对应的
  * constructor，未注册返回 fail-loud 错误串；否则（按需注入 form shim 后）转发

@@ -160,8 +160,7 @@ export const root: DocTreeNode = {
                 "Thread": "Object 思考过程的运行时节点，多个 thread 组成 Thread Tree",
                 "Thread Tree": "thread 派生子 thread 形成的树形结构，多个 thread 可并行思考",
                 "ThinkLoop": "单个 thread 内的一轮思考循环",
-                "Method": "Object 上挂载的可调用方法（原 Command 概念归一化），由 LLM 通过 exec tool 调用；有 public/for_ui_access 两个可见性标记",
-                "Command": "Method 的旧称（2026-05-28 前），概念已与 Object Method 合并",
+                "Method": "Object 上挂载的可调用方法，由 LLM 通过 exec tool 调用；有 public/for_ui_access 两个可见性标记",
                 "exec/close/wait/compress": "LLM 的 4 个基础 tool：exec 调某 object 上的 method（含 form 的 refine/submit）/ close 关 window / wait 等 IO / compress 压上下文",
                 "form ContextWindow": "执行 method 时由 open 创建的表单型 ContextWindow（type=method_exec），承载渐进式参数填充与知识激活",
                 "ProcessEvent": "thread 运行中产生的过程事件，包括 LLM 输出、tool 调用和上下文变化",
@@ -291,7 +290,7 @@ export const root: DocTreeNode = {
                             - knowledge_object 展示知识（builtin object，位于 \`packages/@ooc/builtins/knowledge/\`）
                             - program_object 展示程序执行过程（builtin object，位于 \`packages/@ooc/builtins/program/\`）
                             - search_object 展示一次 glob / grep 的命中（builtin object，位于 \`packages/@ooc/builtins/search/\`）
-                            - command_exec object 展示一次 method 调用的表单状态（builtin object；P6 ooc-6 起 canonical type=\"method_exec\"，注册于 \`packages/@ooc/core/executable/windows/method_exec/\`，旧 type=\"command_exec\" 作为 legacy alias 同 methods 注册一个 release）
+                            - method_exec object 展示一次 method 调用的表单状态（builtin object，注册于 \`packages/@ooc/core/executable/windows/method_exec/\`）
                             - todo_object 展示待办事项（builtin object，位于 \`packages/@ooc/builtins/todo/\`）
                             - plan_object 展示计划（builtin object，位于 \`packages/@ooc/builtins/plan/\`）
                             - skill_index_object 展示技能索引（builtin object，位于 \`packages/@ooc/builtins/skill_index/\`）
@@ -365,7 +364,6 @@ export const root: DocTreeNode = {
                           - \`"super"\` — 仅在 super flow 中命中
                         - 旧格式（兼容）:
                           - \`"window::<type>"\` → 自动映射为 \`object::<type>\`
-                          - \`"window::<type>"\` → 已在上一行；\`"command::"\` 格式已移除
                         多 trigger 命中取 **max**（show_content > show_description）。
                     - markdown body: frontmatter 之外的正文，构成 KnowledgeDoc.body。
 
@@ -748,12 +746,6 @@ export const root: DocTreeNode = {
             Thinkable 让 Object 能思考，Executable 让 Object 能改变世界。
             在 OOC 中，LLM 不直接调用任意函数，也不直接读写任意状态；它只能通过一组稳定的 tool 原语与 ContextObject（= Object in Context）交互。
 
-            **2026-05-28 ooc-6 归一化: Command 与 Object Method 合并**
-            原 "Window Command" 与 "Object Method" 两个概念合并，统一称为 **Method**:
-            - 原 window 上注册的 method 现在是 builtin object 的 method
-            - 原 stone object executable/index.ts 中定义的方法现在也是 object 的 method
-            - Method 有两个可见性标记: \`public?: boolean\`（对其他 Object 是否可见）、\`for_ui_access?: boolean\`（对前端 API 是否可调用）
-
             Executable 的核心分层:
             1. Tool 原语层: exec / close / wait / compress，是 LLM 直接看见的稳定接口（4 个）。
             2. Method 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 method_exec object 上的 method。
@@ -769,13 +761,12 @@ export const root: DocTreeNode = {
             named: {
                 "Executable": "Object 的行动能力维度，定义 LLM 如何通过 tool、method、ContextObject 改变系统状态",
                 "Tool": "LLM 直接可调用的稳定原语：exec / close / wait / compress",
-                "Method": "具体行动单元（2026-05-28 归一化，原 Command 与 Object Method 合并），挂在某 object 上注册；如 do/talk/program 在 root 上、refine/submit 在 method_exec（旧名 command_exec）上",
-                "Command": "Method 的旧称（2026-05-28 前），概念已与 Object Method 合并",
+                "Method": "具体行动单元，挂在某 object 上注册；如 do/talk/program 在 root 上、refine/submit 在 method_exec 上",
                 "ContextObject": "可展示、可操作、可挂载 method 的上下文对象；本质是 OOC Object 出现在 context 中的形态",
                 "ContextWindow": "ContextObject 的旧称（2026-05-28 前），概念已统一为 ContextObject",
                 "ObjectType": "ContextObject 的类型分支，如 root/file/program/talk/do/knowledge/search/plan，以及运行时通过 registerNewObjectType 注册的任意字符串类型",
                 "WindowType": "ObjectType 的旧称（2026-05-28 前）",
-                "MethodExec": "一次 method 调用过程对应的临时对象（type=\"method_exec\"；2026-06-08 method 概念移除，旧别名 command_exec 已删除）；自身注册 refine/submit method",
+                "MethodExec": "一次 method 调用过程对应的临时对象（type=\"method_exec\"）；自身注册 refine/submit method",
                 "ObjectRegistry": "注册各类 object type 行为的机制（原 WindowRegistry）",
                 "ObjectManager": "管理 thread context objects 增删改查和生命周期的机制（原 WindowManager）",
                 "WindowRegistry": "ObjectRegistry 的旧称",
@@ -869,14 +860,13 @@ export const root: DocTreeNode = {
                     },
                 },
                 "methods": {
-                    title: "methods - 具体行动单元（原称 commands）",
+                    title: "methods - 具体行动单元",
                     content: `
-                    Method 是 LLM 通过 exec 间接调用的具体行动（2026-05-28 ooc-6 命名归一前称 command；
-                    原 \`ObjectDefinition.commands\` 字段已于 2026-06-08 重命名为 \`methods\`——command 概念移除，无 alias）。
+                    Method 是 LLM 通过 exec 间接调用的具体行动，注册在 ObjectDefinition.methods 字段。
 
                     LLM 通常不是直接 "调用 program 函数"，而是:
                     1. exec(method="program", args={ language: "shell", code: "..." }) → args 齐全立即执行
-                    2. 或 exec(method="program") → 系统创建 form（type="method_exec"，旧名 "command_exec"），后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
+                    2. 或 exec(method="program") → 系统创建 form（type="method_exec"），后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
                     3. method 产生副作用，比如创建 program_window 或派生 plan_window。
 
                     root window 注册一组顶层 method（与 src/executable/windows/root/index.ts ROOT_METHODS 一致）:
@@ -903,7 +893,7 @@ export const root: DocTreeNode = {
                     （共 14 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
 
                     其它 window 上也注册 method（do_window: continue/wait/close；talk_window: say/wait/close；
-                    file_window: edit/reload/set_range/close；method_exec（旧名 command_exec）: refine/submit；user-defined object: 自定义 methods ...）。
+                    file_window: edit/reload/set_range/close；method_exec: refine/submit；user-defined object: 自定义 methods ...）。
                     Object 自定义 methods 通过 executable/index.ts 的 \`export const object\`（旧名 \`window\`）注册，运行时通过 \`registerNewObjectType\` 动态注册到 ObjectRegistry（即 \`REGISTRY\` Map in \`core/executable/windows/_shared/registry.ts\`）。
 
                     Method 与 knowledge 通过 trigger 协议协作：
@@ -4805,7 +4795,7 @@ export const root: DocTreeNode = {
             实施计划: docs/superpowers/plans/2026-05-28-ooc-object-unification-plan.md
             `,
             named: {
-                "object unification": "ooc-6 核心概念归一化: ContextWindow = Object in Context, Command = Method",
+                "object unification": "ooc-6 核心概念归一化: ContextWindow = Object in Context",
                 "Context Object Tree": "运行时创建的对象形成的嵌套结构，持久化在 context/ 目录下",
             },
         },

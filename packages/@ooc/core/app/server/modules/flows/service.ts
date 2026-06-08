@@ -363,7 +363,7 @@ export function createFlowsService(deps: {
      * 一次性 seed 一个 session：建 session + user flow object + 让 user 对 target 发起 talk。
      *
      * collaborable § cross-object talk（spec 2026-05-15）：web 用户创建 session 的入口，
-     * 等价于 user 这个 flow object 用 talk command 调起对 target 的会话。
+     * 等价于 user 这个 flow object 用 talk method 调起对 target 的会话。
      *
      * 流程：
      * 1. createFlowSession（已存在则跳过）

@@ -8,7 +8,7 @@
  *
  * 仅保留：
  * - `ProgramSelf` —— program 模式 ts/js sandbox 注入的 self；`callMethod`
- *   按 windowId 查 thread.contextWindows 并执行该 window 上的 command
+ *   按 windowId 查 thread.contextWindows 并执行该 window 上的 method
  * - UI 路径相关：`UiServerMethod` / `UiMethods` / `UiServerMethodContext` ——
  *   `ui_methods` 仍由 server/index.ts 平行导出（plan D3 完全保留）；HTTP
  *   `flows.callMethod` / `stones.callMethod` 路径只服务这一字典
@@ -21,21 +21,21 @@ import type { ReadableFn } from "../windows/_shared/registry.js";
 
 export type { StoneObjectDeclaration };
 
-/** program 中注入的 self 对象，让用户代码能调用任意 window 上任意 command 与读写 data。 */
+/** program 中注入的 self 对象，让用户代码能调用任意 window 上任意 method 与读写 data。 */
 export interface ProgramSelf {
   /** stone 目录绝对路径。 */
   dir: string;
   /**
-   * 调用任意 window 上的任意已注册 command。
+   * 调用任意 window 上的任意已注册 method。
    *
    * - windowId：thread.contextWindows 中已存在的 window id（含 custom window）
-   * - command：该 window 的 commands 表中的命令名
-   * - args：command exec ctx.args 的内容
+   * - method：该 window 的 methods 表中的方法名
+   * - args：method exec ctx.args 的内容
    *
-   * 行为：在当前 thread 的 contextWindows 里 lookup window → 通过 WindowRegistry 取
-   * commands[command] → 走 entry.exec（type=custom 时由 dispatcher 注入 self）。
+   * 行为：在当前 thread 的 contextWindows 里 lookup window → 通过 ObjectRegistry 取
+   * methods[method] → 走 entry.exec（type=custom 时由 dispatcher 注入 self）。
    *
-   * 找不到 windowId / command 时抛清晰错误（包含当前可见 window/command 列表）。
+   * 找不到 windowId / method 时抛清晰错误（包含当前可见 window/method 列表）。
    */
   callMethod: (windowId: string, command: string, args?: Record<string, unknown>) => Promise<unknown>;
   /** 读 data.json 中的字段；不存在返回 undefined。 */

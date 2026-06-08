@@ -1,8 +1,5 @@
 /**
  * method_exec window 的 readable hook：accumulated_args / paths / result。
- *
- * P6.§9（2026-06-02）：源文件从 `packages/@ooc/builtins/command_exec/readable.ts`
- * 迁移到 `packages/@ooc/core/executable/windows/method_exec/readable.ts`。
  */
 
 import { type RenderContext } from "../_shared/registry.js";

@@ -18,7 +18,7 @@ const callOpen = (callId: string, opts: { method?: string; title?: string }) => 
   kind: "function_call",
   callId,
   toolName: "open",
-  arguments: { command: opts.method ?? "talk", title: opts.title ?? "open card" },
+  arguments: { method: opts.method ?? "talk", title: opts.title ?? "open card" },
 });
 
 const callOpenOutput = (callId: string, windowId: string, ok: boolean = true) => ({

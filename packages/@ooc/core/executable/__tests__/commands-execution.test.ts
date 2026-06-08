@@ -52,16 +52,16 @@ function callKnowledge(
 }
 
 /**
- * 验证 root level command 在 ContextWindow 模型下的副作用。
+ * 验证 root level method 在 ContextWindow 模型下的副作用。
  *
  * 注：do/todo 都改为产生 window 类型的产物；详见各自专门测试。
  */
-describe("command execution side effects", () => {
-  it("all commands expose knowledge via ObjectMethod instead of exported KNOWLEDGE", async () => {
-    for (const [command, entry] of Object.entries(ROOT_METHODS)) {
+describe("method execution side effects", () => {
+  it("all methods expose knowledge via ObjectMethod instead of exported KNOWLEDGE", async () => {
+    for (const [method, entry] of Object.entries(ROOT_METHODS)) {
       const knowledge = callKnowledge(entry, {}, "open");
-      expect(knowledge[`internal/executable/${command}/basic`]).toBeString();
-      expect(knowledge[`internal/executable/${command}/basic`].length).toBeGreaterThan(0);
+      expect(knowledge[`internal/executable/${method}/basic`]).toBeString();
+      expect(knowledge[`internal/executable/${method}/basic`].length).toBeGreaterThan(0);
     }
 
     const modules = await Promise.all([
@@ -130,7 +130,7 @@ describe("command execution side effects", () => {
     // 这里只构造最小：把 child 挂到一个 parent 的 childThreads 上
     const parent = makeThread({ id: "t_parent", skipCreatorWindow: true });
     parent.childThreads = { [child.id]: child };
-    // 反向引用：与 do command 中 _parentThreadRef 的 mechanism 一致
+    // 反向引用：与 do method 中 _parentThreadRef 的 mechanism 一致
     Object.defineProperty(child, "_parentThreadRef", {
       value: parent,
       enumerable: false,

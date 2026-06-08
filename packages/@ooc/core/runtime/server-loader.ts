@@ -10,7 +10,7 @@ import {
   resolveStoneDir,
 } from "../persistable/index.js";
 import type { ReadableFn } from "../executable/windows/_shared/registry.js";
-import type { ObjectMethod } from "../executable/windows/_shared/command-types.js";
+import type { ObjectMethod } from "../executable/windows/_shared/method-types.js";
 import type {
   ServerLoaderEntry,
   StoneObjectRef,
@@ -79,7 +79,7 @@ export class ServerLoader {
 
     if ("llm_methods" in mod) {
       throw new Error(
-        `${serverFile}: 'llm_methods' 已被移除；请改写为 \`export const window: StoneObjectDeclaration = { commands: { ... } }\``,
+        `${serverFile}: 'llm_methods' 已被移除；请改写为 \`export const window: StoneObjectDeclaration = { methods: { ... } }\``,
       );
     }
 

@@ -6,16 +6,13 @@
  * exec ctx 中：
  * - self = 该 form 自身（type=method_exec；P6.§3 由 manager dispatch 强保证类型）
  * - ctx.args = 要累积/覆盖到 form 上的键值对
- * - manager 用来调内部 refine 方法重算 commandPaths
- *
- * P6.§9（2026-06-02）：源文件从 `packages/@ooc/builtins/command_exec/executable/command.refine.ts`
- * 迁移到 `packages/@ooc/core/executable/windows/method_exec/refine.ts`。
+ * - manager 用来调内部 refine 方法重算 methodPaths
  */
 
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "../_shared/command-types.js";
+} from "../_shared/method-types.js";
 import type { MethodExecWindow } from "../_shared/types.js";
 import type { WindowManager } from "../_shared/manager.js";
 import type { BaseContextWindow } from "@ooc/core/_shared";
@@ -57,7 +54,7 @@ async function executeRefine(ctx: MethodExecutionContext): Promise<string | unde
 }
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
   const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {

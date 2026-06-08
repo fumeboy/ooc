@@ -72,7 +72,7 @@ function callKnowledge(
 // ---------- U1 ----------
 
 describe("U1: SearchWindow type + render + basicKnowledge", () => {
-  it("registry has 'search' definition with non-empty commands and basicKnowledge", () => {
+  it("registry has 'search' definition with non-empty methods and basicKnowledge", () => {
     const def = builtinRegistry.getObjectDefinition("search");
     expect(Object.keys(def.methods).length).toBeGreaterThan(0);
     expect(typeof def.basicKnowledge).toBe("string");
@@ -182,7 +182,7 @@ describe("U1: SearchWindow type + render + basicKnowledge", () => {
     expect(thread.contextWindows.find((w) => w.id === sw.id)).toBeUndefined();
   });
 
-  it("basicKnowledge mentions open_match and close commands", () => {
+  it("basicKnowledge mentions open_match and close methods", () => {
     expect(SEARCH_WINDOW_BASIC_KNOWLEDGE).toContain("open_match");
     expect(SEARCH_WINDOW_BASIC_KNOWLEDGE).toContain("close");
     expect(SEARCH_WINDOW_BASIC_KNOWLEDGE).toContain("truncated");
@@ -322,7 +322,7 @@ describe("U2: file_window.edit", () => {
   });
 
   it("edge: parent is not a file_window → error '未挂载在 file_window 上'", async () => {
-    // 在 root 上调 edit（root 没有 edit command），应被 lookup 拒绝
+    // 在 root 上调 edit（root 没有 edit method），应被 lookup 拒绝
     const thread = makeThread({ id: "t_wrong_parent" });
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     let err: string | undefined;
@@ -829,7 +829,7 @@ describe("U5: root.grep", () => {
 import { programMethod } from "@ooc/builtins/root/executable/method.program";
 
 describe("U6: program knowledge mentions file_window.edit", () => {
-  it("program command knowledge text steers LLM toward file_window.edit + write_file", () => {
+  it("program method knowledge text steers LLM toward file_window.edit + write_file", () => {
     // 用代表性 args 调 knowledge()——只需要 basic path 包含建议段落
     const k = callKnowledge(programMethod, { language: "shell", code: "ls" }, "open");
     const text = Object.values(k).join("\n");

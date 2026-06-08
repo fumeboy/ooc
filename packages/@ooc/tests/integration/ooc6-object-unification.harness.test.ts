@@ -10,7 +10,7 @@
  *  5. Prototype chain (verified via custom dispatcher inheritance)
  *  6. Directory naming (executable/, readable., visible/)
  *  7. Method visibility (public, for_ui_access)
- *  8. Command exec creating objects that enter context
+ *  8. Method exec creating objects that enter context
  *  9. Runtime-created objects in flows/<sid>/objects/<pid>/context/
  * 10. Peer/children auto-enter context (no relation window needed)
  *
@@ -218,7 +218,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(Object.keys(rootDef.methods).length).toBeGreaterThan(5);
 
     // objectId type is no longer a separate builtin type (ooc-6); objects self-register
-    // edit_relation command is now available on dynamically-registered object types
+    // edit_relation method is now available on dynamically-registered object types
 
     // Todo has no LLM-callable commands (correct per design: only close action)
     const todoDef = builtinRegistry.getObjectDefinition("todo");
@@ -238,13 +238,13 @@ describe("ooc-6 Object Unification harness cycle", () => {
     const skillDef = builtinRegistry.getObjectDefinition("skill_index");
     expect(Object.keys(skillDef.methods).length).toBe(0);
 
-    // Command_exec should have submit/refine/cancel commands
+    // method_exec should have submit/refine methods
     const execDef = builtinRegistry.getObjectDefinition("method_exec");
     expect(execDef.methods["submit"]).toBeDefined();
     expect(execDef.methods["refine"]).toBeDefined();
   });
 
-  // ── Point 8: Command exec creates objects that enter context ────────────
+  // ── Point 8: Method exec creates objects that enter context ────────────
   it("8: open_knowledge creates a knowledge object that enters context", async () => {
     const thread = makeThread({
       id: "t_main",
@@ -254,7 +254,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
 
     const initialCount = thread.contextWindows.length;
 
-    // Insert a knowledge window (simulating what open_knowledge command does)
+    // Insert a knowledge window (simulating what open_knowledge method does)
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     mgr.insertTypedWindow({
       id: "w_knowledge_test",

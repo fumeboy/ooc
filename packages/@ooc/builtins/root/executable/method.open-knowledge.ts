@@ -1,5 +1,5 @@
 /**
- * root.open_knowledge command — 委托到 knowledge_window constructor。
+ * root.open_knowledge method — 委托到 knowledge_window constructor。
  *
  * 2026-06-02 P6.§4-§5: 历史 root.open_knowledge 的构造逻辑（path 校验 + KnowledgeWindow build）
  * 已迁到 packages/@ooc/builtins/knowledge/executable/index.ts 的 kind="constructor" knowledge method。
@@ -26,7 +26,7 @@ open_knowledge 用于显式打开一个 knowledge doc，作为 knowledge_window 
 参数：
 - path: 必填，knowledge 索引中的路径（不带 .md，例如 "build-tools/file-ops"）
 
-打开后该 knowledge 会强制以 full 形式渲染（绕过 activator 的 command-path 命中规则），
+打开后该 knowledge 会强制以 full 形式渲染（绕过 activator 的 method-path 命中规则），
 直到显式 close。等价于旧 pinnedKnowledge。
 
 后续：

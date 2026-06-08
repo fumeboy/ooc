@@ -4,14 +4,14 @@ import type { ThreadContext } from "../../thinkable/context";
 import type { ProgramSelf } from "./types";
 import type { ObjectRegistry } from "../windows/_shared/registry";
 import { builtinRegistry } from "../windows/index.js";
-import type { MethodExecutionContext } from "../windows/_shared/command-types";
+import type { MethodExecutionContext } from "../windows/_shared/method-types";
 
 /**
  * 构造 program 模式注入的 self 对象（plan §6.5 / §5.5）。
  *
  * - dir：stone 目录绝对路径
- * - callMethod(windowId, command, args?)：在当前 thread.contextWindows 里 lookup
- *   window → 通过 WindowRegistry 取 commands[command] → exec(ctx)；type=custom
+ * - callMethod(windowId, method, args?)：在当前 thread.contextWindows 里 lookup
+ *   window → 通过 ObjectRegistry 取 methods[method] → exec(ctx)；type=custom
  *   时 dispatcher 会把 ProgramSelf 注入到 ctx.programSelf（2026-06-02 P6.§1 从 ctx.self 改名）
  * - getData/setData：读写 flow object 的 `data.json`
  *   （`flows/<sid>/objects/<self>/data.json`；2026-05-23 起从 stone 迁到 flow，
@@ -28,7 +28,7 @@ export function createProgramSelf(
   const dir = stoneDir(stoneRef);
   const self: ProgramSelf = {
     dir,
-    async callMethod(windowId, command, args = {}) {
+    async callMethod(windowId, method, args = {}) {
       const window = thread.contextWindows.find((w) => w.id === windowId);
       if (!window) {
         const visible = thread.contextWindows.map((w) => `${w.id}(${w.type})`).join(", ") || "(无)";
@@ -37,15 +37,15 @@ export function createProgramSelf(
         );
       }
 
-      // 取该 window type 的 commands
+      // 取该 window type 的 methods
       const def = registry.getObjectDefinition(window.type);
-      let commands = def.methods;
+      const methods = def.methods;
 
-      const entry = commands[command];
+      const entry = methods[method];
       if (!entry) {
-        const available = Object.keys(commands).join(", ") || "(无)";
+        const available = Object.keys(methods).join(", ") || "(无)";
         throw new Error(
-          `windowId ${windowId} (${window.type}) 上不存在 command ${command}；当前可用：${available}`,
+          `windowId ${windowId} (${window.type}) 上不存在 method ${method}；当前可用：${available}`,
         );
       }
 

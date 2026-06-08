@@ -432,14 +432,14 @@ exec(form_id, "submit")                              // 重新执行
 \`\`\`
 
 - refine 检测到 failed 状态时自动: 累积新 args + 清旧 result + 切回 open
-- 保留原 form id + 已激活的 knowledge / 已派生的 commandPaths (不丢上下文)
+- 保留原 form id + 已激活的 knowledge / 已派生的 methodPaths (不丢上下文)
 - **这是失败修复的首选路径**
 
 ### 关键提示
 
 **open 或 failed 状态发现参数不全/错时，优先 refine；不要 close + 重开。**
 
-- close + 重开会丢失 form 上已激活的 knowledge / 已派生的 commandPaths / form id 关联
+- close + 重开会丢失 form 上已激活的 knowledge / 已派生的 methodPaths / form id 关联
 - 产生额外噪声 window，污染 context，拖慢 thread
 - 每个 method 的 input prompt 在缺参数时会列出缺失的字段，按提示 refine 即可
 - close 仍可用作 "彻底放弃此次调用" 的兜底, 但不是失败修复首选

@@ -109,7 +109,7 @@ export const writeFileMethod: ObjectMethod = {
  * P6.§4-§5 thin delegator —— 委托到 file_window constructor（dispatch on form.method="write_file"）。
  *
  * 注入一个最小 form shim（{ method: "write_file" }）到 ctx，让 constructor 的
- * dispatch 分支拿到正确的 command 名（生产链路里 manager.submit 会传完整 form）。
+ * dispatch 分支拿到正确的 method 名（生产链路里 manager.submit 会传完整 form）。
  */
 export const executeWriteFileMethod = makeRootDelegator({
   method: "write_file",

@@ -1,8 +1,8 @@
 # executable 体验官 Playbook
 
 ## 维度 brief
-行动能力：被测 Agent 通过 tools/commands（编辑、搜索、grep、open_file 等）操作真实文件系统。
-**外部可观察落点**：world fs 文件 diff、thread 里的命令序列（command_exec/method_exec）、git。
+行动能力：被测 Agent 通过 tools（编辑、搜索、grep、open_file 等）操作真实文件系统。
+**外部可观察落点**：world fs 文件 diff、thread 里的 method 调用序列（method_exec）、git。
 
 ## 驱动准备
 1. 建被测 agent：`POST /api/stones {objectId:"assistant", self:"# Assistant\n我能编辑文件、搜索、grep。"}`
@@ -36,4 +36,4 @@
 ## 已知陷阱
 - agent 的编辑默认落在**自身 stone 自治区**（stones/main/objects/assistant/）；别期望它写到任意 world 路径。
 - 等 job done 再 cat 文件（真 LLM 慢）。
-- 命令名是 method 术语（method_exec），不是旧 command_exec。
+- method 调用走 method_exec form，form 成功后自动移除。

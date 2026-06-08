@@ -5,7 +5,7 @@
  * - 级联：parent 关闭 → 所有 sub-window 强制关闭
  * - 释放该 window 引入的 knowledge 引用计数（WindowManager 内部处理）
  * - type 注册的 onClose hook 决定额外副作用（do_window archive、creator window 拒绝等）
- * - command_exec 成功执行后已自动消失，无需 close；本 tool 用于 close 失败 form / do_window /
+ * - method_exec form 成功执行后已自动消失，无需 close；本 tool 用于 close 失败 form / do_window /
  *   todo_window
  */
 
@@ -25,7 +25,7 @@ export const CLOSE_TOOL: LlmTool = {
       title: TITLE_PARAM,
       window_id: {
         type: "string",
-        description: "要关闭的 window 的 id（command_exec form 也是一种 window）",
+        description: "要关闭的 window 的 id（method_exec form 也是一种 window）",
       },
       reason: { type: "string", description: "关闭原因，帮助下一轮理解" },
       mark: MARK_PARAM,

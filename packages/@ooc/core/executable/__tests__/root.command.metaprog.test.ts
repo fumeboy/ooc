@@ -1,7 +1,7 @@
 /**
- * command.metaprog caller-guard + error-token 单测
+ * method.metaprog caller-guard + error-token 单测
  *
- * 不跑真 git；只校验 metaprog command 层的 caller-permission 校验与新的
+ * 不跑真 git；只校验 metaprog method 层的 caller-permission 校验与新的
  * `[metaprog:create_object:<CODE>]` 错误 token 形态。
  */
 

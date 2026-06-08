@@ -3,7 +3,7 @@
  *
  * - 由 root.open_file / root.write_file 创建（args: path, lines?, columns?）
  *   open 时自动填默认 viewport = 0-200 行 / 0-200 字符（DEFAULT_VIEWPORT）
- * - 注册的 command：set_viewport / set_range / reload / edit / close
+ * - 注册的 method：set_viewport / set_range / reload / edit / close
  *   - **set_viewport（推荐）**：精细化调整渲染窗口（line_start/line_end/column_start/column_end）
  *   - set_range：遗留命令，调整 lines / columns 切片（保留向后兼容）
  *   - reload：重新读文件（render 层每轮都会读，所以 reload 主要是语义提示）
@@ -534,9 +534,9 @@ async function compressFileWindow(
  *  - `write_file` — write content to disk (with optional stone versioning) then spawn a window
  *
  * Dispatch on `ctx.form?.method`:
- *  - command === "write_file": validate path + content, perform write (versioned for stones,
+ *  - method === "write_file": validate path + content, perform write (versioned for stones,
  *    direct for non-stone), then construct a FileWindow.
- *  - command === "open_file" (or anything else): validate path exists, then construct.
+ *  - method === "open_file" (or anything else): validate path exists, then construct.
  *
  * Validation rules (per root method):
  *  - open_file: `path` is a non-empty string; resolved against session baseDir; must exist.

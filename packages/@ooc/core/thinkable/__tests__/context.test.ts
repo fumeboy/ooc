@@ -12,7 +12,7 @@ import {
 } from "../../executable/windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
 
-/** 构造一个 command_exec window，便于 context render 测试 */
+/** 构造一个 method_exec window，便于 context render 测试 */
 function execForm(overrides: Partial<MethodExecWindow>): MethodExecWindow {
   return {
     id: overrides.id ?? "f_x",
@@ -329,7 +329,7 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain('type="expert"'); // 未注册 peer 仍以占位/可用形式渲染
   });
 
-  it("renders command_exec form result only when status=failed (Round 13 四态机)", async () => {
+  it("renders method_exec form result only when status=failed (Round 13 四态机)", async () => {
     const thread = makeThread({
       id: "t_status",
       extraWindows: [

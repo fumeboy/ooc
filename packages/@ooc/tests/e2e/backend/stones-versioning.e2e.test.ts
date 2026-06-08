@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { __resetSerialQueueForTests, readPrIssueIndex } from "@ooc/core/persistable";
 import { executeMetaprog } from "@ooc/builtins/root/executable/method.metaprog";
 import { runRecoveryCheck } from "@ooc/core/app/server/bootstrap/recovery-check";
-import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/command-types";
+import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 let tempRoot: string | undefined;

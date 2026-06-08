@@ -6,8 +6,8 @@
  *
  * 三种 source：
  * - explicit  ：LLM 显式 \`open(method="open_knowledge")\` 创建；持久化；可 close
- * - protocol  ：每轮自动注入的协议常量（KNOWLEDGE）+ 各 command_exec form 的 knowledge() 派生
- * - activator ：stones/{id}/knowledge/*.md 经 commandPaths 命中合成；带 presentation
+ * - protocol  ：每轮自动注入的协议常量（KNOWLEDGE）+ 各 method_exec form 的 knowledge() 派生
+ * - activator ：stones/{id}/knowledge/*.md 经 methodPaths 命中合成；带 presentation
  *
  * 后两种由 src/executable/index.ts: synthesizeKnowledgeWindows 在 buildInputItems 阶段
  * 合成到 thread.contextWindows 的副本上，不会持久化。
@@ -159,7 +159,7 @@ open_knowledge 用于显式打开一个 knowledge doc，作为 knowledge_window 
 参数：
 - path: 必填，knowledge 索引中的路径（不带 .md，例如 "build-tools/file-ops"）
 
-打开后该 knowledge 会强制以 full 形式渲染（绕过 activator 的 command-path 命中规则），
+打开后该 knowledge 会强制以 full 形式渲染（绕过 activator 的 method-path 命中规则），
 直到显式 close。等价于旧 pinnedKnowledge。
 
 后续：

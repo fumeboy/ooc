@@ -4,20 +4,18 @@
  * 调用形态：exec(<form_id>, "submit")
  *
  * exec ctx 中：
- * - self = 该 form 自身（type=method_exec / 兼容 command_exec；P6.§3 由 manager dispatch 强保证类型）
+ * - self = 该 form 自身（type=method_exec；P6.§3 由 manager dispatch 强保证类型）
  * - ctx.thread / ctx.manager 是必需的
  *
  * 命令体走 manager.submit：状态 open → executing → success | failed (Round 13 升级)。
  * 成功 (success) 自动移除 form；失败 (failed) 保留 form + result，LLM 可 refine 修复后重 submit。
  *
- * P6.§9（2026-06-02）：源文件从 `packages/@ooc/builtins/command_exec/executable/command.submit.ts`
- * 迁移到 `packages/@ooc/core/executable/windows/method_exec/submit.ts`。
  */
 
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "../_shared/command-types.js";
+} from "../_shared/method-types.js";
 import type { MethodExecWindow } from "../_shared/types.js";
 import type { WindowManager } from "../_shared/manager.js";
 import type { BaseContextWindow } from "@ooc/core/_shared";
@@ -52,7 +50,7 @@ async function executeSubmit(ctx: MethodExecutionContext): Promise<string | unde
 }
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
   const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {

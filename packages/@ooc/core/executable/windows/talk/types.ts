@@ -11,7 +11,7 @@ import type { TranscriptViewport } from "../_shared/transcript-viewport.js";
  * - isCreatorWindow：标记为"指向 caller 的初始 creator talk_window"（不可被 LLM close）
  * - transcriptViewport：transcript 渲染窗口（tail / range 互斥）；默认 tail=20；
  *   通过 set_transcript_window 命令调整；详见 _shared/transcript-viewport.ts
- * - 注册的 command（windows/talk/index.ts）：say / wait / close / set_transcript_window
+ * - 注册的 method（windows/talk/index.ts）：say / wait / close / set_transcript_window
  * - 视图：transcript 按 outbox.windowId === self.id || inbox.replyToWindowId === self.id 过滤
  */
 export interface TalkWindow extends BaseContextWindow {

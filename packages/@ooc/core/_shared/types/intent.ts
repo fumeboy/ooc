@@ -60,7 +60,7 @@ export type FormChangeEvent =
 
 /**
  * Cache keyed by formId, holding the last-computed intent + derived windows for that form.
- * Managed by the write path (manager.openCommandExec / refine / submit) and read by
+ * Managed by the write path (manager.openMethodExec / refine / submit) and read by
  * ContextPipeline. Stored in ThreadContext.
  */
 export interface IntentCacheEntry {

@@ -9,7 +9,7 @@ import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.j
  *
  * 覆盖：
  * - tool 集合定义（exec / close / wait）
- * - exec 在 args 不齐全时创建 command_exec form
+ * - exec 在 args 不齐全时创建 method_exec form
  * - args 给齐 + 不引入新 path/knowledge → 立即执行（auto-execute）
  * - exec(form_id, "refine", args=...) 通过 MethodExecWindow.refine 命令累加 args
  * - exec(form_id, "submit") 通过 MethodExecWindow.submit 命令触发执行
@@ -29,7 +29,7 @@ describe("executable tools (ContextWindow model)", () => {
     expect(tools).toHaveLength(4);
   });
 
-  it("exec(command=plan) 创建 command_exec form 并预填 args（plan 缺 plan 文本时不会被立即提交）", async () => {
+  it("exec(method=plan) 创建 method_exec form 并预填 args（plan 缺 plan 文本时不会被立即提交）", async () => {
     const thread = makeThread();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
@@ -72,7 +72,7 @@ describe("executable tools (ContextWindow model)", () => {
     );
   });
 
-  it("MethodExecWindow.refine 累积 args 并刷新 commandPaths（do 加 wait 触发 do.wait path）", async () => {
+  it("MethodExecWindow.refine 累积 args 并刷新 methodPaths（do 加 wait 触发 do.wait path）", async () => {
     const thread = makeThread();
     await dispatchToolCall(thread, {
       id: "call_1",

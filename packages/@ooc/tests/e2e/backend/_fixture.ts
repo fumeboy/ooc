@@ -361,7 +361,7 @@ function isFnCall(event: ProcessEvent): event is FnCallEvent {
   return event.category === "llm_interaction" && event.kind === "function_call";
 }
 
-/** 抽取本 thread 中 LLM 调用过的 commandPath 列表（开过的 command_exec window 命令名）。 */
+/** 抽取本 thread 中 LLM 调用过的 methodPath 列表（开过的 method_exec window 方法名）。 */
 export function listOpenedCommands(thread: ThreadContext | undefined): string[] {
   if (!thread) return [];
   const seen: string[] = [];

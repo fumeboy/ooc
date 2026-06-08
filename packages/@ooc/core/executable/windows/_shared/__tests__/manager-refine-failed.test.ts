@@ -34,7 +34,7 @@ async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string
   const form = thread.contextWindows.find(
     (w): w is MethodExecWindow => w.type === "method_exec",
   );
-  if (!form) throw new Error("expected command_exec form created (do with no msg)");
+  if (!form) throw new Error("expected method_exec form created (do with no msg)");
   // 2. submit → 失败 (do 缺 msg → form 进 failed)
   await dispatchToolCall(thread, {
     id: "call_2",

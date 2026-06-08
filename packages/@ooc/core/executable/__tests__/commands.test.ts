@@ -47,8 +47,8 @@ function callKnowledge(
   return out;
 }
 
-describe("executable commands", () => {
-  it("should have command table with all commands", () => {
+describe("executable methods", () => {
+  it("should have method table with all methods", () => {
     expect(Object.keys(ROOT_METHODS)).toContain("talk");
     expect(Object.keys(ROOT_METHODS)).toContain("do");
     expect(Object.keys(ROOT_METHODS)).toContain("program");
@@ -60,7 +60,7 @@ describe("executable commands", () => {
     expect(Object.keys(ROOT_METHODS)).not.toContain("compact");
   });
 
-  it("should return sorted openable commands", () => {
+  it("should return sorted openable methods", () => {
     const openable = getOpenableMethods();
     expect(Array.isArray(openable)).toBe(true);
     expect(openable.length).toBeGreaterThan(0);
@@ -70,7 +70,7 @@ describe("executable commands", () => {
     expect(openable).not.toContain("defer");
   });
 
-  it("should define openable commands in index instead of each command file", () => {
+  it("should define openable methods in index instead of each method file", () => {
     for (const entry of Object.values(ROOT_METHODS)) {
       expect("openable" in entry).toBe(false);
     }
@@ -93,10 +93,10 @@ describe("executable commands", () => {
     ]);
   });
 
-  it("should expose non-empty knowledge entries for every command", () => {
-    for (const [command, entry] of Object.entries(ROOT_METHODS)) {
+  it("should expose non-empty knowledge entries for every method", () => {
+    for (const [method, entry] of Object.entries(ROOT_METHODS)) {
       const knowledge = callKnowledge(entry, {}, "open");
-      const basic = knowledge[`internal/executable/${command}/basic`];
+      const basic = knowledge[`internal/executable/${method}/basic`];
       expect(typeof basic).toBe("string");
       expect(basic?.trim().length).toBeGreaterThan(20);
     }
@@ -107,7 +107,7 @@ describe("executable commands", () => {
     expect(deriveRootMethodPaths("talk", { target: "user", title: "x" })).toEqual(["talk"]);
   });
 
-  it("removed legacy talk paths (talk_window has its own command paths)", () => {
+  it("removed legacy talk paths (talk_window has its own method paths)", () => {
     // 旧 talk.fork / talk.continue / talk.thread_creator / talk.relation_update / talk.question_form
     // 在 Step 2 后已下线；talk_window 上的 say/say.wait/wait/close 走 windows registry
     const paths = deriveRootMethodPaths("talk", {
@@ -126,7 +126,7 @@ describe("executable commands", () => {
     ]);
   });
 
-  it("should keep program paths consistent with command docs", () => {
+  it("should keep program paths consistent with method docs", () => {
     expect(deriveRootMethodPaths("program", { language: "ts" })).toEqual([
       "program",
       "program.typescript"
@@ -137,7 +137,7 @@ describe("executable commands", () => {
     ]);
   });
 
-  it("should return empty array for unknown command", () => {
+  it("should return empty array for unknown method", () => {
     const paths = deriveRootMethodPaths("unknown", {});
     expect(paths).toEqual([]);
   });
@@ -165,9 +165,9 @@ describe("executable commands", () => {
   it("should describe program executing and failed knowledge without relying on inline form wording (Round 13)", () => {
     expect(
       callKnowledge(programMethod, { language: "shell", code: "ls" }, "executing")["internal/executable/program/form-status"]
-    ).toContain("对于 command program 的 executing 状态的 form");
+    ).toContain("对于 method program 的 executing 状态的 form");
     expect(
       callKnowledge(programMethod, { function: "readFile", args: { path: "a" } }, "failed")["internal/executable/program/form-status"]
-    ).toContain("对于 command program 的 failed 状态的 form");
+    ).toContain("对于 method program 的 failed 状态的 form");
   });
 });

@@ -152,7 +152,7 @@ export async function handleWaitTool(
     );
   }
 
-  // R3: on 类型不合法（非 talk / 非 do）—— 这同时盖掉了 root/command_exec/file 等
+  // R3: on 类型不合法（非 talk / 非 do）—— 这同时盖掉了 root/method_exec/file 等
   if (target.type !== "talk" && target.type !== "do") {
     // program window 给针对性提示:它是同步执行,结果已落在 history 里,不需要 wait
     const typeSpecificHint =

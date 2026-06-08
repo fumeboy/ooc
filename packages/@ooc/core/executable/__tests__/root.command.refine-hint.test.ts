@@ -1,7 +1,7 @@
 /**
  * Round 12 — refine-hint 测试
  *
- * 验证 root command 的 knowledge() 在 status="open" + args 不全时:
+ * 验证 root method 的 knowledge() 在 status="open" + args 不全时:
  * 1. input prompt 含 "refine" 字符串（指引 refine 路径）
  * 2. input prompt 含 "不要 close" 字眼（不引导 close 重开）
  * 3. basic-knowledge 含 "open 状态" + "refine" 说明（form lifecycle 段落更新）
@@ -10,7 +10,7 @@
 import { describe, expect, it } from "bun:test";
 import { ROOT_METHODS } from "@ooc/builtins/root";
 import { KNOWLEDGE as BASIC_KNOWLEDGE } from "@ooc/core/thinkable/knowledge/basic-knowledge";
-import type { ObjectMethod } from "@ooc/core/executable/windows/_shared/command-types";
+import type { ObjectMethod } from "@ooc/core/executable/windows/_shared/method-types";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";

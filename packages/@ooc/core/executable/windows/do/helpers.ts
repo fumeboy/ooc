@@ -1,5 +1,5 @@
 /**
- * do_window 内部 helper —— 跨 command 共享的工具函数。
+ * do_window 内部 helper —— 跨 method 共享的工具函数。
  */
 
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
@@ -49,7 +49,7 @@ export function findChild(parent: ThreadContext, childId: string): ThreadContext
  * 给已知子）；保留 findChild 路径无成本。
  *
  * _parentThreadRef 是运行时反向引用（root.do 创建 child 时建立，见
- * windows/root/command.do.ts:201），不参与持久化；磁盘恢复的 thread 没有这条链，
+ * windows/root/method.do.ts:201），不参与持久化；磁盘恢复的 thread 没有这条链，
  * 此时子→父 reply 仍可能失败——recovery 路径的 supplement 由 persistable 层负责。
  */
 export function findThreadInScope(self: ThreadContext, targetId: string): ThreadContext | null {

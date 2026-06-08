@@ -85,9 +85,9 @@ describe("WindowManager.submit — P6.§3 self-type guard", () => {
       const { thread, talkWindow } = await setupThread(tempRoot);
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
 
-      // 手工构造一个 form：parent = talk_window, command = "edit"（edit 只挂在 relation_window 上）。
-      // 走低阶 path（绕过 openMethodExec 的 lookupCommandEntry 早期校验）来构造严格
-      // 跨类型场景。这里直接 set 一个 command_exec form 进 manager 私有 windows 也可，
+      // 手工构造一个 form：parent = talk_window, method = "edit"（edit 只挂在 relation_window 上）。
+      // 走低阶 path（绕过 openMethodExec 的 lookupMethodEntry 早期校验）来构造严格
+      // 跨类型场景。这里直接 set 一个 method_exec form 进 manager 私有 windows 也可，
       // 但更朴素的做法是用 openMethodExec 在合法 parent 上开 form 再人为换 parent。
       //
       // 简化：走 openMethodExec 在 relation_window 上开 form, 然后改 parentWindowId。
@@ -139,7 +139,7 @@ describe("WindowManager.submit — P6.§3 self-type guard", () => {
         args: { content: "hello", scope: "session" },
         // args 给齐 + edit 不引入新 knowledge → auto-submit
       });
-      // 不强求 autoSubmitted（command match 列表 / knowledge 行为依实现而定），
+      // 不强求 autoSubmitted（method match 列表 / knowledge 行为依实现而定），
       // 关键是没有 [method-error]。
       if (opened.autoSubmitted) {
         // submitResult 应不带 [method-error] 前缀

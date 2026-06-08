@@ -74,11 +74,11 @@ function buildToolSummaryFields(toolName: string, argumentsValue: unknown): Tool
   if (!isRecord(argumentsValue)) return undefined;
   const fields: ToolSummaryField[] = [];
   if (toolName === "open") {
-    // ContextWindow 协议（spec 2026-05-14）：parent_window_id + command + args
+    // ContextWindow 协议（spec 2026-05-14）：parent_window_id + method + args
     const parent = asDisplayText(argumentsValue.parent_window_id);
     if (parent) fields.push({ label: "parent", value: parent });
     const command = asDisplayText(argumentsValue.method ?? argumentsValue.method);
-    if (command) fields.push({ label: "command", value: command });
+    if (command) fields.push({ label: "method", value: command });
     if (isRecord(argumentsValue.args)) {
       for (const [k, v] of Object.entries(argumentsValue.args)) {
         const text = asDisplayText(v);
@@ -154,7 +154,7 @@ function buildToolLine(input: {
  * - `refine`/`submit`: id = arguments.form_id（fallback parent_window_id / window_id）
  * - `close`: id = arguments.form_id（fallback window_id）
  *
- * 注：实际后端约定字段是 `form_id`（command_exec window 的别名）；老路径或不同
+ * 注：实际后端约定字段是 `form_id`；老路径或不同
  * 命令族可能用 `window_id`/`parent_window_id`，全部一并接受以兼容。
  *
  * 取不到时返回 undefined（caller 自行决定不分组）。
@@ -273,7 +273,7 @@ function findInboxMessage(thread: ThreadContext, msgId?: string) {
 }
 
 /**
- * 识别 "open(command=say) on talk_window" 这类对外消息工具调用,把里面的 msg 提升为
+ * 识别 "exec(method=say) on talk_window" 这类对外消息工具调用,把里面的 msg 提升为
  * 一条 message line。让查看 assistant.t_user_xxx 这种 thread 时,assistant 发回 user
  * 的消息能像普通对话一样出现在 timeline,而不是只藏在 tool card 的 args JSON 里。
  *
@@ -312,7 +312,7 @@ function maybeBuildOutboundSayLine(
 /**
  * 从 thread.outbox 直接生成"发给指定对端的消息" chat lines。
  *
- * 为什么需要这一招:LLM 常用 open(command=say) → refine(args.msg) → submit 三段式,
+ * 为什么需要这一招:LLM 常用 exec(method=say) → refine(args.msg) → submit 三段式,
  * 消息正文最终在 refine.args.msg → 通过 submit 提交后落到 thread.outbox。
  * 直接从 outbox 取已发送消息更简单可靠:outbox 自带 windowId,与 talk_window 一查
  * 就能判断"是不是发给目标对端的"。
@@ -398,7 +398,7 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
   const lines: ChatLine[] = [];
   const events = thread.events ?? [];
 
-  // 预先索引:talk window id → target,用于把 "open(command=say, parent_window_id=...)"
+  // 预先索引:talk window id → target,用于把 "exec(method=say, window_id=...)"
   // 这种隐藏在 tool args 里的"对外消息"识别出来并提升为可读的 message line。
   // 典型场景:assistant.t_user_xxx 给 user 发的回信 — 我们希望在时间线上看到"→ user: 内容",
   // 而不是只看到 JSON 化的 open 工具卡。
@@ -494,7 +494,7 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
       const matched = callId ? outputsByCallId.get(callId) : undefined;
       if (matched) consumedOutputIndices.add(matched.index);
 
-      // 如果是 open(command=say) 并且 parent_window 是个 talk_window,
+      // 如果是 exec(method=say) 并且 parent_window 是个 talk_window,
       // 把"对外发出的消息内容"提升为可读的 message line(在 tool card 之前)。
       // 这样 assistant ↔ user 的 thread 上能直接看到双方对话,不必去翻 tool args JSON。
       const sayLine = maybeBuildOutboundSayLine(event, callId ?? `event-${index}`, talkWindowTargets);

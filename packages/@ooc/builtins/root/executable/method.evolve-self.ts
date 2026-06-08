@@ -1,5 +1,5 @@
 /**
- * root.evolve_self command —— super-flow 身份合入闸门（design §4 / P3）。
+ * root.evolve_self method —— super-flow 身份合入闸门（design §4 / P3）。
  *
  * 只在 super flow（sessionId="super"）里有意义：把「触发本 super 的业务 session
  * (creatorSessionId) 的 worktree 试验改动」正式合入 canonical main。

@@ -105,26 +105,7 @@ export async function readThread(
         dropped.map((w) => `${w.id}=${w.type}`).join(", "),
       );
     }
-    // Round 13 迁移: command_exec form.status="executed" 已被四态机替换为 success|failed;
-    // 历史数据可能仍含 "executed" 字面值。把它们迁为 "failed" (保守路径; 让 LLM 能 refine 修复),
-    // 与 unregistered type 同款 silent-swallow ban: warn 但不抛。
-    //
-    // Phase H 迁移: "command_exec" type string 已统一为 "method_exec"。
-    const contextWindows = filteredWindows.map((w) => {
-      let migrated: any = w;
-      // Phase H: type "command_exec" → "method_exec"
-      if (migrated.type === "command_exec") {
-        migrated = { ...migrated, type: "method_exec" as const };
-      }
-      // Round 13: status "executed" → "failed"
-      if (migrated.type === "method_exec" && (migrated as { status?: string }).status === "executed") {
-        console.warn(
-          `[readThread] ${persistence.objectId}/${threadId}: migrated form ${migrated.id} status "executed" → "failed" (Round 13)`,
-        );
-        migrated = { ...migrated, status: "failed" as const };
-      }
-      return migrated;
-    });
+    const contextWindows = filteredWindows as ContextWindow[];
     const restored: ThreadContext = {
       ...parsed,
       contextWindows,

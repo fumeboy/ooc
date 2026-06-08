@@ -7,7 +7,7 @@
  * - 旧 hook 名 `useWindowTypes` / `getWindowTypeCommands` 已删除。
  * - 旧类型名 `WindowCommandEntry` / `WindowTypeCatalogEntry` 已删除。
  *
- * 用途:WindowDetail 想根据 `window.type` 展示该 type 上注册的 command 清单(每个 type
+ * 用途:WindowDetail 想根据 `window.type` 展示该 type 上注册的 method 清单(每个 type
  * 不同,例如 file 上是 `set_range/reload/edit/close`,root 上是一长串 commands)。
  */
 import { useEffect, useState } from "react";

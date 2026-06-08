@@ -12,20 +12,20 @@
  * - title / description：进 basicKnowledge 与 LLM 视野
  * - renderXml / basicKnowledge / onClose：与 WindowRegistry 同语义，由 registry
  *   按 `window.type` 路由到这里
- * - commands：标准 ObjectMethod 字典；commands[name].exec 会在 dispatcher
+ * - methods：标准 ObjectMethod 字典；methods[name].exec 会在 dispatcher
  *   层包一层"把 self: ProgramSelf 注入到 ctx"再执行
  */
 
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "../windows/_shared/command-types.js";
+} from "../windows/_shared/method-types.js";
 import type { OnCloseContext, ReadableFn, RenderContext } from "../windows/_shared/registry.js";
 import type { XmlNode } from "../../thinkable/context/xml.js";
 import type { ProgramSelf } from "./types.js";
 
 /**
- * Object window 的 commands[name].exec 收到的 ctx —— 标准 MethodExecutionContext + programSelf。
+ * Object window 的 methods[name].exec 收到的 ctx —— 标准 MethodExecutionContext + programSelf。
  *
  * 2026-06-02 P6.§1 命名修正：原字段名 `self: ProgramSelf` 与
  * `MethodExecutionContext.self: ContextWindow`（method 的 receiver，OOP 语义）冲突。

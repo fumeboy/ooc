@@ -2,7 +2,7 @@
  * factor-dev-agents — 验证 3 个因子开发 Agent 的 server/index.ts 加载 + 单条 commands.exec 端到端。
  *
  * - sentry_event_factor / sentry_factor_group: callDynamicRPC 走 fetch mock，验证 RPC URL 拼接 + 错误返回结构;
- * - sentry_factor_dev: 走纯 reasoning command（dispatch_to_event_factor），验证返回的 hint 文案。
+ * - sentry_factor_dev: 走纯 reasoning method（dispatch_to_event_factor），验证返回的 hint 文案。
  *
  * 设计要点:
  * - 直接对 .ooc-world 中的 stone server/index.ts 跑 loadObjectWindow（不复制不重写），保证测试紧贴真实文件；

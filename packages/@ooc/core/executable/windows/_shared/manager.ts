@@ -6,22 +6,22 @@
  * 职责：
  * - 持有 thread.contextWindows，封装所有增删改查
  * - 提供与 LLM 5 原语对齐的方法：
- *   - openCommandExec：在 parent window 下创建 method_exec sub-window；当 args 完整且不引入
- *     新协议知识时，会立刻提交 form（具体行为由各 command 自己控制）
+ *   - openMethodExec：在 parent window 下创建 method_exec sub-window；当 args 完整且不引入
+ *     新协议知识时，会立刻提交 form（具体行为由各 method 自己控制）
  *   - openTypedWindow：创建非 form 的 window（do_window / todo_window 等）
- *   - refine：累积 method_exec 的 args 并重算 commandPaths
- *   - submit：执行 command；成功自动移除 form；失败保留 result
+ *   - refine：累积 method_exec 的 args 并重算 methodPaths
+ *   - submit：执行 method；成功自动移除 form；失败保留 result
  *   - close：触发 type 的 onClose，级联关闭子 window
  * - 维护 knowledge path 引用计数（knowledgeRefCount），保证多 window 共享 path 时不被提前释放
  *
  * 不负责：
- * - command 自身的 exec 实现（由各 root/X.ts 与 windows/X.ts 中的 entry.exec 提供）
+ * - method 自身的 exec 实现（由各 root/X.ts 与 windows/X.ts 中的 entry.exec 提供）
  * - knowledge entries 的具体内容（由 collectExecutableKnowledgeEntries 派生）
  * - 持久化（由 src/persistable/thread-json.ts 处理）
  *
  * 使用模式：
  *   const mgr = WindowManager.fromThread(thread);
- *   const formId = await mgr.openCommandExec(...);
+ *   const formId = await mgr.openMethodExec(...);
  *   thread.contextWindows = mgr.toData();
  */
 
@@ -37,7 +37,7 @@ import {
   type ContextWindow,
   type ObjectType,
 } from "./types.js";
-import type { ObjectMethod } from "./command-types.js";
+import type { ObjectMethod } from "./method-types.js";
 import {
   writeRuntimeObjectState,
   deleteRuntimeObject,
@@ -53,10 +53,10 @@ import {
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common.js";
 
 /**
- * 用 entry.intent() 计算 commandPaths；空 args 时退化为 [command]。
+ * 用 entry.intent() 计算 methodPaths；空 args 时退化为 [method]。
  *
  * intent() 返回的是 sub-intents（不含方法名自身）；我们把方法名作为首元素再追加
- * sub-intent name，构成完整 commandPaths 列表。
+ * sub-intent name，构成完整 methodPaths 列表。
  */
 function computeMethodPaths(
   entry: ObjectMethod,
@@ -111,7 +111,7 @@ function setEqual(a: string[], b: string[]): boolean {
   return true;
 }
 
-/** 判断 a 是否是 b 的子集（用于 openCommandExec 中的 auto-submit knowledge keys 判定）。 */
+/** 判断 a 是否是 b 的子集（用于 openMethodExec 中的 auto-submit knowledge keys 判定）。 */
 function setSubset(a: string[], b: string[]): boolean {
   const setB = new Set(b);
   for (const v of a) if (!setB.has(v)) return false;
@@ -351,11 +351,11 @@ export class WindowManager {
    *
    * - parent_window_id 缺省 = ROOT_WINDOW_ID
    * - 如 args 非空，立刻 apply 一次 refine（累积到 form 上）
-   * - 当 args 非空、commandPaths / knowledge keys 都未引入新内容时，open 立刻提交 form
-   *   （即"args 给齐 + 不引入新协议知识"⇒一步执行；具体由各 command 的 match/knowledge 控制）
+   * - 当 args 非空、methodPaths / knowledge keys 都未引入新内容时，open 立刻提交 form
+   *   （即"args 给齐 + 不引入新协议知识"⇒一步执行；具体由各 method 的 match/knowledge 控制）
    *
    * 返回 { formId, autoSubmitted, submitResult }
-   * - autoSubmitted=true 表示 open 已经直接提交 form；submitResult 是 command.exec 的返回值
+   * - autoSubmitted=true 表示 open 已经直接提交 form；submitResult 是 method.exec 的返回值
    *
    * 注意：本方法不直接 mutate thread；调用方负责 thread.contextWindows = mgr.toData()
    */
@@ -393,7 +393,7 @@ export class WindowManager {
       : this.registry.lookupWindowMethod(parent, opts.method);
     if (!objectEntry && !windowEntry) {
       throw new Error(
-        `openMethodExec: command "${opts.method}" not registered on window "${parent.type}" (id=${parent.id})`,
+        `openMethodExec: method "${opts.method}" not registered on window "${parent.type}" (id=${parent.id})`,
       );
     }
     const entry = (objectEntry ?? windowEntry) as ObjectMethod;
@@ -405,7 +405,7 @@ export class WindowManager {
     const args = opts.args ?? {};
     const methodPaths = computeMethodPaths(entry, opts.method, args);
 
-    // Stub form for deriveKnowledgeKeys (only needs id/command/accumulatedArgs)
+    // Stub form for deriveKnowledgeKeys (only needs id/method/accumulatedArgs)
     const stubForm = {
       id: formId,
       method: opts.method,
@@ -461,8 +461,8 @@ export class WindowManager {
     // auto-submit 判定：
     // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应直接提交）—— 但
     //   parent 是 method_exec 时除外（refine/submit 是 atomic 命令，无需观察）
-    // - next commandPaths ⊇ baseline（新 path 由 LLM 显式给出，不算"surprise"）
-    // - next knowledge keys ⊆ baseline（command 自己不引入新协议知识，LLM 已知所有规则）
+    // - next methodPaths ⊇ baseline（新 path 由 LLM 显式给出，不算"surprise"）
+    // - next knowledge keys ⊆ baseline（method 自己不引入新协议知识，LLM 已知所有规则）
     const isMetaForm = parent.type === "method_exec";
     if (Object.keys(args).length > 0 || isMetaForm) {
       const nextKnowledgeKeys = deriveKnowledgeKeys(entry, form as any, args);
@@ -481,7 +481,7 @@ export class WindowManager {
   /**
    * 创建非 form 的 typed window（do_window / todo_window 等）。
    *
-   * 用于 command.exec 的副作用：
+   * 用于 method.exec 的副作用：
    * - root.do submit → insertTypedWindow(doWindow, thread) 产出 do_window
    * - root.todo submit → insertTypedWindow(todoWindow, thread)
    * - 也用于 thread init 注入 creator do_window（parentWindowId 仍为 root）
@@ -504,7 +504,7 @@ export class WindowManager {
   }
 
   /**
-   * 累积 method_exec form 的 args 并重算 commandPaths。
+   * 累积 method_exec form 的 args 并重算 methodPaths。
    *
    * Round 13: 允许 status="open" 或 status="failed" 上调 refine。
    * - open: 累积 args, 状态保持 open（原行为）
@@ -620,16 +620,16 @@ export class WindowManager {
   }
 
   /**
-   * 提交 method_exec form：跑 command.exec → 写 result。
+   * 提交 method_exec form：跑 method.exec → 写 result。
    *
    * 状态过渡：open → executing → success | failed (Round 13 升级；旧 "executed" 已废弃)
    * 成功 (success) 时：自动从 contextWindows 移除（spec § submit 段）
    * 失败 (failed) 时：保留 result 含错误；LLM 可 refine 修正后重 submit（首选）, 或 close 放弃。
    *
-   * 失败判定：command.exec 抛异常 → 失败；result 字符串以 "[command-error]" / "[error]" /
+   * 失败判定：method.exec 抛异常 → 失败；result 字符串以 "[method-error]" / "[error]" /
    *           "缺少" / "失败" 开头时也视为失败（与旧 form-status 协议保持一致）。
    *
-   * 返回 result 字符串（可能 undefined，例如 plan/end 等无 result 的 command）。
+   * 返回 result 字符串（可能 undefined，例如 plan/end 等无 result 的 method）。
    */
   async submit(formId: string, thread: ThreadContext): Promise<string | undefined> {
     const form = this.windows.get(formId);
@@ -648,7 +648,7 @@ export class WindowManager {
       : this.registry.lookupWindowMethod(parent, form.method);
     if (!resolved && !windowEntry) {
       throw new Error(
-        `submit: command "${form.method}" not registered on parent window type "${parent.type}"`,
+        `submit: method "${form.method}" not registered on parent window type "${parent.type}"`,
       );
     }
     // P6.§3 + §7 (2026-06-02): 校验由 lookupMethodEntry 完成——它沿 parentClass 链
@@ -675,7 +675,7 @@ export class WindowManager {
         ? undefined
         : this.runtimeObjectRefForWindow(thread, parent);
       const ownerThreadRef = this.threadPersistRefFromThread(thread);
-      const ctx: import("./command-types.js").MethodExecutionContext = {
+      const ctx: import("./method-types.js").MethodExecutionContext = {
         thread,
         form: executing,
         self: parent,
@@ -715,7 +715,7 @@ export class WindowManager {
       // - outcome.ok=true && "result" in: regular method 成功 + 可选 result 文本
       // - outcome.ok=false: 失败
       // - undefined：成功无 result
-      // - string：兼容旧约定——以 [<name>]/[command-error]/[error] 为前缀视为错误
+      // - string：兼容旧约定——以 [<name>]/[method-error]/[error] 为前缀视为错误
       if (raw && typeof raw === "object" && "ok" in raw) {
         if (raw.ok) {
           if ("object" in raw) {
@@ -740,7 +740,7 @@ export class WindowManager {
       }
       } // end object-method branch
     } catch (err) {
-      result = `[command-error] ${(err as Error).message}`;
+      result = `[method-error] ${(err as Error).message}`;
       isError = true;
     }
 
@@ -794,7 +794,7 @@ export class WindowManager {
     return true;
   }
 
-  /** 仅供 command 实现使用：把 form 的 result 字段写入并保留 failed 状态（成功时不调用——会自动移除）。 */
+  /** 仅供 method 实现使用：把 form 的 result 字段写入并保留 failed 状态（成功时不调用——会自动移除）。 */
   setResultFailed(formId: string, result: string): void {
     const form = this.windows.get(formId);
     if (!form || form.type !== "method_exec") return;
@@ -1078,7 +1078,7 @@ export class WindowManager {
   /**
    * 公开版 removeWindow —— 不触发 onClose hook，仅释放 mgr 持有的状态。
    *
-   * 适用于 do_window.move 等场景：command 自己已处理副作用，需要 mgr 同步移除 window。
+   * 适用于 do_window.move 等场景：method 自己已处理副作用，需要 mgr 同步移除 window。
    * 与 close() 的区别：close() 走 onClose hook + 级联子 window；本方法仅 raw remove。
    */
   removeWindowSilent(windowId: string): boolean {
@@ -1087,7 +1087,7 @@ export class WindowManager {
     return true;
   }
 
-  /** 公开版 insert/update：command 直接构造好 sharing 状态后写回 mgr。 */
+  /** 公开版 insert/update：method 直接构造好 sharing 状态后写回 mgr。 */
   upsertWindow(window: ContextWindow, thread?: ThreadContext): void {
     this.windows.set(window.id, window);
     this.recordKnowledgeRefs(window);
@@ -1136,13 +1136,13 @@ export class WindowManager {
 }
 
 /**
- * 兼容判定：旧 command exec 用 string 返回失败信息，统一约定以 \`[<name>]\` 前缀开头。
+ * 兼容判定：旧 method exec 用 string 返回失败信息，统一约定以 \`[<name>]\` 前缀开头。
  *
  * 凡 trim 后以 \`[\w_.]+\]\` 开头的字符串都视为失败：
- * - \`[command-error] ...\`            — manager catch 转抛异常时拼出的固定前缀
+ * - \`[method-error] ...\`            — manager catch 转抛异常时拼出的固定前缀
  * - \`[error] ...\`                    — 旧实现有几个地方手写了
- * - \`[<command 名>] ...\`             — root command / window-level command 失败约定
- * - \`[<window>.<command>] ...\`        — 比如 [do_window.continue] / [talk_window.say]
+ * - \`[<method 名>] ...\`             — root method / window-level method 失败约定
+ * - \`[<window>.<method>] ...\`        — 比如 [do_window.continue] / [talk_window.say]
  *
  * 新代码应改用 MethodOutcome（显式 ok 标志），避免依赖此启发式。
  */

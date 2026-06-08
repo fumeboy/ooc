@@ -476,7 +476,7 @@ function onClosePlanWindow(ctx: OnCloseContext): boolean | void {
 
 const PLAN_BASIC_KNOWLEDGE = `
 plan_window 是 thread 的行动计划窗口（first-class ContextWindow）。
-由 root.plan command 创建/更新；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread。
+由 root.plan method 创建/更新；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread。
 
 在 plan_window 上可调命令（通过 exec(parent_window_id="<plan_window_id>", method="X", args=...) 调用）：
 - update_plan: 更新 plan.title / description

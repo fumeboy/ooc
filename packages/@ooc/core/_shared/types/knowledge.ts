@@ -14,7 +14,7 @@ export type ActivationLevel = "show_description" | "show_content";
  *
  * 支持三类 trigger 语法（详见 `triggers.ts`）：
  * - `window::<type>` —— 任意 open 的 window 满足该 type 时命中
- * - `method::<window_type>::<method>` —— 存在挂在该 window 类型上的同名 command_exec form
+ * - `method::<window_type>::<method>` —— 存在挂在该 window 类型上的同名 method_exec form
  * - `super` —— 当前 thread 跑在 super session 中
  *
  * 多 trigger 命中取 **max**（show_content > show_description）。

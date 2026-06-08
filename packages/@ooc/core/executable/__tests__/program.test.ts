@@ -17,7 +17,7 @@ import { makeThread } from "../../__tests__/make-thread";
  * executeProgramMethod 现在的副作用是创建 program_window；保留少量集成型断言以验证 window 的产生。
  */
 describe("program runtime — runOneExec (shell)", () => {
-  it("returns formatted result for a successful command", async () => {
+  it("returns formatted result for a successful shell exec", async () => {
     const thread = makeThread({ id: "t" });
     const rec = await runOneExec(thread, { language: "shell", code: "echo hello" });
     expect(rec.ok).toBe(true);

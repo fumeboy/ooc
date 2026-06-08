@@ -81,8 +81,8 @@ export async function handleExecTool(
   args: Record<string, unknown>,
   registry: ObjectRegistry = builtinRegistry,
 ): Promise<string | void> {
-  const command = args.method as string | undefined;
-  if (!command) {
+  const method = args.method as string | undefined;
+  if (!method) {
     return errorOutput("exec 缺少 method 参数。");
   }
   const title = (args.title as string | undefined)?.trim();
@@ -93,11 +93,11 @@ export async function handleExecTool(
   const windowId = (args.window_id as string | undefined) ?? ROOT_WINDOW_ID;
   const nestedArgs = getArgs(args);
 
-  // 通用 expand command (design: docs/2026-05-25-context-compression-design.md §4.1 / §D 可逆性):
+  // 通用 expand method (design: docs/2026-05-25-context-compression-design.md §4.1 / §D 可逆性):
   // 任何 compressLevel ≥ 1 的 window 自动获得 expand,无需在 registry 里给每个 type 注册。
   // 在 exec 路径上拦截 method="expand" 并对 target window 做 level → 0 的切换;
   // 落一条 context_compressed 事件,与 compress tool 同协议。
-  if (command === "expand") {
+  if (method === "expand") {
     return handleExpandMethod(thread, windowId);
   }
 
@@ -111,7 +111,7 @@ export async function handleExecTool(
     opened = await mgr.openMethodExec({
       thread,
       parentWindowId: windowId,
-      method: command,
+      method: method,
       title,
       description,
       args: nestedArgs,
@@ -120,7 +120,7 @@ export async function handleExecTool(
     return errorOutput(`exec 失败：${(err as Error).message}`);
   }
 
-  // program command 额外补 method 签名 knowledge（沿用旧 enrichProgramForm 行为）
+  // program method 额外补 method 签名 knowledge（沿用旧 enrichProgramForm 行为）
   const targetForm = mgr.get(opened.formId);
   if (targetForm && targetForm.type === "method_exec" && targetForm.method === "program") {
     await enrichFormMethodKnowledge(targetForm, thread);
@@ -142,15 +142,15 @@ export async function handleExecTool(
     });
   }
   return successOutput(
-    `Form ${opened.formId} 已创建（${command}）。后续用 exec(form_id, "refine", args={...}) 或 exec(form_id, "submit") 推进；不再需要时 close(form_id)。`,
+    `Form ${opened.formId} 已创建（${method}）。后续用 exec(form_id, "refine", args={...}) 或 exec(form_id, "submit") 推进；不再需要时 close(form_id)。`,
     { form_id: opened.formId, executed: false },
   );
 }
 
 /**
- * expand command — 把 compressLevel ≥ 1 的 window 切回 0 (live)。
+ * expand method — 把 compressLevel ≥ 1 的 window 切回 0 (live)。
  *
- * 由 handleExecTool 在 command === "expand" 分支调用。生效条件:
+ * 由 handleExecTool 在 method === "expand" 分支调用。生效条件:
  * - 目标 window 存在 (非 root)
  * - 目标 window 当前 compressLevel ≥ 1
  * 否则返回 ok=false 让 LLM 看见(silent-swallow ban)。

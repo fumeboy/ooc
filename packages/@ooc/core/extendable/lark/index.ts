@@ -3,8 +3,8 @@
  *
  * 本目录持有 OOC 与 lark-cli 子进程之间的全部桥接代码：
  * - cli.ts          larkExec 子进程 helper（OOC 唯一访问飞书 OAPI 的通道）
- * - feishu-chat/    群聊 / 单聊 ContextWindow 类型 + 注册 + root opener command
- * - feishu-doc/     文档 ContextWindow 类型 + 注册 + root opener command
+ * - feishu-chat/    群聊 / 单聊 ContextWindow 类型 + 注册 + root opener method
+ * - feishu-doc/     文档 ContextWindow 类型 + 注册 + root opener method
  *
  * 与 OOC core 的关系：
  * - feishu_chat / feishu_doc 仍然是一等 ObjectType（声明在 src/executable/windows/_shared/types.ts），

@@ -1,5 +1,5 @@
 /**
- * root.do command — 委托到 do_window constructor。
+ * root.do method — 委托到 do_window constructor。
  *
  * 2026-06-02 P6.§4-§5: 历史 root.do 的构造逻辑已迁到 packages/@ooc/core/executable/windows/do/index.ts
  * 的 kind="constructor" do method（child thread fork + creator do_window + inbox/outbox + share_windows）。
@@ -50,7 +50,7 @@ export enum DoMethodPath {
   Wait = "do.wait",
 }
 
-/** root level 的 do command：委托到 do_window constructor。 */
+/** root level 的 do method：委托到 do_window constructor。 */
 export const doMethod: ObjectMethod = {
   paths: [DoMethodPath.Do, DoMethodPath.Wait],
   schema: {

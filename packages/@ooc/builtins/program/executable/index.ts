@@ -3,7 +3,7 @@
  *
  * spec § program_window：
  * - 由 root.program 创建（首次 exec 已在 root.program submit 时跑完）
- * - 注册的 command：exec / close
+ * - 注册的 method：exec / close
  *   - exec：起独立 sandbox 运行（与首次 exec 同一路径），结果追加到 history
  *   - close：onClose 释放 window；不停止任何外部进程（每次 exec 都已结束）
  * - 跨 exec 的 ts/js 数据通过 thread.threadLocalData（self.getThreadLocal/setThreadLocal）
@@ -226,7 +226,7 @@ shell 环境变量：
 - 想读写自己的 stone 目录（self.dir），用 env $OOC_SELF_DIR
 
 ts/js 上下文：
-- self.dir / self.callMethod(windowId, command, args?) / self.getData / self.setData 可用
+- self.dir / self.callMethod(windowId, method, args?) / self.getData / self.setData 可用
 - 跨 exec 共享：self.getThreadLocal(key) / self.setThreadLocal(key, value)
 - shell 之间不共享 threadLocal（OS 进程隔离），需要时自行写入 stone data
 
@@ -301,17 +301,17 @@ const programConstructor: ObjectMethod = {
     const code = typeof args.code === "string" ? args.code.trim() : "";
     if (formStatus === "executing") {
       entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
-        "对于 command program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
+        "对于 method program 的 executing 状态的 form，应等待 result 写入后再继续，不要再次 refine 或 submit。";
       return buildGuidanceWindows(form, entries);
     }
     if (formStatus === "success") {
       entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
-        "对于 command program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
+        "对于 method program 的 success 状态的 form，结果已成功生成；form 将自动从 context 移除。";
       return buildGuidanceWindows(form, entries);
     }
     if (formStatus === "failed") {
       entries[PROGRAM_CONSTRUCTOR_FORM_STATUS] =
-        "对于 command program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
+        "对于 method program 的 failed 状态的 form，先阅读 result 排查错误：可 refine(form_id, args={ language, code }) 修正参数后重 submit（form 会自动切回 open），或 close(form_id, reason=...) 彻底放弃。";
       return buildGuidanceWindows(form, entries);
     }
     if (lang && code) {

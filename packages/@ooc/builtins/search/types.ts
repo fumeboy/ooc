@@ -19,7 +19,7 @@ export type ResultsViewport = TranscriptViewport;
  * - matches 截断到 200；超过则 truncated=true，LLM 可通过 refine_query 兜底
  * - grep kind 时 match 还携带 line + snippet；glob kind 只有 path
  * - resultsViewport: 默认 { tail: 50 } —— 用 set_results_window 调整可见区间
- * - 注册 command：open_match / close / set_results_window
+ * - 注册 method：open_match / close / set_results_window
  */
 export interface SearchWindow extends BaseContextWindow {
   type: "search";

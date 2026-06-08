@@ -5,7 +5,7 @@ import { creatorWindowIdOf, type DoWindow } from "../windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**
- * do command 的 ContextWindow 行为验证。
+ * do method 的 ContextWindow 行为验证。
  *
  * 覆盖：
  * - fork：建 child + 父侧 do_window + child 内 creator do_window + 父 outbox + child inbox + 事件
@@ -13,7 +13,7 @@ import { makeThread } from "../../__tests__/make-thread";
  * - 通过 do_window.continue 追加消息
  * - close 父侧 do_window 归档子线程
  */
-describe("do command (ContextWindow model)", () => {
+describe("do method (ContextWindow model)", () => {
   it("fork: 创建 child thread、父侧 do_window、child 的 creator do_window，并写消息", async () => {
     const parent = makeThread({ id: "t_parent" });
     await execRootMethod("do", {

@@ -1,5 +1,5 @@
 /**
- * root.open_file command — 委托到 file_window constructor。
+ * root.open_file method — 委托到 file_window constructor。
  *
  * 2026-06-02 P6.§4-§5: 历史 root.open_file 的构造逻辑（path 校验 + FileWindow build）已迁到
  * packages/@ooc/builtins/file/executable/index.ts 的 kind="constructor" file method（command 分发）。
@@ -70,7 +70,7 @@ export const openFileMethod: ObjectMethod = {
  * P6.§4-§5 thin delegator —— 委托到 file_window constructor（dispatch on form.method="open_file"）。
  *
  * 注入一个最小 form shim（{ method: "open_file" }）到 ctx，让 constructor 的
- * dispatch 分支拿到正确的 command 名（生产链路里 manager.submit 会传完整 form）。
+ * dispatch 分支拿到正确的 method 名（生产链路里 manager.submit 会传完整 form）。
  */
 export const executeOpenFileMethod = makeRootDelegator({
   method: "open_file",

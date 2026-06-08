@@ -70,10 +70,10 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
       "这条消息会被自动 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。",
       "",
       "**重要边界**：",
-      "- `end` command 只用于声明本轮**自己**结束，**不是回报通道**。",
+      "- `end` method 只用于声明本轮**自己**结束，**不是回报通道**。",
       "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 continue；",
       "  多段对话 / 复杂状态汇报，请显式走 `creator_do_window.continue`，不要塞到 end 里。",
-      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 command；只有 continue / say / wait / close。",
+      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 method；只有 continue / say / wait / close。",
     ].join("\n");
   }
   // talk creator window
@@ -91,7 +91,7 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
     "这条消息会通过 talk-delivery 派送到 caller object 的对端 thread；caller 下一轮就能看到。",
     "",
     "**重要边界**：",
-    "- `end` command 只用于声明本轮**自己**结束，**不是回报通道**。",
+    "- `end` method 只用于声明本轮**自己**结束，**不是回报通道**。",
     "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 say；",
     "  多轮往返 / 复杂确认，请显式走 `creator_talk_window.say`，不要塞到 end 里。",
     "- 不要 open 新的 talk_window 给同一个 caller；用现有的 creator talk_window 复用。",

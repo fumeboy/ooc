@@ -8,7 +8,7 @@
  * - 每个 object 都是"持续占 context 的实体"，对 LLM 而言行为一致：通过 3 原语 exec /
  *   close / wait 与之交互（exec 是命令调用入口；form 自身的 refine/submit 现在
  *   是 MethodExecWindow 上注册的命令，与其它 object 命令同构）
- * - 各 object type 通过 ObjectRegistry（registry.ts）声明自身注册的 command、关闭副作用与渲染规则
+ * - 各 object type 通过 ObjectRegistry（registry.ts）声明自身注册的 method、关闭副作用与渲染规则
  *
  * **batch C6 分层（2026-06-05 ooc-6）**：
  * - base 部分（BaseContextWindow / ObjectType / WindowStatus / provenance / relevance /

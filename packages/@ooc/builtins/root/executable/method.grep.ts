@@ -1,5 +1,5 @@
 /**
- * root.grep command — 委托到 search_window constructor。
+ * root.grep method — 委托到 search_window constructor。
  *
  * 2026-06-02 P6.§4-§5: 历史 root.grep 的构造逻辑（runRipgrep + runJsFallback + SearchWindow build）
  * 已迁到 packages/@ooc/builtins/search/executable/index.ts 的 kind="constructor" search method

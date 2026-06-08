@@ -174,7 +174,7 @@ contextWindows 并不是纯持久化数据。每轮渲染时，`collectExecutabl
 | `file` | 文件 |
 | `knowledge`（source=`explicit`） | 用户通过 `open_knowledge` 显式打开的知识 |
 | `search` | glob / grep 搜索结果 |
-| `method_exec`（= `command_exec`） | method 调用的渐进式表单 |
+| `method_exec` | method 调用的渐进式表单 |
 | `feishu_chat` / `feishu_doc` | 飞书扩展窗口 |
 | 自定义 objectId | 用户 Stone Object（如 `agent_of_think`） |
 

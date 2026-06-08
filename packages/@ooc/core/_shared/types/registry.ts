@@ -52,7 +52,7 @@ export type ConsumedMessageIdsHook = (
  * Object 类型定义（canonical，2026-06-03 ooc-6 cleanup Phase A：原 ObjectTypeDefinition 重命名）。
  *
  * 已删除 deprecated 字段：
- * - `commands` → 使用 `methods`
+ * - 旧 `commands` 字段已弃用，使用 `methods`
  * - `prototype` → 使用 `parentClass`
  */
 export interface ObjectDefinition {

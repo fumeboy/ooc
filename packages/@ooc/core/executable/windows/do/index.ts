@@ -3,13 +3,13 @@
  *
  * spec § do_window：
  * - targetThreadId：fork 出的 child thread id；transcript 视图按它过滤 inbox/outbox
- * - 注册的 command：continue / wait / close
+ * - 注册的 method：continue / wait / close
  * - close 语义：B=ii archive — 把 child thread 标记为 archived；window 释放
  * - 特殊子类：初始 creator do_window（由 windows/_shared/init.ts 创建），不可被 LLM close
  */
 
 import { builtinRegistry, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
-import type { ObjectMethod } from "../_shared/command-types.js";
+import type { ObjectMethod } from "../_shared/method-types.js";
 import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
 import {
   ROOT_WINDOW_ID,
@@ -210,7 +210,7 @@ submit 后：
 `.trim();
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 command，narrow 一次。
+  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
   const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {

@@ -6,7 +6,7 @@ import type { BaseContextWindow } from "../../../executable/windows/_shared/type
  * 设计要点（meta/case.feishu-integration.doc.ts）：
  * - 一个 chat_id 对应一个 window 实例；多次 open 同 chat 应复用 window。
  * - 渐进式 buffer：默认 mode="tail" 拉取最近 N 条；search 模式临时切换。
- * - 写类命令（send/reply）严格走 dry-run gate；form 流程见 command.send / command.reply。
+ * - 写类方法（send/reply）严格走 dry-run gate；form 流程见 method.send / method.reply。
  *
  * 字段：
  * - chatId：飞书 chat_id（oc_xxx）。

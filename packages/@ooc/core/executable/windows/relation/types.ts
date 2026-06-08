@@ -12,7 +12,7 @@ import type { BaseContextWindow } from "../_shared/types.js";
  *   一条 RelationWindow,id 稳定为 `w_rel_<peerId>`;不持久化(每轮重派生)。
  * - 2026-05-27: 同级 / 一级 children Agent 也默认派生 relation_window
  *   (spec collaborable.relation_window default visibility);见 synthesizer.ts。
- * - 注册的 command:`edit`(整文件替换语义);通过 args.scope 路由:
+ * - 注册的 method:`edit`(整文件替换语义);通过 args.scope 路由:
  *   - scope="session" → 直接写 flow 层 `flows/<sid>/objects/<self>/knowledge/relations/<peer>.md`
  *   - scope="long_term" → 派一条 talk message 给 super flow,由 super 写
  *     `pools/<self>/knowledge/relations/<peer>.md`(跨 session 长期生效)

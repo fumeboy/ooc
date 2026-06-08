@@ -57,7 +57,7 @@ curl -X POST http://localhost:$PORT/api/flows/<sid>/continue \
 ## 5. 观察：thread（命令序列 + 回复）
 ```
 curl http://localhost:$PORT/api/flows/<sid>/<objectId>/threads/<tid>
-# 看 contextWindows（command_exec/method_exec 的命令名+args+result）、
+# 看 contextWindows（method_exec 的命令名+args+result）、
 #    events（function_call / 回复）、outbox（assistant→user 回复）、status
 ```
 

@@ -192,7 +192,7 @@ describe("search_window render: matches.count reflects full total (not visible)"
   });
 });
 
-// ─────────────────────────── command: set_results_window ────────────
+// ─────────────────────────── method: set_results_window ────────────
 
 describe("set_results_window window method", () => {
   it("matches_tail returns new state with resultsViewport", () => {

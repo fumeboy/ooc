@@ -16,7 +16,7 @@
 import type {
   MethodExecutionContext,
   ObjectMethod,
-} from "../../../executable/windows/_shared/command-types.js";
+} from "../../../executable/windows/_shared/method-types.js";
 import { builtinRegistry, type RenderContext } from "../../../executable/windows/_shared/registry.js";
 import type { FeishuDocWindow } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
@@ -44,9 +44,9 @@ const PROTOCOL_KNOWLEDGE = `
 feishu_doc_window 是 OOC 与飞书文档之间的 ContextWindow。
 
 每个 docToken 对应一个 window 实例。docKind 区分 doc / docx / sheet / base / wiki / drive_md，
-不同类型在 read / patch 行为上有差异（详见各 command 知识）。
+不同类型在 read / patch 行为上有差异（详见各 method 知识）。
 
-可用 command：
+可用 method：
 - read：拉全文到 window.content（mode=read）
 - search_in_doc：文档内查找（无副作用）
 - append：末尾追加（**有副作用，强制 dry-run gate**）
@@ -140,11 +140,11 @@ const CLOSE_KNOWLEDGE = `
 feishu_doc.close 释放 window；不影响飞书一侧的文档。
 `.trim();
 
-// ─────────────────────────── command 实现 ────────────────────────────
+// ─────────────────────────── method 实现 ────────────────────────────
 
 function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
   // batch C narrowing(N3): onFormChange 的 form 契约层是 base ContextWindow；本 helper 只读
-  // base `id` + 具体 form 的 command（作 provenance 标签），在此唯一处 narrow 回 MethodExecWindow。
+  // base `id` + 具体 form 的 method（作 provenance 标签），在此唯一处 narrow 回 MethodExecWindow。
   const sourceId = (form as MethodExecWindow).method;
   const out: ContextWindow[] = [];
   for (const [path, text] of Object.entries(entries)) {

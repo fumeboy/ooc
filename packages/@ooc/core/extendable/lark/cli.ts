@@ -15,7 +15,7 @@
 export interface LarkExecOptions {
   /** 命令以哪个身份执行；缺省 user。群聊 send 类命令请显式传 "bot"（见 supervisor 决策）。 */
   as?: "bot" | "user";
-  /** 写类命令必须 true 至少跑一次预览；细节由 window command 控制。 */
+  /** 写类方法必须 true 至少跑一次预览；细节由 window method 控制。 */
   dryRun?: boolean;
   /** 进程超时（毫秒）；缺省 30s。 */
   timeoutMs?: number;

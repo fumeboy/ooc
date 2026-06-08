@@ -1,6 +1,6 @@
 /**
  * Object Method 相关类型 —— canonical 源（batch C7 从
- * `executable/windows/_shared/command-types.ts` 迁入）。
+ * `executable/windows/_shared/method-types.ts` 迁入）。
  *
  * - ObjectMethod：单个 method 的完整定义（paths / intent / schema / exec + 可见性标记）
  * - MethodExecutionContext：method 的 exec 函数运行时入参
@@ -38,7 +38,7 @@ export type MethodOutcome =
   | { ok: false; error: string };
 
 /**
- * Object method 定义（合并了原 Window Command 与 Object Server Method 的概念）。
+ * Object method 定义。
  *
  * 包含执行 / 知识 / 路径派生 / 权限等核心字段，并附 `public` / `for_ui_access` 可见性标记。
  *
@@ -108,7 +108,7 @@ export interface ObjectMethod {
  * - form：被 submit 消费的 form 自身（base ContextObject；runtime 层 narrow 到 MethodExecWindow）
  * - self：method 被调用的 ContextObject（receiver；OOP semantics）
  * - manager：当前调度的 WindowManager —— 零依赖层声明为 `unknown`，executable 层定义带
- *   具体 WindowManager 类型的 subtype（见 executable/windows/_shared/command-types.ts）
+ *   具体 WindowManager 类型的 subtype（见 executable/windows/_shared/method-types.ts）
  * - args：最终参数（form.accumulatedArgs）
  */
 export interface MethodExecutionContext<TSelf extends ContextObject = ContextObject> {
