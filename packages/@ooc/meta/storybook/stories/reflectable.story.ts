@@ -27,7 +27,7 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-REFL-01: 经 executable 读自己的 self.md（自观察）
     await postJson(app, "/api/stones", { objectId: id, self: selfContent });
     await putJson(app, `/api/stones/${id}/server-source`, {
-      code: `import { readFileSync } from "node:fs";\nimport { join } from "node:path";\nexport const ui_methods = { readSelf: { fn: (ctx) => readFileSync(join(ctx.self.dir, "self.md"), "utf8") } };\nexport const window = { commands: {} };`,
+      code: `import { readFileSync } from "node:fs";\nimport { join } from "node:path";\nexport const ui_methods = { readSelf: { fn: (ctx) => readFileSync(join(ctx.self.dir, "self.md"), "utf8") } };\nexport const window = { methods: {} };`,
     }, CONFIRM);
     await sleep(HOT);
     {
@@ -59,7 +59,7 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-REFL-04: 经 HTTP 改 executable 代码（自修改行为）
     {
       const w = await putJson(app, `/api/stones/${id}/server-source`, {
-        code: `export const ui_methods = { evolve: { fn: () => "I changed myself!" } }; export const window = { commands: {} };`,
+        code: `export const ui_methods = { evolve: { fn: () => "I changed myself!" } }; export const window = { methods: {} };`,
       }, CONFIRM);
       await sleep(HOT);
       const c = await postJson(app, `/api/stones/${id}/call_method`, { method: "evolve" });
@@ -83,12 +83,12 @@ export async function runControlPlane(): Promise<StoryResult> {
       const id2 = "morph";
       await postJson(app, "/api/stones", { objectId: id2 });
       await putJson(app, `/api/stones/${id2}/server-source`, {
-        code: `export const ui_methods = { version: { fn: () => "v1" } }; export const window = { commands: {} };`,
+        code: `export const ui_methods = { version: { fn: () => "v1" } }; export const window = { methods: {} };`,
       }, CONFIRM);
       await sleep(HOT);
       const r1 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "version" });
       await putJson(app, `/api/stones/${id2}/server-source`, {
-        code: `export const ui_methods = { version: { fn: () => "v2" }, hello: { fn: () => "world" } }; export const window = { commands: {} };`,
+        code: `export const ui_methods = { version: { fn: () => "v2" }, hello: { fn: () => "world" } }; export const window = { methods: {} };`,
       }, CONFIRM);
       await sleep(HOT);
       const r2 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "version" });

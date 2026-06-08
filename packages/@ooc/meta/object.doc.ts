@@ -879,7 +879,7 @@ export const root: DocTreeNode = {
                     2. 或 exec(method="program") → 系统创建 form（type="method_exec"，旧名 "command_exec"），后续 exec(form_id, "refine", args={...}) + exec(form_id, "submit")
                     3. method 产生副作用，比如创建 program_window 或派生 plan_window。
 
-                    root window 注册一组顶层 method（与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致）:
+                    root window 注册一组顶层 method（与 src/executable/windows/root/index.ts ROOT_METHODS 一致）:
                     - do: 派生子 thread，创建 do_window。
                     - talk: 与 user 或其他 Object 对话，创建 talk_window。
                     - program: 执行 shell / javascript / typescript 程序，创建 program_window。
@@ -900,17 +900,17 @@ export const root: DocTreeNode = {
                     - open_feishu_chat: 把飞书群会话作为 feishu_chat_window 引入 Context。
                     - open_feishu_doc: 把飞书文档作为 feishu_doc_window 引入 Context。
 
-                    （共 14 个全局 method，与 src/executable/windows/root/index.ts ROOT_COMMANDS 一致。）
+                    （共 14 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
 
                     其它 window 上也注册命令（do_window: continue/wait/close；talk_window: say/wait/close；
                     file_window: edit/reload/set_range/close；method_exec（旧名 command_exec）: refine/submit；user-defined object: 自定义 methods ...）。
                     Object 自定义 methods 通过 executable/index.ts 的 \`export const object\`（旧名 \`window\`）注册，运行时通过 \`registerNewObjectType\` 动态注册到 ObjectRegistry（即 \`REGISTRY\` Map in \`core/executable/windows/_shared/registry.ts\`）。
 
-                    Command 与 knowledge 通过 trigger 协议协作：
+                    Method 与 knowledge 通过 trigger 协议协作：
                     每个 command_exec form 在 thread 中处于 open 状态时，对应的
                     \`"method::<parent_window_type>::<method>"\` trigger 进入命中状态；
                     knowledge 的 frontmatter \`activates_on\` 中声明同样表达式即按需激活。
-                    （历史上 method 还会派生 commandPaths 子路径如 program.shell，但新 trigger
+                    （历史上 method 还会派生 methodPaths 子路径如 program.shell，但新 trigger
                     模型只到 method 粒度；语言/参数分支由 knowledge 正文自己分支，不再走 path。）
                     `,
                     named: {
@@ -934,7 +934,7 @@ export const root: DocTreeNode = {
                     },
                     patches: {
                         "command_path_activation": {
-                            title: "Command Path 驱动知识激活",
+                            title: "Method Path 驱动知识激活",
                             content: `
                             method path 是一种渐进式语义披露机制。
 
@@ -3913,7 +3913,7 @@ export const root: DocTreeNode = {
 
                     ProgramSelf 在两条路径上被使用:
                     - program method ts/js exec: sandbox 把 self 注入到用户代码（详见 executable.methods.program 与 src/executable/program/sandbox/）。
-                    - program.callMethod exec: runCallCommandProgram(thread, windowId, method, args) 构造 self 后调
+                    - program.callMethod exec: runCallMethodProgram(thread, windowId, method, args) 构造 self 后调
                       \`entry.exec(ctx)\` 拿返回值。
                     `,
                     named: {
@@ -3951,7 +3951,7 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "program.callMethod": "program method 的 callMethod 模式；一行直接调任意 window 上的命令",
-                        "runCallCommandProgram": "callMethod 路径的执行入口",
+                        "runCallMethodProgram": "callMethod 路径的执行入口",
                         "formatProgramResult": "把 result / error 包成可读字符串的格式化函数",
                     },
                 },

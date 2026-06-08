@@ -119,7 +119,7 @@ async function main() {
       `export const ui_methods = {`,
       `  echo: { description: "echoes args.text", fn: (ctx, args) => ({ youSaid: args.text }) },`,
       `};`,
-      `export const window = { commands: {} };`,
+      `export const window = { methods: {} };`,
     ].join("\n"));
     await sleep(250); // hot-reload debounce
     const r = await postJson(`/api/stones/${id}/call_method`, { method: "echo", args: { text: "hello" } });
@@ -136,7 +136,7 @@ async function main() {
       `export const ui_methods = {`,
       `  getMyDir: { fn: (ctx) => ({ myDir: ctx.self.dir, exists: (() => { try { return statSync(ctx.self.dir).isDirectory(); } catch { return false; } })() }) },`,
       `};`,
-      `export const window = { commands: {} };`,
+      `export const window = { methods: {} };`,
     ].join("\n"));
     await sleep(250);
     const r = await postJson(`/api/stones/${id}/call_method`, { method: "getMyDir" });
@@ -156,7 +156,7 @@ async function main() {
     const id = "cmd_demo";
     await postJson("/api/stones", { objectId: id });
     await writeStoneFile(id, "executable/index.ts", [
-      `export const window = { commands: { greet: { paths: ["greet"], intent: () => [], exec: async (_ctx: any) => ({ reply: "hi" }) } } };`,
+      `export const window = { methods: { greet: { paths: ["greet"], intent: () => [], exec: async (_ctx: any) => ({ reply: "hi" }) } } };`,
       `export const ui_methods = {};`,
     ].join("\n"));
     await sleep(250);
@@ -180,7 +180,7 @@ async function main() {
     // v1
     await writeStoneFile(id, "executable/index.ts", [
       `export const ui_methods = { ping: { fn: () => "v1" } };`,
-      `export const window = { commands: {} };`,
+      `export const window = { methods: {} };`,
     ].join("\n"));
     await sleep(250);
     const r1 = await postJson(`/api/stones/${id}/call_method`, { method: "ping" });
@@ -188,7 +188,7 @@ async function main() {
     // v2
     await writeStoneFile(id, "executable/index.ts", [
       `export const ui_methods = { ping: { fn: () => "v2" }, pong: { fn: () => "pong" } };`,
-      `export const window = { commands: {} };`,
+      `export const window = { methods: {} };`,
     ].join("\n"));
     await sleep(500);
     const r2 = await postJson(`/api/stones/${id}/call_method`, { method: "ping" });
@@ -221,7 +221,7 @@ async function main() {
         `export const ui_methods = {`,
         `  readSelf: { fn: (ctx) => readFileSync(join(ctx.self.dir, "self.md"), "utf8") },`,
         `};`,
-        `export const window = { commands: {} };`,
+        `export const window = { methods: {} };`,
       ].join("\n"),
     }, { "X-Overwrite-Confirm": "true" });
     await sleep(250);
@@ -267,7 +267,7 @@ async function main() {
   // TC-REFL-04
   {
     const id = "mirror";
-    const newCode = `export const ui_methods = { evolve: { fn: () => "I changed myself!" } }; export const window = { commands: {} };`;
+    const newCode = `export const ui_methods = { evolve: { fn: () => "I changed myself!" } }; export const window = { methods: {} };`;
     const r = await putJson(`/api/stones/${id}/server-source`, { code: newCode }, { "X-Overwrite-Confirm": "true" });
     const writeOk = r.status === 200 && r.json?.ok === true;
     await sleep(400);
@@ -305,7 +305,7 @@ async function main() {
       `  }},`,
       `  readSeedKnowledge: { fn: (ctx, args: any) => readFileSync(join(ctx.self.dir, "knowledge", args.path), "utf8") },`,
       `};`,
-      `export const window = { commands: {} };`,
+      `export const window = { methods: {} };`,
     ].join("\n"));
     await sleep(250);
 
@@ -354,14 +354,14 @@ async function main() {
     await putJson(`/api/stones/${id}/server-source`, {
       code: [
         `export const ui_methods = { version: { fn: () => "v1" } };`,
-        `export const window = { commands: {} };`,
+        `export const window = { methods: {} };`,
       ].join("\n"),
     }, { "X-Overwrite-Confirm": "true" });
     await sleep(200);
     const r1 = await postJson(`/api/stones/${id}/call_method`, { method: "version" });
     const v1Ok = r1.json?.returnValue === "v1";
 
-    const v2Code = `export const ui_methods = { version: { fn: () => "v2" }, hello: { fn: () => "world" } }; export const window = { commands: {} };`;
+    const v2Code = `export const ui_methods = { version: { fn: () => "v2" }, hello: { fn: () => "world" } }; export const window = { methods: {} };`;
     await putJson(`/api/stones/${id}/server-source`, { code: v2Code }, { "X-Overwrite-Confirm": "true" });
     await sleep(400);
 
@@ -531,7 +531,7 @@ async function main() {
     ].join("\n"));
     await writeStoneFile(id, "executable/index.ts", [
       `export const ui_methods = { greet: { fn: (_ctx, args) => ({ hello: args.name }) } };`,
-      `export const window = { commands: {} };`,
+      `export const window = { methods: {} };`,
     ].join("\n"));
     await sleep(250);
 

@@ -96,7 +96,7 @@ export async function runControlPlane(): Promise<StoryResult> {
       writeStoneFile(baseDir, id, "visible/index.tsx",
         `export default function Demo({ callMethod }: any) { const onClick = () => callMethod?.("greet", { name: "ooc" }); return null; }`);
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const ui_methods = { greet: { fn: (_ctx, args) => ({ hello: args.name }) } };\nexport const window = { commands: {} };`);
+        `export const ui_methods = { greet: { fn: (_ctx, args) => ({ hello: args.name }) } };\nexport const window = { methods: {} };`);
       await sleep(300);
       const urlResp = await getJson(app, `/api/objects/stone/${id}/client-source-url`);
       const callResp = await postJson(app, `/api/stones/${id}/call_method`, { method: "greet", args: { name: "ooc" } });

@@ -115,7 +115,7 @@ export const root: DocTreeNode = {
             content: `
             负责思考如何把 OOC 的 executable 能力落到代码里。关注:
             - Tool 原语层稳定性 (open / refine / submit / close / wait): 不轻易加新 tool。
-            - Command 层: root methods (do / talk / program / ...) 与各 window 上的 methods。
+            - Method 层: root methods (do / talk / program / ...) 与各 window 上的 methods。
             - ContextWindow 体系: WindowRegistry / WindowManager / 新 window type 接入。
             - command_exec form 生命周期 + 渐进式参数披露。
 
