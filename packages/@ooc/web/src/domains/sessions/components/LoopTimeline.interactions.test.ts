@@ -119,7 +119,7 @@ describe("R0d-2: approve/reject 流程", () => {
     });
     expect(calls.length).toBe(1);
     expect(calls[0].path).toBe(
-      "/api/runtime/flows/sess_a/objects/obj_b/threads/root/permission",
+      "/api/runtime/flows/sess_a/obj_b/threads/root/permission",
     );
     expect(calls[0].init?.method).toBe("POST");
     const body = JSON.parse((calls[0].init?.body as string) ?? "{}");

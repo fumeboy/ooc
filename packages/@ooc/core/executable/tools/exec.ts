@@ -42,7 +42,12 @@ export const EXEC_TOOL: LlmTool = {
         type: "string",
         // root 上可调的方法；非 root 的 window 上的方法（如 do_window.continue / 自定义 custom methods /
         // method_exec.refine|submit）通过 enum 之外的 string 传入即可——schema 不强约束。
-        enum: getOpenableMethods(),
+        // 惰性 getter：避免 module-eval 期就访问 root 的 ROOT_METHODS（循环 import 下会 TDZ；
+        // EXEC_TOOL 是模块级 const，在 import 图某些加载顺序下 root/executable 尚未初始化完）。
+        // 延迟到 schema 实际被序列化/读取时（彼时所有模块已加载）再计算。
+        get enum() {
+          return getOpenableMethods();
+        },
         description:
           "要在 target window 上调用的 method 名。" +
           "root 上典型有 do/talk/program/plan/end/todo/open_file/open_knowledge/write_file/glob/grep/metaprog 等；" +

@@ -100,5 +100,11 @@ import "./relation/index.js";
 import "../../extendable/index.js";
 
 // Boot-time 校验：所有 object type 必须配齐 renderXml 或 readable hook。
+// 延迟到 microtask 执行：本 barrel 与 root/executable / extendable 等存在循环 import，
+// 同步在 module-eval 末尾跑 assert 会在某些加载顺序下"过早"触发（彼时 root 等类型尚未
+// registerObjectType 完成），assert 抛错反而中断 root/executable 的 eval → ROOT_METHODS
+// 永不初始化（TDZ 级联）。queueMicrotask 让整个同步 import 图先 settle 再校验。
 import { builtinRegistry as _builtinReg } from "./_shared/registry.js";
-_builtinReg.assertAllObjectDefinitionsRegistered();
+queueMicrotask(() => {
+  _builtinReg.assertAllObjectDefinitionsRegistered();
+});
