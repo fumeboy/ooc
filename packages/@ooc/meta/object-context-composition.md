@@ -40,7 +40,7 @@ think(thread)
   │     │     ├─ activator entries（stone seed + pool sediment，按 trigger 命中）
   │     │     ├─ skill_index window（branch + object + external skills）
   │     │     ├─ peer / children Object 自动注入
-  │     │     └─ form knowledge（command_exec 的 knowledge() 派生）
+  │     │     └─ form knowledge（method_exec 的 knowledge() 派生）
   │     │
   │     ├─ 4b. renderContextXml(thread, enrichedWindows)  →  <context>...</context> XML
   │     ├─ 4c. loadSelfInstructions(thread)               →  instructions (self.md)
@@ -130,11 +130,11 @@ think(thread)
   <!-- ↓ 由 type 的 readable / renderXml / compressView 提供，type-specific -->
   <readable>...</readable>          <!-- 或 <compressed level="1"/> -->
 
-  <!-- ↓ 该 window 上可调用的命令面（R2 #5 / #10） -->
-  <commands hint="通过 open(parent_window_id=..., command=..., args={...}) 调用">
-    <command name="set_viewport">set_viewport: 通过 open(...) 调用</command>
-    <command name="close">close: ...</command>
-  </commands>
+  <!-- ↓ 该 window 上可调用的方法面（R2 #5 / #10） -->
+  <methods hint="通过 exec(window_id=..., method=..., args={...}) 调用">
+    <method name="set_viewport">set_viewport: 通过 exec(...) 调用</method>
+    <method name="close">close: ...</method>
+  </methods>
 
   <!-- ↓ 子 window 折叠（parentWindowId = 本 window.id 的那些） -->
   <sub_windows>
@@ -191,13 +191,13 @@ contextWindows 并不是纯持久化数据。每轮渲染时，`collectExecutabl
 | path | 内容 | 注入条件 |
 |------|------|----------|
 | `internal/basic` | 系统机制 / window 类型 / exec-close-wait 原语 / Skills 说明 / 跨 thread 共享协议 / 思考空间说明 | 每轮 |
-| `internal/root/basic` | root command 清单与用法 | 每轮 |
+| `internal/root/basic` | root method 清单与用法 | 每轮 |
 | `internal/windows/<type>/basic` | 每种已出现 type 的基础命令说明（`def.basicKnowledge`） | 该 type 在 contextWindows 中出现 |
 | `internal/reflectable/basic` | reflectable 反思协议知识 | `sessionId === "super"` |
 | `internal/reflectable/metaprog` | 元编程 worktree 沙箱指引 | `sessionId === "super"` |
 | `internal/windows/<type>/creator-reply/<window_id>` | 子→父 reply 协议（唯一合法回报通道是 creator window 的 continue / say） | thread 含 `isCreatorWindow=true` 的 do/talk window |
 | `internal/end-reflection-reminder` | end 前提醒走 super flow 反思 | 业务 thread 开了 end form 且非 super session |
-| `<form.command>/<form.status>` | 每个 method_exec form 派生的 knowledge() | form 存在且非 sharing |
+| `<form.method>/<form.status>` | 每个 method_exec form 派生的 knowledge() | form 存在且非 sharing |
 
 代码锚点：`thinkable/knowledge/synthesizer.ts:collectExecutableKnowledgeEntries` 步骤 1 → 2。
 
@@ -248,7 +248,7 @@ Phase 6 替换原 `relation_window` 机制。peer OOC Object **本身**作为 co
 - `type = peerId`（所以渲染会走 peer 自己的 readable / readme）
 - `title` 取自 peer 的 readme frontmatter.title
 
-系统会自动为每个 peer 从 stone 动态加载 window definition（executable/index.ts + commands + renderXml + readable）并注册到 registry，确保渲染不抛 "type not registered"。
+系统会自动为每个 peer 从 stone 动态加载 window definition（executable/index.ts + methods + renderXml + readable）并注册到 registry，确保渲染不抛 "type not registered"。
 
 代码锚点：`synthesizer.ts:derivePeerObjectWindows`（步骤 4）。
 
@@ -258,7 +258,7 @@ Phase 6 替换原 `relation_window` 机制。peer OOC Object **本身**作为 co
 
 在合成过程中，每一个 window 都会被 enrichment：
 - `effectiveVisibleType`：沿 `parentClass` 继承链回退到前端能渲染的首个 type（如 `my_custom_plan` → `plan`）。由 `resolveEffectiveVisibleType` 计算。
-- `command_exec` 的 `commandKnowledgePaths`：按最新 form 状态重算派生知识的 key 列表。
+- `method_exec` 的 `methodKnowledgePaths`：按最新 form 状态重算派生知识的 key 列表。
 
 这些字段运行时使用，`stripVolatileForPersist` 落盘前剥离。
 
@@ -288,11 +288,11 @@ Phase 6 替换原 `relation_window` 机制。peer OOC Object **本身**作为 co
 
 builtin types（root / talk / do / todo / file / knowledge / program / search / plan / skill_index / method_exec / feishu_chat / feishu_doc）走 `registry.def.readable` 或 `def.renderXml`，不读 stone。
 
-### 5.3 commands 元数据
+### 5.3 methods 元数据
 
-每个 window 末尾输出 `<commands>` 节点，列出该 type 上注册的所有 command 名 + 简要说明。压缩态 window 自动追加 `expand` 命令。
+每个 window 末尾输出 `<methods>` 节点，列出该 type 上注册的所有 method 名 + 简要说明。压缩态 window 自动追加 `expand` method。
 
-代码锚点：`render.ts:renderCommandsNode`。
+代码锚点：`xml.ts:renderMethodsNode`。
 
 ---
 

@@ -513,7 +513,7 @@ export const root: DocTreeNode = {
             左树组织：
             - thread 根节点对用户隐藏（viewer header 已显示 thread id，重复无用）；
               TreeNode 用 \`depthOffset=1\` 让 children 表现为 depth=0 顶层。
-            - top-level windows **按 type 分组**（root / command_exec / do / talk /
+            - top-level windows **按 type 分组**（root / method_exec / do / talk /
               todo / program / file / knowledge / search），组内按 \`createdAt\` 升序，
               避免 15+ 个混杂 window 难以扫读。
             - events section **默认折叠**（\`collectInitialExpandedIds\` 不把 events
@@ -523,14 +523,14 @@ export const root: DocTreeNode = {
             右详情按 window type 增强：
             - **file_window**：调 \`FileWindowContentView\` 实时 fetch 文件内容，按
               lines / columns 切片显示；\`.md\` 走 MarkdownContent，其它走 CodeMirror。
-            - **command_exec(method=edit)**：把 \`accumulatedArgs.{old, new}\` 渲染为
+            - **method_exec(method=edit)**：把 \`accumulatedArgs.{old, new}\` 渲染为
               \`@codemirror/merge\` 的 unifiedMergeView 红绿 diff；\`edits[]\` 多条按
               顺序展示。
-            - **command_exec(method=write_file)**：把 content 单独成大段预览。
+            - **method_exec(method=write_file)**：把 content 单独成大段预览。
             - **program**：详情平铺 history（lang / status / time + 首行 code），
               最后一次完整展开 code+args+output，前面 output 截断 200 字预览。
             - **knowledge** body 走 MarkdownContent，与 file_window 一致。
-            - **command_exec.result**：按 success / error 加色调。
+            - **method_exec.result**：按 success / error 加色调。
 
             transcript / message 展示 fromObjectId：
             - 后端 \`ThreadMessage\` 增加可选 \`fromObjectId\`（由 \`talk-delivery\` 写入）。

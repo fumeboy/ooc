@@ -139,7 +139,7 @@ export const root: DocTreeNode = {
             - user-defined objects（位于 \`packages/<objectId>/\`，运行时通过 registerNewObjectType 注册）
             Object 的 readable 函数控制自己如何在 context 中以 XML 形式展示给 LLM；Object 的 executable 目录提供 methods；Object 的 visible 目录提供前端 UI。
 
-            渐进式披露的多步 method 调用: LLM 调 exec(window_id, method, args)；若 args 不齐或会引入新 knowledge path，系统创建一个 command_exec form 并激活该 method 的初始知识，告诉 LLM 怎么填；LLM 通过 exec(form_id, "refine", args) 多次累积参数（每次可触发更细的知识激活），最后 exec(form_id, "submit") 执行。例如打开文件 = exec(method="open_file", args={path})，文件以 file 类型 ContextWindow 进入 LLM 输入。close 关闭一个 ContextWindow。
+            渐进式披露的多步 method 调用: LLM 调 exec(window_id, method, args)；若 args 不齐或会引入新 knowledge path，系统创建一个 method_exec form 并激活该 method 的初始知识，告诉 LLM 怎么填；LLM 通过 exec(form_id, "refine", args) 多次累积参数（每次可触发更细的知识激活），最后 exec(form_id, "submit") 执行。例如打开文件 = exec(method="open_file", args={path})，文件以 file 类型 ContextWindow 进入 LLM 输入。close 关闭一个 ContextWindow。
 
             Thinkable 围绕上述模块拆分为以下子维度:
             - identity: Object 如何认识自己，以及如何被其他 Object 认识。
@@ -163,7 +163,7 @@ export const root: DocTreeNode = {
                 "Method": "Object 上挂载的可调用方法（原 Command 概念归一化），由 LLM 通过 exec tool 调用；有 public/for_ui_access 两个可见性标记",
                 "Command": "Method 的旧称（2026-05-28 前），概念已与 Object Method 合并",
                 "exec/close/wait/compress": "LLM 的 4 个基础 tool：exec 调某 object 上的 method（含 form 的 refine/submit）/ close 关 window / wait 等 IO / compress 压上下文",
-                "form ContextWindow": "执行 method 时由 open 创建的表单型 ContextWindow（type=command_exec），承载渐进式参数填充与知识激活",
+                "form ContextWindow": "执行 method 时由 open 创建的表单型 ContextWindow（type=method_exec），承载渐进式参数填充与知识激活",
                 "ProcessEvent": "thread 运行中产生的过程事件，包括 LLM 输出、tool 调用和上下文变化",
                 "public method": "Object method 的可见性标记，public=true 表示可被其他 Object 在其 context 中看见并调用",
                 "for_ui_access method": "Object method 的可见性标记，for_ui_access=true 表示可被前端 HTTP API 调用",
@@ -402,9 +402,9 @@ export const root: DocTreeNode = {
                         "activation_scope": {
                             title: "自动激活知识的生命周期",
                             content: `
-                            由 command_exec window 自动激活的 knowledge 应该跟随这次 method 生命周期。
+                            由 method_exec window 自动激活的 knowledge 应该跟随这次 method 生命周期。
 
-                            当 command_exec window 关闭或执行结束后，本次自动激活的知识不应永久堆在 Context 里。
+                            当 method_exec window 关闭或执行结束后，本次自动激活的知识不应永久堆在 Context 里。
                             如果 LLM 希望长期保留某篇知识，应通过显式 open_knowledge 打开 knowledge_window。
                             `,
                         },
@@ -693,9 +693,9 @@ export const root: DocTreeNode = {
 
                             **豁免规则**：
                             - root: thread 同生命周期, 不可关闭
-                            - command_exec.status ∈ {open, executing}: 真活动 form (LLM 正在用 / exec 在跑)
-                            - **command_exec.status === "failed": 不豁免**（failed 不是焦点; LLM 可能永远不回头修; 让它走自然衰减 fold）
-                            - command_exec.status === "success": 不会到衰减阶段 (success 自动从 contextWindows 移除)
+                            - method_exec.status ∈ {open, executing}: 真活动 form (LLM 正在用 / exec 在跑)
+                            - **method_exec.status === "failed": 不豁免**（failed 不是焦点; LLM 可能永远不回头修; 让它走自然衰减 fold）
+                            - method_exec.status === "success": 不会到衰减阶段 (success 自动从 contextWindows 移除)
 
                             当前：仅 open/executing 豁免，failed 参与衰减（复用既有 idle-fold 而非发明新 GC 机制）。
                             完整 design 见 docs/2026-05-27-failed-form-gc-design.md。
@@ -756,14 +756,14 @@ export const root: DocTreeNode = {
 
             Executable 的核心分层:
             1. Tool 原语层: exec / close / wait / compress，是 LLM 直接看见的稳定接口（4 个）。
-            2. Method 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 command_exec object 上的 method。
+            2. Method 层: do / talk / program / plan / todo / end / open_file / open_knowledge / write_file / glob / grep 等具体行动；form 自身的 refine / submit 也是 method_exec object 上的 method。
             3. ContextObject 层: 行动产生或操作的上下文对象，比如 file_object、talk_object、program_object、do_object、plan_object、user-defined object。每个 context object 背后都是一个 OOC Object（builtin 或 user-defined）。
             4. Registry / Manager 层: 注册不同 object type 的 method、readable、onClose hook、basicKnowledge。
             5. Knowledge Activation 层: 根据 method path 自动激活执行所需知识。
 
             因此，Executable 不是 "给 LLM 一堆工具"。
             它是一套以 Object 为中心的行动协议: LLM 通过 exec 在某 object 上调一个 method；
-            args 齐全立即执行，args 不齐时系统创建一个 command_exec form（也是一个 builtin object），LLM 后续通过
+            args 齐全立即执行，args 不齐时系统创建一个 method_exec form（也是一个 builtin object），LLM 后续通过
             \`exec(form_id, "refine"/"submit")\` 推进。
             `,
             named: {
@@ -792,7 +792,7 @@ export const root: DocTreeNode = {
 
                     基础 tool（当前实现 4 个，src/executable/tools/index.ts OOC_TOOLS）:
                     - exec: 在某 window 上调用一条 method。args 齐全 + 不引入新 path/knowledge 时立即执行；
-                      否则创建 command_exec form 让 LLM 后续推进。
+                      否则创建 method_exec form 让 LLM 后续推进。
                     - close: 关闭一个 ContextWindow（form / do_window / todo_window 等）。
                     - wait: 声明当前 thread 等待某个 talk_window / do_window 的未来 IO。
                     - compress: 控制 thread 上下文体积（折叠 window / fold events）。见 children.compress。
@@ -855,8 +855,8 @@ export const root: DocTreeNode = {
                             因此新能力应优先表现为新的 method 或新的 window type，而不是新的顶层 tool。
                             `,
                         },
-                        "form_lifecycle_via_commands": {
-                            title: "form lifecycle 下沉为 command_exec 的命令",
+                        "form_lifecycle_via_methods": {
+                            title: "form lifecycle 下沉为 method_exec 的 method",
                             content: `
                             旧版本曾有 5 个原语 open/refine/submit/close/wait，其中 refine/submit 仅服务 form lifecycle。
 
@@ -869,10 +869,10 @@ export const root: DocTreeNode = {
                     },
                 },
                 "methods": {
-                    title: "methods - 具体行动单元（原称 methods）",
+                    title: "methods - 具体行动单元（原称 commands）",
                     content: `
-                    Method 是 LLM 通过 exec 间接调用的具体行动（2026-05-28 ooc-6 命名归一前称 method；
-                    原 \`ObjectDefinition.methods\` 字段已于 2026-06-08 重命名为 \`methods\`——method 概念移除，无 alias）。
+                    Method 是 LLM 通过 exec 间接调用的具体行动（2026-05-28 ooc-6 命名归一前称 command；
+                    原 \`ObjectDefinition.commands\` 字段已于 2026-06-08 重命名为 \`methods\`——command 概念移除，无 alias）。
 
                     LLM 通常不是直接 "调用 program 函数"，而是:
                     1. exec(method="program", args={ language: "shell", code: "..." }) → args 齐全立即执行
@@ -902,12 +902,12 @@ export const root: DocTreeNode = {
 
                     （共 14 个全局 method，与 src/executable/windows/root/index.ts ROOT_METHODS 一致。）
 
-                    其它 window 上也注册命令（do_window: continue/wait/close；talk_window: say/wait/close；
+                    其它 window 上也注册 method（do_window: continue/wait/close；talk_window: say/wait/close；
                     file_window: edit/reload/set_range/close；method_exec（旧名 command_exec）: refine/submit；user-defined object: 自定义 methods ...）。
                     Object 自定义 methods 通过 executable/index.ts 的 \`export const object\`（旧名 \`window\`）注册，运行时通过 \`registerNewObjectType\` 动态注册到 ObjectRegistry（即 \`REGISTRY\` Map in \`core/executable/windows/_shared/registry.ts\`）。
 
                     Method 与 knowledge 通过 trigger 协议协作：
-                    每个 command_exec form 在 thread 中处于 open 状态时，对应的
+                    每个 method_exec form 在 thread 中处于 open 状态时，对应的
                     \`"method::<parent_window_type>::<method>"\` trigger 进入命中状态；
                     knowledge 的 frontmatter \`activates_on\` 中声明同样表达式即按需激活。
                     （历史上 method 还会派生 methodPaths 子路径如 program.shell，但新 trigger
@@ -929,11 +929,11 @@ export const root: DocTreeNode = {
                         "metaprog": "开元编程 worktree 沙箱自改自身 stone 的 method",
                         "open_feishu_chat": "把飞书群会话载入 Context 的 method",
                         "open_feishu_doc": "把飞书文档载入 Context 的 method",
-                        "refine / submit": "command_exec window 上注册的两条命令；用 exec(form_id, ...) 触发",
+                        "refine / submit": "method_exec window 上注册的两条 method；用 exec(form_id, ...) 触发",
                         "do_window.move": "do_window 上注册的命令；通过本 do_window 把 ContextWindow 以 ref / move 模式分享给对端 thread；归还路径按 id 自动识别 lent_out ↔ owner 配对",
                     },
                     patches: {
-                        "command_path_activation": {
+                        "method_path_activation": {
                             title: "Method Path 驱动知识激活",
                             content: `
                             method path 是一种渐进式语义披露机制。
@@ -1033,7 +1033,7 @@ export const root: DocTreeNode = {
                             (具体路径与现有 runtime 控制面接口风格一致, 由 AgentOfVisible 实施期决定)。
                             `,
                         },
-                        "command_default_table": {
+                        "method_default_table": {
                             title: "method 默认 permission 表 (草案)",
                             content: `
                             allow (纯读 / 控制流):
@@ -1109,10 +1109,10 @@ export const root: DocTreeNode = {
                         "render": "把 window 转换为 LLM 可读 Context 的过程",
                     },
                     children: {
-                        "command_exec_window": {
-                            title: "command_exec window - 一次行动调用的表单窗口",
+                        "method_exec_window": {
+                            title: "method_exec window - 一次行动调用的表单窗口",
                             content: `
-                            command_exec window 是 LLM 调用 method 时产生的临时窗口。
+                            method_exec window 是 LLM 调用 method 时产生的临时窗口。
 
                             它类似一个 form。**四态状态机**（open / executing / success / failed）：
 
@@ -1128,7 +1128,7 @@ export const root: DocTreeNode = {
                             - **failed**: 执行失败; result 含错误信息;
                               **可以 refine 修回 open 状态再 submit** (refine 时累积新 args + 清旧 result + 切回 open)
 
-                            command_exec window 让 "函数调用" 不再是一次性黑盒。
+                            method_exec window 让 "函数调用" 不再是一次性黑盒。
                             LLM 可以看见自己正在填写什么参数、还缺什么、激活了哪些知识、执行结果是什么。
 
                             **失败修复路径**：
@@ -1444,7 +1444,7 @@ export const root: DocTreeNode = {
                               默认全展开
                             - **relation_window**：sections 选择（peer_readme 收起 / self_long_term 展开）→
                               \`set_sections\` args = { peer_readme: "full"|"summary"|"hidden", self_long_term: ... }
-                            - **command_exec window**：args 显示（高频 refine 时多冗余）→ \`set_args_display\`
+                            - **method_exec window**：args 显示（高频 refine 时多冗余）→ \`set_args_display\`
                               args = { mode: "full"|"summary" }
                             - **custom window**：交由 stone 作者决定（programmable 维度），不强加协议
 
@@ -1478,7 +1478,7 @@ export const root: DocTreeNode = {
                             },
                             sources: [["src/executable/windows/_shared/viewport.ts | src/executable/windows/_shared/transcript-viewport.ts | src/executable/windows/search/results-viewport.ts | src/executable/windows/program/history-viewport.ts", "viewport 协议共享实现（file/knowledge 行列 + talk/do transcript + search matches + program history）"]],
                             todo: [
-                                "其它 window type（plan/relation/command_exec）的信息量轴尚未实施",
+                                "其它 window type（plan/relation/method_exec）的信息量轴尚未实施",
                                 "viewport 默认值是否对'看长函数'场景过紧——待 AgentOfExperience 真实体验后回调",
                                 "transcriptViewport 默认 tail=20 是否对长对话过紧（用户多回合后看不到早期 context）——待真实使用回调",
                             ],
@@ -1492,7 +1492,7 @@ export const root: DocTreeNode = {
 
                     这些 type 不是 UI 组件分类，而是 LLM 的上下文对象分类（共 14 种，与 src/executable/windows/_shared/types.ts ObjectType 联合一致）:
                     - root: 每个 thread 隐含存在的根 window，注册顶层 method。
-                    - command_exec: 一次 method 调用的临时 form window。
+                    - method_exec: 一次 method 调用的临时 form window。
                     - do: 子 thread 的父侧窗口，展示子任务状态与 transcript。
                     - talk: 与 user 或其他 Object 的持续会话窗口。
                     - todo: 可见待办窗口。
@@ -1522,7 +1522,7 @@ export const root: DocTreeNode = {
                     `,
                     named: {
                         "root": "thread 的隐含根窗口，提供顶层 method",
-                        "command_exec": "一次 method 调用的临时窗口",
+                        "method_exec": "一次 method 调用的临时窗口",
                         "do_window": "父 thread 观察和继续子 thread 的窗口；注册 continue/wait/close/move 命令；archive 时自动归还所有 borrowed owner windows（plan §do_window.move）",
                         "talk_window": "与 user 或其他 Object 对话的窗口",
                         "todo_window": "可见待办窗口",
@@ -2021,7 +2021,7 @@ export const root: DocTreeNode = {
                     每轮 render 时由 synthesizer 自动派生 RelationWindow，承载"你对该 peer 的关系认知":
 
                     **RelationWindow**（type="relation"，id 稳定 \`w_rel_<peerId>\`）：
-                    专属 window type，注册 \`edit\` method（详见 children/edit_command）。
+                    专属 window type，注册 \`edit\` method（详见 children/edit_method）。
                     这是 relation 的命令面入口——LLM 想更新 relation 不再依赖 write_file 弱 prompt。
 
                     **default visibility 扩展**：
@@ -2088,7 +2088,7 @@ export const root: DocTreeNode = {
                         "*Exists flag": "API caller 用 selfLongTermExists/selfSessionExists 区分 lazy-create vs read-fail",
                     },
                     children: {
-                        "edit_command": {
+                        "edit_method": {
                             title: "relation_window.edit - 双 scope 编辑",
                             content: `
                             relation_window 注册唯一一个 method \`edit\`，参数:
@@ -2160,7 +2160,7 @@ export const root: DocTreeNode = {
                     **id 协议**：跨 thread 时 window id 严格保持不变（用于配对识别 lent_out ↔ owner）。
 
                     **可被 share 的 window 类型**：file / knowledge / search / program / todo / talk / plan / relation / custom；
-                    do_window 自身、command_exec、root 不可分享（语义不合理）。
+                    do_window 自身、method_exec、root 不可分享（语义不合理）。
 
                     与 inbox/outbox 的关系：消息通道仍是协作的主路径；window 共享只是把"已经组织好的上下文"
                     一次性带过去，避免对端重复打开 file / search / knowledge 等。
@@ -2587,7 +2587,7 @@ export const root: DocTreeNode = {
                     title: "end_reflection_reminder - 业务 thread 调 end 时的反思提醒",
                     content: `
                     **触发**: 当 OOC agent 在**非 super flow** 的业务 thread 中创建 \`method="end"\` 的
-                    command_exec form 时, synthesizer 注入一段简短的 reflection reminder knowledge。
+                    method_exec form 时, synthesizer 注入一段简短的 reflection reminder knowledge。
 
                     **目的**: 让 agent 在结束业务 thread 之前自觉考虑 — 本次工作是否产生了值得沉淀的认知 /
                     经验 / 对 peer 的认识更新 / 反复犯的错。如果有, 建议在 end 之前开 super flow 走一次反思:
@@ -4431,7 +4431,7 @@ export const root: DocTreeNode = {
                             - **search_window**: match 集合 diff (按 path+line 配对)
                             - **knowledge_window**: body 文本 diff (复用 CodeMirror Merge unified)
                             - **program_window**: history 执行记录 diff (新增 exec / output 变化)
-                            - **command_exec**: args 字段级 diff (refine 累积)
+                            - **method_exec**: args 字段级 diff (refine 累积)
                             - **relation_window**: body 文本 diff (CodeMirror Merge unified)
                             - **root / skill_index / todo / custom**: FallbackJsonDiff (通用 JSON tree 高亮变化)
 

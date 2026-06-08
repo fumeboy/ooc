@@ -353,7 +353,7 @@ export const root: DocTreeNode = {
             - 不抽公共 lib: 两份重复 (~30 行) 比强行抽到 src/ 拉外部依赖更轻; OOC 体系倾向于
               **stone 内自给自足** (objects/<self>/server/ 应当独立可读)。
             - 错误**不抛**, 返回 \`{ ok, error }\` 让上游 LLM 自己判断是否要 retry / talk 用户;
-              这与 OOC \`executable.command_exec\` 协议一致 (methods 不抛异常, 用结构化结果)。
+              这与 OOC \`executable.method_exec\` 协议一致 (methods 不抛异常, 用结构化结果)。
             - **缺 USER_INFO 给清晰错误** (而不是 silent 失败), 方便用户在 web UI 上看到提示后补 env。
 
             **未来迁移到 lib 的信号**: 当第 3 个 Agent 也开始抄这段 helper 时, 应该把它抽到

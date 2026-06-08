@@ -47,7 +47,7 @@ export const root: DocTreeNode = {
     单元测试不归本树管 (沿用各模块 __tests__/ 下的 bun:test 自然规范)。
 
     核心组成:
-    1. 两个观察孔 (A/B): A=User story (任务是否真完成); B=OOC 机制 (LLM 走过的 windows / commands / talk-delivery 是否对)。两者同时通过才叫 e2e 通过。
+    1. 两个观察孔 (A/B): A=User story (任务是否真完成); B=OOC 机制 (LLM 走过的 windows / methods / talk-delivery 是否对)。两者同时通过才叫 e2e 通过。
     2. 三档评分基准 (Good / OK / Bad): 每个场景跑完根据可观察事实落到一档；通过门槛 >= OK；Bad 是真信号、OK 多发是黄信号。
     3. 入口分离: backend e2e (HTTP API + worker + LLM + 文件系统) 与 frontend e2e (Web UI + Playwright + 真后端 + 真 LLM) 各一份场景集，独立演进、共享策略。
     4. 横切政策: 真 LLM / mock LLM / 半真三种触发模式，env-gated；CI 单场景允许重试 1 次；OK/Good 趋势归档。
@@ -58,7 +58,7 @@ export const root: DocTreeNode = {
     named: {
         "e2e": "end-to-end 测试; OOC 上下文中特指 \"用户真把 OOC 当 CodeAgent\" 那条完整链路",
         "观察孔 A": "User story 视角: 任务是否完成、文件是否真改、对话是否回到 user",
-        "观察孔 B": "OOC 机制视角: LLM 走过的 commands / windows / talk-delivery 双写 / form 状态流转",
+        "观察孔 B": "OOC 机制视角: LLM 走过的 methods / windows / talk-delivery 双写 / form 状态流转",
         "Good": "系统按设计的最优路径完成 (推荐命令 + 无绕行)",
         "OK": "任务完成但有可观察的浪费或绕行 (容忍区, 需趋势观察)",
         "Bad": "任务没完成 / 用户看不到结果 / 机制状态错乱; 通过门槛是 >= OK",
@@ -368,7 +368,7 @@ export const root: DocTreeNode = {
             横切设计: e2e 的 "是否好用" 必须同时通过两个观察孔。
 
             - A. User story: 用户给一个真实任务 (如 "在 src/foo.ts 中把函数 X 改名为 Y"), 任务是否完成、文件是否真改、对话是否回到 user。视角: 用户。
-            - B. OOC 机制: LLM 走了什么 commands / 创建了什么 windows / talk-delivery 双写是否正确 / form 状态是否正常流转。视角: OOC 设计者。
+            - B. OOC 机制: LLM 走了什么 methods / 创建了什么 windows / talk-delivery 双写是否正确 / form 状态是否正常流转。视角: OOC 设计者。
 
             两孔同时通过才算 e2e 通过:
             - 只看 A 会漏 OOC 自身退化 (任务完成了但用 shell sed 而非 file_window.edit)

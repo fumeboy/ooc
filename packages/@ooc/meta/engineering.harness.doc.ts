@@ -117,7 +117,7 @@ export const root: DocTreeNode = {
             - Tool 原语层稳定性 (open / refine / submit / close / wait): 不轻易加新 tool。
             - Method 层: root methods (do / talk / program / ...) 与各 window 上的 methods。
             - ContextWindow 体系: WindowRegistry / WindowManager / 新 window type 接入。
-            - command_exec form 生命周期 + 渐进式参数披露。
+            - method_exec form 生命周期 + 渐进式参数披露。
 
             内循环典型动作: 设计一个新 method → 决定它注册到哪个 window type → 写 knowledge() 函数 → 实现 exec → 单测 + e2e。
 
