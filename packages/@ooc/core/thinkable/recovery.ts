@@ -115,6 +115,8 @@ export function markInterrupted(thread: ThreadContext): void {
       category: "context_change",
       kind: "inject",
       text: "[interrupted] previous LLM call did not complete; will retry on next tick.",
+      source: "thinkable/recovery#markInterrupted",
+      errorCode: "llm_call_interrupted",
     },
   ];
 }

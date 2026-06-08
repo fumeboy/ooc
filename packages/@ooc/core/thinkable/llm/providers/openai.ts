@@ -10,6 +10,38 @@ import type {
   LlmToolCall
 } from "../types";
 
+/**
+ * 宽容地解析 LLM 返回的 tool call 参数。
+ *
+ * 上游模型 (特别是 OpenAI-compatible 代理如 Ark) 可能在 arguments 字段里返回
+ * 自然语言文本、空字符串、截断 JSON 等非 JSON 内容。裸 JSON.parse 会抛异常并
+ * 让整条 think 循环进入 failed 状态 (参见 thinkloop.ts 的顶层 catch)，使得
+ * 后续所有上下文都无法推进。
+ *
+ * 这里做三层 fallback：
+ *   1. 原串直接 JSON.parse
+ *   2. 尝试包裹成对象形式（模型偶尔只吐出 value 部分）
+ *   3. 回退到 `{ _raw: originalString }`，保证上层永远拿到一个对象；同时
+ *      调用方可以通过检测 `_raw` 字段知道这是降级结果。
+ */
+function safeParseArguments(raw: unknown): Record<string, unknown> {
+  const s = typeof raw === "string" ? raw : "";
+  if (!s) return {};
+  const trimmed = s.trim();
+  if (!trimmed) return {};
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    // 模型吐出了单个值（字符串、数字、数组）——包一层作为回退
+    return { _raw: parsed as unknown };
+  } catch {
+    // 不是合法 JSON：记录原文，让 LLM 下一轮自己看到错误输出并修正
+    return { _raw: trimmed };
+  }
+}
+
 // OpenAI tools 统一映射为 function calling 结构。
 function toOpenAiTools(tools: LlmTool[] | undefined): FunctionTool[] | undefined {
   if (!tools || tools.length === 0) {
@@ -38,7 +70,7 @@ function toOpenAiToolCalls(rawToolCalls: unknown): LlmToolCall[] {
     return {
       id: (item as { id?: string }).id ?? "",
       name: (functionCall?.name ?? "wait") as LlmToolCall["name"],
-      arguments: JSON.parse(rawArguments)
+      arguments: safeParseArguments(rawArguments)
     };
   });
 }
@@ -117,7 +149,7 @@ function toOpenAiOutputItems(rawOutput: unknown): LlmInputItem[] {
         type: "function_call" as const,
         call_id: (raw.call_id as string | undefined) ?? "",
         name: ((raw.name as string | undefined) ?? "wait") as LlmToolCall["name"],
-        arguments: JSON.parse((raw.arguments as string | undefined) ?? "{}")
+        arguments: safeParseArguments(raw.arguments)
       });
       continue;
     }
@@ -293,7 +325,7 @@ export async function* streamWithOpenAi(
     const normalized = {
       id: toolCall.id,
       name: toolCall.name as LlmToolCall["name"],
-      arguments: JSON.parse(toolCall.arguments || "{}")
+      arguments: safeParseArguments(toolCall.arguments || "{}")
     };
 
     emittedToolCalls.push(normalized);

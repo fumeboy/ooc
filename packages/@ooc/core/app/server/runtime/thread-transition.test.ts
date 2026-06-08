@@ -28,10 +28,11 @@ describe("thread transition (ContextWindow model)", () => {
 
     expect(next.status).toBe("running");
     expect(next.inboxSnapshotAtWait).toBeUndefined();
-    expect(next.events.at(-1)).toEqual({
+    expect(next.events.at(-1)).toMatchObject({
       category: "context_change",
       kind: "inject",
       text: "继续",
+      source: "app/server/runtime/thread-transition#applyInjectTransition",
     });
   });
 

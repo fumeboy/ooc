@@ -22,6 +22,7 @@ export function applyInjectTransition(thread: ThreadContext, text: string): Thre
         category: "context_change",
         kind: "inject",
         text,
+        source: "app/server/runtime/thread-transition#applyInjectTransition",
       },
     ],
   };

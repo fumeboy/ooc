@@ -202,11 +202,19 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
     // [interrupted] 恢复提示、end.result 兜底说明等。文案语义由各写入点的前缀
     // ([错误] / [close 拒绝] / [interrupted] / [end.result] / [do] ...) 自带，render
     // 层不再做二次分类。
+    //
+    // 如果事件携带 observability 元数据 (source / errorCode / dataPreview)，
+    // 也一并渲染出来——便于 LLM 自己解释哪里出错，也便于 timeline viewer 调试。
+    const meta: string[] = [];
+    if (event.source) meta.push(`source=${event.source}`);
+    if (event.errorCode) meta.push(`errorCode=${event.errorCode}`);
+    if (event.dataPreview) meta.push(`dataPreview=${event.dataPreview}`);
+    const metaLine = meta.length > 0 ? `\n[meta] ${meta.join(", ")}` : "";
     return [
       {
         type: "message",
         role: "system",
-        content: `[context_change:inject]\n${event.text}`,
+        content: `[context_change:inject]\n${event.text}${metaLine}`,
       },
     ];
   }

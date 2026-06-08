@@ -472,12 +472,18 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
     }
 
     if (category === "context_change" && kind === "inject" && typeof event.text === "string") {
+      const meta: string[] = [];
+      const ev = event as { source?: string; errorCode?: string; dataPreview?: string };
+      if (ev.source) meta.push(`source: ${ev.source}`);
+      if (ev.errorCode) meta.push(`errorCode: ${ev.errorCode}`);
+      if (ev.dataPreview) meta.push(`dataPreview: ${ev.dataPreview}`);
+      const content = meta.length > 0 ? `${event.text}\n\n(${meta.join("; ")})` : event.text;
       lines.push({
         id: `event-${index}`,
         kind: "notice",
         role: "notice",
         title: "Context update",
-        content: event.text,
+        content,
         tone: isErrorText(event.text) ? "error" : "info",
       });
       continue;

@@ -128,6 +128,27 @@ export function classifyLoopEvent(event: LoopEvent): LoopEventBadgeSpec | undefi
     };
   }
 
+  // inject 事件：带 source/errorCode 元数据时显示 badge,便于调试；纯提示文本(无元数据)不渲染
+  if (event.category === "context_change" && event.kind === "inject") {
+    const ev = event as { text?: string; source?: string; errorCode?: string };
+    const hasMeta = Boolean(ev.source || ev.errorCode);
+    if (!hasMeta) return undefined;
+    const isError = typeof ev.text === "string" && /error|fail|reject|deny|exception|parse/i.test(ev.text);
+    const tooltipParts = [
+      ev.errorCode ? ev.errorCode : undefined,
+      ev.source ? ev.source : undefined,
+      typeof ev.text === "string" && ev.text.length > 0
+        ? (ev.text.length > 120 ? ev.text.slice(0, 120) + "…" : ev.text)
+        : undefined,
+    ].filter(Boolean) as string[];
+    return {
+      icon: isError ? "⚠️" : "ℹ️",
+      color: isError ? "red" : "slate",
+      tooltip: tooltipParts.join(" · "),
+      label: ev.errorCode ? ev.errorCode.slice(0, 20) : "inject",
+    };
+  }
+
   if (event.category === "permission" && event.kind === "permission_ask") {
     const command = (event.command ?? "(unknown)").toString();
     if (!event.decided) {

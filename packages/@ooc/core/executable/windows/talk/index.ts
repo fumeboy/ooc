@@ -206,6 +206,8 @@ function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
       category: "context_change",
       kind: "inject",
       text: `[close 拒绝] talk_window "${w.id}" 是初始 creator talk_window，与 caller 的恒在通道，不可关闭。`,
+      source: "executable/windows/talk#onCloseTalkWindow",
+      errorCode: "creator_talk_window_close_rejected",
     });
     return false;
   }

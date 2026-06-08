@@ -166,11 +166,15 @@ describe("think", () => {
     await think(thread, llmClient);
 
     expect(thread.status).toBe("failed");
-    expect(thread.events.at(-1)).toEqual({
+    const last = thread.events.at(-1);
+    expect(last).toMatchObject({
       category: "context_change",
       kind: "inject",
-      text: "llm exploded"
+      text: "llm exploded",
+      source: "thinkable/thinkloop#think.catch",
+      errorCode: "think_error",
     });
+    expect(typeof (last as { stack?: string }).stack).toBe("string");
   });
 
   it("tool 失败时写入 inject 且停止后续 tool", async () => {
@@ -203,11 +207,16 @@ describe("think", () => {
     await think(thread, llmClient);
 
     expect(thread.status).toBe("running");
-    expect(thread.events.at(-1)).toEqual({
+    const lastEv = thread.events.at(-1);
+    expect(lastEv).toMatchObject({
       category: "context_change",
       kind: "inject",
-      text: "first tool failed"
+      text: "first tool failed",
+      source: "thinkable/thinkloop#runToolDispatchLoop.catch",
+      errorCode: "tool_dispatch_error",
     });
+    expect(typeof (lastEv as { stack?: string }).stack).toBe("string");
+    expect((lastEv as { dataPreview?: string }).dataPreview).toContain("call_1");
     expect(dispatch).toHaveBeenCalledTimes(1);
   });
 

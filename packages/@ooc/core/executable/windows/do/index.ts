@@ -171,6 +171,8 @@ function onCloseDoWindow(ctx: OnCloseContext): boolean | void {
       category: "context_change",
       kind: "inject",
       text: `[close 拒绝] window ${window.id} 是初始 creator do_window，不可关闭（spec § 初始 creator 对话 window）。`,
+      source: "executable/windows/do#onCloseDoWindow",
+      errorCode: "creator_do_window_close_rejected",
     });
     return false;
   }
@@ -432,6 +434,8 @@ const doConstructor: ObjectMethod = {
         category: "context_change",
         kind: "inject",
         text: "[do] knowledge / threadId 参数在 Step 1 已弃用；threadId 续写改走 do_window.continue，knowledge 待 Step 2 回归。",
+        source: "executable/windows/do#builtin_do.exec",
+        errorCode: "deprecated_param",
       });
     }
 
@@ -500,6 +504,8 @@ const doConstructor: ObjectMethod = {
           category: "context_change",
           kind: "inject",
           text: `[do.share_windows] 部分分享失败：\n${errors.join("\n")}`,
+          source: "executable/windows/do#builtin_do.exec",
+          errorCode: "share_windows_partial_failure",
         });
       }
     }

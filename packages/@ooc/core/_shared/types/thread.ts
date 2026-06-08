@@ -200,6 +200,27 @@ export type ProcessEvent = ProcessEventCommon & (
       kind: "inject";
       /** 注入内容，会以 user message 形式进入下一轮 transcript。 */
       text: string;
+      /**
+       * 可选：触发该注入的源头模块 / 函数（如 "thinkable/llm/providers/openai#toOpenAiOutputItems"）。
+       * 用于可观测性：thread.json 查看者 / 控制面能直接定位事件是谁发出的，
+       * 而不必从错误文本反推。错误类注入强烈建议填充。
+       */
+      source?: string;
+      /**
+       * 可选：机器可读的错误码，供上层按类型处理（如 "json_parse_failed"、
+       * "tool_dispatch_error"、"permission_denied"）。
+       */
+      errorCode?: string;
+      /**
+       * 可选：完整或截断的原始异常堆栈。仅在 source 是异常捕获点时填充；
+       * 前端 timeline 默认折叠，不直接注入 LLM context。
+       */
+      stack?: string;
+      /**
+       * 可选：相关数据的预览（截断到 ≤ 200 字符）。
+       * 例如 JSON.parse 失败时放入被解析的原始字符串前 200 字，极大降低定位成本。
+       */
+      dataPreview?: string;
     }
   | {
       /** 事件来源：外部输入到达，供 context builder 关联 inbox 中的新消息。 */

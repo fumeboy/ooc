@@ -390,7 +390,15 @@ async function runToolDispatchLoop(
       thread.events.push({
         category: "context_change",
         kind: "inject",
-        text: (error as Error).message
+        text: (error as Error).message,
+        source: "thinkable/thinkloop#runToolDispatchLoop.catch",
+        errorCode: "tool_dispatch_error",
+        stack: (error as Error).stack,
+        dataPreview: JSON.stringify({
+          tool: toolCall.name,
+          callId: toolCall.id,
+          argsKeys: Object.keys(toolCall.arguments ?? {})
+        }).slice(0, 200)
       });
       return "error";
     }
@@ -549,7 +557,10 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     thread.events.push({
       category: "context_change",
       kind: "inject",
-      text: message
+      text: message,
+      source: "thinkable/thinkloop#think.catch",
+      errorCode: error instanceof LlmTimeoutError ? "llm_timeout" : "think_error",
+      stack: (error as Error).stack
     });
     thread.status = "failed";
     // 根因 #4: 给 failed 终态补结构化失败原因，让 worker 对账 + 控制面直接读，
