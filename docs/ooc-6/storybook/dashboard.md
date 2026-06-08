@@ -7,14 +7,14 @@
 
 | 能力 | Tier A 档位 | A: PASS/FAIL/SKIP | Tier B（agent-native） |
 |---|---|---|---|
-| thinkable | 🟢 Good | 2/0/0 | 🟢 Good |
+| thinkable | 🟢 Good | 3/0/0 | 🟢 Good |
 | executable | 🟢 Good | 2/0/0 | 🟢 Good |
 | collaborable | 🟢 Good | 2/0/0 | 🟢 Good |
 | observable | 🟢 Good | 2/0/0 | 🟢 Good |
 | reflectable | 🟢 Good | 6/0/0 | 🟢 Good |
-| programmable | 🟢 Good | 4/0/0 | 🟢 Good |
+| programmable | 🟢 Good | 4/0/0 | 🔴 Bad |
 | visible | 🟡 OK | 3/0/2 | 🟢 Good |
 | persistable | 🟢 Good | 3/0/0 | 🟢 Good |
-| class | 🟢 Good | 4/0/0 | 🟢 Good |
+| class | 🟢 Good | 4/0/0 | 🔴 Bad |
 
 _注：SKIP 多为环境依赖（如 visible 的 Vite serve 需 live Vite 指向同 world）。Tier B 质量判据见各 spec。_
