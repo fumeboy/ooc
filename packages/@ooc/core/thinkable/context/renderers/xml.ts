@@ -33,6 +33,7 @@ import {
   type ObjectDefinition,
 } from "../../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../../executable/windows/index.js";
+import { extractBasicDescription, conciseDescription } from "../../../executable/windows/_shared/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { loadObjectReadable, loadObjectWindow } from "../../../runtime/server-loader.js";
 import { readReadable, type StoneObjectRef } from "../../../persistable/index.js";
@@ -73,6 +74,7 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
 // ─────────────────────────── commands node ───────────────────────────────────
 
 const COMMAND_BRIEF_MAX = 80;
+const COMMAND_DESC_MAX = 200;
 
 export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistry): XmlNode | null {
   // fail-soft：未注册 type（peer stone 后台注册中 / 新建对象未注册 / builtin 缺失）无 methods 节点。
@@ -91,8 +93,12 @@ export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistr
 
   const children: XmlNode[] = names.map((name) => {
     const entry = def.methods?.[name] ?? def.windowMethods?.[name];
-    const paths = entry?.paths ?? [name];
-    const brief = paths.join(", ").slice(0, COMMAND_BRIEF_MAX);
+    // 优先展示语义描述（method 的 *_BASIC 知识），让 LLM 看懂每个 command 的含义；
+    // 无描述时退回 paths 简述（仅别名，价值低）。
+    const desc = entry ? extractBasicDescription(entry) : undefined;
+    const brief = desc
+      ? conciseDescription(desc, COMMAND_DESC_MAX)
+      : (entry?.paths ?? [name]).join(", ").slice(0, COMMAND_BRIEF_MAX);
     return xmlElement("command", { name }, [xmlText(brief)]);
   });
 

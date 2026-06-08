@@ -16,9 +16,7 @@
 
 import { Elysia } from "elysia";
 import { builtinRegistry } from "../../../../executable/windows";
-import type { ObjectMethod } from "../../../../executable/windows";
-import type { FormChangeEvent, Intent } from "../../../../thinkable/context/intent.js";
-import type { MethodExecWindow } from "../../../../executable/windows/_shared/types.js";
+import { extractBasicDescription } from "../../../../executable/windows/_shared/method-description.js";
 
 export type ObjectMethodEntry = {
   name: string;
@@ -59,45 +57,6 @@ export function listObjectTypesApi() {
   return new Elysia({ name: "ooc.windows.api.list-types" })
     .get("/windows/_shared/types", handler)
     .get("/objects/_shared/types", handler);
-}
-
-/**
- * Phase C (2026-06-03): 从 entry.onFormChange() 返回的 GuidanceWindow 中挑出"基础描述":
- *   1. title 以 `/basic` 结尾的那条(约定;所有 method 都登记在这里)
- *   2. 兜底取 content 最长的那条(input hint 通常更短)
- *   3. onFormChange 未注册或调用抛错 → 返回 undefined,让 UI 退化成"只有 chip 名"
- */
-function extractBasicDescription(entry: ObjectMethod): string | undefined {
-  if (!entry.onFormChange) return undefined;
-  const stubForm = {
-    id: "__api_list__",
-    command: "describe",
-    accumulatedArgs: {},
-    status: "open",
-  } as MethodExecWindow;
-  const change: FormChangeEvent = {
-    kind: "args_refined",
-    added: [],
-    removed: [],
-    changed: [],
-    args: {},
-  };
-  const defaultIntent: Intent = { name: "describe" };
-  const intents = [defaultIntent, ...entry.intent({})];
-  let windows;
-  try {
-    windows = entry.onFormChange(change, { form: stubForm, intents }) ?? [];
-  } catch {
-    return undefined;
-  }
-  const pairs = windows
-    .filter((w) => w.type === "guidance")
-    .map((w) => [w.title, (w as any).content] as [string, string])
-    .filter(([, c]) => typeof c === "string" && c.length > 0);
-  if (pairs.length === 0) return undefined;
-  const basic = pairs.find(([path]) => path.endsWith("/basic"));
-  if (basic) return basic[1];
-  return pairs.reduce((a, b) => (a[1].length >= b[1].length ? a : b))[1];
 }
 
 function summarize(text: string, max = 200): string {
