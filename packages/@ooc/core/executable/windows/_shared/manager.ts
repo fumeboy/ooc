@@ -384,12 +384,19 @@ export class WindowManager {
       }
     }
 
-    const entry = this.lookupMethodEntry(parent, opts.command);
-    if (!entry) {
+    // object method 优先；其次 window method（控制展示，归 readable）。两者都用于
+    // 构造 form（computeMethodPaths / deriveKnowledgeKeys 只读 .intent / .onFormChange，
+    // WindowMethod 同样具备）。真正的 dispatch 分流在 submit()。
+    const objectEntry = this.lookupMethodEntry(parent, opts.command);
+    const windowEntry = objectEntry
+      ? undefined
+      : this.registry.lookupWindowMethod(parent, opts.command);
+    if (!objectEntry && !windowEntry) {
       throw new Error(
         `openMethodExec: command "${opts.command}" not registered on window "${parent.type}" (id=${parent.id})`,
       );
     }
+    const entry = (objectEntry ?? windowEntry) as ObjectMethod;
 
     const formId = generateWindowId("method_exec");
     const baselineArgs: Record<string, unknown> = {};
@@ -635,7 +642,11 @@ export class WindowManager {
 
     const parent = this.requireParent(form.parentWindowId);
     const resolved = this.registry.lookupMethodEntry(parent, form.command);
-    if (!resolved) {
+    // window method 分流（控制展示，归 readable）：object method 缺席时查 window method 表。
+    const windowEntry = resolved
+      ? undefined
+      : this.registry.lookupWindowMethod(parent, form.command);
+    if (!resolved && !windowEntry) {
       throw new Error(
         `submit: command "${form.command}" not registered on parent window type "${parent.type}"`,
       );
@@ -645,7 +656,8 @@ export class WindowManager {
     // 找不到（resolved === undefined）就在上面已经 fail-loud 抛错。这里不再做
     // declaringType !== parent.type 的严格相等校验，否则会反过来阻断 §7 设计的
     // 继承调用（如 supervisor 借 root 拿 talk/do/...）。
-    const entry = resolved.entry;
+    // window method 路径下 entry 用作 fireStatusChanged 的 onFormChange 载体（两类签名同）。
+    const entry = (resolved?.entry ?? windowEntry) as ObjectMethod;
 
     const executing: MethodExecWindow = { ...form, status: "executing" };
     this.windows.set(formId, executing);
@@ -678,6 +690,24 @@ export class WindowManager {
           ? () => this.reportContextEdit(thread)
           : () => Promise.resolve(),
       };
+      if (windowEntry) {
+        // ── window method 分流（控制展示，归 readable）──
+        // 注入 window 展示状态快照，exec 返回新 state（immutable），写回 parent.state。
+        // 不碰 parent 业务数据。result/isError 之后与 object method 路径共用收尾。
+        const windowState =
+          (parent as { state?: import("../../../_shared/types/window-state.js").WindowDisplayState })
+            .state ?? {};
+        const windowCtx: import("../../../_shared/types/window-method.js").WindowMethodExecutionContext =
+          { ...ctx, windowState };
+        const outcome = await windowEntry.exec(windowCtx);
+        if (outcome.ok) {
+          this.upsertWindow({ ...parent, state: outcome.state }, thread);
+          result = outcome.result;
+        } else {
+          result = outcome.error;
+          isError = true;
+        }
+      } else {
       const raw = await entry.exec(ctx);
       // 四种返回形态：MethodOutcome (constructor / regular / failed) / string / undefined
       // - outcome.ok=true && "object" in: P6 (ooc-6) constructor —— mount 新 ContextObject，
@@ -708,6 +738,7 @@ export class WindowManager {
           isError = true;
         }
       }
+      } // end object-method branch
     } catch (err) {
       result = `[command-error] ${(err as Error).message}`;
       isError = true;
