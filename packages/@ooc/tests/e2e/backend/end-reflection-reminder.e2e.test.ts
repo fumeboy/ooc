@@ -47,7 +47,7 @@ function makeMethodExecWindow(
     createdAt: 1,
     description: "",
     accumulatedArgs: {},
-    methodPaths: [overrides.method],
+    intentPaths: [overrides.method],
     loadedKnowledgePaths: [],
     ...overrides,
   };

@@ -6,10 +6,10 @@ export default function TodoWindowDetail({ window }: { window: TodoWindow }) {
   return (
     <>
       <pre className="llm-input-pre">{window.content}</pre>
-      {window.onMethodPath && window.onMethodPath.length > 0 && (
+      {window.activatesOn && window.activatesOn.length > 0 && (
         <div className="llm-input-attr-row">
-          <span className="llm-input-attr-key">on_command_path</span>
-          <span className="llm-input-attr-value">{window.onMethodPath.join(", ")}</span>
+          <span className="llm-input-attr-key">activates_on</span>
+          <span className="llm-input-attr-value">{window.activatesOn.join(", ")}</span>
         </div>
       )}
     </>

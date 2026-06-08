@@ -29,7 +29,7 @@ function callKnowledge(
     method: "test",
     description: "",
     accumulatedArgs: args,
-    methodPaths: [],
+    intentPaths: [],
     loadedKnowledgePaths: [],
     status,
     createdAt: 0,
@@ -96,14 +96,14 @@ describe("method execution side effects", () => {
       thread,
       args: {
         content: "补充 thinkloop 集成测试",
-        on_command_path: ["program", "exec"],
+        activates_on: ["program", "exec"],
       },
     });
     const todoWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "todo");
     expect(todoWindow?.type).toBe("todo");
     expect(todoWindow && todoWindow.type === "todo" && todoWindow.content).toBe("补充 thinkloop 集成测试");
     expect(
-      todoWindow && todoWindow.type === "todo" && todoWindow.onMethodPath,
+      todoWindow && todoWindow.type === "todo" && todoWindow.activatesOn,
     ).toEqual(["program", "exec"]);
   });
 

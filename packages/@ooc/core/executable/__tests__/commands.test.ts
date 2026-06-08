@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { ROOT_METHODS, getOpenableMethods, deriveRootMethodPaths } from "../windows";
+import { ROOT_METHODS, getOpenableMethods, deriveRootIntentPaths } from "../windows";
 import { programMethod } from "@ooc/builtins/root/executable/method.program";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
@@ -29,7 +29,7 @@ function callKnowledge(
     method: "test",
     description: "",
     accumulatedArgs: args,
-    methodPaths: [],
+    intentPaths: [],
     loadedKnowledgePaths: [],
     status,
     createdAt: 0,
@@ -103,14 +103,14 @@ describe("executable methods", () => {
   });
 
   it("root.talk paths in new model: only [talk] (say/wait/close moved to talk_window)", () => {
-    expect(deriveRootMethodPaths("talk", { wait: true })).toEqual(["talk"]);
-    expect(deriveRootMethodPaths("talk", { target: "user", title: "x" })).toEqual(["talk"]);
+    expect(deriveRootIntentPaths("talk", { wait: true })).toEqual(["talk"]);
+    expect(deriveRootIntentPaths("talk", { target: "user", title: "x" })).toEqual(["talk"]);
   });
 
   it("removed legacy talk paths (talk_window has its own method paths)", () => {
     // 旧 talk.fork / talk.continue / talk.thread_creator / talk.relation_update / talk.question_form
     // 在 Step 2 后已下线；talk_window 上的 say/say.wait/wait/close 走 windows registry
-    const paths = deriveRootMethodPaths("talk", {
+    const paths = deriveRootIntentPaths("talk", {
       context: "continue",
       target: "creator",
       type: "relation_update",
@@ -119,34 +119,34 @@ describe("executable methods", () => {
   });
 
   it("root.do paths in new model: only do and do.wait (continue moved to do_window)", () => {
-    expect(deriveRootMethodPaths("do", { msg: "x" })).toEqual(["do"]);
-    expect(deriveRootMethodPaths("do", { msg: "x", wait: true })).toEqual([
+    expect(deriveRootIntentPaths("do", { msg: "x" })).toEqual(["do"]);
+    expect(deriveRootIntentPaths("do", { msg: "x", wait: true })).toEqual([
       "do",
       "do.wait",
     ]);
   });
 
   it("should keep program paths consistent with method docs", () => {
-    expect(deriveRootMethodPaths("program", { language: "ts" })).toEqual([
+    expect(deriveRootIntentPaths("program", { language: "ts" })).toEqual([
       "program",
       "program.typescript"
     ]);
-    expect(deriveRootMethodPaths("program", { language: "js" })).toEqual([
+    expect(deriveRootIntentPaths("program", { language: "js" })).toEqual([
       "program",
       "program.javascript"
     ]);
   });
 
   it("should return empty array for unknown method", () => {
-    const paths = deriveRootMethodPaths("unknown", {});
+    const paths = deriveRootIntentPaths("unknown", {});
     expect(paths).toEqual([]);
   });
 
   it("should derive todo reminder paths from args", () => {
-    expect(deriveRootMethodPaths("todo", { content: "补测试" })).toEqual(["todo"]);
-    expect(deriveRootMethodPaths("todo", { content: "补测试", on_command_path: ["program"] })).toEqual([
+    expect(deriveRootIntentPaths("todo", { content: "补测试" })).toEqual(["todo"]);
+    expect(deriveRootIntentPaths("todo", { content: "补测试", activates_on: ["program"] })).toEqual([
       "todo",
-      "todo.on_command_path"
+      "todo.activates_on"
     ]);
   });
 

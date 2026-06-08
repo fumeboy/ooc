@@ -900,7 +900,7 @@ export const root: DocTreeNode = {
                     每个 method_exec form 在 thread 中处于 open 状态时，对应的
                     \`"method::<parent_window_type>::<method>"\` trigger 进入命中状态；
                     knowledge 的 frontmatter \`activates_on\` 中声明同样表达式即按需激活。
-                    （历史上 method 还会派生 methodPaths 子路径如 program.shell，但新 trigger
+                    （历史上 method 还会派生 intentPaths 子路径如 program.shell，但新 trigger
                     模型只到 method 粒度；语言/参数分支由 knowledge 正文自己分支，不再走 path。）
                     `,
                     named: {

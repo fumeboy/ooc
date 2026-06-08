@@ -32,7 +32,7 @@ function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
     method: "x",
     description: "",
     accumulatedArgs: {},
-    methodPaths: [],
+    intentPaths: [],
     loadedKnowledgePaths: [],
     ...overrides,
   };

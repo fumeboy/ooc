@@ -40,7 +40,7 @@ type _ContextWindowUnion =
       method: string;
       description?: string;
       accumulatedArgs?: Record<string, unknown>;
-      methodPaths?: string[];
+      intentPaths?: string[];
       loadedKnowledgePaths?: string[];
       methodKnowledgePaths?: string[];
       result?: string;
@@ -77,7 +77,7 @@ type _ContextWindowUnion =
       title: string;
       status: "open" | "done";
       content: string;
-      onMethodPath?: string[];
+      activatesOn?: string[];
       createdAt?: number;
     }
   | {
@@ -473,7 +473,7 @@ function windowCharCount(window: ContextWindow): number {
       break;
     case "todo":
       n += window.content.length;
-      n += (window.onMethodPath ?? []).join(",").length;
+      n += (window.activatesOn ?? []).join(",").length;
       break;
     case "talk":
       n += window.target.length;

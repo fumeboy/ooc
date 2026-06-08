@@ -12,7 +12,7 @@ import type { Viewport } from "@ooc/core/extendable/_shared/viewport.js";
  *               与每个 method_exec form 的 \`knowledge()\` 派生条目；
  *               不持久化，每轮 buildInputItems / captureContextSnapshot 时合成；
  *               LLM 不可 close（\`close\` hook 会拒绝并写 inject）。
- * - activator ：pools/objects/{id}/knowledge/*.md 经 methodPaths 命中激活的条目；
+ * - activator ：pools/objects/{id}/knowledge/*.md 经 intentPaths 命中激活的条目；
  *               同样合成、不持久化、不可 close；额外携带 presentation=full|summary。
  * - relation  ：thread.contextWindows 中存在 talk_window(target=peerId) 时,
  *               按 peerId 派生最多 2 条:peer 的 stones/{peer}/readme.md 与

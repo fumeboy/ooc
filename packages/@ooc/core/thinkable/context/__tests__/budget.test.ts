@@ -205,7 +205,7 @@ describe("BudgetManager.allocate", () => {
       method: "say",
       description: "",
       accumulatedArgs: {},
-      methodPaths: ["say"],
+      intentPaths: ["say"],
       loadedKnowledgePaths: [],
       provenance: mkProv({ kind: "explicit" }),
       relevance: mkRel({ score: 1.0, priorityHint: "critical" }),

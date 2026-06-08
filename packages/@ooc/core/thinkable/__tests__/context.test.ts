@@ -24,7 +24,7 @@ function execForm(overrides: Partial<MethodExecWindow>): MethodExecWindow {
     method: overrides.method ?? "program",
     description: overrides.description ?? "form description",
     accumulatedArgs: overrides.accumulatedArgs ?? {},
-    methodPaths: overrides.methodPaths ?? [overrides.method ?? "program"],
+    intentPaths: overrides.intentPaths ?? [overrides.method ?? "program"],
     loadedKnowledgePaths: overrides.loadedKnowledgePaths ?? [],
     methodKnowledgePaths: overrides.methodKnowledgePaths,
     result: overrides.result,
@@ -358,7 +358,7 @@ describe("buildContext (ContextWindow model)", () => {
     expect(sliceWindow("f_executing")).not.toContain("<result>");
   });
 
-  it("renders todo_window content + on_command_path", async () => {
+  it("renders todo_window content + activates_on", async () => {
     const thread = makeThread({
       id: "t_todo",
       extraWindows: [
@@ -370,7 +370,7 @@ describe("buildContext (ContextWindow model)", () => {
           status: "open",
           createdAt: 1,
           content: "记得加单测",
-          onMethodPath: ["program.shell"],
+          activatesOn: ["program.shell"],
         },
       ] as ContextWindow[],
     });
@@ -378,7 +378,7 @@ describe("buildContext (ContextWindow model)", () => {
     const xml = messages[0]!.content;
     expect(xml).toContain('type="todo"');
     expect(xml).toContain("<content>记得加单测</content>");
-    expect(xml).toContain("<on_command_path>");
+    expect(xml).toContain("<activates_on>");
     expect(xml).toContain("<path>program.shell</path>");
   });
 
@@ -487,13 +487,13 @@ describe("buildContext (ContextWindow model)", () => {
       id: "f_1",
       method: "program",
       accumulatedArgs: { language: "shell", code: "pwd" },
-      methodPaths: ["program", "program.shell"],
+      intentPaths: ["program", "program.shell"],
     });
     const f2 = execForm({
       id: "f_2",
       method: "program",
       accumulatedArgs: { language: "shell", code: "ls" },
-      methodPaths: ["program", "program.shell"],
+      intentPaths: ["program", "program.shell"],
     });
     const thread = makeThread({ id: "t_dedupe", extraWindows: [f1, f2] });
     const messages = await buildContext(thread);
@@ -511,7 +511,7 @@ describe("buildContext (ContextWindow model)", () => {
           id: "f_cdata",
           method: "talk",
           accumulatedArgs: { msg: 'say "hello" & <tag>' },
-          methodPaths: ["talk"],
+          intentPaths: ["talk"],
         }),
       ],
     });
@@ -546,7 +546,7 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     const thread = makeThread({
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
-      extraWindows: [execForm({ id: "f1", method: "program", methodPaths: ["program"] })],
+      extraWindows: [execForm({ id: "f1", method: "program", intentPaths: ["program"] })],
     });
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
@@ -571,7 +571,7 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
       extraWindows: [
-        execForm({ id: "f1", method: "program", methodPaths: ["program", "program.shell"] }),
+        execForm({ id: "f1", method: "program", intentPaths: ["program", "program.shell"] }),
       ],
     });
     const messages = await buildContext(thread);

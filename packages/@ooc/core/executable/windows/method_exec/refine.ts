@@ -6,7 +6,7 @@
  * exec ctx 中：
  * - self = 该 form 自身（type=method_exec；P6.§3 由 manager dispatch 强保证类型）
  * - ctx.args = 要累积/覆盖到 form 上的键值对
- * - manager 用来调内部 refine 方法重算 methodPaths
+ * - manager 用来调内部 refine 方法重算 intentPaths
  */
 
 import type {
@@ -47,7 +47,7 @@ async function executeRefine(ctx: MethodExecutionContext): Promise<string | unde
   // snapshot reflects the edit immediately. Fixes "refine 不写盘" in the plan.
   await ctx.reportContextEdit?.();
   const updated = manager.get(form.id);
-  const paths = updated && updated.type === "method_exec" ? updated.methodPaths.join(", ") : "";
+  const paths = updated && updated.type === "method_exec" ? updated.intentPaths.join(", ") : "";
   // Round 13: 如果是从 failed 复活, 标注一下让 LLM 知道 form 已切回 open。
   const revived = form.status === "failed" ? "（form 从 failed 复活, 已切回 open, 可 submit）" : "";
   return `Form ${form.id} 已累积参数${revived}。当前路径：${paths}。`;

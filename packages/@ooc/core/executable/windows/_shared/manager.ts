@@ -9,7 +9,7 @@
  *   - openMethodExec：在 parent window 下创建 method_exec sub-window；当 args 完整且不引入
  *     新协议知识时，会立刻提交 form（具体行为由各 method 自己控制）
  *   - openTypedWindow：创建非 form 的 window（do_window / todo_window 等）
- *   - refine：累积 method_exec 的 args 并重算 methodPaths
+ *   - refine：累积 method_exec 的 args 并重算 intentPaths
  *   - submit：执行 method；成功自动移除 form；失败保留 result
  *   - close：触发 type 的 onClose，级联关闭子 window
  * - 维护 knowledge path 引用计数（knowledgeRefCount），保证多 window 共享 path 时不被提前释放
@@ -53,12 +53,12 @@ import {
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common.js";
 
 /**
- * 用 entry.intent() 计算 methodPaths；空 args 时退化为 [method]。
+ * 用 entry.intent() 计算 intentPaths；空 args 时退化为 [method]。
  *
  * intent() 返回的是 sub-intents（不含方法名自身）；我们把方法名作为首元素再追加
- * sub-intent name，构成完整 methodPaths 列表。
+ * sub-intent name，构成完整 intentPaths 列表。
  */
-function computeMethodPaths(
+function computeIntentPaths(
   entry: ObjectMethod,
   command: string,
   args: Record<string, unknown>,
@@ -351,7 +351,7 @@ export class WindowManager {
    *
    * - parent_window_id 缺省 = ROOT_WINDOW_ID
    * - 如 args 非空，立刻 apply 一次 refine（累积到 form 上）
-   * - 当 args 非空、methodPaths / knowledge keys 都未引入新内容时，open 立刻提交 form
+   * - 当 args 非空、intentPaths / knowledge keys 都未引入新内容时，open 立刻提交 form
    *   （即"args 给齐 + 不引入新协议知识"⇒一步执行；具体由各 method 的 match/knowledge 控制）
    *
    * 返回 { formId, autoSubmitted, submitResult }
@@ -385,7 +385,7 @@ export class WindowManager {
     }
 
     // object method 优先；其次 window method（控制展示，归 readable）。两者都用于
-    // 构造 form（computeMethodPaths / deriveKnowledgeKeys 只读 .intent / .onFormChange，
+    // 构造 form（computeIntentPaths / deriveKnowledgeKeys 只读 .intent / .onFormChange，
     // WindowMethod 同样具备）。真正的 dispatch 分流在 submit()。
     const objectEntry = this.lookupMethodEntry(parent, opts.method);
     const windowEntry = objectEntry
@@ -400,10 +400,10 @@ export class WindowManager {
 
     const formId = generateWindowId("method_exec");
     const baselineArgs: Record<string, unknown> = {};
-    const baselinePaths = computeMethodPaths(entry, opts.method, baselineArgs);
+    const baselinePaths = computeIntentPaths(entry, opts.method, baselineArgs);
 
     const args = opts.args ?? {};
-    const methodPaths = computeMethodPaths(entry, opts.method, args);
+    const intentPaths = computeIntentPaths(entry, opts.method, args);
 
     // Stub form for deriveKnowledgeKeys (only needs id/method/accumulatedArgs)
     const stubForm = {
@@ -429,7 +429,7 @@ export class WindowManager {
       method: opts.method,
       description: opts.description ?? opts.title,
       accumulatedArgs: { ...args },
-      methodPaths: methodPaths,
+      intentPaths: intentPaths,
       loadedKnowledgePaths: [],
       methodKnowledgePaths: deriveKnowledgeKeys(entry, stubForm, args),
     };
@@ -461,13 +461,13 @@ export class WindowManager {
     // auto-submit 判定：
     // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应直接提交）—— 但
     //   parent 是 method_exec 时除外（refine/submit 是 atomic 命令，无需观察）
-    // - next methodPaths ⊇ baseline（新 path 由 LLM 显式给出，不算"surprise"）
+    // - next intentPaths ⊇ baseline（新 path 由 LLM 显式给出，不算"surprise"）
     // - next knowledge keys ⊆ baseline（method 自己不引入新协议知识，LLM 已知所有规则）
     const isMetaForm = parent.type === "method_exec";
     if (Object.keys(args).length > 0 || isMetaForm) {
       const nextKnowledgeKeys = deriveKnowledgeKeys(entry, form as any, args);
       if (
-        setSubset(baselinePaths, methodPaths) &&
+        setSubset(baselinePaths, intentPaths) &&
         setSubset(nextKnowledgeKeys, baselineKnowledgeKeys)
       ) {
         const submitResult = await this.submit(formId, opts.thread);
@@ -504,7 +504,7 @@ export class WindowManager {
   }
 
   /**
-   * 累积 method_exec form 的 args 并重算 methodPaths。
+   * 累积 method_exec form 的 args 并重算 intentPaths。
    *
    * Round 13: 允许 status="open" 或 status="failed" 上调 refine。
    * - open: 累积 args, 状态保持 open（原行为）
@@ -531,7 +531,7 @@ export class WindowManager {
       return true;
     }
 
-    const nextPaths = computeMethodPaths(entry, form.method, nextArgs);
+    const nextPaths = computeIntentPaths(entry, form.method, nextArgs);
     // failed → open 复活: 清 result, 把 status 切回 "open"。
     // open → open: 仅累积 args / 重算 paths。
     const next: MethodExecWindow = {
@@ -539,7 +539,7 @@ export class WindowManager {
       status: "open",
       result: undefined,
       accumulatedArgs: nextArgs,
-      methodPaths: nextPaths,
+      intentPaths: nextPaths,
     };
 
     // ── P4: recompute fill_state ──

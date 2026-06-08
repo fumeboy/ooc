@@ -51,7 +51,7 @@ function callKnowledge(
     method: "test",
     description: "",
     accumulatedArgs: args,
-    methodPaths: [],
+    intentPaths: [],
     loadedKnowledgePaths: [],
     status,
     createdAt: 0,

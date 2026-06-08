@@ -7,7 +7,7 @@
  * 三种 source：
  * - explicit  ：LLM 显式 \`open(method="open_knowledge")\` 创建；持久化；可 close
  * - protocol  ：每轮自动注入的协议常量（KNOWLEDGE）+ 各 method_exec form 的 knowledge() 派生
- * - activator ：stones/{id}/knowledge/*.md 经 methodPaths 命中合成；带 presentation
+ * - activator ：stones/{id}/knowledge/*.md 经 intentPaths 命中合成；带 presentation
  *
  * 后两种由 src/executable/index.ts: synthesizeKnowledgeWindows 在 buildInputItems 阶段
  * 合成到 thread.contextWindows 的副本上，不会持久化。

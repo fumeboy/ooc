@@ -5,7 +5,7 @@
  * - 旧 src/executable/commands/index.ts 拆分到这里 + windows/_shared/registry.ts；
  *   commands/ 目录已迁到 windows/root/，体现 "root 是一种 window type" 的从属关系
  * - 通过 registerObjectType("root", { commands }) 注入；与其它 window type 形态一致
- * - 暴露的工具函数（getOpenableMethods / deriveRootMethodPaths）只服务于 root 上的 method
+ * - 暴露的工具函数（getOpenableMethods / deriveRootIntentPaths）只服务于 root 上的 method
  * - 暴露 ROOT_BASIC_PATH / ROOT_KNOWLEDGE：列出 root 注册的命令清单 + 用法摘要，
  *   由 src/executable/index.ts:collectExecutableKnowledgeEntries 合成为
  *   protocol 来源的 knowledge_window，每轮注入 context（参照 plan.ts 的 KNOWLEDGE 形态）
@@ -160,7 +160,7 @@ export async function execRootMethod(
  *
  * @returns 点分路径数组；method 未定义时返回 []
  */
-export function deriveRootMethodPaths(
+export function deriveRootIntentPaths(
   command: string,
   args: Record<string, unknown>,
 ): string[] {

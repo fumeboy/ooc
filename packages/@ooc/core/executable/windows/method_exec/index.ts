@@ -2,7 +2,7 @@
  * method_exec window — form lifecycle 的 LLM 视角统一抽象（P6.§9，2026-06-02）。
  *
  * 注册的 methods：
- * - refine：累积参数到 form.accumulatedArgs，重算 methodPaths
+ * - refine：累积参数到 form.accumulatedArgs，重算 intentPaths
  * - submit：触发 form.method 真正执行
  *
  * basicKnowledge 在每轮 thread.contextWindows 出现至少一个 method_exec form 时自动作为
@@ -42,7 +42,7 @@ method_exec form 是 LLM 调用某个 method 时的临时 sub-window。两条命
 
 **关键提醒**：
 - exec 在 args 齐全时会立即执行（不创建 form）；只有需要多步填参时才会落到 form
-- close 仍可用 (彻底放弃此次调用), 但不再是失败修复的首选 — refine-from-failed 保留 form 上下文 (knowledge / methodPaths / form id)
+- close 仍可用 (彻底放弃此次调用), 但不再是失败修复的首选 — refine-from-failed 保留 form 上下文 (knowledge / intentPaths / form id)
 `.trim();
 
 const sharedMethods = {

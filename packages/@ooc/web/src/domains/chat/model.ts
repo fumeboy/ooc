@@ -38,7 +38,7 @@ export type ContextWindow =
       method: string;
       description?: string;
       accumulatedArgs?: Record<string, unknown>;
-      methodPaths?: string[];
+      intentPaths?: string[];
       loadedKnowledgePaths?: string[];
       methodKnowledgePaths?: string[];
       result?: string;
@@ -61,7 +61,7 @@ export type ContextWindow =
       title: string;
       status: "open" | "done";
       content: string;
-      onMethodPath?: string[];
+      activatesOn?: string[];
       createdAt?: number;
     }
   | {

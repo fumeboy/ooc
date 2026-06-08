@@ -76,7 +76,7 @@ export type { InitContextWindowsOpts } from "./_shared/init.js";
 export {
   ROOT_METHODS,
   getOpenableMethods,
-  deriveRootMethodPaths,
+  deriveRootIntentPaths,
   execRootMethod,
 } from "@ooc/builtins/root";
 

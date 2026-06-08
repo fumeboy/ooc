@@ -34,10 +34,10 @@ todo 用于登记一条可见待办，直接产生一个 todo_window 挂到当�
 
 参数：
 - content: 必填，待办内容
-- on_command_path: 可选，命中这些 command path 时强提醒（数组）
+- activates_on: 可选，命中这些 intent 时强提醒（数组）
 
 示例：
-open(method="todo", title="补集成测试", args={ content: "补 program shell 集成测试", on_command_path: ["program.shell"] })
+open(method="todo", title="补集成测试", args={ content: "补 program shell 集成测试", activates_on: ["program.shell"] })
 
 提示：
 - args.content 给齐时 open 会立刻提交 form，不需要再 refine / submit
@@ -55,22 +55,22 @@ function deriveTodoTitle(content: string, maxLen = 60): string {
  *
  * 行为:
  *  - 校验 content 非空
- *  - 解析 on_command_path（可选）
+ *  - 解析 activates_on（可选）
  *  - generateWindowId("todo") + build TodoWindow（status="open"）
  *  - 返回 { ok: true, object: todoWindow }
  */
 const todoConstructor: ObjectMethod = {
   kind: "constructor",
-  paths: ["todo", "todo.on_command_path"],
+  paths: ["todo", "todo.activates_on"],
   schema: {
     args: {
       content: { type: "string", required: true, description: "待办内容" },
-      on_command_path: { type: "array", description: "命中这些 command path 时强提醒" },
+      activates_on: { type: "array", description: "命中这些 intent 时强提醒" },
     },
   },
   intent: (args) => {
-    if (Array.isArray(args.on_command_path) && args.on_command_path.length > 0) {
-      return [{ name: "todo.on_command_path" }];
+    if (Array.isArray(args.activates_on) && args.activates_on.length > 0) {
+      return [{ name: "todo.activates_on" }];
     }
     return [];
   },
@@ -86,7 +86,7 @@ const todoConstructor: ObjectMethod = {
     if (typeof args.content !== "string" || args.content.trim().length === 0) {
       entries[TODO_CONSTRUCTOR_INPUT] =
         "todo 还缺以下参数: content。\n" +
-        "请用 refine(form_id, args={ content: \"<待办内容>\", on_command_path?: [\"<cmd>\"] }) 补齐后 submit(form_id)。\n" +
+        "请用 refine(form_id, args={ content: \"<待办内容>\", activates_on?: [\"<cmd>\"] }) 补齐后 submit(form_id)。\n" +
         "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
     }
     return buildGuidanceWindows(form, entries);
@@ -96,8 +96,8 @@ const todoConstructor: ObjectMethod = {
     if (!ctx.thread) return { ok: false, error: "[todo] 缺少 thread context。" };
     const content = typeof ctx.args.content === "string" ? ctx.args.content : "";
     if (!content) return { ok: false, error: "[todo] 缺少 content 参数。" };
-    const onMethodPath = Array.isArray(ctx.args.on_command_path)
-      ? (ctx.args.on_command_path as unknown[]).filter((v): v is string => typeof v === "string")
+    const activatesOn = Array.isArray(ctx.args.activates_on)
+      ? (ctx.args.activates_on as unknown[]).filter((v): v is string => typeof v === "string")
       : undefined;
     const todoWindow: TodoWindow = {
       id: generateWindowId("todo"),
@@ -107,7 +107,7 @@ const todoConstructor: ObjectMethod = {
       status: "open",
       createdAt: Date.now(),
       content,
-      onMethodPath,
+      activatesOn,
     };
     return { ok: true, object: todoWindow };
   },

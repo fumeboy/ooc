@@ -13,7 +13,7 @@ export function readable(ctx: RenderContext): XmlNode[] {
     xmlElement("description", {}, [xmlText(form.description)]),
     xmlElement("accumulated_args", {}, [xmlText(JSON.stringify(form.accumulatedArgs))]),
   ];
-  appendNode(children, renderPathList("method_paths", form.methodPaths));
+  appendNode(children, renderPathList("method_paths", form.intentPaths));
   appendNode(children, renderPathList("loaded_knowledge", form.loadedKnowledgePaths));
   appendNode(children, renderPathList("method_knowledge_paths", form.methodKnowledgePaths));
   // Round 13: 仅 failed 状态保留 result 渲染 (success 已自动移除; open/executing 无 result)

@@ -26,10 +26,10 @@ export default function MethodExecWindowDetail({ window }: { window: MethodExecW
             <span className="llm-input-attr-value">{window.description}</span>
           </div>
         )}
-        {window.methodPaths && window.methodPaths.length > 0 && (
+        {window.intentPaths && window.intentPaths.length > 0 && (
           <div className="llm-input-attr-row">
             <span className="llm-input-attr-key">paths</span>
-            <span className="llm-input-attr-value">{window.methodPaths.join(", ")}</span>
+            <span className="llm-input-attr-value">{window.intentPaths.join(", ")}</span>
           </div>
         )}
       </div>

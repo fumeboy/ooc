@@ -20,7 +20,7 @@ export interface MethodExecWindow extends BaseContextWindow {
   method: string;
   description: string;
   accumulatedArgs: Record<string, unknown>;
-  methodPaths: string[];
+  intentPaths: string[];
   loadedKnowledgePaths: string[];
   methodKnowledgePaths?: string[];
   status: "open" | "executing" | "success" | "failed";

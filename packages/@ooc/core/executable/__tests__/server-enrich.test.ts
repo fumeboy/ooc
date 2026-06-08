@@ -19,7 +19,7 @@ function makeForm(overrides: Partial<MethodExecWindow> = {}): MethodExecWindow {
     method: "program",
     description: "test",
     accumulatedArgs: {},
-    methodPaths: ["program"],
+    intentPaths: ["program"],
     loadedKnowledgePaths: [],
     ...overrides,
   };

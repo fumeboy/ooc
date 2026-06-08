@@ -72,7 +72,7 @@ describe("executable tools (ContextWindow model)", () => {
     );
   });
 
-  it("MethodExecWindow.refine 累积 args 并刷新 methodPaths（do 加 wait 触发 do.wait path）", async () => {
+  it("MethodExecWindow.refine 累积 args 并刷新 intentPaths（do 加 wait 触发 do.wait path）", async () => {
     const thread = makeThread();
     await dispatchToolCall(thread, {
       id: "call_1",
@@ -93,7 +93,7 @@ describe("executable tools (ContextWindow model)", () => {
 
     const form = (thread.contextWindows as ContextWindow[]).find((w) => w.id === formId);
     expect(form && form.type === "method_exec" && form.accumulatedArgs).toEqual({ wait: true });
-    expect(form && form.type === "method_exec" && form.methodPaths).toContain("do.wait");
+    expect(form && form.type === "method_exec" && form.intentPaths).toContain("do.wait");
     expect(JSON.parse(output).ok).toBe(true);
   });
 
