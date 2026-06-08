@@ -3049,7 +3049,7 @@ export const root: DocTreeNode = {
                               （\`stones/main/objects/<id>/\`，main git worktree；stoneDir 默认即此）。
                             - **session worktree = 会话内试验层**：普通业务 session（非 super、非控制面）里对
                               上述 identity 文件的 write_file / file_window.edit **不即时改 main**，而是落该 session
-                              从 main HEAD lazy 派生的 git worktree 分支 \`stones/session-<sid>/objects/<id>/\`
+                              从 main HEAD eager 派生的 git worktree（物理路径 \`flows/<sid>/objects/<id>/\`，branch 名 \`session-<sid>\`）
                               （完整工作副本，plain write，不走 versioning/不 commit）。本 session 内即时生效，
                               main 不变、别 session 仍读旧版。worktree 是完整副本——读写收敛到同一目录，无 shadow、
                               裸读（program shell \`$OOC_SELF_DIR\`）看得到完整 identity。
@@ -3660,7 +3660,7 @@ export const root: DocTreeNode = {
                         "stones-branch": "OOC Server 启动参数；指定本进程绑定的 git 分支，决定 stoneDir 解析根",
                         ".stones_repo": "stones/ 下的 bare git repo 目录；承载所有 git 元数据，与任何 worktree 物理分离",
                         "linked worktree": "git worktree 模式下的非主工作树；其 .git 是文件不是目录，gitdir 指回 bare 的 worktrees admin",
-                        "metaprog worktree": "Object 元编程的隔离工作树；branch 形态 metaprog/{objectId}/{token}",
+                        "session worktree": "LLM session 的隔离工作树；物理路径 flows/<sid>，branch 名 session-<sid>；session 一创建即 eager checkout main 全部文件；session 内 write_file 落此处，evolve_self 合入 main",
                         "self-scope / cross-scope": "路径划界判定结果；前者自治 ff merge，后者必须经 PR-Issue",
                         "PR-Issue": "落在 super session 的 Issue（带 prPayload diff/branch/intent）；Supervisor 评审通道",
                         "recovery-check": "启动期自检；executable/index.ts 加载失败的 Object 自动开 [recovery-needed] PR-Issue 给 supervisor",
@@ -3703,7 +3703,7 @@ export const root: DocTreeNode = {
                             },
                             todo: [
                                 "user-review-supervisor-seed 与 parent 跨 object 改 child seed 的显式授权校验当前未实现（design-ahead-of-code）；现有代码仅靠 self-scope 路径前缀隐式表达层级修改权。",
-                                "isValidObjectId（src/persistable/stone-versioning.ts）regex 不允许 \"/\"，嵌套 child（objectId 含 \"/\"）暂无法用完整 objectId 调 openMetaprogWorktree 自 metaprog。放开后：child 改自己子树 = self-scope 自治 ff-merge（不经 parent review），child 改 parent = cross-scope PR。需同时确认 self-scope 前缀对 nested 用 nestedObjectPath（objects/<p>/children/<c>/）而非直拼。",
+                                "isValidObjectId（src/persistable/stone-versioning.ts）regex 不允许 \"/\"，嵌套 child（objectId 含 \"/\"）写 stone 时路径前缀判定需用 nestedObjectPath（objects/<p>/children/<c>/）而非直拼，否则 self-scope 越界到 cross-scope PR。当前 design-ahead-of-code。",
                             ],
                         },
                         "r12_enforcement_at_persistable_layer": {
@@ -3997,40 +3997,31 @@ export const root: DocTreeNode = {
                     `,
                 },
                 "http_writes_go_through_versioning": {
-                    title: "HTTP 写 stone 必经 stone-versioning",
+                    title: "HTTP 写 stone 直接 commit main（2026-06-09）",
                     content: `
-                    **设计哲学（契约 3：状态翻转唯一 owner）**：所有写 stone 的入口（HTTP / LLM 命令 /
-                    未来的 cron / 测试夹具）共享同一底层语义——open metaprog worktree →
-                    write in worktree → commitWorktree → tryMergeSelf 或 requestPrIssueReview。
+                    **设计哲学（契约 3：状态翻转唯一 owner）**：写 stone 有且只有两条合法入口：
+                    ① HTTP 控制面（putSelf / putReadme / putServerSource / createStone）→ \`httpDirectMainWrite\`，
+                      直接 commit main，立即权威生效，不开 worktree。
+                    ② LLM session write_file → 落 session worktree（\`flows/<sid>\`）→ super flow \`evolve_self\` 合入 main。
+                    两路均有 git commit，不存在 uncommitted 半成品状态。
 
-                    **症状**：
-                    HTTP \`POST /api/stones\` / \`PUT /api/stones/:id/server-source\` 等 endpoint
-                    历史上**绕开** stone-versioning 直接 \`writeFile\`，导致：
-                    - HTTP 创建的 stone 不入 git；\`openMetaprogWorktree\` 后 worktree 看不到该 stone
-                    - 元编程协议在 dogfooding 场景**第一步崩**
-                    - audit trail 散在两路（"git 看到的世界" vs "filesystem 看到的世界"分裂）
-
-                    **简化设计**（克制熵增 - 删特殊路径而非加补丁）：
-                    - HTTP route 不再直接 writeFile；改调 \`wrapHttpWriteInWorktree(write, ref, authorObjectId, intent)\`
-                      helper，自动 open worktree → exec write → commit → merge
-                    - 不引入"uncommitted working tree"半成品状态——每个 HTTP 写操作都产生一个 commit
-                    - HTTP 与 LLM 命令是同一个 evolution 流程的两个入口，不再有"快/慢"两条路
+                    **历史问题（已修复，记录作参考）**：
+                    HTTP endpoint 曾绕开 stone-versioning 直接 \`writeFile\`，导致 stone 不入 git、
+                    session worktree 看不到该 stone、audit trail 分裂两路。
 
                     **不在本契约内**：
                     - knowledge 文件操作（\`POST /api/stones/:id/knowledge/files\`）写到
-                      \`pools/objects/<id>/knowledge/\`（sediment, pool 层不进 git）——route 命名
-                      与存储位置错位是 root-cause #3 范围。
+                      \`pools/objects/<id>/knowledge/\`（sediment, pool 层不进 git）。
                     - call_method（ui_methods 调用）不涉及 stone 写入。
 
                     **实现见**：
-                    - \`src/app/server/modules/stones/versioning-helper.ts:wrapHttpWriteInWorktree\`
+                    - \`src/persistable/stone-versioning.ts:httpDirectMainWrite\`
                     - \`src/app/server/modules/stones/service.ts\`：createStone / putSelf / putReadme / putServerSource
-                      改调 helper
                     `,
                     named: {
-                        "HTTP 必经 versioning": "所有 HTTP stone 写操作经 stone-versioning open/commit/merge 流程",
-                        "wrapHttpWriteInWorktree": "把 HTTP 写操作 wrap 成 worktree+commit+merge 序列的 helper",
-                        "状态翻转唯一 owner": "HTTP 与 LLM 共享同一底层 stone 写入语义，不再分裂",
+                        "HTTP 直写 main": "HTTP stone 写操作直接 commit main（httpDirectMainWrite），不经 worktree",
+                        "session worktree 写": "LLM session write_file 落 flows/<sid>，evolve_self 合入 main",
+                        "状态翻转唯一 owner": "两条写路径均有 git commit，不存在 uncommitted 半成品状态",
                     },
                 },
                 "pool_methods": {

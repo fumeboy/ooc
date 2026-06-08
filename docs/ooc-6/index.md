@@ -5,24 +5,31 @@
 > 一次迭代一份，按时间追加。每份文档统一模板（维度定位 / 能力现状 / 本次迭代记录 / 边界与未决），
 > 断言锚定真实代码 `file:行号`。本 index 是全局入口 + 状态盘点。
 
-## 8 维度速览（迭代 01，2026-06-06）
+## 8 维度速览
 
-| 维度 | 一句话定位 | 状态 | 本次迭代 |
-|---|---|---|---|
-| [thinkable 思考](./thinkable/2026-06-06-iteration-01.md) | 与 LLM 交互、构造 context、按 trigger 激活 knowledge、运行可并行可恢复的 Thread Tree 与单轮 thinkloop | 最小闭环 | window::root trigger always-on（修 reflectable 召回断裂：memory 只写不读） |
-| [executable 执行](./executable/2026-06-06-iteration-01.md) | LLM 经 4 个稳定 tool 原语（exec/close/wait/compress）在 ContextObject 上调 Method 改变世界 | 最小闭环 | write/edit/program-shell 收敛到 session worktree |
-| [collaborable 协作](./collaborable/2026-06-06-iteration-01.md) | Object 间以「消息 + 持续会话窗口」协作，跨 thread 影响必经显式 inbox/outbox（peer 平等轴） | 最小闭环 | inbox 拆 per-message 存储，根治并发回报丢正文竞态 |
-| [observable 观测](./observable/2026-06-06-iteration-01.md) | thinkloop 周围加观测点，每轮 LLM 输入输出/tool/context 可记录可查可暂停可回放 | 最小闭环（人类面完整） | 可观测三件套：log-aggregator + /api/runtime/activity + harness 超时快照 |
-| [reflectable 反思](./reflectable/2026-06-06-iteration-01.md) | 经受保护的 super session 改写自身身份文件与 sediment knowledge，下一轮自动生效的自我演化 | 最小闭环 | evolve_self 重做为「session worktree 即演化单元」 |
-| [programmable 元编程](./programmable/2026-06-06-iteration-01.md) | Object 持有并演化自身自定义 ContextWindow + 命令表，写 executable/index.ts 即热更 | 最小闭环 | program shell $OOC_SELF_DIR 接入 worktree 统一模型 |
-| [visible 可见](./visible/2026-06-06-iteration-01.md) | Object 持有并演化自身 UI 页面（stone visible/index.tsx + flow pages），人类经 HTTP callMethod 交互 | 最小闭环 | client-source-url endpoint 接入 worktree 预览 |
-| [persistable 持久化](./persistable/2026-06-06-iteration-01.md) | 把身份/事实/产物落到 stone(持久+git)/pool(持久+不git)/flow(ephemeral) 三子树，离开内存可恢复 | 最小闭环 | stone identity 收敛到 session-worktree 统一模型（回收 plain overlay） |
+| 维度 | 一句话定位 | 状态 | 迭代 01（2026-06-06） | 迭代 02（2026-06-09） |
+|---|---|---|---|---|
+| [thinkable 思考](./thinkable/2026-06-06-iteration-01.md) | 与 LLM 交互、构造 context、按 trigger 激活 knowledge、运行可并行可恢复的 Thread Tree 与单轮 thinkloop | 最小闭环 | window::root trigger always-on（修 reflectable 召回断裂：memory 只写不读） | — |
+| [executable 执行](./executable/2026-06-06-iteration-01.md) | LLM 经 4 个稳定 tool 原语（exec/close/wait/compress）在 ContextObject 上调 Method 改变世界 | 最小闭环 | write/edit/program-shell 收敛到 session worktree | — |
+| [collaborable 协作](./collaborable/2026-06-06-iteration-01.md) | Object 间以「消息 + 持续会话窗口」协作，跨 thread 影响必经显式 inbox/outbox（peer 平等轴） | 最小闭环 | inbox 拆 per-message 存储，根治并发回报丢正文竞态 | — |
+| [observable 观测](./observable/2026-06-06-iteration-01.md) | thinkloop 周围加观测点，每轮 LLM 输入输出/tool/context 可记录可查可暂停可回放 | 最小闭环（人类面完整） | 可观测三件套：log-aggregator + /api/runtime/activity + harness 超时快照 | — |
+| [reflectable 反思](./reflectable/2026-06-06-iteration-01.md) | 经受保护的 super session 改写自身身份文件与 sediment knowledge，下一轮自动生效的自我演化 | 最小闭环 | evolve_self 重做为「session worktree 即演化单元」 | [metaprog 瘦身为治理；改身体统一走 session write_file→evolve_self](./reflectable/2026-06-09-iteration-02.md) |
+| [programmable 元编程](./programmable/2026-06-06-iteration-01.md) | Object 持有并演化自身自定义 ContextWindow + 命令表，写 executable/index.ts 即热更 | 最小闭环 | program shell $OOC_SELF_DIR 接入 worktree 统一模型 | [建对象/改命令统一 session worktree+evolve_self；versionedStoneWrite 删除](./programmable/2026-06-09-iteration-02.md) |
+| [visible 可见](./visible/2026-06-06-iteration-01.md) | Object 持有并演化自身 UI 页面（stone visible/index.tsx + flow pages），人类经 HTTP callMethod 交互 | 最小闭环 | client-source-url endpoint 接入 worktree 预览 | — |
+| [persistable 持久化](./persistable/2026-06-06-iteration-01.md) | 把身份/事实/产物落到 stone(持久+git)/pool(持久+不git)/flow(ephemeral) 三子树，离开内存可恢复 | 最小闭环 | stone identity 收敛到 session-worktree 统一模型（回收 plain overlay） | [session worktree 迁 flows/\<sid\>；HTTP 直 commit main；GC 保留运行时](./persistable/2026-06-09-iteration-02.md) |
 
 ## 本轮系统演化主线（2026-06）
 
-两条横切主线贯穿本轮 8 维度迭代：
+四条横切主线贯穿本轮 8 维度迭代（按时间升序）：
 
-1. **session-worktree 统一模型**（横切 persistable / executable / programmable / reflectable / visible）：
+1. **去 metaprog 统一 session-worktree（flows/\<sid\>）**（横切 persistable / reflectable / programmable，2026-06-09）：
+   删除并行的 metaprog worktree 写路径（`openMetaprogWorktree` / `supervisorCreateObject` / `versionedStoneWrite`），
+   LLM session 内所有 stone 写（改自己 / 改别人 / 建新对象）一律 plain write 落 `flows/<sid>` session worktree，
+   唯一合入闸门 = super flow `evolve_self`（self-scope ff-merge / cross-scope PR-Issue → supervisor resolve）；
+   HTTP 控制面写经 `httpDirectMainWrite` 直 commit main；GC 用 `gitWorktreeUnregister` 解除 worktree 身份同时保留
+   运行时数据。设计权威：`docs/2026-06-09-remove-metaprog-unify-session-worktree-design.md`。
+
+2. **session-worktree 统一模型**（横切 persistable / executable / programmable / reflectable / visible）：
    stone identity 的会话内试验层从 plain overlay 升级为「从 main lazy 派生的 git worktree 分支」。
    业务 session 改 self/executable/visible → 落 `stones/session-<sid>/`（完整副本，读写收敛同一目录、
    裸读可见），super flow `evolve_self` = commit session 分支 → ff-merge main → GC。五访问通道
@@ -31,13 +38,13 @@
    `docs/2026-06-05-stone-flow-overlay-versioning-design.md`；落地复盘：
    `docs/2026-06-06-worktree-and-observability-retrospective.md`。
 
-2. **可观测增强**（observable）：由 harness programmable 反复 TIMEOUT「盲等」触发——
+3. **可观测增强**（observable）：由 harness programmable 反复 TIMEOUT「盲等」触发——
    log-aggregator 去重限流（370× 刷屏→限流计数）+ `GET /api/runtime/activity` 系统活动快照
    + harness 超时前抓快照。把「盲 TIMEOUT」变成「随时可诊断」。方法论（超时是 observability
    症状，应增强可观测而非干等）已纳入 harness 循环常设环节（`engineering.harness.doc.ts`
    `experience_sedimentation`）。
 
-3. **class 一等继承抽象**（2026-06-07，横切 persistable / thinkable / executable·collaborable /
+4. **class 一等继承抽象**（2026-06-07，横切 persistable / thinkable / executable·collaborable /
    visible）：把 `class` 提升为与 `object` 平级的一等概念、作为**唯一**继承机制（彻底剔除 prototype）；
    builtin = 类（`_builtin/<id>` 寻址、从框架包解析），world = 实例（`objects/<id>`，`ooc.class`
    继承）。`instantiate_with_new_world` 让 builtin class 在新 world 幂等实例化出可交互 object——

@@ -9,7 +9,7 @@
 - TC-PROG-04：热更新 —— 改 executable 后已有方法变更、新增方法立即生效。
 
 ## Tier B —— agent-native（真 LLM，env-gated）
-- supervisor 用 `metaprog action=create_object` 亲手建对象并写自定义命令（`_demo_session.ts` 已演示）；`customWindowInvocations`+`functionOutputFor` 实证命令真执行。
+- supervisor 在业务 session 内 write_file 写 `objects/<newId>/...` 建对象并写自定义命令，经 super flow evolve_self（cross-scope → PR-Issue → 自审 resolve）合入 main；`customWindowInvocations`+`functionOutputFor` 实证命令真执行。
 - rubric（收编 `playbooks/programmable.playbook.md` + e2e `backend-programmable-self-command`）：
   - **Good**：method 写出、注册、被 LLM 成功调用、返回正确。
   - **OK**：写出但调用绕行 / 重试。
