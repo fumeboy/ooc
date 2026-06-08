@@ -7,7 +7,7 @@
  * 触发条件：thread.persistence?.sessionId === SUPER_SESSION_ID
  *
 允许 LLM 在 super flow 里写 `pools/<self>/knowledge/memory/`
- * (并允许更新 self.md / readme.md),让 caller "请帮我把 X 沉淀为记忆" 这种请求
+ * (并允许更新 self.md / readable.md),让 caller "请帮我把 X 沉淀为记忆" 这种请求
  * 真的落到磁盘。
  *
  * U7 扩展：本文件还导出 `REFLECTABLE_METAPROG_KNOWLEDGE` 与 `REFLECTABLE_METAPROG_PATH`，
@@ -36,7 +36,7 @@ export const REFLECTABLE_KNOWLEDGE = `
    用 \`open(command="write_file", path="pools/<self>/knowledge/memory/<slug>.md",
    content="...")\` 写入。已存在的文件可以用 open_file + edit 增量更新。
 3. 必要时(caller 明确要求改身份/对外说明) 也允许写
-   \`stones/<self>/self.md\`(内部第一人称叙述)或 \`stones/<self>/readme.md\`
+   \`stones/<self>/self.md\`(内部第一人称叙述)或 \`stones/<self>/readable.md\`
    (对外公开自述)。其它路径(server / client / files / package.json) 本轮不要碰。
 4. 通过 creator talk_window 回复你的简短结论(say + close)
 5. 用 \`open(end, summary="...")\` 结束本轮 super 思考
@@ -129,14 +129,14 @@ export const REFLECTABLE_METAPROG_KNOWLEDGE = `
 # 元编程：用 worktree 安全地改自己的"身体"
 
 当 caller 的反思请求需要修改你的 \`server/index.ts\` / 整篇 \`self.md\` /
-\`readme.md\` 等"加载链路"上的文件时（即一旦写错下一轮启动就跑不起来的内容），
+\`readable.md\` 等"加载链路"上的文件时（即一旦写错下一轮启动就跑不起来的内容），
 **不要直接 write_file 落 main**。改用元编程协议：在 git worktree 沙箱里改、
 试运行、再合并。错了能直接丢 worktree、main 不被污染。
 
 ## 何时走 worktree（推荐）
 
 - 改 \`stones/<self>/server/index.ts\`（你的方法库；写错下一轮加载失败）
-- 整篇重写 \`stones/<self>/self.md\` 或 \`readme.md\`
+- 整篇重写 \`stones/<self>/self.md\` 或 \`readable.md\`
 - 跨 Object 修改（涉及别人 stone 的内容）—— 必须走，会自动转 PR-Issue 给 supervisor
 - 一次同时改 3 个以上文件、需要互相一致
 
@@ -166,13 +166,13 @@ shell 启动一个独立 OOC Server 指向新 branch，然后在那里跑反思 
 
 \`\`\`bash
 # 在 super flow 中用 program(language="shell") 跑
-bun run src/app/server/index.ts \\
+bun run packages/@ooc/core/app/server/index.ts \\
   --world ./.ooc-world \\
   --stones-branch <branch> \\
   --port 0 &
 \`\`\`
 
-或者更轻量的：直接 shell 出 \`echo > stones/<branch>/<self>/...\` 写文件，
+或者更轻量的：直接 shell 出 \`echo > stones/<branch>/objects/<self>/...\` 写文件，
 不启子 server——只在你不需要"加载并跑一下"验证时这样做。
 
 ### 3. 试运行（可选但推荐）
@@ -230,7 +230,7 @@ supervisor 把 PR-Issue 标 \`reject\` 时，你的整个 branch 被存档到
  * 沉淀经验。
  *
  * 注入条件（参见 synthesizer.collectExecutableKnowledgeEntries）：
- * - thread 中存在 form.command === "end" 的 command_exec window
+ * - thread 中存在 form.command === "end" 的 method_exec window
  * - thread.persistence?.sessionId !== SUPER_SESSION_ID（避免 super flow 内
  *   end 时套娃提醒）
  *
