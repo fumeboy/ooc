@@ -1,8 +1,8 @@
 /**
  * versioned-write —— 把"写一个 stone 文件"的副作用统一包进 stone-versioning 流程：
  *
- *   mkdir packages/ → openMetaprogWorktree → write(callback) → commitWorktree → tryMergeSelf
- *     - self-scope（diff 全落在 author 自治区 packages/<author>/）→ ff merge 回 main
+ *   openMetaprogWorktree → write(callback) → commitWorktree → tryMergeSelf
+ *     - self-scope（diff 全落在 author 自治区 stones/main/objects/<author>/）→ ff merge 回 main
  *     - cross-scope（越界）→ requestPrIssueReview，等 Supervisor 决议
  *
  * 这是 persistable 层的单一 owner。两个 caller 复用它：
@@ -23,8 +23,6 @@ import {
   tryMergeSelf,
   type MetaprogWorktreeRef,
 } from "./versioning.js";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 
 /** versionedStoneWrite 成功返回。 */
 export interface VersionedWriteOk {
@@ -91,18 +89,8 @@ function extractMessage(r: { code: string; message?: string; stderr?: string; gi
 export async function versionedStoneWrite(
   input: VersionedStoneWriteInput,
 ): Promise<VersionedWriteOk | VersionedWriteErr> {
-  // 契约：本函数自己负责 packages/ 目录存在性前置条件，不依赖 caller 记得调用。
-  // mkdir 是 idempotent 的，已存在时是 fast no-op。
-  try {
-    await mkdir(join(input.baseDir, "packages"), { recursive: true });
-  } catch (e) {
-    return {
-      ok: false,
-      code: "REPO_INIT_FAILED",
-      message: e instanceof Error ? e.message : String(e),
-    };
-  }
-
+  // metaprog worktree 落在 stones/ 下（openMetaprogWorktree），不依赖 `<world>/packages/`。
+  // 旧的 mkdir packages/ 前置条件已于 2026-06-07 随 deprecated packages/ 布局一并移除。
   const open = await openMetaprogWorktree({
     baseDir: input.baseDir,
     objectId: input.authorObjectId,

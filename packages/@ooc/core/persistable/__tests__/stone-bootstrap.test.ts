@@ -12,7 +12,7 @@ beforeEach(async () => {
 });
 
 describe("ensureStoneRepo (post workspace migration)", () => {
-  it("creates flows/, pools/, packages/ directories and initializes bare repo", async () => {
+  it("creates flows/, pools/ directories and initializes bare repo", async () => {
     const result = await ensureStoneRepo({ baseDir: tempRoot });
     expect(result.initialized).toBe(true);
     expect(result.migrated).toBe(false);
@@ -21,7 +21,8 @@ describe("ensureStoneRepo (post workspace migration)", () => {
 
     expect(existsSync(join(tempRoot, "flows"))).toBe(true);
     expect(existsSync(join(tempRoot, "pools"))).toBe(true);
-    expect(existsSync(join(tempRoot, "packages"))).toBe(true);
+    // deprecated packages/ 目录已于 2026-06-07 不再创建（布局移除）
+    expect(existsSync(join(tempRoot, "packages"))).toBe(false);
     // Also verifies git repo is initialized
     expect(existsSync(join(tempRoot, "stones", ".stones_repo"))).toBe(true);
     expect(existsSync(join(tempRoot, "stones", "main"))).toBe(true);

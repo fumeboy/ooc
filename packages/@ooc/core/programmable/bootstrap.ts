@@ -270,12 +270,12 @@ async function hasOldFlatLayout(stonesDir: string): Promise<boolean> {
 export async function ensureStoneRepo(opts: { baseDir: string }): Promise<EnsureStoneRepoResult> {
   const stonesDir = join(opts.baseDir, "stones");
   await mkdir(stonesDir, { recursive: true });
-  // 顺手 mkdir flows/ pools/ packages/ —— 不属于 git 跟踪范围，但前端 /api/tree 在
+  // 顺手 mkdir flows/ pools/ —— 不属于 git 跟踪范围，但前端 /api/tree 在
   // 目录不存在时返回 404 会让 refreshBasics 的 Promise.all reject、连带 stones
   // 数组也回不到 UI。空目录让初次 cold-start 体验顺滑。
+  // （`packages/` 已于 2026-06-07 随 deprecated packages/ 布局一并移除，不再预创。）
   await mkdir(join(opts.baseDir, "flows"), { recursive: true });
   await mkdir(join(opts.baseDir, "pools"), { recursive: true });
-  await mkdir(join(opts.baseDir, "packages"), { recursive: true });
 
   // Detect old flat layout BEFORE creating worktree (which would delete stones/main/)
   const needsMigration = await hasOldFlatLayout(stonesDir);

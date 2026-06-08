@@ -167,8 +167,8 @@ export function createStoneRegistry(
     // Scan order defines priority (first-seen wins on duplicate objectId):
     //   1. Flat layout stones/<id>       (canonical, highest priority)
     //   2. Versioning stones/<branch>/objects/<id>  (git worktree mirrors)
-    //   3. Deprecated packages/<id>       (lowest priority)
-    //   4. Builtins node_modules/@ooc/builtins/<id>
+    //   3. Builtins node_modules/@ooc/builtins/<id>
+    // （deprecated `<world>/packages/<id>/` 扫描已于 2026-06-07 移除——该布局无活跃使用。）
     await scanTree(join(worldPath, "stones"), "stone", stones);
     try {
       const stonesEntries = await readdir(join(worldPath, "stones"), { withFileTypes: true });
@@ -185,7 +185,6 @@ export function createStoneRegistry(
     } catch {
       // stones/ doesn't exist — fine
     }
-    await scanTree(join(worldPath, "packages"), "stone", stones, /*allowOverwrite=*/ false);
     await scanTree(join(worldPath, "node_modules", "@ooc", "builtins"), "builtin", stones);
   }
 

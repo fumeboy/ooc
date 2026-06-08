@@ -1,6 +1,6 @@
 /**
- * Recovery 启动自检（U8）—— Server 启动时遍历 `stones/main/objects/` 下所有 Object 目录，
- * 试加载它们的 `server/index.ts`；任何 Object 加载失败则在 super session 创一条
+ * Recovery 启动自检（U8）—— Server 启动时遍历 `stones/main/objects/` 下所有用户 Object，
+ * 试加载它们的 `executable/index.ts`；任何 Object 加载失败则在 super session 创一条
  * `[recovery-needed]` PR-Issue（不带 prPayload，因为这不是元编程修改而是诊断信号），
  * 让 Supervisor 在自己的 super flow 中看到并决定是否触发 metaprog rollback。
  *
@@ -9,16 +9,21 @@
  *
  * 去重：以 (objectId, stone state hash) 为 key —— 同一 broken state 不重复开 issue
  * （同 title + 同 createdByObjectId 视为 dup）。
+ *
+ * 枚举走 StoneRegistry（canonical `stones/main/objects/` + versioning worktree，含 children/
+ * 嵌套），只看 kind="stone"（用户/实例对象——builtin class 是框架代码，不受自我编程腐化）。
+ * 2026-06-07：扫描目标从 deprecated `<world>/packages/` 改回 canonical，并随 packages/ 兼容层移除
+ * 修正文件名 `server/index.ts → executable/index.ts`（2026-05-28 已重命名）。
  */
 
-import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
 import {
   createRecoveryIssue,
   readPrIssueIndex,
+  readExecutableSource,
   type PrIssueRecord,
 } from "@ooc/core/persistable";
 import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
+import { createStoneRegistry } from "@ooc/core/runtime/stone-registry";
 
 const RECOVERY_PREFIX = "[recovery-needed]";
 
@@ -40,39 +45,36 @@ export interface BrokenObject {
  * 主入口。idempotent：重复运行不重复开 issue。
  */
 export async function runRecoveryCheck(opts: { baseDir: string }): Promise<RecoveryCheckResult> {
-  const packagesDir = join(opts.baseDir, "packages");
-  let entries: { name: string; isDir: boolean }[] = [];
-  try {
-    const dir = await readdir(packagesDir, { withFileTypes: true });
-    entries = dir
-      .filter((e) => e.isDirectory() && !e.name.startsWith(".") && !e.name.startsWith("@"))
-      .map((e) => ({ name: e.name, isDir: true }));
-  } catch {
-    return { scanned: 0, broken: [], newIssues: [] };
-  }
+  // canonical 枚举：StoreRegistry 扫 stones/main/objects/（含 children/ 嵌套）+ versioning 镜像。
+  // 只校验 kind="stone"（用户/实例对象）——builtin class 是框架代码，不在自我编程恢复范围内。
+  const registry = createStoneRegistry(opts.baseDir, { autoDiscover: false });
+  await registry.rescan();
+  const stones = registry.listByKind("stone");
 
   const broken: BrokenObject[] = [];
-  for (const e of entries) {
-    const stoneRef = { baseDir: opts.baseDir, objectId: e.name };
+  for (const def of stones) {
+    const stoneRef = { baseDir: opts.baseDir, objectId: def.objectId };
+    // 只校验有 executable/index.ts 的 Object（绝大多数 stone 没有可执行方法）。
+    // readExecutableSource 双读：优先 executable/，fallback legacy server/。
+    let source: string | undefined;
     try {
-      // 试加载 server/index.ts；不存在/空文件视为正常（绝大多数 stone 没有 server 方法）
-      const serverFile = join(opts.baseDir, "packages", e.name, "server", "index.ts");
-      try {
-        await stat(serverFile);
-      } catch {
-        continue;
-      }
+      source = await readExecutableSource(stoneRef);
+    } catch {
+      source = undefined;
+    }
+    if (!source) continue;
+    try {
       await loadObjectWindow(stoneRef);
     } catch (err) {
       broken.push({
-        objectId: e.name,
+        objectId: def.objectId,
         reason: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
   // 列出 super session 既有 PR-Issues，做去重
-  let existingTitles = new Set<string>();
+  const existingTitles = new Set<string>();
   try {
     const index = await readPrIssueIndex(opts.baseDir);
     for (const entry of index.issues) {
@@ -96,7 +98,7 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
       issue = await createRecoveryIssue({
         baseDir: opts.baseDir,
         title,
-        description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/server/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider \`metaprog rollback\` to a previous commit, or directly fix the stone.`,
+        description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/executable/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider \`metaprog rollback\` to a previous commit, or directly fix the stone.`,
         createdByObjectId: "supervisor",
       });
     } catch {
@@ -106,5 +108,5 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
     if (issue) newIssues.push(issue.id);
   }
 
-  return { scanned: entries.length, broken, newIssues };
+  return { scanned: stones.length, broken, newIssues };
 }

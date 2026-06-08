@@ -3,8 +3,6 @@ import { setPauseChecker, setThreadActivationNotifier } from "@ooc/core/observab
 import { createWorldRuntime, type WorldRuntime } from "@ooc/core/runtime/world-runtime";
 import { readServerConfig, type ServerConfig } from "./bootstrap/config";
 import { runRecoveryCheck } from "./bootstrap/recovery-check";
-import { checkStoneToPoolMigration, reportPoolMigration } from "./bootstrap/check-pool-migration";
-import { checkStaleDatabaseDir } from "./bootstrap/check-stale-database-dir";
 import { checkFlowChildrenMigration } from "./bootstrap/check-flow-children-migration";
 import { checkStateContextSplit } from "./bootstrap/check-state-context-split";
 import { instantiateBuiltinClassObjects } from "./bootstrap/instantiate-classes";
@@ -325,18 +323,8 @@ if (import.meta.main) {
     console.warn(`[ooc-app-server] recovery-check failed (non-fatal): ${e instanceof Error ? e.message : e}`);
   }
 
-  // 2026-05-23 三分重组：检测 stone 仍持有 knowledge/ 或 files/、但对应 pool 还没建的 object，
-  // 提示用户跑一次性迁移命令。不自动迁移；不阻塞启动。
-  try {
-    const migration = await checkStoneToPoolMigration({ baseDir: config.baseDir });
-    reportPoolMigration(migration, config.baseDir);
-  } catch (e) {
-    console.warn(`[ooc-app-server] pool-migration check failed (non-fatal): ${e instanceof Error ? e.message : e}`);
-  }
-
-  // 2026-05-24 二次简化：检测 stone 仍持有 database/ 残留子目录（2026-05-23 六件套时代遗留；
-  // sql_pool 删除后该目录已无语义）。advisory，不阻塞启动。
-  await checkStaleDatabaseDir(config.baseDir);
+  // 2026-06-07：移除两项一次性迁移 advisory（checkStoneToPoolMigration / checkStaleDatabaseDir）——
+  // 它们扫描 deprecated `<world>/packages/<id>/` 布局，该布局已随 packages/ 兼容层一并删除，永远空返回。
 
   // 2026-05-27: flow 子 object 物理布局迁移到 children/ marker（与 stone 对称）。
   // 幂等：已是 children/ 形态的不动。必须在 worker bootstrap 入队前跑（worker.scanRunningThreads

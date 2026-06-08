@@ -28,8 +28,8 @@
  * 随 OOC 代码仓发版，Agent 不可改写。
  */
 
-import { mkdir, rm, stat, writeFile, cp } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, rm, rmdir, stat, writeFile, cp } from "node:fs/promises";
+import { dirname, join, sep } from "node:path";
 import { createStoneObject, stoneDir, stoneKnowledgeDir } from "../persistable/stone-object.js";
 import { writeSelf } from "../persistable/stone-self.js";
 import { writeReadable } from "../persistable/stone-readme.js";
@@ -67,6 +67,65 @@ export const SUPERVISOR_OBJECT_ID = "supervisor";
 
 /** worktree branch 命名约定：`metaprog/{objectId}/{token}`（{token} 由 caller 提供或自动生成）。 */
 const WORKTREE_BRANCH_PREFIX = "metaprog";
+
+/**
+ * worktree 移除后 GC 空父目录（2026-06-07）。
+ *
+ * `git worktree remove` 只删 worktree 目录本身（`stones/metaprog/<id>/<token>`），留下空的父路径段
+ * `stones/metaprog/<id>/`（甚至 `stones/metaprog/`）。本函数从 worktree 父目录起逐级 `rmdir`，只删空目录、
+ * 到 `stones/metaprog/` 即止（不碰 `stones/`）。best-effort：rmdir 遇非空/不存在即停。
+ */
+async function gcEmptyWorktreeParents(worktreePathAbs: string, baseDir: string): Promise<void> {
+  const metaprogRoot = join(baseDir, "stones", WORKTREE_BRANCH_PREFIX);
+  let dir = dirname(worktreePathAbs);
+  while (dir === metaprogRoot || dir.startsWith(metaprogRoot + sep)) {
+    try {
+      await rmdir(dir); // 仅当空时成功；非空抛 ENOTEMPTY → 停
+    } catch {
+      break;
+    }
+    dir = dirname(dir);
+  }
+}
+
+/**
+ * 后序清扫整个 `stones/metaprog/` 子树里的空目录（启动 hygiene，2026-06-07）。
+ *
+ * 用于回收历史遗留：旧版 worktree 移除未 GC 父目录、或非正常退出留下的空 `metaprog/<id>/`。
+ * 自底向上 rmdir，只删空目录；`stones/metaprog/` 自身若清空也一并删除（取代旧的空目录残留）。
+ * best-effort：任何 rmdir 失败（非空/竞态）静默跳过。
+ */
+async function gcEmptyMetaprogTree(baseDir: string): Promise<void> {
+  const { readdir } = await import("node:fs/promises");
+  const metaprogRoot = join(baseDir, "stones", WORKTREE_BRANCH_PREFIX);
+  async function sweep(dir: string): Promise<boolean> {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return false; // 不存在/不可读 → 不删
+    }
+    let allEmpty = true;
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        const childEmptied = await sweep(join(dir, e.name));
+        if (!childEmptied) allEmpty = false;
+      } else {
+        allEmpty = false; // 有文件 → 非空
+      }
+    }
+    if (allEmpty) {
+      try {
+        await rmdir(dir);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+  await sweep(metaprogRoot);
+}
 
 export interface MetaprogWorktreeRef {
   /** OOC world 根。 */
@@ -389,7 +448,7 @@ export async function tryMergeSelf(
     const head = gitHead(repo);
     if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
 
-    // step 4: cleanup worktree（移除目录 + branch）
+    // step 4: cleanup worktree（移除目录 + branch + GC 空父目录）
     const removeWt = gitWorktreeRemove(repo, worktree.path);
     // silent-swallow ban: 失败不阻塞 ff 成功，但必须 warn 让运维知情（caller 可下次启动 prune）
     if (!removeWt.ok) {
@@ -398,6 +457,7 @@ export async function tryMergeSelf(
         `[stone-versioning] tryMergeSelf worktree cleanup failed branch=${worktree.branch} stderr=${removeWt.stderr}`,
       );
     }
+    await gcEmptyWorktreeParents(worktree.path, worktree.baseDir);
     return { ok: true, kind: "merged", commitSha: head.value } as const;
   });
 }
@@ -569,6 +629,7 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
           `[stone-versioning] resolvePrIssue(merge) worktree prune failed stderr=${pruneMerge.stderr}`,
         );
       }
+      await gcEmptyWorktreeParents(worktreePath(input.baseDir, branch), input.baseDir);
 
       try {
         await closePrIssue({
@@ -600,6 +661,7 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
         `[stone-versioning] resolvePrIssue(reject) worktree prune failed stderr=${pruneReject.stderr}`,
       );
     }
+    await gcEmptyWorktreeParents(worktreePath(input.baseDir, branch), input.baseDir);
     const archive = gitArchiveBranch(repo, branch);
     if (!archive.ok) {
       return { ok: false, code: "GIT", gitCode: archive.code, stderr: archive.stderr } as const;
@@ -887,6 +949,8 @@ export async function pruneStaleWorktrees(baseDir: string): Promise<PruneResult>
         `[stone-versioning] pruneStaleWorktrees prune failed stderr=${prune.stderr}`,
       );
     }
+    // 回收 metaprog 子树里的空目录残留（历史遗留 + 本轮 prune 后空出的父目录）
+    await gcEmptyMetaprogTree(baseDir);
     return { ok: true, removed, pruned: prune.ok } as const;
   });
 }

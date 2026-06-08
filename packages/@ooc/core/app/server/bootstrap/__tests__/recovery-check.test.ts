@@ -7,6 +7,7 @@ import {
   __resetSerialQueueForTests,
   readPrIssueIndex,
   createRecoveryIssue,
+  nestedObjectPath,
 } from "@ooc/core/persistable";
 import { runRecoveryCheck } from "../recovery-check";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
@@ -25,58 +26,47 @@ afterEach(async () => {
   }
 });
 
-async function newWorld(): Promise<string> {
-  tempRoot = await mkdtemp(join(tmpdir(), "ooc-recovery-"));
-  // pre-create supervisor stone (createdByObjectId for recovery issues)
-  await mkdir(join(tempRoot, "stones", "supervisor"), { recursive: true });
-  await writeFile(join(tempRoot, "stones", "supervisor", "self.md"), "supervisor v1\n");
+/**
+ * 在 canonical 布局 `stones/main/objects/<nestedId>/` 下落一个 stone。
+ * recovery-check 经 StoneRegistry 扫的就是这里（不再是 deprecated packages/）。
+ */
+async function seedStone(
+  baseDir: string,
+  objectId: string,
+  opts: { self?: string; executable?: string } = {},
+): Promise<void> {
+  const dir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId));
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, "self.md"), opts.self ?? `${objectId} v1\n`);
   await writeFile(
-    join(tempRoot, "stones", "supervisor", "package.json"),
+    join(dir, "package.json"),
     JSON.stringify({
-      name: "@ooc-obj/supervisor",
+      name: `@ooc-obj/${objectId.replace(/\//g, "-")}`,
       version: "0.1.0",
       private: true,
       type: "module",
-      ooc: { objectId: "supervisor", kind: "object", type: "agent" },
+      ooc: { objectId, kind: "object", type: "agent" },
     }),
     "utf8",
   );
-  return tempRoot;
+  if (opts.executable !== undefined) {
+    await mkdir(join(dir, "executable"), { recursive: true });
+    await writeFile(join(dir, "executable", "index.ts"), opts.executable, "utf8");
+  }
 }
 
-/** Sync stones/main/objects/ to packages/ so runtime scans can find them. */
-async function syncStonesToPackages(baseDir: string, objectIds: string[]): Promise<void> {
-  const { cp } = await import("node:fs/promises");
-  for (const id of objectIds) {
-    const segs = id.split("/");
-    const pathSegs = segs.flatMap((seg) => ["children", seg]).slice(1);
-    const source = join(baseDir, "stones", "main", "objects", ...pathSegs);
-    const target = join(baseDir, "packages", ...pathSegs);
-    try {
-      await cp(source, target, { recursive: true, force: true });
-    } catch { /* source might not exist */ }
-  }
+async function newWorld(): Promise<string> {
+  tempRoot = await mkdtemp(join(tmpdir(), "ooc-recovery-"));
+  await ensureStoneRepo({ baseDir: tempRoot });
+  // supervisor 是 recovery issue 的 createdByObjectId
+  await seedStone(tempRoot, "supervisor", { self: "supervisor v1\n" });
+  return tempRoot;
 }
 
 describe("runRecoveryCheck", () => {
   test("scans clean repo without creating any issue", async () => {
     const baseDir = await newWorld();
-    // 用真实 stone 内容（git 不跟踪空目录；bare bootstrap 后空 dir 会丢失）
-    await mkdir(join(baseDir, "stones", "agent_of_x"), { recursive: true });
-    await writeFile(join(baseDir, "stones", "agent_of_x", "self.md"), "agent_of_x v1\n");
-    await writeFile(
-      join(baseDir, "stones", "agent_of_x", "package.json"),
-      JSON.stringify({
-        name: "@ooc-obj/agent-of-x",
-        version: "0.1.0",
-        private: true,
-        type: "module",
-        ooc: { objectId: "agent_of_x", kind: "object", type: "agent" },
-      }),
-      "utf8",
-    );
-    await ensureStoneRepo({ baseDir });
-    await syncStonesToPackages(baseDir, ["supervisor", "agent_of_x"]);
+    await seedStone(baseDir, "agent_of_x", { self: "agent_of_x v1\n" });
 
     const r = await runRecoveryCheck({ baseDir });
     expect(r.scanned).toBeGreaterThanOrEqual(2);
@@ -84,27 +74,12 @@ describe("runRecoveryCheck", () => {
     expect(r.newIssues).toEqual([]);
   });
 
-  test("creates [recovery-needed] issue when server/index.ts has syntax error", async () => {
+  test("creates [recovery-needed] issue when executable/index.ts has syntax error", async () => {
     const baseDir = await newWorld();
-    await mkdir(join(baseDir, "stones", "agent_of_x", "server"), { recursive: true });
-    await writeFile(
-      join(baseDir, "stones", "agent_of_x", "server", "index.ts"),
-      "this is not valid typescript &^$@!\n",
-    );
-    await writeFile(join(baseDir, "stones", "agent_of_x", "self.md"), "agent_of_x v1\n");
-    await writeFile(
-      join(baseDir, "stones", "agent_of_x", "package.json"),
-      JSON.stringify({
-        name: "@ooc-obj/agent-of-x",
-        version: "0.1.0",
-        private: true,
-        type: "module",
-        ooc: { objectId: "agent_of_x", kind: "object", type: "agent" },
-      }),
-      "utf8",
-    );
-    await ensureStoneRepo({ baseDir });
-    await syncStonesToPackages(baseDir, ["supervisor", "agent_of_x"]);
+    await seedStone(baseDir, "agent_of_x", {
+      self: "agent_of_x v1\n",
+      executable: "this is not valid typescript &^$@!\n",
+    });
 
     const r = await runRecoveryCheck({ baseDir });
     expect(r.broken.length).toBe(1);
@@ -117,25 +92,10 @@ describe("runRecoveryCheck", () => {
 
   test("idempotent: pre-existing recovery-needed issue is not duplicated", async () => {
     const baseDir = await newWorld();
-    await mkdir(join(baseDir, "stones", "agent_of_y", "server"), { recursive: true });
-    await writeFile(
-      join(baseDir, "stones", "agent_of_y", "server", "index.ts"),
-      "still broken &^&^!\n",
-    );
-    await writeFile(join(baseDir, "stones", "agent_of_y", "self.md"), "agent_of_y v1\n");
-    await writeFile(
-      join(baseDir, "stones", "agent_of_y", "package.json"),
-      JSON.stringify({
-        name: "@ooc-obj/agent-of-y",
-        version: "0.1.0",
-        private: true,
-        type: "module",
-        ooc: { objectId: "agent_of_y", kind: "object", type: "agent" },
-      }),
-      "utf8",
-    );
-    await ensureStoneRepo({ baseDir });
-    await syncStonesToPackages(baseDir, ["supervisor", "agent_of_y"]);
+    await seedStone(baseDir, "agent_of_y", {
+      self: "agent_of_y v1\n",
+      executable: "still broken &^&^!\n",
+    });
 
     // 预置一条同 title 的 issue 模拟"上一次启动已经报过"
     await createRecoveryIssue({
@@ -154,23 +114,9 @@ describe("runRecoveryCheck", () => {
     expect(recoveryIssues.length).toBe(1);
   });
 
-  test("ignores Object without server/index.ts", async () => {
+  test("ignores Object without executable/index.ts", async () => {
     const baseDir = await newWorld();
-    await mkdir(join(baseDir, "stones", "passive_agent"), { recursive: true });
-    await writeFile(join(baseDir, "stones", "passive_agent", "self.md"), "no server methods\n");
-    await writeFile(
-      join(baseDir, "stones", "passive_agent", "package.json"),
-      JSON.stringify({
-        name: "@ooc-obj/passive-agent",
-        version: "0.1.0",
-        private: true,
-        type: "module",
-        ooc: { objectId: "passive_agent", kind: "object", type: "agent" },
-      }),
-      "utf8",
-    );
-    await ensureStoneRepo({ baseDir });
-    await syncStonesToPackages(baseDir, ["supervisor", "passive_agent"]);
+    await seedStone(baseDir, "passive_agent", { self: "no executable methods\n" });
 
     const r = await runRecoveryCheck({ baseDir });
     expect(r.broken).toEqual([]);

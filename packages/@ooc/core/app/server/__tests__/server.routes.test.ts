@@ -227,7 +227,8 @@ describe("app server routes", () => {
     expect(flowsTree.children[0].path).toBe("flows/web-session");
     expect(flowsTree.children[0].marker).toBe("flow");
     expect(worldResponse.status).toBe(200);
-    expect(worldTree.children.map((node: { name: string }) => node.name).sort()).toEqual(["flows", "packages", "pools", "stones"]);
+    // deprecated packages/ 目录已于 2026-06-07 不再由 bootstrap 创建（布局移除）
+    expect(worldTree.children.map((node: { name: string }) => node.name).sort()).toEqual(["flows", "pools", "stones"]);
   });
 
   test("GET /api/tree/file reads text files and reports missing or unsafe paths", async () => {

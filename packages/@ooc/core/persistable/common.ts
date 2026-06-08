@@ -99,30 +99,13 @@ export function stoneDir(ref: StoneObjectRef): string {
 }
 
 /**
- * 计算 fallback package 路径（deprecated `packages/` layout），用于存在性检查。
- * Internal helper for dual-path compatibility.
- */
-export function _deprecatedPackageDir(ref: StoneObjectRef): string {
-  if (ref.objectId.startsWith("_builtin/") || BUILTIN_OBJECT_IDS.has(ref.objectId)) {
-    return stoneDir(ref);
-  }
-  if (ref._stonesBranch != null) return stoneDir(ref);
-  return join(
-    ref.baseDir,
-    "packages",
-    ...nestedObjectPath(ref.objectId),
-  );
-}
-
-/**
- * Resolve an existing stone directory with multi-path fallback (M2 2026-06-03).
+ * Resolve an existing stone directory（M2 2026-06-03；2026-06-07 移除 deprecated packages/ 第3路）。
  *
  * Priority:
- *   1. Flat layout:  stones/<id>/                    (canonical)
- *   2. Versioning:   stones/<branch>/objects/<id>/   (git worktree, metaprog)
- *   3. Deprecated:   packages/<id>/                  (legacy, console.warn)
+ *   1. Canonical:   stones/main/objects/<id>/         (canonical / flat)
+ *   2. Versioning:  stones/<branch>/objects/<id>/     (git worktree, metaprog/session)
  *
- * If none exist, returns the canonical flat path (caller handles ENOENT).
+ * If none exist, returns the canonical path (caller handles ENOENT).
  *
  * Use this at I/O boundaries (ServerLoader, listStones, etc.) where we actually
  * read from disk. Call sites that only need the path for string manipulation can
@@ -165,23 +148,6 @@ export async function resolveStoneDir(
     }
   }
 
-  // 3. Deprecated packages/ layout
-  const fallback = _deprecatedPackageDir(ref);
-  if (fallback !== canonical) {
-    try {
-      const s = await doStat(fallback);
-      if (s.isDirectory()) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[stoneDir] deprecated: object '${ref.objectId}' found at '${fallback}' (packages/ layout). ` +
-          `Please migrate to '${canonical}' (stones/ layout). packages/ fallback will be removed.`,
-        );
-        return fallback;
-      }
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-    }
-  }
-
+  // deprecated `<world>/packages/<id>/` layout fallback 已于 2026-06-07 移除（该布局无活跃使用）。
   return canonical;
 }

@@ -3,7 +3,6 @@ export {
   objectDir,
   stoneDir,
   resolveStoneDir,
-  _deprecatedPackageDir,
   threadDir,
   deriveStoneFromThread,
   nestedObjectPath,

@@ -33,6 +33,18 @@ async function newWorld(agents: string[]): Promise<string> {
   for (const id of agents) {
     await mkdir(join(tempRoot, "stones", "main", "objects", id), { recursive: true });
     await writeFile(join(tempRoot, "stones", "main", "objects", id, "self.md"), `${id} v1\n`);
+    // package.json 是 StoneRegistry 登记 stone 的前提（recovery-check 经 registry 枚举）
+    await writeFile(
+      join(tempRoot, "stones", "main", "objects", id, "package.json"),
+      JSON.stringify({
+        name: `@ooc-obj/${id.replace(/\//g, "-")}`,
+        version: "0.1.0",
+        private: true,
+        type: "module",
+        ooc: { objectId: id, kind: "object", type: "agent" },
+      }),
+      "utf8",
+    );
   }
   // bootstrap git repo
   const mainDir = join(tempRoot, "stones", "main");
@@ -341,18 +353,12 @@ describe("e2e: AE5 flows/ 不入 git", () => {
 });
 
 describe("e2e: U8 recovery-check 端到端", () => {
-  test("broken stone 的 server/index.ts → 启动期产 [recovery-needed] PR-Issue", async () => {
+  test("broken stone 的 executable/index.ts → 启动期产 [recovery-needed] PR-Issue", async () => {
     const baseDir = await newWorld(["agent_of_x", "supervisor"]);
-    // 故意写坏 agent_of_x 的 server/index.ts
-    await mkdir(join(baseDir, "stones", "main", "objects", "agent_of_x", "server"), { recursive: true });
+    // 故意写坏 agent_of_x 的 canonical executable/index.ts（recovery-check 经 registry 扫此处）
+    await mkdir(join(baseDir, "stones", "main", "objects", "agent_of_x", "executable"), { recursive: true });
     await writeFile(
-      join(baseDir, "stones", "main", "objects", "agent_of_x", "server", "index.ts"),
-      "this is &^&^ not valid &@!!\n",
-    );
-    // recovery-check 扫描 packages/，所以也要在那里放 broken 文件
-    await mkdir(join(baseDir, "packages", "agent_of_x", "server"), { recursive: true });
-    await writeFile(
-      join(baseDir, "packages", "agent_of_x", "server", "index.ts"),
+      join(baseDir, "stones", "main", "objects", "agent_of_x", "executable", "index.ts"),
       "this is &^&^ not valid &@!!\n",
     );
 
