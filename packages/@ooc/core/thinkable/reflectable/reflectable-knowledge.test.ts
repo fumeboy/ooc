@@ -79,9 +79,11 @@ describe("reflectable knowledge protocol injection", () => {
   });
 
   it("metaprog knowledge mentions key protocol elements", () => {
-    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("worktree");
-    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("open_worktree");
-    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("--stones-branch");
+    // 2026-06-09 去 metaprog 写路径后：改身体走「业务 session write_file → super flow evolve_self」，
+    // cross-object 转 PR-Issue；metaprog 命令只剩 resolve/rollback 治理。
+    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("evolve_self");
+    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("业务 session");
+    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("PR-Issue");
     expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("metaprog");
     expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("rollback");
   });

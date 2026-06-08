@@ -207,15 +207,14 @@ export {
 } from "../programmable/git.js";
 
 export {
-  // U4: 高层 versioning 编排
-  openMetaprogWorktree,
+  // U4: 高层 versioning 编排（session worktree 合入 + 治理 + 控制面直写 main）
   commitWorktree,
   classifyWorktreeBranch,
   tryMergeSelf,
   requestPrIssueReview,
   resolvePrIssue,
   rollback,
-  supervisorCreateObject,
+  httpDirectMainWrite,
   pruneStaleWorktrees,
   SUPERVISOR_OBJECT_ID,
   type MetaprogWorktreeRef,
@@ -223,20 +222,12 @@ export {
   type PrIssueDecision,
   type RollbackInput,
   type RollbackResult,
-  type SupervisorCreateObjectInput,
-  type SupervisorCreateObjectResult,
+  type HttpDirectMainWriteInput,
+  type HttpDirectMainWriteResult,
   type TryMergeSelfResult,
   type RequestPrIssueResult,
   type ResolvePrIssueResult,
 } from "../programmable/versioning.js";
-export {
-  // versioned-write: 把"写一个 stone 文件"包进 versioning 流程的单一 owner
-  versionedStoneWrite,
-  type VersionedStoneWriteInput,
-  type VersionedWriteContext,
-  type VersionedWriteOk,
-  type VersionedWriteErr,
-} from "../programmable/versioned-write.js";
 
 export {
   // evolve-self: super-flow 身份合入闸门（session worktree → main）

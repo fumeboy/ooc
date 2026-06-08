@@ -1,67 +1,66 @@
 /**
- * HTTP stone-write versioning helper —— 根因 #2（HTTP-git 语义统一）。
+ * HTTP stone-write helper —— 控制面写 → **直接 commit main**（去 metaprog，2026-06-09）。
  *
- * 让 HTTP service.ts 的写 stone 操作复用 LLM 命令同样的 stone-versioning 流程：
- *   open metaprog worktree → exec write callback in worktree → commit → tryMergeSelf
+ * 人类经 HTTP 控制面的编辑（PUT self/readable/server-source、createStone）即「已决策/
+ * 已评审」操作：所见即所得，不需 session worktree 隔离与 super flow 评审。本 helper 把写
+ * 操作直接落 `stones/main/` 工作树并 commit（enqueueSessionWrite 串行化防 HTTP 并发竞争）。
  *
- * 2026-05-28：核心三步编排已上移到 persistable 的 `versionedStoneWrite`（单一 owner，
- * 同时被 LLM write_file 命令复用）。本文件保留为薄适配层——仅做命名对齐
- * （HttpWrite* ↔ VersionedWrite*），不再复制编排逻辑。
+ * 编排核心在 persistable/programmable 的 `httpDirectMainWrite`（单一 owner）；本文件保留为
+ * 薄适配层——仅做命名对齐（HttpWrite* ↔ HttpDirectMainWrite*）。
  */
-import { versionedStoneWrite } from "@ooc/core/persistable";
+import { httpDirectMainWrite } from "@ooc/core/programmable";
 
 /** wrapHttpWriteInWorktree 的成功返回。 */
 export interface HttpWriteOk {
   ok: true;
-  /** worktree merge 后 main 上的 commit sha（self-scope）；cross-scope 时退回 commit 的 sha。 */
+  /** main 上的 commit sha。 */
   commitSha: string;
-  /** true = 已 ff merge 到 main；false = 已落 PR-Issue 等 Supervisor 决议。 */
+  /** 控制面写恒为 true（直接 commit main，立即生效，无 PR-Issue）。 */
   merged: boolean;
-  /** cross-scope 时新建的 PR-Issue id。 */
+  /** 兼容字段：控制面写不再开 PR-Issue，恒 undefined。 */
   prIssueId?: number;
 }
 
 /** wrapHttpWriteInWorktree 的失败返回（不抛错——caller 转 AppServerError）。 */
 export interface HttpWriteErr {
   ok: false;
-  /** 与 stone-versioning 的 GitErrorCode/INVALID_INPUT/ISSUE_SERVICE 对齐。 */
+  /** 与 GitErrorCode/WRITE_FAILED 对齐。 */
   code: string;
   message: string;
 }
 
-/** write callback 拿到的 worktree 上下文：caller 在 baseDir 下用 stonesBranch=branch 调 persistable.write*。 */
+/** write callback 拿到的上下文：caller 用 branch（恒为 "main"）调 persistable 写函数。 */
 export interface WriteContext {
-  /** worktree 在磁盘上的绝对路径（仅 informational；caller 一般用 baseDir + stonesBranch）。 */
-  path: string;
-  /** worktree 仍属于的 OOC world 根（与外层 baseDir 一致）。 */
+  /** 当前写落点 OOC world 根。 */
   baseDir: string;
-  /** worktree 对应的 git branch；写 stone 时把 stoneRef.stonesBranch 改为这个值。 */
+  /** stone 写落点 git branch；控制面写恒为 "main"（直写 main 工作树）。 */
   branch: string;
 }
 
 export interface WrapHttpWriteInput {
   baseDir: string;
-  /** 当前 server 实例绑定的 stones-branch（一般是 "main"）。当前实现仅支持从 main 派生 metaprog 分支。 */
+  /** commit 署名 + 写落点 objects/<objectId>/。 */
   authorObjectId: string;
   /** commit message。 */
   intent: string;
   /**
-   * 实际写文件的 callback。调用方应当用 ctx.baseDir + stoneRef.stonesBranch=ctx.branch
-   * 调原 persistable 函数（writeSelf / createStoneObject / ...），让文件落在 worktree 工作目录。
-   *
-   * 抛错会被 helper 捕获并转为 { ok: false, code: "WRITE_FAILED", ... }。
+   * 实际写文件的 callback。调用方用 ctx.baseDir + stoneRef._stonesBranch=ctx.branch
+   * 调原 persistable 函数（writeSelf / createStoneObject / ...），文件即落 `stones/main/`。
+   * 抛错被捕获转 { ok: false, code: "WRITE_FAILED", ... }。
    */
   write: (ctx: WriteContext) => Promise<void>;
 }
 
 /**
- * 把 HTTP 写 stone 操作包成 stone-versioning 流程（薄适配 → persistable.versionedStoneWrite）。
+ * 把 HTTP 写 stone 操作直接 commit 到 main（薄适配 → programmable.httpDirectMainWrite）。
  */
 export async function wrapHttpWriteInWorktree(input: WrapHttpWriteInput): Promise<HttpWriteOk | HttpWriteErr> {
-  return versionedStoneWrite({
+  const r = await httpDirectMainWrite({
     baseDir: input.baseDir,
     authorObjectId: input.authorObjectId,
     intent: input.intent,
-    write: input.write,
+    write: async (branch) => input.write({ baseDir: input.baseDir, branch }),
   });
+  if (!r.ok) return { ok: false, code: r.code, message: r.message };
+  return { ok: true, commitSha: r.commitSha, merged: r.merged };
 }

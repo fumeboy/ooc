@@ -1,8 +1,9 @@
 /**
- * method.metaprog caller-guard + error-token 单测
+ * method.metaprog caller-guard 单测（治理 action：resolve / rollback）
  *
- * 不跑真 git；只校验 metaprog method 层的 caller-permission 校验与新的
- * `[metaprog:create_object:<CODE>]` 错误 token 形态。
+ * 不跑真 git；只校验 metaprog method 层的 caller-permission 校验。
+ * 去 metaprog（2026-06-09）后 metaprog 只剩治理 action；改自己/建别人的写经
+ * write_file → session worktree → super flow，不再有 create_object 快捷 action。
  */
 
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -59,102 +60,26 @@ function makeCtx(opts: {
   } as MethodExecutionContext;
 }
 
-describe("metaprog action=create_object caller-guard", () => {
-  test("非 supervisor caller 调 create_object → FORBIDDEN token", async () => {
-    const baseDir = await newWorld(["agent_of_x", "supervisor"]);
+describe("metaprog 去 metaprog 后只剩治理 action", () => {
+  test("已删的 create_object action → 未知 action（写改自己/建别人改走 write_file）", async () => {
+    const baseDir = await newWorld(["supervisor"]);
     const r = await executeMetaprog(
       makeCtx({
         baseDir,
-        callerId: "agent_of_x",
-        args: {
-          action: "create_object",
-          objectId: "hacker",
-          selfMd: "# hacker\n",
-          readableMd: "# hacker\n",
-        },
+        callerId: "supervisor",
+        args: { action: "create_object", objectId: "weather", selfMd: "x", readableMd: "y" },
       }),
     );
     expect(typeof r).toBe("string");
-    expect(r).toContain("[metaprog:create_object:FORBIDDEN]");
-    expect(r).toContain("agent_of_x");
+    expect(r).toContain("未知 action 'create_object'");
   });
 
-  test("supervisor caller + 缺 objectId → INVALID_INPUT token", async () => {
+  test("已删的 open_worktree action → 未知 action", async () => {
     const baseDir = await newWorld(["supervisor"]);
     const r = await executeMetaprog(
-      makeCtx({
-        baseDir,
-        callerId: "supervisor",
-        args: { action: "create_object", selfMd: "x", readableMd: "y" },
-      }),
+      makeCtx({ baseDir, callerId: "supervisor", args: { action: "open_worktree" } }),
     );
-    expect(r).toContain("[metaprog:create_object:INVALID_INPUT]");
-  });
-
-  test("supervisor caller + 空 selfMd → INVALID_INPUT token", async () => {
-    const baseDir = await newWorld(["supervisor"]);
-    const r = await executeMetaprog(
-      makeCtx({
-        baseDir,
-        callerId: "supervisor",
-        args: { action: "create_object", objectId: "weather", selfMd: "  ", readableMd: "x" },
-      }),
-    );
-    expect(r).toContain("[metaprog:create_object:INVALID_INPUT]");
-  });
-
-  test("supervisor caller + knowledge 不是 string map → INVALID_INPUT token", async () => {
-    const baseDir = await newWorld(["supervisor"]);
-    const r = await executeMetaprog(
-      makeCtx({
-        baseDir,
-        callerId: "supervisor",
-        args: {
-          action: "create_object",
-          objectId: "weather",
-          selfMd: "x",
-          readableMd: "y",
-          knowledge: { "usage.md": 42 },
-        },
-      }),
-    );
-    expect(r).toContain("[metaprog:create_object:INVALID_INPUT]");
-  });
-
-  test("supervisor caller + objectId=supervisor → BUILTIN_CONFLICT（supervisor 是 Builtin Object）", async () => {
-    const baseDir = await newWorld(["supervisor"]);
-    const r = await executeMetaprog(
-      makeCtx({
-        baseDir,
-        callerId: "supervisor",
-        args: { action: "create_object", objectId: "supervisor", selfMd: "x", readableMd: "y" },
-      }),
-    );
-    // supervisor/user 现为 Builtin Object（packages/@ooc/builtins/<id>），create_object 不可覆写 →
-    // BUILTIN_CONFLICT（原 INVALID_INPUT 是 supervisor 成为 Builtin 前的旧契约）。
-    expect(r).toContain("[metaprog:create_object:BUILTIN_CONFLICT]");
-  });
-
-  test("supervisor caller + 全部参数合法 → 成功（commit 落 main）", async () => {
-    const baseDir = await newWorld(["supervisor"]);
-    const r = await executeMetaprog(
-      makeCtx({
-        baseDir,
-        callerId: "supervisor",
-        args: {
-          action: "create_object",
-          objectId: "weather",
-          selfMd: "# weather\n",
-          readmeMd: "# weather\n",
-          knowledge: { "usage.md": "Pass {city}.\n" },
-          intent: "feat: introduce weather",
-        },
-      }),
-    );
-    const parsed = JSON.parse(r as string);
-    expect(parsed.ok).toBe(true);
-    expect(parsed.objectId).toBe("weather");
-    expect(typeof parsed.commitSha).toBe("string");
+    expect(r).toContain("未知 action 'open_worktree'");
   });
 });
 

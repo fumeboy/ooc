@@ -11,7 +11,7 @@ import {
 } from "./stone-worktree";
 
 /**
- * 把 main worktree 的当前文件树 commit 进 main 分支（模拟控制面 versionedStoneWrite /
+ * 把 main worktree 的当前文件树 commit 进 main 分支（模拟控制面 httpDirectMainWrite /
  * bootstrap 对 identity 写入的 commit）。session worktree 从 main HEAD checkout，故 identity
  * 必须先 commit 到 main 才能被 worktree 看到（design doc §8 约束）。
  */

@@ -3671,7 +3671,7 @@ export const root: DocTreeNode = {
                     sources: [
                         [
                             "src/persistable/stone-versioning.ts",
-                            "openMetaprogWorktree / commitWorktree / classifyWorktreeBranch / tryMergeSelf / requestPrIssueReview / resolvePrIssue / rollback / pruneStaleWorktrees；R12 supervisor 例外（rollback 在 persistable 层强制 supervisorAuthor === SUPERVISOR_OBJECT_ID，FORBIDDEN code）；所有 git 操作通过 enqueueSessionWrite('git:'+baseDir) 串行；底层 git 命令在 src/persistable/stone-git.ts；bare init + linked worktree 编排在 src/persistable/stone-bootstrap.ts:ensureStoneRepo (createBareRepoWithMainWorktree 处理 bootstrap commit 通过 scratch clone 灌入 bare，末尾自动调 pruneStaleWorktrees)；启动期 recovery-check 在 src/app/server/bootstrap/recovery-check.ts",
+                            "commitWorktree / classifyWorktreeBranch / tryMergeSelf / requestPrIssueReview / resolvePrIssue / rollback / httpDirectMainWrite / pruneStaleWorktrees（去 metaprog 2026-06-09：删 openMetaprogWorktree / supervisorCreateObject / versionedStoneWrite——stone 写只剩 LLM session worktree[经 super flow evolve_self 合入] 与 HTTP 控制面 httpDirectMainWrite[直写 main]两路）；R12 supervisor 例外（rollback 在 persistable 层强制 supervisorAuthor === SUPERVISOR_OBJECT_ID，FORBIDDEN code）；所有 git 操作通过 enqueueSessionWrite('git:'+baseDir) 串行；底层 git 命令在 src/persistable/stone-git.ts；bare init + linked worktree 编排在 src/persistable/stone-bootstrap.ts:ensureStoneRepo (createBareRepoWithMainWorktree 处理 bootstrap commit 通过 scratch clone 灌入 bare，末尾自动调 pruneStaleWorktrees)；启动期 recovery-check 在 src/app/server/bootstrap/recovery-check.ts",
                         ],
                     ],
                     patches: {

@@ -140,9 +140,12 @@ describe("write_file stone-versioning routing", () => {
     ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  test("self-scope（super flow）: 仍走 versioning，commit + ff-merge 到 main（不落 overlay）", async () => {
+  test("super flow: write_file 写 stone 自治区 → fail-loud（非业务 session，无 worktree 落点），main 不变", async () => {
+    // 去 metaprog（2026-06-09）：stone 写的两个落点是「业务 session worktree」（LLM 试验，
+    // 经 evolve_self 合入）与「HTTP 控制面直写 main」（人类已决策）。super flow 既非业务 session
+    // （sessionUsesWorktree("super")=false）也非 HTTP，其角色是 evolve_self 合入闸门、不是 stone
+    // 作者——故 super session 内 write_file 写 stone 自治区 fail-loud，不再裸 commit main。
     const baseDir = await newWorld(["agent_of_x"]);
-    // super flow（sessionId="super"）操作 canonical 本身：保留旧 versioning 行为。
     const ctx = ctxFor(baseDir, "agent_of_x", {
       path: "stones/agent_of_x/self.md",
       content: "agent_of_x v2 via super write_file\n",
@@ -150,15 +153,16 @@ describe("write_file stone-versioning routing", () => {
     (ctx.thread as unknown as { persistence: { sessionId: string } }).persistence.sessionId = "super";
 
     const out = await executeWriteFileMethod(ctx);
-    expect(typeof out === "object" && out !== null && out.ok === true).toBe(true);
+    expect(typeof out).toBe("object");
+    if (typeof out === "object" && out && out.ok === false) {
+      expect(out.error).toContain("业务 session");
+    } else {
+      throw new Error(`expected failure outcome, got ${JSON.stringify(out)}`);
+    }
 
-    // main 已反映新内容
+    // main 未变（fail-loud，不裸写）
     const onMain = await readFile(join(mainObjectsDir(baseDir), "agent_of_x", "self.md"), "utf8");
-    expect(onMain).toBe("agent_of_x v2 via super write_file\n");
-    // 没有 overlay 副本
-    await expect(
-      readFile(join(baseDir, "flows", "super", "agent_of_x", "overlay", "self.md"), "utf8"),
-    ).rejects.toMatchObject({ code: "ENOENT" });
+    expect(onMain).toBe("agent_of_x v1\n");
   });
 
   test("cross-scope: 写别人 stone → 不合并 main，开 PR-Issue", async () => {

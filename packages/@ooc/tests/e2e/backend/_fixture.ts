@@ -155,7 +155,7 @@ export async function startApp(opts: {
   }
 
   if (opts.initStoneGit) {
-    // 初始化 stones/main 为 git repo，让后续 versionedStoneWrite 有 repo 可 commit。
+    // 初始化 stones/main 为 git repo，让后续 stone 写（session worktree / 控制面直写）有 repo 可 commit。
     const mainDir = join(baseDir, "stones", "main");
     mkdirSync(mainDir, { recursive: true });
     Bun.spawnSync(["git", "init", "-b", "main"], { cwd: mainDir, stdout: "pipe", stderr: "pipe" });

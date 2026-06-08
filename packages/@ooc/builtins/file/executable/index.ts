@@ -45,7 +45,6 @@ import {
   resolveSessionPath,
 } from "@ooc/core/extendable/_shared/session-path.js";
 import {
-  versionedStoneWrite,
   sessionUsesWorktree,
   resolveStoneIdentityRef,
 } from "@ooc/core/persistable/index.js";
@@ -389,14 +388,16 @@ export function fileWindowSetRange(ctx: WindowMethodExecutionContext): WindowMet
  * - 失败：不写盘；返回错误字符串（前缀 [file_window.edit]，便于 LLM 解析）
  */
 /**
- * worktree 重定向决策（worktree 统一模型）：当 file_window 指向 caller**自己 stone
- * 自治区**的 main canonical 路径、且当前是普通业务 session 时，identity 文件的读/写都
- * 应落到该 session 的 worktree（`stones/session-<sid>/objects/<id>/...`，main HEAD 完整副本）。
+ * worktree 重定向决策（worktree 统一模型，单一落点）：当 file_window 指向**任何** stone
+ * 自治区（自己 own 或别人 cross）的 main canonical 路径、且当前是普通业务 session 时，
+ * identity 文件的读/写都应落到该 session 的 worktree
+ * （`stones/session-<sid>/objects/<target>/...`，main HEAD 完整副本，含所有 objects/）。
+ * 路径以**目标对象 id**（stoneClass.ownerObjectId）维度计算，而非 caller 自己的 objectId。
  *
  * @returns
  *  - undefined：不重定向 → 直读直写 window.path。命中以下任一即不重定向：
- *    非自己 stone / 非业务 session / 已指向 worktree（worktree 路径 classify 为 non-package）/
- *    worktree 不可建（回退 main，避免裸写绕过 versioning——交回 caller 走 window.path 原路）。
+ *    非 stone 自治区路径 / 非业务 session / 已指向 worktree（worktree 路径 classify 为 non-package）/
+ *    worktree 不可建（read 模式回退 main canonical；write 模式 caller 须 fail-loud，不裸写 main）。
  *  - string：worktree 内的目标绝对路径（读写同一路径——worktree 是完整副本，文件必在）。
  */
 async function resolveStoneWorktreeTarget(
@@ -407,16 +408,18 @@ async function resolveStoneWorktreeTarget(
   const thread = ctx.thread;
   const baseDir = thread?.persistence?.baseDir;
   const sessionId = thread?.persistence?.sessionId;
-  const objectId = thread?.persistence?.objectId;
-  if (!baseDir || !objectId || !sessionUsesWorktree(sessionId)) return undefined;
+  if (!baseDir || !sessionUsesWorktree(sessionId)) return undefined;
   const stoneClass = classifyPackagesPath(absPath, baseDir);
   if (stoneClass.kind !== "package-object") return undefined;
-  if (stoneClass.ownerObjectId !== objectId) return undefined;
-  const rel = relWithinObjectFromPackages(objectId, stoneClass.relInPackages);
+  const targetObjectId = stoneClass.ownerObjectId;
+  const rel = relWithinObjectFromPackages(targetObjectId, stoneClass.relInPackages);
   if (!rel) return undefined;
   // mode=read（open_file）：worktree 已建才重定向，不为一次读主动建 worktree（惰性）。
   // mode=write（edit）：lazy 建 worktree，写必落 worktree（保 versioning 边界，不裸写 main）。
-  const wtRef = await resolveStoneIdentityRef({ baseDir, sessionId, objectId }, mode);
+  const wtRef = await resolveStoneIdentityRef(
+    { baseDir, sessionId, objectId: targetObjectId },
+    mode,
+  );
   if (!wtRef._stonesBranch) return undefined; // 未建/建失败回退 main → 不重定向
   return join(stoneDir(wtRef), ...rel.split("/").filter(Boolean));
 }
@@ -442,6 +445,20 @@ export async function executeFileWindowEdit(
     readPath = wtTarget;
     writePath = wtTarget;
     toWorktree = true;
+  } else {
+    // 未重定向但 window 指向 stone 自治区 + 业务 session = worktree 建失败 → fail-loud，
+    // 绝不裸写 main 绕过版本化（resolveStoneWorktreeTarget undefined 的唯一危险分支）。
+    const baseDir = ctx.thread?.persistence?.baseDir;
+    const sessionId = ctx.thread?.persistence?.sessionId;
+    if (baseDir && sessionUsesWorktree(sessionId)) {
+      const stoneClass = classifyPackagesPath(window.path, baseDir);
+      if (stoneClass.kind === "package-object") {
+        return (
+          `[file_window.edit] 无法为 session ${sessionId} 建立 worktree 落点（${window.path}）；` +
+          `绝不裸写 main 绕过版本化。`
+        );
+      }
+    }
   }
 
   let buffer: string;
@@ -541,7 +558,8 @@ async function compressFileWindow(
  * Validation rules (per root method):
  *  - open_file: `path` is a non-empty string; resolved against session baseDir; must exist.
  *  - write_file: `path` is a non-empty string; `content` is a string (may be empty);
- *    if path falls inside a stone-object subtree, route through versionedStoneWrite;
+ *    if path falls inside a stone-object subtree (own or cross), write lands in the
+ *    session worktree (super flow evolve_self merges to main);
  *    workspace-level packages/ paths are forbidden.
  *
  * Returns: `{ ok: true, object: FileWindow }` on success — manager.submit's §2 branch
@@ -604,74 +622,77 @@ const fileConstructor: ObjectMethod = {
           };
         }
 
-        // worktree 写重定向（worktree 统一模型）：普通业务 session 对**自己 stone 自治区**的
-        // 写 → 落该 session 的 worktree（`stones/session-<sid>/objects/<id>/...`，plain write，
-        // 不走 versioning / 不 commit main）；本 session 内即时生效（worktree 完整副本，读写同
-        // 一目录），main 不变，经 super flow evolve_self 合入才永久。cross-scope（别人 stone）
-        // 保持现有 versioning/PR-Issue 行为不变。worktree 建失败回退 main → fall through 到
-        // versionedStoneWrite（绝不裸写 main 绕过 versioning）。
+        // worktree 写重定向（worktree 统一模型，单一落点）：业务 session 内对**任何** stone
+        // 自治区的写（改自己 own + 改别人/建别人 cross）都落该 session 的 worktree
+        // （`stones/session-<sid>/objects/<target>/...`，plain write，不 commit main）。
+        // 路径以**目标对象 id**（stoneClass.ownerObjectId，可能 ≠ authorObjectId）维度计算：
+        // worktree 是 main 完整副本含所有 objects/，stoneDir(wtRef) 拼到 objects/<target>/；
+        // relWithinObject 也用 target 前缀剥。本 session 内即时生效（读写同一目录），main 不变，
+        // 经 super flow evolve_self 合入才永久（self-scope ff-merge / cross-scope PR-Issue）。
         const sessionId = thread.persistence?.sessionId;
-        const isOwnStone = stoneClass.ownerObjectId === authorObjectId;
-        const relWithinObject = isOwnStone
-          ? relWithinObjectFromPackages(authorObjectId, stoneClass.relInPackages)
-          : undefined;
-        if (isOwnStone && sessionUsesWorktree(sessionId) && relWithinObject) {
-          const wtRef = await resolveStoneIdentityRef(
-            { baseDir, sessionId, objectId: authorObjectId },
-            "write",
-          );
-          if (wtRef._stonesBranch) {
-            const wtTarget = join(stoneDir(wtRef), ...relWithinObject.split("/").filter(Boolean));
-            await mkdir(dirname(wtTarget), { recursive: true });
-            await writeFile(wtTarget, content, "utf8");
-            if (thread.events) {
-              thread.events.push({
-                category: "context_change",
-                kind: "inject",
-                text:
-                  `[write_file] ${path} 的改动落在本 session 的 worktree（${wtTarget}），` +
-                  `main 未变。本 session 内即时生效；要把它沉淀为正式身份，去 super flow 调 ` +
-                  `evolve_self 合入 main 才永久生效。`,
-              });
-            }
-            const wtWindow: FileWindow = {
-              id: generateWindowId("file"),
-              type: "file",
-              parentWindowId: ROOT_WINDOW_ID,
-              title: basenameOfPath(path),
-              status: "open",
-              createdAt: Date.now(),
-              path: wtTarget,
-            };
-            return { ok: true, object: wtWindow };
-          }
-          // worktree 不可建 → fall through 到 versionedStoneWrite（保 versioning 边界）。
+        const targetObjectId = stoneClass.ownerObjectId;
+        const relWithinObject = relWithinObjectFromPackages(
+          targetObjectId,
+          stoneClass.relInPackages,
+        );
+        if (!sessionUsesWorktree(sessionId)) {
+          return {
+            ok: false,
+            error:
+              `[write_file] 路径落在 stone 自治区 (${path})，需在业务 session 的 worktree 内写入，` +
+              `但当前不是业务 session（sessionId=${sessionId ?? "<none>"}）。控制面写请走 HTTP versioning endpoint。`,
+          };
         }
-
-        const versioned = await versionedStoneWrite({
-          baseDir,
-          authorObjectId,
-          intent: `write_file objects/${stoneClass.relInPackages}`,
-          write: async (wt) => {
-            const target = join(wt.path, "objects", stoneClass.relInPackages);
-            await mkdir(dirname(target), { recursive: true });
-            await writeFile(target, content, "utf8");
-          },
-        });
-        if (!versioned.ok) {
-          return { ok: false, error: `[write_file] versioning 写入失败 (${versioned.code})：${versioned.message}` };
+        if (!relWithinObject) {
+          return {
+            ok: false,
+            error:
+              `[write_file] 无法把 ${path} 解析到对象 ${targetObjectId} 的 stone 根（relInPackages=${stoneClass.relInPackages}）。`,
+          };
         }
-        // versioning 信息走 thread.events.inject（constructor outcome 不能返 result 字符串）
-        const scopeNote = versioned.merged
-          ? `已 commit 并合并（commit ${versioned.commitSha.slice(0, 8)}）`
-          : `改动越出你的自治区，已开 PR-Issue #${versioned.prIssueId} 等 Supervisor 评审（暂未合并）`;
+        const wtRef = await resolveStoneIdentityRef(
+          { baseDir, sessionId, objectId: targetObjectId },
+          "write",
+        );
+        if (!wtRef._stonesBranch) {
+          return {
+            ok: false,
+            error:
+              `[write_file] 无法为 session ${sessionId} 建立 worktree 落点（写入 ${path} 失败）。` +
+              `绝不裸写 main 绕过版本化。`,
+          };
+        }
+        const wtTarget = join(stoneDir(wtRef), ...relWithinObject.split("/").filter(Boolean));
+        try {
+          await mkdir(dirname(wtTarget), { recursive: true });
+          await writeFile(wtTarget, content, "utf8");
+        } catch (err) {
+          return { ok: false, error: `[write_file] 写入 worktree ${wtTarget} 失败：${(err as Error).message}` };
+        }
+        const isOwnStone = targetObjectId === authorObjectId;
         if (thread.events) {
           thread.events.push({
             category: "context_change",
             kind: "inject",
-            text: `[write_file] ${path} 经 versioning ${scopeNote}。`,
+            text: isOwnStone
+              ? `[write_file] ${path} 的改动落在本 session 的 worktree（${wtTarget}），` +
+                `main 未变。本 session 内即时生效；要把它沉淀为正式身份，去 super flow 调 ` +
+                `evolve_self 合入 main 才永久生效。`
+              : `[write_file] 你改/建了别人的对象 ${targetObjectId}（${path}），改动落在本 session 的 ` +
+                `worktree（${wtTarget}），main 未变。本 session 内即时生效；经 super flow evolve_self 时，` +
+                `因越出你的自治区将开 PR-Issue 等 Supervisor 评审后才合入 main。`,
           });
         }
+        const wtWindow: FileWindow = {
+          id: generateWindowId("file"),
+          type: "file",
+          parentWindowId: ROOT_WINDOW_ID,
+          title: basenameOfPath(path),
+          status: "open",
+          createdAt: Date.now(),
+          path: wtTarget,
+        };
+        return { ok: true, object: wtWindow };
       } else if (stoneClass.kind === "packages-world") {
         return {
           ok: false,

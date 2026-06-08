@@ -10,9 +10,11 @@
  * 与旧 plain-overlay 模型的区别（doc §4）：**session 分支即演化单元**——不再读 overlay
  * 逐文件应用进新建实验 worktree，而是直接 commit+merge 业务 session 已有的 worktree 分支。
  *
- * 设计契合：worktree 改的是 Object 自己 stone 自治区的文件 → tryMergeSelf 判为 self-scope
- * → ff-merge 到 main，author = objectId（非 bootstrap）。冲突 / 越界由 tryMergeSelf 上抛，
- * worktree 保留、main 不变（fail-loud）。
+ * 合入分类（去 metaprog 后 worktree 可含任何 stone 改动，2026-06-09）：
+ * - self-scope（只改自己 objects/<self>/）→ tryMergeSelf ff-merge 到 main，author = objectId。
+ * - cross-scope（动了别人 / 建了新对象）→ tryMergeSelf 整体判 must-pr-issue → requestPrIssueReview
+ *   开 PR-Issue 交 supervisor resolve。
+ * 冲突由 tryMergeSelf 上抛，worktree 保留、main 不变（fail-loud）。
  */
 
 import {
@@ -22,7 +24,7 @@ import {
   type MetaprogWorktreeRef,
 } from "./versioning.js";
 import { gitBranchDelete, gitStatus } from "./git.js";
-import { nestedObjectPath, STONES_MAIN_BRANCH } from "../persistable/common.js";
+import { STONES_MAIN_BRANCH } from "../persistable/common.js";
 import {
   sessionStoneBranch,
   sessionWorktreePath,
@@ -77,27 +79,35 @@ async function pathExists(p: string): Promise<boolean> {
 
 /**
  * 把 worktree `git status --porcelain` 的一行（如 ` M objects/agent/self.md` /
- * `?? objects/agent/new.ts`）转成相对 object stone 根的 relWithinObject（如 `self.md`）。
- * 不属于本 object 自治区前缀的行（理论上不该有——worktree 只装自己 identity）返回 undefined。
+ * `?? objects/other/new.ts`）转成 stone 改动相对路径。
+ *
+ * 去 metaprog（2026-06-09）后：业务 session 的 write_file/edit 把**任何** stone 写
+ * （改自己 + 改别人/建别人）都落进同一 session worktree，所以 evolve_self 必须**列全部
+ * `objects/` 改动**（含 cross-object），让 super flow 看见要评审什么——cross-scope 由
+ * tryMergeSelf 整体判 must-pr-issue → requestPrIssueReview。
+ *
+ * 返回 `objects/` 前缀去掉后的路径（如 `agent/self.md` / `other/new.ts`），保留 owner
+ * 段以区分跨对象改动。非 `objects/` 路径（运行时产物等）返回 undefined。
  */
-function porcelainLineToRel(line: string, objectPrefix: string): string | undefined {
+function porcelainLineToRel(line: string): string | undefined {
   // porcelain 格式：前两列是 XY status，第三列起是路径（有空格则从第 3 字符切）。
   const path = line.slice(3).trim();
   if (!path) return undefined;
   // 重命名 "old -> new" 取 new
   const real = path.includes(" -> ") ? path.split(" -> ")[1]!.trim() : path;
-  const prefix = `objects/${objectPrefix}/`;
+  const prefix = "objects/";
   if (!real.startsWith(prefix)) return undefined;
   return real.slice(prefix.length);
 }
 
 /**
  * diff 模式：列出 creator session worktree 工作树（vs HEAD）改了哪些 stone 文件。
+ * 列**全部** `objects/` 改动（含 cross-object），不再只过滤自己 `objects/<self>/` 前缀。
  * worktree 未建（session 没改过 identity）→ 空数组。
  */
 export async function evolveSelfDiff(
   baseDir: string,
-  objectId: string,
+  _objectId: string,
   creatorSessionId: string,
 ): Promise<EvolveSelfDiff> {
   const wtPath = sessionWorktreePath(baseDir, creatorSessionId);
@@ -106,11 +116,10 @@ export async function evolveSelfDiff(
   const status = gitStatus(wtPath);
   if (!status.ok) return { ok: true, kind: "diff", files: [] };
 
-  const objectPrefix = nestedObjectPath(objectId).join("/");
   const files: string[] = [];
   for (const line of status.value.split("\n")) {
     if (!line.trim()) continue;
-    const rel = porcelainLineToRel(line, objectPrefix);
+    const rel = porcelainLineToRel(line);
     if (rel) files.push(rel);
   }
   return { ok: true, kind: "diff", files: files.sort() };
@@ -183,7 +192,9 @@ export async function evolveSelfMerge(
   }
 
   if (merge.kind === "must-pr-issue") {
-    // 理论上 worktree 只装自己 identity（自治区），不该越界；防御性走 PR-Issue。
+    // cross-scope 一等路径（去 metaprog，2026-06-09）：业务 session 的 worktree 现在可含
+    // cross-object 改动（改别人 / 建新对象）——tryMergeSelf 把含越界改动的 session 整体判
+    // must-pr-issue，转 requestPrIssueReview 交 supervisor resolve 后合入。
     const pr = await requestPrIssueReview({ worktree, intent: message, authorObjectId: objectId });
     if (!pr.ok) {
       return { ok: false, code: pr.code, message: "message" in pr ? pr.message : pr.stderr };

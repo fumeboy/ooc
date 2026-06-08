@@ -112,116 +112,60 @@ activates_on:
 `.trim();
 
 /**
- * U7: Metaprog 协议 knowledge —— 教 super flow LLM 如何走 git worktree 沙箱、
- * 安全地修改自己的 server / self / readme 等"高赌注"文件。
+ * 元编程 knowledge —— 教 LLM 新模型下如何改自己的"身体"：业务 session 直接
+ * write_file（落本 session 的 worktree 副本，即时生效、main 不变），经 super flow
+ * evolve_self 合入 main；cross-object 改动 evolve_self 时自动转 PR-Issue 给 supervisor。
  *
- * 与 REFLECTABLE_KNOWLEDGE 的关系：
- * - 上一段是默认指引：写 memory 目录是 super flow 最常见的反思动作，无版本风险
- * - 本段是"重操作"指引：当 caller 请求改 server/index.ts、整篇 self.md 重写、
- *   增删 server method 等可能导致 Object 加载不动的修改时，应当走 worktree
+ * 与 REFLECTABLE_KNOWLEDGE 的关系：上一段讲记忆沉淀（写 pool），本段讲改身体 + 合入闸门。
  *
- * 不强制——简单 memory 追加可以直接 write_file 落 main；只有"改身体"级修改才
- * 推荐 worktree。LLM 自己判断粒度。
+ * 2026-06-09：随 metaprog 写路径去除重写——不再有 open_worktree/commit/merge 手动四步，
+ * 改身体统一走「业务 session write_file → super flow evolve_self」。
  */
 export const REFLECTABLE_METAPROG_PATH = "internal/executable/reflectable/metaprog";
 
 export const REFLECTABLE_METAPROG_KNOWLEDGE = `
-# 元编程：用 worktree 安全地改自己的"身体"
+# 改自己的"身体"：业务 session 写，super flow 合入
 
-当 caller 的反思请求需要修改你的 \`server/index.ts\` / 整篇 \`self.md\` /
-\`readable.md\` 等"加载链路"上的文件时（即一旦写错下一轮启动就跑不起来的内容），
-**不要直接 write_file 落 main**。改用元编程协议：在 git worktree 沙箱里改、
-试运行、再合并。错了能直接丢 worktree、main 不被污染。
+你对自己 self 文件的修改有两条线，分清楚就不会犯错。
 
-## 何时走 worktree（推荐）
+## 改身体（self.md / readable.* / executable/** / visible/**）
 
-- 改 \`stones/<self>/server/index.ts\`（你的方法库；写错下一轮加载失败）
-- 整篇重写 \`stones/<self>/self.md\` 或 \`readable.md\`
-- 跨 Object 修改（涉及别人 stone 的内容）—— 必须走，会自动转 PR-Issue 给 supervisor
-- 一次同时改 3 个以上文件、需要互相一致
+在**业务 session**（不是 super flow）里直接 \`write_file\` 写 \`stones/<self>/...\`。
+- 改动落在本 session 的私有副本，**本 session 内即时生效**，但 main（canonical 权威自我）不变。
+- 写错也只影响这个 session，main 不被污染——放心试。
+- 要让它**永久定型**：在本 session 调 \`end\` 进 super flow，在那里用 \`evolve_self\` 合入（见下）。
 
-## 何时不必（简单情况）
+## 改记忆（memory/<slug>.md / relations）
 
-- 单个 \`memory/<slug>.md\` 增量追加（只读不影响加载链）
-- 单个 relation 文件更新
+直接 \`write_file\` 到你的 pool。记忆是沉淀、无加载风险、即时生效，不需要合入流程。
 
-这些场景直接 \`write_file\` 落到当前 stones-branch 即可（OOC 自动按
-\`--stones-branch\` 路由，默认 main）。
-
-## 协议步骤
-
-### 1. 开 worktree
+## 在 super flow 里：evolve_self 把试验合入 main
 
 \`\`\`
-open(method="metaprog", args={ action: "open_worktree" })
+open(method="evolve_self")                               # 先看 diff：这次试验改了身份的哪些文件
+open(method="evolve_self", args={ message: "为什么改" })   # 整个 session 的 identity 改动一并合入 main
 \`\`\`
+合入成功后下一轮新 session 见新身份。**super flow 自己不直接 write_file 改 stone**——它的职责是
+合入（evolve_self）、沉淀记忆、以及（supervisor）治理。改身体永远在业务 session 做。
 
-返回 \`{ branch: "metaprog/<self>/<token>", path: "<absolute>" }\`。把 branch
-记下来，后续 commit/merge 都需要它。
+## 改别人 / 建新对象（cross-object）
 
-### 2. 在 worktree 内编辑文件
-
-直接用既有命令；OOC 会按当前 server 绑定的 stones-branch 自动路由。最简方式：
-shell 启动一个独立 OOC Server 指向新 branch，然后在那里跑反思 / 试运行：
-
-\`\`\`bash
-# 在 super flow 中用 program(language="shell") 跑
-bun run packages/@ooc/core/app/server/index.ts \\
-  --world ./.ooc-world \\
-  --stones-branch <branch> \\
-  --port 0 &
-\`\`\`
-
-或者更轻量的：直接 shell 出 \`echo > stones/<branch>/objects/<self>/...\` 写文件，
-不启子 server——只在你不需要"加载并跑一下"验证时这样做。
-
-### 3. 试运行（可选但推荐）
-
-启了子 server 后，跑你修改的 server method、看看 self.md 是否能 load 解析。
-任何一处加载失败 = 修改错了，回到 step 2 改、或者放弃整 worktree。
-
-### 4. commit + merge
-
-\`\`\`
-open(method="metaprog", args={ action: "commit", branch: "<from step 1>",
-                                 intent: "为什么改的简短说明" })
-open(method="metaprog", args={ action: "merge", branch: "<branch>" })
-\`\`\`
-
-merge 返回四种 kind：
-
-- **merged** —— 自动 fast-forward 进了 main，worktree 已清理。下一轮 super flow
-  你会看到新版本。
-- **must-pr-issue** —— 你的修改触及了别人的 stone（cross-scope），PR-Issue
-  已自动开给 supervisor。返回值里有 \`issueId\`；耐心等 supervisor 在他自己的
-  super flow 里 resolve。期间 main 不变。
-- **rebase-conflict** —— rebase 到 main HEAD 时冲突（极少见，通常是有人在
-  你之间改了同一文件）。回到 worktree 处理或重开。
-- **non-fast-forward** —— main 又飘了；再调一次 \`merge\` 即可。
-
-### 5. PR-Issue 被 reject 怎么办
-
-supervisor 把 PR-Issue 标 \`reject\` 时，你的整个 branch 被存档到
-\`refs/ooc/rejected/<branch>\`，worktree 被销毁。**包括 self-scope 的合法部分
-也跟着丢了**——这是 OOC 的显式约定：cross-scope 修改必须整体经审。
-
-如果你想保住自治区那部分，下次开两个 worktree：一个只改自己的、一个改跨界的，
-分开 merge。
+同样在业务 session 直接 \`write_file\` 写 \`stones/<对方或新 id>/...\`（建新对象就写
+\`objects/<newId>/self.md\` / \`readable.md\` 等）。evolve_self 合入时，凡触及别人自治区的改动会
+**自动转 PR-Issue 给 supervisor**（返回值带 \`prIssueId\`），等 supervisor 评审 \`resolve\`；
+其间 main 不变。
 
 ## supervisor 专属（你不是 supervisor 时跳过本节）
 
-- \`metaprog\` action \`resolve\` —— 评审一个 PR-Issue
-  \`open(method="metaprog", args={ action:"resolve", issueId: <N>,
-                                    decision: "merge" | "reject" | "request-changes" })\`
-- \`metaprog\` action \`rollback\` —— 把某个 Object 的 stone 回滚到先前 commit
-  \`open(method="metaprog", args={ action:"rollback", objectId: "agent_of_x",
-                                    targetCommit: "<sha>" })\`
-  典型场景：启动期看到 \`[recovery-needed] agent_of_x stone unloadable\` PR-Issue。
-  回滚 commit 由你（supervisor）署名（R4 例外）。
+- \`metaprog\` action \`resolve\` —— 评审一个 PR-Issue：
+  \`open(method="metaprog", args={ action:"resolve", issueId: <N>, decision: "merge" | "reject" | "request-changes" })\`
+- \`metaprog\` action \`rollback\` —— 把某个 Object 的 stone 回滚到先前 commit：
+  \`open(method="metaprog", args={ action:"rollback", objectId: "<id>", targetCommit: "<sha>" })\`
+  典型场景：启动期看到 \`[recovery-needed] <id> stone unloadable\` PR-Issue。回滚由你（supervisor）署名。
 
 ## 一条心法
 
-**改身体 = 走 worktree；改记忆 = 直写**。两条线分开记，下次反思就不用犹豫。
+**改身体 = 业务 session write_file + super flow evolve_self 合入；改记忆 = 直写 pool。**
 `.trim();
 
 /**

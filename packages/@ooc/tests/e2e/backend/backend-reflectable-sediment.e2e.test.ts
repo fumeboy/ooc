@@ -9,7 +9,7 @@
  *   1. memory 落 pools/<self>/knowledge/memory/<slug>.md 且含合法 frontmatter
  *      （reflectable.memory_layout 的 sediment write contract）
  *   2. （若 super flow 改了 self.md）self.md 经 stone-versioning 进 git
- *      （task#17：write_file 落 stone 自治区 → versionedStoneWrite → ff-merge commit）
+ *      （write_file 落 session worktree → super flow evolve_self → ff-merge commit）
  *
  * Design spec:
  *   - meta/object.doc.ts:reflectable（super_session / super_alias_target /

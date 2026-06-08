@@ -45,34 +45,24 @@ export {
 } from "./git.js";
 
 export {
-  // 高层 metaprog 编排
-  openMetaprogWorktree,
+  // 高层 versioning 编排（session worktree 合入 + 治理 + 控制面直写 main）
   commitWorktree,
   classifyWorktreeBranch,
   tryMergeSelf,
   requestPrIssueReview,
   resolvePrIssue,
   rollback,
-  supervisorCreateObject,
+  httpDirectMainWrite,
   pruneStaleWorktrees,
   SUPERVISOR_OBJECT_ID,
+  type HttpDirectMainWriteInput,
+  type HttpDirectMainWriteResult,
   type MetaprogWorktreeRef,
   type ScopeClass,
   type PrIssueDecision,
   type RollbackInput,
   type RollbackResult,
-  type SupervisorCreateObjectInput,
-  type SupervisorCreateObjectResult,
   type TryMergeSelfResult,
   type RequestPrIssueResult,
   type ResolvePrIssueResult,
 } from "./versioning.js";
-
-export {
-  // versioned-write: 把"写一个 stone 文件"包进 versioning 流程的单一 owner
-  versionedStoneWrite,
-  type VersionedStoneWriteInput,
-  type VersionedWriteContext,
-  type VersionedWriteOk,
-  type VersionedWriteErr,
-} from "./versioned-write.js";

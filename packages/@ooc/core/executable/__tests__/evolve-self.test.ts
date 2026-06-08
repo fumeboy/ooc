@@ -106,7 +106,8 @@ describe("evolve_self (P3)", () => {
     expect(typeof diffOut).toBe("string");
     const diff = JSON.parse(diffOut as string);
     expect(diff.kind).toBe("diff");
-    expect(diff.files).toEqual(["self.md"]);
+    // 去 metaprog 后 evolve_self 列全部 objects/ 改动，files 带 owner 段前缀（区分 cross-object）。
+    expect(diff.files).toEqual(["alice/self.md"]);
 
     // 3. super flow merge
     const mergeOut = await executeEvolveSelf(
@@ -116,7 +117,7 @@ describe("evolve_self (P3)", () => {
     expect(merge.ok).toBe(true);
     expect(merge.kind).toBe("merged");
     expect(typeof merge.commitSha).toBe("string");
-    expect(merge.files).toEqual(["self.md"]);
+    expect(merge.files).toEqual(["alice/self.md"]);
 
     // main 已更新
     expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v2 (evolved)\n");
@@ -145,9 +146,9 @@ describe("evolve_self (P3)", () => {
       }),
     );
 
-    // diff sees both
+    // diff sees both（files 带 owner 段前缀）
     const diff = JSON.parse((await executeEvolveSelf(superCtx(baseDir, "alice", "s1", {}))) as string);
-    expect(diff.files.sort()).toEqual(["executable/index.ts", "self.md"]);
+    expect(diff.files.sort()).toEqual(["alice/executable/index.ts", "alice/self.md"]);
 
     // merge 整个 session（不再支持挑文件子集）→ 两个文件都合入 main
     const merge = JSON.parse(
@@ -155,12 +156,46 @@ describe("evolve_self (P3)", () => {
         superCtx(baseDir, "alice", "s1", { message: "evolve both" }),
       )) as string,
     );
-    expect(merge.files.sort()).toEqual(["executable/index.ts", "self.md"]);
+    expect(merge.files.sort()).toEqual(["alice/executable/index.ts", "alice/self.md"]);
     expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("self v2\n");
     // executable 也已合入 main
     expect(
       await readFile(join(baseDir, "stones", "main", "objects", "alice", "executable", "index.ts"), "utf8"),
     ).toBe("export const methods = {};\n");
+  });
+
+  test("cross-scope: 业务 session 改别人 stone → evolve_self 整体走 PR-Issue，main 不变", async () => {
+    // 去 metaprog（2026-06-09）：业务 session 的 write_file 对**任何** stone（含别人）的写
+    // 都落同一 session worktree；evolve_self 列全部 objects/ 改动，tryMergeSelf 把含 cross-object
+    // 的 session 整体判 must-pr-issue → requestPrIssueReview。
+    const baseDir = await newWorld(["alice", "bob"]);
+
+    // 1. 业务 session s1（caller=alice）改 alice 自己 + bob（cross-object）→ 同一 worktree
+    await executeWriteFileMethod(
+      bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "alice v2\n" }),
+    );
+    await executeWriteFileMethod(
+      bizCtx(baseDir, "alice", "s1", { path: "stones/bob/self.md", content: "bob edited by alice\n" }),
+    );
+
+    // 2. diff 列出全部改动（含 cross-object bob/self.md，前缀含 owner 段）
+    const diff = JSON.parse((await executeEvolveSelf(superCtx(baseDir, "alice", "s1", {}))) as string);
+    expect(diff.files.sort()).toEqual(["alice/self.md", "bob/self.md"]);
+
+    // 3. merge → cross-scope 整体走 PR-Issue（merged=false + prIssueId），main 不变
+    const merge = JSON.parse(
+      (await executeEvolveSelf(
+        superCtx(baseDir, "alice", "s1", { message: "evolve crossing into bob" }),
+      )) as string,
+    );
+    expect(merge.ok).toBe(true);
+    expect(merge.kind).toBe("pr-issue");
+    expect(typeof merge.prIssueId).toBe("number");
+    expect(merge.prIssueId).toBeGreaterThan(0);
+
+    // main 两边都未变（cross-scope 不直接合入）
+    expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v1\n");
+    expect(await readFile(mainSelf(baseDir, "bob"), "utf8")).toBe("bob v1\n");
   });
 
   test("fail-loud: not in super flow → error, main unchanged", async () => {

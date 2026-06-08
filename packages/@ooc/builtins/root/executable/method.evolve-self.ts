@@ -10,9 +10,8 @@
  *   rebase→self-scope ff-merge 回 main，返回 commitSha（署名 = objectId，非 bootstrap），
  *   并 GC（移除 worktree + 删分支）。失败（冲突 / git 错）→ 错误字符串，worktree 保留、main 不变。
  *
- * 与 metaprog 的分工：metaprog 是裸 worktree 协议（开/写/commit/merge 手动四步）；
  * evolve_self 是 worktree 模型下的「一键合入身份试验」——commit session worktree → 合 main，
- * 是 Object 身份从「session 试验」到「main 提交」的常规通道。**session 分支即演化单元**
+ * 是 Object 身份从「session 试验」到「main 提交」的唯一常规通道。**session 分支即演化单元**
  * （整个 session 的 identity 改动一并合入，不再支持挑文件子集）。
  */
 

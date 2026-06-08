@@ -1,30 +1,31 @@
 /**
- * stone-versioning —— U4 高层编排，把 worktree / commit / scope 评估 / merge /
+ * stone-versioning —— 高层编排，把 worktree commit / scope 评估 / merge /
  * PR-Issue / rollback / GC 收口在 persistable 层。
  *
- * Caller 视角：
- * - `openMetaprogWorktree({ baseDir, objectId })` 在 `${baseDir}/stones/{branch}/`
- *   开 worktree（branch 形态：`metaprog/{objectId}/{token}`），返回 ref
+ * 去 metaprog（2026-06-09，docs/2026-06-09-remove-metaprog-unify-session-worktree-design.md）：
+ * 删除并行的 metaprog worktree 写路径（openMetaprogWorktree / supervisorCreateObject /
+ * versionedStoneWrite）。stone 写只剩两个落点——
+ * - **LLM session 内任何 stone 写**（改自己 + 改别人/建别人）落业务 session 的 worktree
+ *   （`stones/session-<sid>/`，plain write），经 super flow `evolve_self` 合入 main。
+ * - **HTTP 控制面写**（人类已决策）经 `httpDirectMainWrite` 直写 `stones/main/` 并 commit。
+ *
+ * Caller 视角（保留的底层原语，供上述两路 + 治理复用）：
  * - `commitWorktree(ref, { intent, authorObjectId })` stage 全部并 commit
  * - `tryMergeSelf(ref, authorObjectId)` 尝试 self-scope ff merge：rebase 到 main
- *   HEAD → 路径分类 → 全在自治区则 ff，否则提示 caller 走 PR-Issue
- * - `requestPrIssueReview(ref, { intent, authorObjectId })` 在 super session 创
- *   PR-Issue
+ *   HEAD → 路径分类 → 全在自治区则 ff，否则 must-pr-issue（caller 转 requestPrIssueReview）
+ * - `requestPrIssueReview(ref, { intent, authorObjectId })` 在 super session 创 PR-Issue
  * - `resolvePrIssue(opts)` 让 Supervisor 的决议生效
  * - `rollback(opts)` Supervisor 署名回滚
+ * - `httpDirectMainWrite(input)` 控制面写直写 main 并 commit
  * - `pruneStaleWorktrees(baseDir)` 启动 hygiene
  *
- * 所有 git 子命令通过 `enqueueSessionWrite("git:" + baseDir, ...)` 串行化（plan §U4
- * Approach）。
+ * 所有 git 子命令通过 `enqueueSessionWrite("git:" + baseDir, ...)` 串行化。
  *
- * Supervisor 对称化（2026-05-25 修订，原 R12 例外撤销）：supervisor 走与其它
- * Object 完全相同的 metaprog 流程——open_worktree → commit → merge。改动落在
- * `objects/supervisor/` 下为 self-scope（ff merge），跨自治区为 cross-scope
- * 自动开 PR-Issue。**supervisor 评审自己的 PR-Issue 是合法的**（自审是治理责任
- * 的一部分；git log 与 PR-Issue 链均保留事后审计线索）。唯一保留的特权是
- * `rollback`（只 supervisor 可调），属于治理操作而非 worktree 路径特殊化。
- * bootstrap 期不再写 supervisor stone —— supervisor 与 user 都是 Builtin Object，
- * 定义位于 `packages/@ooc/builtins/supervisor` 和 `packages/@ooc/builtins/user`，
+ * Supervisor 对称化：supervisor 走与其它 Object 完全相同的合入路径——session worktree
+ * → super flow evolve_self。改动落在 `objects/supervisor/` 下为 self-scope（ff merge），
+ * 跨自治区为 cross-scope 自动开 PR-Issue。**supervisor 评审自己的 PR-Issue 是合法的**
+ * （自审是治理责任的一部分）。唯一保留的特权是 `rollback`（只 supervisor 可调）。
+ * supervisor 与 user 都是 Builtin Object（`packages/@ooc/builtins/{supervisor,user}`），
  * 随 OOC 代码仓发版，Agent 不可改写。
  */
 
@@ -242,65 +243,6 @@ function extractObjectIdsFromPaths(paths: string[]): string[] {
     if (idSegs.length > 0) ids.add(idSegs.join("/"));
   }
   return Array.from(ids);
-}
-
-/* ---------------------------------------------------------------- *
- * openMetaprogWorktree
- * ---------------------------------------------------------------- */
-
-export interface OpenMetaprogWorktreeInput {
-  baseDir: string;
-  objectId: string;
-  /** 可选 token，缺省自动生成。便于测试用稳定值。 */
-  token?: string;
-}
-
-export interface OpenMetaprogWorktreeResult {
-  ok: true;
-  worktree: MetaprogWorktreeRef;
-}
-
-export type OpenMetaprogWorktreeError =
-  | { ok: false; code: "INVALID_INPUT"; message: string }
-  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
-
-/** 创建 metaprog worktree。Supervisor 也走此通路（与其它 Object 对称）。 */
-export async function openMetaprogWorktree(
-  input: OpenMetaprogWorktreeInput,
-): Promise<OpenMetaprogWorktreeResult | OpenMetaprogWorktreeError> {
-  if (!isValidObjectId(input.objectId)) {
-    return { ok: false, code: "INVALID_INPUT", message: `invalid objectId '${input.objectId}'` };
-  }
-
-  return enqueueSessionWrite(gitQueueKey(input.baseDir), async () => {
-    const repo = repoDir(input.baseDir);
-    const token = input.token ?? generateToken();
-    const branch = `${WORKTREE_BRANCH_PREFIX}/${input.objectId}/${token}`;
-
-    if (!isValidBranchName(branch)) {
-      return { ok: false, code: "INVALID_INPUT", message: `generated branch unsafe '${branch}'` } as const;
-    }
-
-    const head = gitHead(repo);
-    if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
-    const baseCommit = head.value;
-    if (!baseCommit) {
-      return {
-        ok: false,
-        code: "INVALID_INPUT",
-        message: "stones/main has no commits — bootstrap not run yet?",
-      } as const;
-    }
-
-    const path = worktreePath(input.baseDir, branch);
-    const add = gitWorktreeAdd(repo, { path, branch, baseRef: STONES_MAIN_BRANCH });
-    if (!add.ok) return { ok: false, code: "GIT", gitCode: add.code, stderr: add.stderr } as const;
-
-    return {
-      ok: true,
-      worktree: { baseDir: input.baseDir, objectId: input.objectId, branch, path, baseCommit },
-    } as const;
-  });
 }
 
 /* ---------------------------------------------------------------- *
@@ -777,136 +719,6 @@ export async function rollback(input: RollbackInput): Promise<RollbackResult> {
 }
 
 /* ---------------------------------------------------------------- *
- * supervisorCreateObject (supervisor 创建新 Object 的快捷路径)
- * ---------------------------------------------------------------- */
-
-export interface SupervisorCreateObjectInput {
-  baseDir: string;
-  /** 新 Object 的 id（不能与 supervisor / 现有 stone 冲突）。 */
-  newObjectId: string;
-  /** stone 的 self.md 全文。 */
-  selfMd: string;
-  /** stone 的 readable.md 全文。 */
-  readableMd: string;
-  /** @deprecated Use readableMd instead (2026-06-01 ooc-6). readme.md is being renamed to readable.md. */
-  readmeMd?: string;
-  /** 可选 seed knowledge（filename → markdown content；写到 knowledge/ 目录）。 */
-  knowledge?: Record<string, string>;
-  /** commit message；缺省 `bootstrap: create <id> stone (supervisor)`。 */
-  intent?: string;
-  /** stones-branch；缺省 `STONES_MAIN_BRANCH`。 */
-  branch?: string;
-}
-
-export type SupervisorCreateObjectResult =
-  | { ok: true; commitSha: string }
-  | { ok: false; code: "INVALID_INPUT"; message: string }
-  | { ok: false; code: "ALREADY_EXISTS"; message: string }
-  | { ok: false; code: "BUILTIN_CONFLICT"; message: string }
-  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
-
-/**
- * supervisor 创建新 Object 的快捷路径：原子地落盘 stone 骨架（self/readme/
- * knowledge）+ gitCommitAll on main。等价于走 open_worktree → write → commit →
- * merge（cross-scope → PR-Issue → supervisor 自审 merge）的标准流程，但一次
- * 同步调用完成、零 PR-Issue 噪音。
- *
- * 设计动机（2026-05-25 R9 D1）：
- * - 标准 metaprog 流程仍然完整保留并对 supervisor 开放（详见 stone-versioning
- *   模块注释）；create_object 是其上的**便利层**——为新 Object 这种"零参与方
- *   评审"的场景省掉自审 PR-Issue 噪音。
- * - 复用 `createSupervisorStone` 同款实现（writeSelf/WriteReadable + knowledge +
- *   gitCommitAll），author 永远 = supervisor，事后 git log 可追溯。
- *
- * 等价 LLM 命令：metaprog action='create_object'（仅 supervisor caller 允许）。
- *
- * 流程：
- *   1. 校验 newObjectId（不能是 Builtin Object、不能已存在）
- *   2. enqueueSessionWrite git 队列锁
- *   3. createStoneObject + writeSelf + writeReadable + 写 knowledge/*
- *   4. gitCommitAll on main worktree, author = supervisor
- */
-export async function supervisorCreateObject(
-  input: SupervisorCreateObjectInput,
-): Promise<SupervisorCreateObjectResult> {
-  if (!isValidObjectId(input.newObjectId)) {
-    return { ok: false, code: "INVALID_INPUT", message: `invalid newObjectId '${input.newObjectId}'` };
-  }
-  if (isBuiltinObjectId(input.newObjectId)) {
-    return {
-      ok: false,
-      code: "BUILTIN_CONFLICT",
-      message: `objectId '${input.newObjectId}' conflicts with a Builtin Object (supervisor/user/root/etc). Builtins are defined by OOC runtime and cannot be overwritten by create_object.`,
-    };
-  }
-  if (typeof input.selfMd !== "string" || !input.selfMd.trim()) {
-    return { ok: false, code: "INVALID_INPUT", message: "selfMd required (non-empty)." };
-  }
-  const readableMd = input.readableMd ?? input.readmeMd;
-  if (typeof readableMd !== "string" || !readableMd.trim()) {
-    return { ok: false, code: "INVALID_INPUT", message: "readableMd required (non-empty)." };
-  }
-
-  const branch = input.branch ?? STONES_MAIN_BRANCH;
-  const ref = { baseDir: input.baseDir, objectId: input.newObjectId, _stonesBranch: branch };
-
-  return enqueueSessionWrite(gitQueueKey(input.baseDir), async () => {
-    // existence check (after lock 取得，防 race)
-    // marker = package.json：createStoneObject 写 package.json + self.md + readable.md（不写 .stone.json），
-    // 与 discoverStoneHierarchicalPeers 的「package.json||self.md = object package」判定对齐。
-    const marker = join(stoneDir(ref), "package.json");
-    try {
-      const st = await stat(marker);
-      if (st.isFile()) {
-        return {
-          ok: false,
-          code: "ALREADY_EXISTS",
-          message: `stone '${input.newObjectId}' already exists at ${stoneDir(ref)}`,
-        } as const;
-      }
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-      // ENOENT = 不存在 → 继续创建
-    }
-
-    await createStoneObject(ref);
-    await writeSelf(ref, input.selfMd);
-    await writeReadable(ref, readableMd);
-
-    if (input.knowledge && Object.keys(input.knowledge).length > 0) {
-      const kDir = stoneKnowledgeDir(ref);
-      await mkdir(kDir, { recursive: true });
-      for (const [filename, content] of Object.entries(input.knowledge)) {
-        // filename 简单校验：禁止 `/` 与 `..`，避免目录穿越
-        if (filename.includes("/") || filename.includes("..") || filename.startsWith(".")) {
-          return {
-            ok: false,
-            code: "INVALID_INPUT",
-            message: `invalid knowledge filename '${filename}'`,
-          } as const;
-        }
-        await writeFile(join(kDir, filename), content, "utf8");
-      }
-    }
-
-    const mainWorktreePath = join(input.baseDir, "stones", branch);
-    const message = input.intent ?? `bootstrap: create ${input.newObjectId} stone (supervisor)`;
-    const commit = gitCommitAll(mainWorktreePath, {
-      authorName: SUPERVISOR_OBJECT_ID,
-      authorEmail: `${SUPERVISOR_OBJECT_ID}@ooc.local`,
-      message,
-    });
-    if (!commit.ok) {
-      return { ok: false, code: "GIT", gitCode: commit.code, stderr: commit.stderr } as const;
-    }
-
-    await syncMergedObjectToPackages(input.baseDir, input.newObjectId);
-
-    return { ok: true, commitSha: commit.value } as const;
-  });
-}
-
-/* ---------------------------------------------------------------- *
  * pruneStaleWorktrees (启动 hygiene)
  * ---------------------------------------------------------------- */
 
@@ -952,6 +764,67 @@ export async function pruneStaleWorktrees(baseDir: string): Promise<PruneResult>
     // 回收 metaprog 子树里的空目录残留（历史遗留 + 本轮 prune 后空出的父目录）
     await gcEmptyMetaprogTree(baseDir);
     return { ok: true, removed, pruned: prune.ok } as const;
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * httpDirectMainWrite (HTTP 控制面写 → 直接 commit main)
+ * ---------------------------------------------------------------- */
+
+export interface HttpDirectMainWriteInput {
+  baseDir: string;
+  /** 写入对象（commit 署名 + 写落点 objects/<objectId>/）。 */
+  authorObjectId: string;
+  /** commit message。 */
+  intent: string;
+  /**
+   * 实际写文件的 callback。拿到的 branch 恒为 main——caller 用
+   * stoneRef._stonesBranch=branch 调 persistable 写函数，文件即落 `stones/main/objects/<id>/`，
+   * 所见即所得（不开 worktree、不隔离）。抛错被捕获转 WRITE_FAILED。
+   */
+  write: (branch: string) => Promise<void>;
+}
+
+export type HttpDirectMainWriteResult =
+  | { ok: true; commitSha: string; merged: true }
+  | { ok: false; code: string; message: string };
+
+/**
+ * HTTP 控制面写 stone → **直接 commit main**（去 metaprog，2026-06-09）。
+ *
+ * 人类经控制面的编辑即「已决策/已评审」操作：所见即所得，无需 session 隔离与 super flow 评审。
+ * 写直接落 `stones/main/` worktree，enqueueSessionWrite 串行化防 HTTP 并发 git 竞争，
+ * 之后 gitCommitAll 署名 authorObjectId 提交 main。返回 merged=true（已即时生效）。
+ */
+export async function httpDirectMainWrite(
+  input: HttpDirectMainWriteInput,
+): Promise<HttpDirectMainWriteResult> {
+  const branch = STONES_MAIN_BRANCH;
+  return enqueueSessionWrite(gitQueueKey(input.baseDir), async () => {
+    try {
+      await input.write(branch);
+    } catch (err) {
+      return {
+        ok: false,
+        code: "WRITE_FAILED",
+        message: (err as Error).message,
+      } as const;
+    }
+    const mainWorktreePath = join(input.baseDir, "stones", branch);
+    const commit = gitCommitAll(mainWorktreePath, {
+      authorName: input.authorObjectId,
+      authorEmail: `${input.authorObjectId}@ooc.local`,
+      message: input.intent,
+    });
+    if (!commit.ok) {
+      return {
+        ok: false,
+        code: commit.code ?? "GIT",
+        message: commit.stderr ?? "git commit failed",
+      } as const;
+    }
+    await syncMergedObjectToPackages(input.baseDir, input.authorObjectId);
+    return { ok: true, commitSha: commit.value, merged: true } as const;
   });
 }
 

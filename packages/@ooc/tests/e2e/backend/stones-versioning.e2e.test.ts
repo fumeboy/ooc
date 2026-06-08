@@ -1,17 +1,25 @@
 /**
- * Stones git versioning e2e (U9) —— 用 metaprog command 端到端跑一遍 worktree
- * 协议，覆盖 origin doc AE1-AE8 的关键 happy path。
+ * Stones git versioning e2e —— 端到端跑一遍 stone 写 → 合入 main 的协议，覆盖 origin
+ * doc AE1-AE8 的关键 happy path。
  *
- * 不依赖真 LLM，直接 executeMetaprog（绕过 LLM 解析）；fixture 用 mkdtemp 的
- * 干净 world。
+ * 去 metaprog（2026-06-09，docs/2026-06-09-remove-metaprog-unify-session-worktree-design.md）：
+ * stone 写不再走 metaprog open_worktree/commit/merge/create_object，而是——
+ * - 业务 session 内 `write_file` 写**任何** stone（own + cross）→ 落 session worktree；
+ * - super flow 内 `evolve_self` 把该业务 session 的 worktree 改动合入 main
+ *   （self-scope ff-merge / cross-scope → PR-Issue）；
+ * - supervisor `metaprog resolve/rollback` 治理 PR-Issue / 回滚（保留）。
+ *
+ * 不依赖真 LLM，直接调 method exec（绕过 LLM 解析）；fixture 用 mkdtemp 的干净 world。
  */
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { __resetSerialQueueForTests, readPrIssueIndex } from "@ooc/core/persistable";
+import { __resetSerialQueueForTests, readPrIssueIndex, ensureStoneRepo } from "@ooc/core/persistable";
 import { executeMetaprog } from "@ooc/builtins/root/executable/method.metaprog";
+import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
+import { executeEvolveSelf } from "@ooc/builtins/root/executable/method.evolve-self";
 import { runRecoveryCheck } from "@ooc/core/app/server/bootstrap/recovery-check";
 import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
@@ -29,13 +37,14 @@ afterEach(async () => {
 
 async function newWorld(agents: string[]): Promise<string> {
   tempRoot = await mkdtemp(join(tmpdir(), "ooc-stones-git-e2e-"));
-  // 直接在 stones/main/objects/ 下创建（不再依赖 ensureStoneRepo 迁移）
+  // flat 布局 stones/<id>/ → ensureStoneRepo 建 .stones_repo bare + main worktree 并迁移。
+  // session worktree 模型（去 metaprog 后唯一写路径）需要 bare repo 才能 `git worktree add`。
   for (const id of agents) {
-    await mkdir(join(tempRoot, "stones", "main", "objects", id), { recursive: true });
-    await writeFile(join(tempRoot, "stones", "main", "objects", id, "self.md"), `${id} v1\n`);
+    await mkdir(join(tempRoot, "stones", id), { recursive: true });
+    await writeFile(join(tempRoot, "stones", id, "self.md"), `${id} v1\n`);
     // package.json 是 StoneRegistry 登记 stone 的前提（recovery-check 经 registry 枚举）
     await writeFile(
-      join(tempRoot, "stones", "main", "objects", id, "package.json"),
+      join(tempRoot, "stones", id, "package.json"),
       JSON.stringify({
         name: `@ooc-obj/${id.replace(/\//g, "-")}`,
         version: "0.1.0",
@@ -46,24 +55,7 @@ async function newWorld(agents: string[]): Promise<string> {
       "utf8",
     );
   }
-  // bootstrap git repo
-  const mainDir = join(tempRoot, "stones", "main");
-  Bun.spawnSync(["git", "init", "-b", "main"], { cwd: mainDir, stdout: "pipe", stderr: "pipe" });
-  Bun.spawnSync(["git", "add", "-A"], { cwd: mainDir, stdout: "pipe", stderr: "pipe" });
-  Bun.spawnSync(
-    [
-      "git",
-      "-c",
-      "user.name=bootstrap",
-      "-c",
-      "user.email=bootstrap@ooc.local",
-      "commit",
-      "-m",
-      "chore(bootstrap): import existing stones/",
-      "--allow-empty",
-    ],
-    { cwd: mainDir, stdout: "pipe", stderr: "pipe" },
-  );
+  await ensureStoneRepo({ baseDir: tempRoot });
   return tempRoot;
 }
 
@@ -91,116 +83,111 @@ function makeCtx(opts: {
   } as MethodExecutionContext;
 }
 
-describe("e2e: metaprog command — AE1 self-scope ff merge", () => {
-  test("open → write → commit → merge → main 推进且 worktree 销毁", async () => {
+/** 业务 session ctx（write_file 落 session worktree）。 */
+function bizCtx(
+  baseDir: string,
+  objectId: string,
+  sessionId: string,
+  args: Record<string, unknown>,
+): MethodExecutionContext {
+  return {
+    thread: {
+      persistence: { baseDir, objectId, sessionId, threadId: "t" },
+      contextWindows: [],
+      events: [],
+    },
+    args,
+  } as unknown as MethodExecutionContext;
+}
+
+/** super flow ctx（evolve_self 合入 creatorSessionId 的 worktree）。 */
+function superCtx(
+  baseDir: string,
+  objectId: string,
+  creatorSessionId: string,
+  args: Record<string, unknown>,
+): MethodExecutionContext {
+  return {
+    thread: {
+      persistence: { baseDir, objectId, sessionId: "super", threadId: "tS" },
+      creatorSessionId,
+      contextWindows: [],
+      events: [],
+    },
+    args,
+  } as unknown as MethodExecutionContext;
+}
+
+describe("e2e: AE1 self-scope ff merge（write_file → evolve_self）", () => {
+  test("write_file own stone → evolve_self → main 推进且 worktree 销毁", async () => {
     const baseDir = await newWorld(["agent_of_x", "supervisor"]);
 
-    // 1. open_worktree
-    const openRaw = await executeMetaprog(
-      makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "open_worktree" } }),
+    // 1. 业务 session s1 内 write_file 改自己 self.md → 落 session worktree（main 不变）
+    const w = await executeWriteFileMethod(
+      bizCtx(baseDir, "agent_of_x", "s1", { path: "stones/agent_of_x/self.md", content: "v2\n" }),
     );
-    expect(typeof openRaw).toBe("string");
-    const open = JSON.parse(openRaw as string);
-    expect(open.ok).toBe(true);
-    const branch: string = open.branch;
-    const path: string = open.path;
-
-    // 2. 直接 fs 写到 worktree（2026-05-21 重组后 stone 落在 objects/ 下）
-    await writeFile(join(path, "objects", "agent_of_x", "self.md"), "v2\n");
-
-    // 3. commit
-    const commitRaw = await executeMetaprog(
-      makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "commit", branch, intent: "update self" } }),
+    expect(typeof w === "object" && w !== null && w.ok === true).toBe(true);
+    expect(await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8")).toBe(
+      "agent_of_x v1\n",
     );
-    expect(JSON.parse(commitRaw as string).ok).toBe(true);
 
-    // 4. merge → merged
-    const mergeRaw = await executeMetaprog(
-      makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "merge", branch } }),
-    );
+    // 2. super flow evolve_self（creatorSessionId=s1）→ self-scope ff-merge 到 main
+    const mergeRaw = await executeEvolveSelf(superCtx(baseDir, "agent_of_x", "s1", { message: "update self" }));
     const merged = JSON.parse(mergeRaw as string);
     expect(merged.ok).toBe(true);
     expect(merged.kind).toBe("merged");
 
-    // 5. main 上 self.md 是 v2
-    const after = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8");
-    expect(after).toBe("v2\n");
+    // 3. main 上 self.md 是 v2，worktree 已 GC
+    expect(await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8")).toBe("v2\n");
+    await expect(readFile(join(baseDir, "stones", "session-s1", "objects", "agent_of_x", "self.md"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 });
 
-describe("e2e: metaprog command — AE2/AE7 cross-scope → PR-Issue", () => {
-  test("Object 改了别人的 stone → 整 commit 走 PR-Issue", async () => {
+describe("e2e: AE2/AE7 cross-scope → PR-Issue（write_file 别人 stone → evolve_self）", () => {
+  test("业务 session 改了别人的 stone → evolve_self 整体走 PR-Issue", async () => {
     const baseDir = await newWorld(["agent_of_x", "agent_of_y", "supervisor"]);
 
-    const open = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "open_worktree" } }),
-      )) as string,
+    // 业务 session s1：caller=agent_of_x 改自己 + agent_of_y（cross-object）→ 同一 worktree
+    await executeWriteFileMethod(
+      bizCtx(baseDir, "agent_of_x", "s1", { path: "stones/agent_of_x/self.md", content: "x edits self\n" }),
     );
-    const branch: string = open.branch;
-    const path: string = open.path;
-
-    await writeFile(join(path, "objects", "agent_of_x", "self.md"), "x edits self\n");
-    await writeFile(join(path, "objects", "agent_of_y", "self.md"), "x edits y\n");
-
-    expect(
-      JSON.parse(
-        (await executeMetaprog(
-          makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "commit", branch, intent: "cross" } }),
-        )) as string,
-      ).ok,
-    ).toBe(true);
+    await executeWriteFileMethod(
+      bizCtx(baseDir, "agent_of_x", "s1", { path: "stones/agent_of_y/self.md", content: "x edits y\n" }),
+    );
 
     const merge = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "merge", branch, intent: "cross" } }),
-      )) as string,
+      (await executeEvolveSelf(superCtx(baseDir, "agent_of_x", "s1", { message: "cross" }))) as string,
     );
     expect(merge.ok).toBe(true);
-    expect(merge.kind).toBe("must-pr-issue");
-    expect(typeof merge.issueId).toBe("number");
-    expect(merge.paths.sort()).toEqual(["objects/agent_of_x/self.md", "objects/agent_of_y/self.md"]);
+    expect(merge.kind).toBe("pr-issue");
+    expect(typeof merge.prIssueId).toBe("number");
 
     // PR-Issue 落在 super session
     const index = await readPrIssueIndex(baseDir);
-    const prIssue = index.issues.find((i: { id: number }) => i.id === merge.issueId);
+    const prIssue = index.issues.find((i: { id: number }) => i.id === merge.prIssueId);
     expect(prIssue).toBeDefined();
     expect(prIssue?.title.startsWith("[PR]")).toBe(true);
 
-    // main 上 agent_of_y/self.md 仍是 v1
+    // main 上 agent_of_y/self.md 仍是 v1（cross-scope 不直接合入）
     const yMain = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
     expect(yMain).toBe("agent_of_y v1\n");
   });
 });
 
-describe("e2e: metaprog command — supervisor resolve merge / reject", () => {
+describe("e2e: supervisor resolve merge / reject", () => {
   test("supervisor resolve(merge) → main 推进；resolve(reject) → branch archived, main 不变", async () => {
     const baseDir = await newWorld(["agent_of_x", "agent_of_y", "supervisor"]);
 
-    // 准备一个 cross-scope PR
-    const open1 = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "open_worktree" } }),
-      )) as string,
-    );
-    await writeFile(join(open1.path, "objects", "agent_of_y", "self.md"), "approved\n");
-    await executeMetaprog(
-      makeCtx({
-        baseDir,
-        callerId: "agent_of_x",
-        args: { action: "commit", branch: open1.branch, intent: "ok" },
-      }),
+    // 准备一个 cross-scope PR：业务 session s1 改 agent_of_y → evolve_self → PR-Issue
+    await executeWriteFileMethod(
+      bizCtx(baseDir, "agent_of_x", "s1", { path: "stones/agent_of_y/self.md", content: "approved\n" }),
     );
     const m1 = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({
-          baseDir,
-          callerId: "agent_of_x",
-          args: { action: "merge", branch: open1.branch, intent: "ok" },
-        }),
-      )) as string,
+      (await executeEvolveSelf(superCtx(baseDir, "agent_of_x", "s1", { message: "ok" }))) as string,
     );
-    expect(m1.kind).toBe("must-pr-issue");
+    expect(m1.kind).toBe("pr-issue");
 
     // supervisor resolve merge
     const r1 = JSON.parse(
@@ -208,7 +195,7 @@ describe("e2e: metaprog command — supervisor resolve merge / reject", () => {
         makeCtx({
           baseDir,
           callerId: "supervisor",
-          args: { action: "resolve", issueId: m1.issueId, decision: "merge" },
+          args: { action: "resolve", issueId: m1.prIssueId, decision: "merge" },
         }),
       )) as string,
     );
@@ -219,36 +206,21 @@ describe("e2e: metaprog command — supervisor resolve merge / reject", () => {
     const y = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
     expect(y).toBe("approved\n");
 
-    // 准备第二个 cross-scope PR 走 reject
-    const open2 = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "open_worktree" } }),
-      )) as string,
-    );
-    await writeFile(join(open2.path, "objects", "agent_of_y", "self.md"), "rejected change\n");
-    await executeMetaprog(
-      makeCtx({
-        baseDir,
-        callerId: "agent_of_x",
-        args: { action: "commit", branch: open2.branch, intent: "rej" },
-      }),
+    // 准备第二个 cross-scope PR 走 reject（新业务 session s2）
+    await executeWriteFileMethod(
+      bizCtx(baseDir, "agent_of_x", "s2", { path: "stones/agent_of_y/self.md", content: "rejected change\n" }),
     );
     const m2 = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({
-          baseDir,
-          callerId: "agent_of_x",
-          args: { action: "merge", branch: open2.branch, intent: "rej" },
-        }),
-      )) as string,
+      (await executeEvolveSelf(superCtx(baseDir, "agent_of_x", "s2", { message: "rej" }))) as string,
     );
+    expect(m2.kind).toBe("pr-issue");
 
     const r2 = JSON.parse(
       (await executeMetaprog(
         makeCtx({
           baseDir,
           callerId: "supervisor",
-          args: { action: "resolve", issueId: m2.issueId, decision: "reject" },
+          args: { action: "resolve", issueId: m2.prIssueId, decision: "reject" },
         }),
       )) as string,
     );
@@ -261,30 +233,23 @@ describe("e2e: metaprog command — supervisor resolve merge / reject", () => {
   });
 });
 
-describe("e2e: metaprog command — AE4/AE8 supervisor rollback + Supervisor 例外", () => {
+describe("e2e: AE4/AE8 supervisor rollback + Supervisor 例外", () => {
   test("supervisor rollback 恢复 broken stone；author 是 supervisor", async () => {
     const baseDir = await newWorld(["agent_of_x", "supervisor"]);
 
-    // 让 agent_of_x 自治 merge 一个新版本
-    const open = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "open_worktree" } }),
-      )) as string,
-    );
-    await writeFile(join(open.path, "objects", "agent_of_x", "self.md"), "broken-v2\n");
-    await executeMetaprog(
-      makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "commit", branch: open.branch, intent: "broken" } }),
-    );
-    await executeMetaprog(
-      makeCtx({ baseDir, callerId: "agent_of_x", args: { action: "merge", branch: open.branch } }),
-    );
-
-    // 拿 bootstrap commit sha
-    const log = Bun.spawnSync(["git", "log", "--reverse", "--pretty=format:%H"], {
+    // 回滚目标 = broken 改动之前的 HEAD（含 agent_of_x v1 的 objects/）。
+    // ensureStoneRepo 的 seed 初始 commit 不含 objects/，不能作 target——取迁移后的 HEAD。
+    const headLog = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
       cwd: join(baseDir, "stones", "main"),
       stdout: "pipe",
     });
-    const target = new TextDecoder().decode(log.stdout).trim().split("\n")[0];
+    const target = new TextDecoder().decode(headLog.stdout).trim();
+
+    // 让 agent_of_x 在业务 session 改自己并 evolve_self 合入一个新版本（broken-v2）
+    await executeWriteFileMethod(
+      bizCtx(baseDir, "agent_of_x", "s1", { path: "stones/agent_of_x/self.md", content: "broken-v2\n" }),
+    );
+    await executeEvolveSelf(superCtx(baseDir, "agent_of_x", "s1", { message: "broken" }));
 
     // supervisor rollback
     const r = JSON.parse(

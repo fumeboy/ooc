@@ -5,13 +5,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   classifyWorktreeBranch,
   commitWorktree,
-  openMetaprogWorktree,
   requestPrIssueReview,
   resolvePrIssue,
   rollback,
-  supervisorCreateObject,
   tryMergeSelf,
   pruneStaleWorktrees,
+  type MetaprogWorktreeRef,
   __testing,
 } from "@ooc/core/programmable/versioning";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
@@ -83,40 +82,51 @@ async function initMainRepo(baseDir: string): Promise<void> {
   );
 }
 
-describe("openMetaprogWorktree", () => {
-  test("creates a worktree at stones/{branch}/ branched from main HEAD", async () => {
-    const baseDir = await newWorld();
-    const r = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "t1" });
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
+/**
+ * 测试用 worktree 落点（去 metaprog 后，openMetaprogWorktree 已删）。
+ *
+ * 直接 `git worktree add` 从 main HEAD 派生一个分支 worktree（完整副本），返回
+ * `MetaprogWorktreeRef`——与 evolve-self.ts 构造 session worktree ref 同形（branch/path/
+ * baseDir/objectId）。retained 的 commitWorktree/classifyWorktreeBranch/tryMergeSelf/
+ * requestPrIssueReview/resolvePrIssue 全部 branch-name 无关，照样覆盖。
+ */
+async function mkWorktree(
+  baseDir: string,
+  objectId: string,
+  token: string,
+): Promise<MetaprogWorktreeRef> {
+  const repo = __testing.repoDir(baseDir);
+  const branch = `session-test-${token}`;
+  const path = __testing.worktreePath(baseDir, branch);
+  const add = Bun.spawnSync(["git", "worktree", "add", "-b", branch, path, "main"], {
+    cwd: repo,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (add.exitCode !== 0) {
+    throw new Error(`git worktree add failed: ${add.stderr.toString()}`);
+  }
+  const head = gitHead(repo);
+  return { baseDir, objectId, branch, path, baseCommit: head.ok ? head.value : "" };
+}
 
-    expect(r.worktree.branch).toBe("metaprog/agent_of_x/t1");
-    expect(r.worktree.path).toBe(__testing.worktreePath(baseDir, "metaprog/agent_of_x/t1"));
+describe("mkWorktree (test helper: session worktree 落点)", () => {
+  test("worktree 从 main HEAD 派生，含所有 objects/ 完整副本", async () => {
+    const baseDir = await newWorld();
+    const wt = await mkWorktree(baseDir, "agent_of_x", "t1");
+    expect(wt.path).toBe(__testing.worktreePath(baseDir, "session-test-t1"));
     // 工作树有 agent_of_x/self.md（其它 Object 也在）
-    const content = await readFile(join(r.worktree.path, "objects", "agent_of_x", "self.md"), "utf8");
+    const content = await readFile(join(wt.path, "objects", "agent_of_x", "self.md"), "utf8");
     expect(content).toBe("agent_of_x v1\n");
-  });
-
-  test("supervisor 也能开 worktree（R12 例外撤销后对称化）", async () => {
-    const baseDir = await newWorld();
-    const r = await openMetaprogWorktree({ baseDir, objectId: "supervisor", token: "svc1" });
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.worktree.branch).toBe("metaprog/supervisor/svc1");
-    }
-  });
-
-  test("rejects invalid objectId", async () => {
-    const baseDir = await newWorld();
-    const r = await openMetaprogWorktree({ baseDir, objectId: "../etc" });
-    expect(r.ok).toBe(false);
+    const otherContent = await readFile(join(wt.path, "objects", "agent_of_y", "self.md"), "utf8");
+    expect(otherContent).toBe("agent_of_y v1\n");
   });
 });
 
 describe("commitWorktree + classifyWorktreeBranch", () => {
   test("self-scope when only stones/{authorId}/ paths changed", async () => {
     const baseDir = await newWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "self" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "self") };
     expect(open.ok).toBe(true);
     if (!open.ok) return;
 
@@ -138,7 +148,7 @@ describe("commitWorktree + classifyWorktreeBranch", () => {
 
   test("cross-scope when commit touches another Object's stone", async () => {
     const baseDir = await newWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "cross" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "cross") };
     expect(open.ok).toBe(true);
     if (!open.ok) return;
 
@@ -161,7 +171,7 @@ describe("commitWorktree + classifyWorktreeBranch", () => {
 
   test("supervisor 走标准 path-based 判定（R12 例外撤销）：改自己 stones → self-scope", async () => {
     const baseDir = await newWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "supervisor", token: "sv2" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "supervisor", "sv2") };
     if (!open.ok) throw new Error("open failed");
     // 改 supervisor 自己自治区
     await writeFile(join(open.worktree.path, "objects", "supervisor", "self.md"), "supervisor v2\n");
@@ -181,7 +191,7 @@ describe("commitWorktree + classifyWorktreeBranch", () => {
 
   test("supervisor 改他人 stones → cross-scope（PR-Issue 由 supervisor 自审）", async () => {
     const baseDir = await newWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "supervisor", token: "sv3" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "supervisor", "sv3") };
     if (!open.ok) throw new Error("open failed");
     // 改 agent_of_x stone（不在 objects/supervisor/ 下 → cross-scope）
     await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "agent_of_x edited by supervisor\n");
@@ -203,7 +213,7 @@ describe("commitWorktree + classifyWorktreeBranch", () => {
 describe("tryMergeSelf", () => {
   test("self-scope edits → fast-forward merged into main", async () => {
     const baseDir = await newWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "ff1" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "ff1") };
     if (!open.ok) throw new Error("open failed");
 
     await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "v2\n");
@@ -233,7 +243,7 @@ describe("tryMergeSelf", () => {
 
   test("cross-scope edits → must-pr-issue (no merge)", async () => {
     const baseDir = await newWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "cross" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "cross") };
     if (!open.ok) throw new Error("open failed");
 
     await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "violated\n");
@@ -260,7 +270,7 @@ describe("tryMergeSelf", () => {
 
   test("AE7: even mostly-self with one cross-scope path → whole branch must-pr-issue", async () => {
     const baseDir = await newWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "mixed" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "mixed") };
     if (!open.ok) throw new Error("open failed");
 
     // 95% self, 5% cross
@@ -285,7 +295,7 @@ describe("tryMergeSelf", () => {
 describe("requestPrIssueReview + resolvePrIssue", () => {
   test("creates PR-Issue, merge resolution lands changes on main", async () => {
     const baseDir = await newWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "pr1" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "pr1") };
     if (!open.ok) throw new Error("open failed");
     await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "x edits y\n");
     expect(
@@ -324,7 +334,7 @@ describe("requestPrIssueReview + resolvePrIssue", () => {
 
   test("AE3: reject archives branch and leaves main unchanged", async () => {
     const baseDir = await newWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "rej" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "rej") };
     if (!open.ok) throw new Error("open failed");
     await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "rejected change\n");
     expect(
@@ -362,7 +372,7 @@ describe("rollback", () => {
   test("AE4: Supervisor-signed rollback restores objectId/ subtree", async () => {
     const baseDir = await newWorld();
     // 让 agent_of_x merge 一个新版本 v2 进 main
-    const open = await openMetaprogWorktree({ baseDir, objectId: "agent_of_x", token: "v2" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "v2") };
     if (!open.ok) throw new Error();
     await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "broken-v2\n");
     expect(
@@ -409,86 +419,6 @@ describe("pruneStaleWorktrees", () => {
   });
 });
 
-describe("supervisorCreateObject", () => {
-  test("creates new stone with self/readme/knowledge and commits to main", async () => {
-    const baseDir = await newWorld();
-    const r = await supervisorCreateObject({
-      baseDir,
-      newObjectId: "weather",
-      selfMd: "# weather — query weather\n",
-      readableMd: "# weather\n\nAsk for forecasts.\n",
-      knowledge: { "usage.md": "Pass {city}.\n" },
-      intent: "feat: introduce weather agent",
-    });
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(typeof r.commitSha).toBe("string");
-    // 文件落盘 main
-    const selfOnMain = await readFile(join(baseDir, "stones", "main", "objects", "weather", "self.md"), "utf8");
-    expect(selfOnMain).toBe("# weather — query weather\n");
-    const kn = await readFile(join(baseDir, "stones", "main", "objects", "weather", "knowledge", "usage.md"), "utf8");
-    expect(kn).toBe("Pass {city}.\n");
-    // 2026-06-01 ooc-6: createStoneObject 现写 package.json（bun workspace metadata）作为
-    // canonical stone marker，不再写 .stone.json。
-    const meta = await readFile(join(baseDir, "stones", "main", "objects", "weather", "package.json"), "utf8");
-    expect(JSON.parse(meta)).toMatchObject({ ooc: { objectId: "weather", kind: "object" } });
-  });
-
-  test("rejects when stone already exists", async () => {
-    const baseDir = await newWorld();
-    const first = await supervisorCreateObject({
-      baseDir,
-      newObjectId: "weather",
-      selfMd: "v1",
-      readableMd: "v1",
-    });
-    expect(first.ok).toBe(true);
-    const dup = await supervisorCreateObject({
-      baseDir,
-      newObjectId: "weather",
-      selfMd: "v2",
-      readableMd: "v2",
-    });
-    expect(dup.ok).toBe(false);
-    if (!dup.ok) expect(dup.code).toBe("ALREADY_EXISTS");
-  });
-
-  test("rejects supervisor itself (Builtin Object conflict)", async () => {
-    const baseDir = await newWorld();
-    const r = await supervisorCreateObject({
-      baseDir,
-      newObjectId: "supervisor",
-      selfMd: "x",
-      readableMd: "y",
-    });
-    expect(r.ok).toBe(false);
-    // supervisor 现为 Builtin Object（packages/@ooc/builtins/supervisor）→ BUILTIN_CONFLICT
-    // （原 INVALID_INPUT 是 supervisor 成为 Builtin 前的旧契约）。
-    if (!r.ok) expect(r.code).toBe("BUILTIN_CONFLICT");
-  });
-
-  test("rejects empty selfMd / readableMd", async () => {
-    const baseDir = await newWorld();
-    const r1 = await supervisorCreateObject({ baseDir, newObjectId: "x", selfMd: "", readableMd: "y" });
-    expect(r1.ok).toBe(false);
-    const r2 = await supervisorCreateObject({ baseDir, newObjectId: "x", selfMd: "x", readableMd: "  " });
-    expect(r2.ok).toBe(false);
-  });
-
-  test("rejects unsafe knowledge filenames", async () => {
-    const baseDir = await newWorld();
-    const r = await supervisorCreateObject({
-      baseDir,
-      newObjectId: "weather",
-      selfMd: "x",
-      readableMd: "y",
-      knowledge: { "../escape.md": "bad" },
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("INVALID_INPUT");
-  });
-});
-
 describe("isValidObjectId (task#16: nested child + path-traversal defense)", () => {
   const { isValidObjectId } = __testing;
 
@@ -528,12 +458,11 @@ describe("selfScopePrefix (task#16: nested child uses physical children/ layout)
 });
 
 describe("nested child metaprog (task#16)", () => {
-  test("openMetaprogWorktree accepts nested objectId; branch is multi-level", async () => {
+  test("worktree 含嵌套 child 的物理落点（objects/parent/children/child/）", async () => {
     const baseDir = await newNestedWorld();
-    const r = await openMetaprogWorktree({ baseDir, objectId: "parent/child", token: "n1" });
+    const r = { ok: true as const, worktree: await mkWorktree(baseDir, "parent/child", "n1") };
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.worktree.branch).toBe("metaprog/parent/child/n1");
     // 工作树里能读到 child 的物理落点
     const content = await readFile(
       join(r.worktree.path, "objects", "parent", "children", "child", "self.md"),
@@ -544,7 +473,7 @@ describe("nested child metaprog (task#16)", () => {
 
   test("① child edits its own subtree → self-scope ff-merge to main", async () => {
     const baseDir = await newNestedWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "parent/child", token: "self" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "parent/child", "self") };
     if (!open.ok) throw new Error("open failed");
 
     await writeFile(
@@ -578,7 +507,7 @@ describe("nested child metaprog (task#16)", () => {
 
   test("② child edits parent (objects/parent/self.md) → cross-scope PR-Issue", async () => {
     const baseDir = await newNestedWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "parent/child", token: "cross" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "parent/child", "cross") };
     if (!open.ok) throw new Error("open failed");
 
     // 改 parent 自己的 self.md（objects/parent/self.md，不在 child 子树下）
@@ -608,7 +537,7 @@ describe("nested child metaprog (task#16)", () => {
 
   test("③ parent edits child subtree → self-scope (parent prefix covers children/)", async () => {
     const baseDir = await newNestedWorld();
-    const open = await openMetaprogWorktree({ baseDir, objectId: "parent", token: "p2c" });
+    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "parent", "p2c") };
     if (!open.ok) throw new Error("open failed");
 
     // parent 改 child 的物理落点（在 objects/parent/ 子树内）
@@ -639,12 +568,5 @@ describe("nested child metaprog (task#16)", () => {
       "utf8",
     );
     expect(onMain).toBe("child edited by parent\n");
-  });
-
-  test("rejects nested objectId with traversal segment at openMetaprogWorktree", async () => {
-    const baseDir = await newNestedWorld();
-    const r = await openMetaprogWorktree({ baseDir, objectId: "parent/../escape" });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("INVALID_INPUT");
   });
 });
