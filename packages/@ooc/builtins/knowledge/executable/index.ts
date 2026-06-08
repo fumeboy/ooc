@@ -20,9 +20,10 @@
 import type {
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/method-types.js";
+import type { WindowMethod } from "@ooc/core/_shared/types/window-method.js";
 import { builtinRegistry, type OnCloseContext } from "@ooc/core/extendable/_shared/registry.js";
 import {
-  executeWindowSetViewport,
+  windowSetViewport,
   hasAnyViewportField,
   DEFAULT_VIEWPORT,
 } from "@ooc/core/extendable/_shared/viewport.js";
@@ -98,7 +99,8 @@ const closeCommand: ObjectMethod = {
   exec: () => undefined,
 };
 
-const setViewportCommand: ObjectMethod = {
+const setViewportCommand: WindowMethod = {
+  kind: "window",
   paths: ["set_viewport"],
   schema: {
     args: {
@@ -124,7 +126,7 @@ const setViewportCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeWindowSetViewport(ctx, "knowledge"),
+  exec: (ctx) => windowSetViewport(ctx, "knowledge"),
 };
 
 /** 拒绝 close 非 explicit 来源的 knowledge_object（合成 window 不可关闭）。 */
@@ -238,7 +240,7 @@ const knowledgeConstructor: ObjectMethod = {
       createdAt: Date.now(),
       path,
       source: "explicit",
-      viewport: { ...DEFAULT_VIEWPORT },
+      state: { viewport: { ...DEFAULT_VIEWPORT } },
     };
     return { ok: true, object: knowledgeWindow };
   },
@@ -248,8 +250,10 @@ builtinRegistry.registerObjectType("knowledge", {
   methods: {
     reload: reloadCommand,
     close: closeCommand,
-    set_viewport: setViewportCommand,
     open_knowledge: knowledgeConstructor,
+  },
+  windowMethods: {
+    set_viewport: setViewportCommand,
   },
   onClose: onCloseKnowledgeWindow,
   readable,

@@ -10,10 +10,8 @@
  * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 
-import type { MethodExecutionContext } from "./command-types.js";
-import type { ContextWindow } from "./types.js";
+import type { WindowMethodExecutionContext, WindowMethodOutcome } from "../../../_shared/types/window-method.js";
 import {
-  type TranscriptViewport,
   DEFAULT_TRANSCRIPT_VIEWPORT,
   hasAnyTranscriptViewportField,
   mergeTranscriptViewport,
@@ -22,30 +20,29 @@ import {
 export * from "../../../_shared/types/viewport.js";
 
 /**
- * talk_window / do_window 共享的 set_transcript_window 执行入口。
+ * talk_window / do_window 共享的 set_transcript_window 执行体（window method）。
  *
- * - 校验 ctx.self 是 expectedTypes 中某一种
- * - 校验至少有一个 tail / range_start / range_end 字段（否则 no-op + 提示）
- * - 合并 + fail-loud 校验
- * - Object.assign 写回 window.transcriptViewport（按现有 set_viewport 的同模式）
+ * 读 ctx.windowState.transcriptViewport，校验+合并，返回新 WindowDisplayState（immutable）。
+ * 不再 mutate ctx.self —— manager 命中 windowMethod 时把返回的 state 写回 window.state。
+ *
+ * @param expectedTypes 仅用于错误文案 label（talk / do）。
  */
-export async function executeWindowSetTranscriptViewport(
-  ctx: MethodExecutionContext,
+export function windowSetTranscriptViewport(
+  ctx: WindowMethodExecutionContext,
   expectedTypes: Array<"talk" | "do">,
-): Promise<string | undefined> {
-  // P6.§3: manager 在 dispatch 阶段已保证 self.type 是 caller 注册的 type 之一，
-  // method 体不再 re-check self 类型。expectedTypes 仅用于错误文案 label。
-  const window = ctx.self as ContextWindow;
+): WindowMethodOutcome {
+  const label = expectedTypes[0] ?? "transcript";
   if (!hasAnyTranscriptViewportField(ctx.args)) {
-    return `[${window.type}_window.set_transcript_window] 至少需要传入 tail / range_start+range_end 之一。`;
+    return {
+      ok: true,
+      state: ctx.windowState,
+      result: `[${label}_window.set_transcript_window] 至少需要传入 tail / range_start+range_end 之一。`,
+    };
   }
-  const current =
-    (window as { transcriptViewport?: TranscriptViewport }).transcriptViewport ??
-    DEFAULT_TRANSCRIPT_VIEWPORT;
+  const current = ctx.windowState.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
   const merged = mergeTranscriptViewport(current, ctx.args);
   if (!merged.ok) {
-    return `[${window.type}_window.set_transcript_window] ${merged.error}`;
+    return { ok: false, error: `[${label}_window.set_transcript_window] ${merged.error}` };
   }
-  Object.assign(window, { transcriptViewport: merged.viewport });
-  return undefined;
+  return { ok: true, state: { ...ctx.windowState, transcriptViewport: merged.viewport } };
 }

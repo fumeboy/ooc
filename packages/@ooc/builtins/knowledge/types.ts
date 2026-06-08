@@ -38,8 +38,8 @@ export interface KnowledgeWindow extends BaseContextWindow {
   /** activator 来源时记录 doc.frontmatter.description，便于 summary 渲染。 */
   description?: string;
   /**
-   * 渲染窗口大小 { lineStart, lineEnd, columnStart, columnEnd }；
-   * open_knowledge 创建 explicit 来源时填默认 0-200 / 0-200，可通过 `set_viewport` 命令调整。
+   * @deprecated 移到 state.viewport（WindowDisplayState）；保留以兼容旧 thread.json。
+   * 渲染窗口大小由 readable 维度的 window method `set_viewport`（写 state.viewport）调整。
    *
    * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
    */

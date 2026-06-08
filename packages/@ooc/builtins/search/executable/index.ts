@@ -260,6 +260,8 @@ builtinRegistry.registerObjectType("search", {
   methods: {
     close: closeCommand,
     open_match: openMatchCommand,
+  },
+  windowMethods: {
     set_results_window: setResultsWindowCommandForSearch,
   },
   readable,
@@ -425,7 +427,7 @@ const searchConstructor: ObjectMethod = {
         matches: searchMatches,
         truncated,
         searchRoot: path,
-        resultsViewport: { ...DEFAULT_RESULTS_VIEWPORT },
+        state: { resultsViewport: { ...DEFAULT_RESULTS_VIEWPORT } },
       };
       return { ok: true, object: sw };
     }
@@ -456,18 +458,18 @@ const searchConstructor: ObjectMethod = {
       matches,
       truncated,
       searchRoot: cwd,
-      resultsViewport: { ...DEFAULT_RESULTS_VIEWPORT },
+      state: { resultsViewport: { ...DEFAULT_RESULTS_VIEWPORT } },
     };
     return { ok: true, object: sw };
   },
 };
 
-// 二次注册：把 constructor 加进 commands 表（registerObjectType 替换 methods）
+// 二次注册：把 constructor 加进 methods 表（registerObjectType 替换 methods；
+// windowMethods 已在首次注册携带，registerObjectType 未传时保留 existing）。
 builtinRegistry.registerObjectType("search", {
   methods: {
     close: closeCommand,
     open_match: openMatchCommand,
-    set_results_window: setResultsWindowCommandForSearch,
     glob: searchConstructor,
     grep: searchConstructor,
   },

@@ -9,15 +9,13 @@
  * - 详见 _shared/transcript-viewport.ts
  */
 
-import type {
-  ObjectMethod,
-} from "../_shared/command-types.js";
+import type { WindowMethod } from "../../../_shared/types/window-method.js";
 import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
 import type { ContextWindow } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
 import type { BaseContextWindow } from "@ooc/core/_shared";
 import {
-  executeWindowSetTranscriptViewport,
+  windowSetTranscriptViewport,
   hasAnyTranscriptViewportField,
 } from "../_shared/transcript-viewport.js";
 
@@ -78,7 +76,8 @@ function guidanceWindows(form: BaseContextWindow, entries: Record<string, string
   return out;
 }
 
-export const setTranscriptWindowCommandForTalk: ObjectMethod = {
+export const setTranscriptWindowCommandForTalk: WindowMethod = {
+  kind: "window",
   paths: ["set_transcript_window"],
   schema: {
     args: {
@@ -103,5 +102,5 @@ export const setTranscriptWindowCommandForTalk: ObjectMethod = {
     }
     return guidanceWindows(form, entries);
   },
-  exec: (ctx) => executeWindowSetTranscriptViewport(ctx, ["talk"]),
+  exec: (ctx) => windowSetTranscriptViewport(ctx, ["talk"]),
 };

@@ -36,7 +36,10 @@ export async function readable(ctx: RenderContext): Promise<XmlNode[]> {
   const children: XmlNode[] = [
     xmlElement("path", {}, [xmlText(window.path)]),
   ];
-  const viewport: Viewport = window.viewport ?? DEFAULT_VIEWPORT;
+  // 展示状态从 window.state 读，向后兼容旧平铺字段（H2/H3）。
+  const viewport: Viewport = window.state?.viewport ?? window.viewport ?? DEFAULT_VIEWPORT;
+  const lines = window.state?.lines ?? window.lines;
+  const columns = window.state?.columns ?? window.columns;
   children.push(
     xmlElement(
       "viewport",
@@ -49,17 +52,17 @@ export async function readable(ctx: RenderContext): Promise<XmlNode[]> {
       [],
     ),
   );
-  if (window.lines) {
-    children.push(xmlElement("lines", {}, [xmlText(`${window.lines[0]}-${window.lines[1]}`)]));
+  if (lines) {
+    children.push(xmlElement("lines", {}, [xmlText(`${lines[0]}-${lines[1]}`)]));
   }
-  if (window.columns) {
-    children.push(xmlElement("columns", {}, [xmlText(`${window.columns[0]}-${window.columns[1]}`)]));
+  if (columns) {
+    children.push(xmlElement("columns", {}, [xmlText(`${columns[0]}-${columns[1]}`)]));
   }
   try {
     const raw = await readFile(window.path, "utf8");
     let body = applyViewport(raw, viewport);
-    if (window.lines || window.columns) {
-      body = sliceByLinesColumns(body, window.lines, window.columns);
+    if (lines || columns) {
+      body = sliceByLinesColumns(body, lines, columns);
     }
     children.push(xmlElement("content", {}, [xmlText(truncateBytes(body, MAX_FILE_WINDOW_BYTES))]));
   } catch (error) {

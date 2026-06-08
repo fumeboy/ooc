@@ -9,16 +9,12 @@
  * - 详见 search/results-viewport.ts + _shared/transcript-viewport.ts
  */
 
-import type {
-  ObjectMethod,
-} from "@ooc/core/extendable/_shared/method-types.js";
-import type { Intent } from "@ooc/core/thinkable/context/intent.js";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { WindowMethod } from "@ooc/core/_shared/types/window-method.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
 import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 import {
-  executeSearchSetResultsViewport,
+  searchSetResultsViewport,
   hasAnyResultsViewportField,
 } from "./results-viewport.js";
 
@@ -55,7 +51,8 @@ search_window.set_results_window 精细化调整 matches 渲染视口。
 即使 match 不在 visible 区间，只要 index 合法就能 open。
 `.trim();
 
-export const setResultsWindowCommandForSearch: ObjectMethod = {
+export const setResultsWindowCommandForSearch: WindowMethod = {
+  kind: "window",
   paths: ["set_results_window"],
   schema: {
     args: {
@@ -80,5 +77,5 @@ export const setResultsWindowCommandForSearch: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeSearchSetResultsViewport(ctx),
+  exec: (ctx) => searchSetResultsViewport(ctx),
 };

@@ -23,7 +23,7 @@ import { serializeXml } from "../../../thinkable/context/xml.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {
   DEFAULT_HISTORY_VIEWPORT,
-  executeProgramSetHistoryViewport,
+  programSetHistoryViewport,
   hasAnyHistoryViewportField,
 } from "@ooc/builtins/program";
 import { executeProgramCommand } from "@ooc/builtins/root/executable/method.program.js";
@@ -56,7 +56,7 @@ function makeProgramWindow(opts: {
     status: "open",
     createdAt: NOW,
     history: opts.history,
-    historyViewport: opts.historyViewport,
+    state: opts.historyViewport ? { historyViewport: opts.historyViewport } : undefined,
   };
 }
 
@@ -210,133 +210,100 @@ describe("program_window render: last_output unaffected by viewport", () => {
 
 // ─────────────────────────── command: set_history_window ────────────
 
-describe("set_history_window command", () => {
-  it("history_tail updates window.historyViewport", async () => {
-    const window = makeProgramWindow({
-      history: makeHistory(5),
-      historyViewport: { tail: 10 },
-    });
-    const out = await executeProgramSetHistoryViewport({
+describe("set_history_window window method", () => {
+  it("history_tail returns new state with historyViewport", () => {
+    const out = programSetHistoryViewport({
       args: { history_tail: 30 },
-      self: window,
-    });
-    expect(out).toBeUndefined();
-    expect(window.historyViewport).toEqual({ tail: 30 });
+      windowState: { historyViewport: { tail: 10 } },
+    } as any);
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.state.historyViewport).toEqual({ tail: 30 });
   });
 
-  it("range mode replaces tail", async () => {
-    const window = makeProgramWindow({
-      history: makeHistory(5),
-      historyViewport: { tail: 10 },
-    });
-    const out = await executeProgramSetHistoryViewport({
+  it("range mode replaces tail", () => {
+    const out = programSetHistoryViewport({
       args: { history_start: 0, history_end: 3 },
-      self: window,
-    });
-    expect(out).toBeUndefined();
-    expect(window.historyViewport).toEqual({ rangeStart: 0, rangeEnd: 3 });
+      windowState: { historyViewport: { tail: 10 } },
+    } as any);
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.state.historyViewport).toEqual({ rangeStart: 0, rangeEnd: 3 });
   });
 
-  it("fail-loud: history_tail + history_start mutually exclusive", async () => {
-    const window = makeProgramWindow({
-      history: makeHistory(5),
-      historyViewport: { tail: 10 },
-    });
-    const out = await executeProgramSetHistoryViewport({
+  it("does not mutate input windowState", () => {
+    const windowState = { historyViewport: { tail: 10 } };
+    programSetHistoryViewport({ args: { history_tail: 30 }, windowState } as any);
+    expect(windowState.historyViewport).toEqual({ tail: 10 });
+  });
+
+  it("fail-loud: history_tail + history_start mutually exclusive", () => {
+    const out = programSetHistoryViewport({
       args: { history_tail: 5, history_start: 0, history_end: 3 },
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("互斥");
-    // 错误信息应用 history_* 命名（不暴露内部 tail / range_*）
-    expect(out as string).toContain("history_tail");
-    expect(out as string).toContain("history_start");
-    expect(out as string).toContain("history_end");
-    // unchanged
-    expect(window.historyViewport).toEqual({ tail: 10 });
+      windowState: { historyViewport: { tail: 10 } },
+    } as any);
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error).toContain("互斥");
+      expect(out.error).toContain("history_tail");
+      expect(out.error).toContain("history_start");
+      expect(out.error).toContain("history_end");
+    }
   });
 
-  it("fail-loud: invalid history_tail (negative)", async () => {
-    const window = makeProgramWindow({
-      history: makeHistory(5),
-      historyViewport: { tail: 10 },
-    });
-    const out = await executeProgramSetHistoryViewport({
+  it("fail-loud: invalid history_tail (negative)", () => {
+    const out = programSetHistoryViewport({
       args: { history_tail: -1 },
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("history_tail");
-    expect(window.historyViewport).toEqual({ tail: 10 });
+      windowState: { historyViewport: { tail: 10 } },
+    } as any);
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.error).toContain("history_tail");
   });
 
-  it("fail-loud: history_start without history_end", async () => {
-    const window = makeProgramWindow({
-      history: makeHistory(5),
-      historyViewport: { tail: 10 },
-    });
-    const out = await executeProgramSetHistoryViewport({
+  it("fail-loud: history_start without history_end", () => {
+    const out = programSetHistoryViewport({
       args: { history_start: 0 },
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("history_start");
-    expect(out as string).toContain("history_end");
-    expect(window.historyViewport).toEqual({ tail: 10 });
+      windowState: { historyViewport: { tail: 10 } },
+    } as any);
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error).toContain("history_start");
+      expect(out.error).toContain("history_end");
+    }
   });
 
-  it("fail-loud: history_start > history_end", async () => {
-    const window = makeProgramWindow({
-      history: makeHistory(5),
-      historyViewport: { tail: 10 },
-    });
-    const out = await executeProgramSetHistoryViewport({
+  it("fail-loud: history_start > history_end", () => {
+    const out = programSetHistoryViewport({
       args: { history_start: 5, history_end: 2 },
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("history_start");
-    expect(window.historyViewport).toEqual({ tail: 10 });
+      windowState: { historyViewport: { tail: 10 } },
+    } as any);
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.error).toContain("history_start");
   });
 
-  // P6.§3 (2026-06-02): self-type guard 已下放到 manager.submit；method 体不再 re-check。
-  // 旧测试 "rejects when not mounted on program_window" 已删除，跨类型拒绝由
-  // manager-dispatch 测试覆盖（见 manager-method-dispatch.test.ts）。
-
-  it("no viewport args returns helpful error", async () => {
-    const window = makeProgramWindow({
-      history: makeHistory(5),
-    });
-    const out = await executeProgramSetHistoryViewport({
-      args: {},
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("至少需要");
+  it("no viewport args returns ok with helpful result text", () => {
+    const out = programSetHistoryViewport({ args: {}, windowState: {} } as any);
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.result).toContain("至少需要");
   });
 });
 
-// ─────────────────────────── command registered on program type ──────
+// ─────────────────────────── windowMethod registered on program type ──
 
-describe("set_history_window registered on program window", () => {
-  it("program window definition has set_history_window command", () => {
+describe("set_history_window registered as windowMethod on program", () => {
+  it("program definition has set_history_window in windowMethods (not methods)", () => {
     const def = builtinRegistry.getObjectDefinition("program");
-    expect(def.methods["set_history_window"]).toBeDefined();
+    expect(def.windowMethods?.["set_history_window"]).toBeDefined();
+    expect(def.methods["set_history_window"]).toBeUndefined();
   });
 
-  it("registered command executes via window registry", async () => {
+  it("registered windowMethod executes returning new state", () => {
     const def = builtinRegistry.getObjectDefinition("program");
-    const cmd = def.methods["set_history_window"]!;
-    const window = makeProgramWindow({
-      history: makeHistory(5),
-      historyViewport: { tail: 10 },
-    });
-    const out = await cmd.exec({
+    const cmd = def.windowMethods!["set_history_window"]!;
+    const out = cmd.exec({
       args: { history_tail: 25 },
-      self: window,
-    });
-    expect(out).toBeUndefined();
-    expect(window.historyViewport).toEqual({ tail: 25 });
+      windowState: { historyViewport: { tail: 10 } },
+    } as any) as any;
+    expect(out.ok).toBe(true);
+    expect(out.state.historyViewport).toEqual({ tail: 25 });
   });
 });
 
@@ -359,8 +326,8 @@ describe("program_window.exec is not affected by historyViewport", () => {
     expect(out).toBeUndefined();
     // history should now have 4 entries (3 original + 1 new)
     expect(window.history.length).toBe(4);
-    // viewport unchanged
-    expect(window.historyViewport).toEqual({ rangeStart: 0, rangeEnd: 1 });
+    // viewport (on state) unchanged
+    expect(window.state?.historyViewport).toEqual({ rangeStart: 0, rangeEnd: 1 });
   });
 });
 
@@ -379,6 +346,6 @@ describe("root.program creates program_window with DEFAULT_HISTORY_VIEWPORT", ()
     const outcome = out as { ok: true; object: ProgramWindow };
     expect(outcome.ok).toBe(true);
     expect(outcome.object.type).toBe("program");
-    expect(outcome.object.historyViewport).toEqual({ tail: 10 });
+    expect(outcome.object.state?.historyViewport).toEqual({ tail: 10 });
   });
 });

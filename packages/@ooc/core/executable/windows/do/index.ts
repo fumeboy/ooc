@@ -67,8 +67,9 @@ function renderDoWindow(ctx: RenderContext): XmlNode[] {
     children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
   }
   const transcriptMessages = filterMessagesForDoWindow(window, ctx.thread);
+  // 展示状态从 window.state 读，向后兼容旧平铺字段。
   const viewport: TranscriptViewport =
-    window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
+    window.state?.transcriptViewport ?? window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
   const { visible, earlierCount } = applyTranscriptViewport(
     transcriptMessages,
     viewport,
@@ -275,7 +276,7 @@ function buildChildInitialWindows(
     createdAt: Date.now(),
     targetThreadId: parentThreadId,
     isCreatorWindow: true,
-    transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
+    state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
   };
   return [creatorWindow];
 }
@@ -477,7 +478,7 @@ const doConstructor: ObjectMethod = {
       status: "running",
       createdAt: Date.now(),
       targetThreadId: childId,
-      transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
+      state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
     };
 
     // 5) wait
@@ -513,8 +514,10 @@ builtinRegistry.registerObjectType("do", {
     wait: waitCommand,
     close: closeCommand,
     move: moveCommand,
-    set_transcript_window: setTranscriptWindowCommandForDo,
     do: doConstructor,
+  },
+  windowMethods: {
+    set_transcript_window: setTranscriptWindowCommandForDo,
   },
   onClose: onCloseDoWindow,
   renderXml: renderDoWindow,

@@ -75,7 +75,7 @@ describe("talk_window: transcript viewport render", () => {
       createdAt: NOW,
       target: "bob",
       conversationId: "w_talk_1",
-      transcriptViewport: { tail: 20 },
+      state: { transcriptViewport: { tail: 20 } },
     };
     const outbox: ThreadMessage[] = Array.from({ length: 5 }, (_, i) => ({
       ...makeMessage(`m${i}`, "self", "bob", `msg ${i}`, i),
@@ -109,7 +109,7 @@ describe("talk_window: transcript viewport render", () => {
       createdAt: NOW,
       target: "bob",
       conversationId: "w_talk_2",
-      transcriptViewport: { tail: 20 },
+      state: { transcriptViewport: { tail: 20 } },
     };
     const outbox: ThreadMessage[] = Array.from({ length: 30 }, (_, i) => ({
       ...makeMessage(`m${i}`, "self", "bob", `msg ${i}`, i),
@@ -174,7 +174,7 @@ describe("talk_window: transcript viewport render", () => {
       createdAt: NOW,
       target: "bob",
       conversationId: "w_talk_range",
-      transcriptViewport: { rangeStart: 2, rangeEnd: 5 },
+      state: { transcriptViewport: { rangeStart: 2, rangeEnd: 5 } },
     };
     const outbox: ThreadMessage[] = Array.from({ length: 10 }, (_, i) => ({
       ...makeMessage(`m${i}`, "self", "bob", `msg ${i}`, i),
@@ -211,7 +211,7 @@ describe("do_window: transcript viewport render", () => {
       status: "running",
       createdAt: NOW,
       targetThreadId: "child1",
-      transcriptViewport: { tail: 20 },
+      state: { transcriptViewport: { tail: 20 } },
     };
     const outbox: ThreadMessage[] = Array.from({ length: 25 }, (_, i) => ({
       id: `m${i}`,
@@ -235,147 +235,75 @@ describe("do_window: transcript viewport render", () => {
   });
 });
 
-describe("set_transcript_window command (talk)", () => {
-  let setCommand: ReturnType<typeof builtinRegistry.getObjectDefinition>["methods"][string];
+describe("set_transcript_window windowMethod (talk)", () => {
+  let setCommand: NonNullable<
+    ReturnType<typeof builtinRegistry.getObjectDefinition>["windowMethods"]
+  >[string];
   beforeAll(() => {
-    setCommand = builtinRegistry.getObjectDefinition("talk").methods["set_transcript_window"]!;
+    setCommand = builtinRegistry.getObjectDefinition("talk").windowMethods!["set_transcript_window"]!;
     expect(setCommand).toBeDefined();
+    expect(builtinRegistry.getObjectDefinition("talk").methods["set_transcript_window"]).toBeUndefined();
   });
 
-  it("tail mode updates window.transcriptViewport", async () => {
-    const talkWindow: TalkWindow = {
-      id: "w_talk_set1",
-      type: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "test",
-      status: "open",
-      createdAt: NOW,
-      target: "bob",
-      conversationId: "w_talk_set1",
-      transcriptViewport: { tail: 20 },
-    };
-    const out = await setCommand.exec({
+  it("tail mode returns new state with transcriptViewport", () => {
+    const out = setCommand.exec({
       args: { tail: 50 },
-      self: talkWindow,
-    });
-    expect(out).toBeUndefined();
-    expect(talkWindow.transcriptViewport).toEqual({ tail: 50 });
+      windowState: { transcriptViewport: { tail: 20 } },
+    } as any) as any;
+    expect(out.ok).toBe(true);
+    expect(out.state.transcriptViewport).toEqual({ tail: 50 });
   });
 
-  it("range mode replaces tail", async () => {
-    const talkWindow: TalkWindow = {
-      id: "w_talk_set2",
-      type: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "test",
-      status: "open",
-      createdAt: NOW,
-      target: "bob",
-      conversationId: "w_talk_set2",
-      transcriptViewport: { tail: 20 },
-    };
-    const out = await setCommand.exec({
+  it("range mode replaces tail", () => {
+    const out = setCommand.exec({
       args: { range_start: 0, range_end: 10 },
-      self: talkWindow,
-    });
-    expect(out).toBeUndefined();
-    expect(talkWindow.transcriptViewport).toEqual({
-      rangeStart: 0,
-      rangeEnd: 10,
-    });
+      windowState: { transcriptViewport: { tail: 20 } },
+    } as any) as any;
+    expect(out.ok).toBe(true);
+    expect(out.state.transcriptViewport).toEqual({ rangeStart: 0, rangeEnd: 10 });
   });
 
-  it("fail-loud: tail + range_start mutually exclusive", async () => {
-    const talkWindow: TalkWindow = {
-      id: "w_talk_set3",
-      type: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "test",
-      status: "open",
-      createdAt: NOW,
-      target: "bob",
-      conversationId: "w_talk_set3",
-      transcriptViewport: { tail: 20 },
-    };
-    const out = await setCommand.exec({
+  it("does not mutate input windowState", () => {
+    const windowState = { transcriptViewport: { tail: 20 } };
+    setCommand.exec({ args: { tail: 50 }, windowState } as any);
+    expect(windowState.transcriptViewport).toEqual({ tail: 20 });
+  });
+
+  it("fail-loud: tail + range_start mutually exclusive", () => {
+    const out = setCommand.exec({
       args: { tail: 10, range_start: 0, range_end: 5 },
-      self: talkWindow,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("互斥");
-    // unchanged
-    expect(talkWindow.transcriptViewport).toEqual({ tail: 20 });
+      windowState: { transcriptViewport: { tail: 20 } },
+    } as any) as any;
+    expect(out.ok).toBe(false);
+    expect(out.error).toContain("互斥");
   });
 
-  it("fail-loud: invalid tail", async () => {
-    const talkWindow: TalkWindow = {
-      id: "w_talk_set4",
-      type: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "test",
-      status: "open",
-      createdAt: NOW,
-      target: "bob",
-      conversationId: "w_talk_set4",
-      transcriptViewport: { tail: 20 },
-    };
-    const out = await setCommand.exec({
+  it("fail-loud: invalid tail", () => {
+    const out = setCommand.exec({
       args: { tail: -5 },
-      self: talkWindow,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("tail");
-    expect(talkWindow.transcriptViewport).toEqual({ tail: 20 });
+      windowState: { transcriptViewport: { tail: 20 } },
+    } as any) as any;
+    expect(out.ok).toBe(false);
+    expect(out.error).toContain("tail");
   });
 
-  // P6.§3 (2026-06-02): self-type guard 已下放到 manager.submit；method 体不再 re-check。
-  // 旧测试 "rejects when not mounted on talk_window" 已删除，跨类型拒绝由
-  // manager-dispatch 测试覆盖（见 manager-method-dispatch.test.ts）。
-
-  it("no viewport args returns helpful error", async () => {
-    const talkWindow: TalkWindow = {
-      id: "w_talk_set5",
-      type: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "test",
-      status: "open",
-      createdAt: NOW,
-      target: "bob",
-      conversationId: "w_talk_set5",
-    };
-    const out = await setCommand.exec({
-      args: {},
-      self: talkWindow,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("至少需要");
+  it("no viewport args returns ok with helpful result text", () => {
+    const out = setCommand.exec({ args: {}, windowState: {} } as any) as any;
+    expect(out.ok).toBe(true);
+    expect(out.result).toContain("至少需要");
   });
 });
 
-describe("set_transcript_window command (do)", () => {
-  it("works on do_window via shared helper", async () => {
-    const setCommand = builtinRegistry.getObjectDefinition("do").methods["set_transcript_window"]!;
+describe("set_transcript_window windowMethod (do)", () => {
+  it("works on do_window via shared helper", () => {
+    const setCommand = builtinRegistry.getObjectDefinition("do").windowMethods!["set_transcript_window"]!;
     expect(setCommand).toBeDefined();
-    const doWindow: DoWindow = {
-      id: "w_do_set",
-      type: "do",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "test",
-      status: "running",
-      createdAt: NOW,
-      targetThreadId: "child",
-      transcriptViewport: { tail: 20 },
-    };
-    const out = await setCommand.exec({
+    expect(builtinRegistry.getObjectDefinition("do").methods["set_transcript_window"]).toBeUndefined();
+    const out = setCommand.exec({
       args: { tail: 5 },
-      self: doWindow,
-    });
-    expect(out).toBeUndefined();
-    expect(doWindow.transcriptViewport).toEqual({ tail: 5 });
+      windowState: { transcriptViewport: { tail: 20 } },
+    } as any) as any;
+    expect(out.ok).toBe(true);
+    expect(out.state.transcriptViewport).toEqual({ tail: 5 });
   });
-
-  // P6.§3 (2026-06-02): cross-type rejection 已上移到 manager.submit
-  // (lookupMethodEntry 直接 REGISTRY.get(parent.type) 必定返回 do 的 entry，
-  //  而 form 是从 do 上 open 的；构造一个 form.parentWindowId 指向 talk
-  //  但 form.command="set_transcript_window" 的场景由 manager 路径单独覆盖)。
 });

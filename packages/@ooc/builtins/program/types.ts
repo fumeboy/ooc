@@ -24,9 +24,8 @@ export interface ProgramWindow extends BaseContextWindow {
   status: "open" | "closed";
   history: ProgramExecRecord[];
   /**
-   * history 渲染视口；默认 { tail: 10 }；
-   * 通过 set_history_window 切换（语义同 transcript viewport，字段名前缀 history_）。
-   * 详见 patches.viewport_protocol。
+   * @deprecated 移到 state.historyViewport（WindowDisplayState）；保留以兼容旧 thread.json。
+   * history 渲染视口；由 readable 维度的 window method `set_history_window` 调整。
    */
   historyViewport?: HistoryViewport;
 }

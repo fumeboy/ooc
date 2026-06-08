@@ -21,12 +21,17 @@ import type {
   MethodExecutionContext,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/method-types.js";
+import type {
+  WindowMethod,
+  WindowMethodExecutionContext,
+  WindowMethodOutcome,
+} from "@ooc/core/_shared/types/window-method.js";
 import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import type { FileWindow } from "../types.js";
 import {
   DEFAULT_VIEWPORT,
   applyViewport,
-  executeWindowSetViewport,
+  windowSetViewport,
   hasAnyViewportField,
   type Viewport,
 } from "@ooc/core/extendable/_shared/viewport.js";
@@ -171,7 +176,8 @@ open(parent_window_id="<file_window_id>", command="edit",
 - 不要用 \`write_file\` 做"修改局部"——write_file 是整文件覆盖语义，详见 root.write_file 的 KNOWLEDGE
 `.trim();
 
-const setRangeCommand: ObjectMethod = {
+const setRangeCommand: WindowMethod = {
+  kind: "window",
   paths: ["set_range"],
   schema: {
     args: {
@@ -184,10 +190,11 @@ const setRangeCommand: ObjectMethod = {
     if (change.kind === "status_changed" && change.to !== "open") return [];
     return buildGuidanceWindows(form, { [FILE_WINDOW_SET_RANGE_BASIC]: SET_RANGE_KNOWLEDGE });
   },
-  exec: (ctx) => executeFileWindowSetRange(ctx),
+  exec: (ctx) => fileWindowSetRange(ctx),
 };
 
-const setViewportCommand: ObjectMethod = {
+const setViewportCommand: WindowMethod = {
+  kind: "window",
   paths: ["set_viewport"],
   schema: {
     args: {
@@ -213,7 +220,7 @@ const setViewportCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeWindowSetViewport(ctx, "file"),
+  exec: (ctx) => windowSetViewport(ctx, "file"),
 };
 
 const reloadCommand: ObjectMethod = {
@@ -352,21 +359,23 @@ function applyEdits(
   return { ok: true, result: buffer };
 }
 
-/** 把 set_range 的 args 落到目标 file_window；通过 manager 操作以保证 toData() 写回。 */
-export async function executeFileWindowSetRange(
-  ctx: MethodExecutionContext,
-): Promise<string | undefined> {
-  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "file"，method 体不再 re-check。
-  const window = ctx.self as FileWindow;
+/**
+ * set_range 的 window method 执行体（控制展示，归 readable）。
+ *
+ * 写 state.lines / state.columns（第二阶段切片，与 viewport 复合、互不覆盖）。
+ * 返回新 WindowDisplayState（immutable）——manager 写回 window.state，不碰业务数据。
+ */
+export function fileWindowSetRange(ctx: WindowMethodExecutionContext): WindowMethodOutcome {
   const lines = asTuple(ctx.args.lines);
   const columns = asTuple(ctx.args.columns);
-  const next: FileWindow = {
-    ...window,
-    lines: lines ?? window.lines,
-    columns: columns ?? window.columns,
+  return {
+    ok: true,
+    state: {
+      ...ctx.windowState,
+      lines: lines ?? ctx.windowState.lines,
+      columns: columns ?? ctx.windowState.columns,
+    },
   };
-  Object.assign(window, next);
-  return undefined;
 }
 
 /**
@@ -493,8 +502,10 @@ async function compressFileWindow(
   } catch (err) {
     errorMsg = (err as Error).message;
   }
-  if (level === 1 && window.lines) {
-    attrs.read_range = `${window.lines[0]}-${window.lines[1]}`;
+  // H2: 展示字段从 window.state 读，向后兼容旧平铺字段。
+  const lines = window.state?.lines ?? window.lines;
+  if (level === 1 && lines) {
+    attrs.read_range = `${lines[0]}-${lines[1]}`;
   }
   const children: XmlNode[] = [xmlElement("file", attrs)];
   if (errorMsg) {
@@ -726,9 +737,11 @@ const fileConstructor: ObjectMethod = {
       status: "open",
       createdAt: Date.now(),
       path,
-      viewport: { ...DEFAULT_VIEWPORT },
-      lines: asTuple(ctx.args.lines),
-      columns: asTuple(ctx.args.columns),
+      state: {
+        viewport: { ...DEFAULT_VIEWPORT },
+        lines: asTuple(ctx.args.lines),
+        columns: asTuple(ctx.args.columns),
+      },
     };
     return { ok: true, object: fileWindow };
   },
@@ -736,12 +749,14 @@ const fileConstructor: ObjectMethod = {
 
 builtinRegistry.registerObjectType("file", {
   methods: {
-    set_range: setRangeCommand,
-    set_viewport: setViewportCommand,
     reload: reloadCommand,
     edit: editCommand,
     close: closeCommand,
     file: fileConstructor,
+  },
+  windowMethods: {
+    set_range: setRangeCommand,
+    set_viewport: setViewportCommand,
   },
   readable,
   compressView: compressFileWindow,

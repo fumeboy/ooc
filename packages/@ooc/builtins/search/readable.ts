@@ -17,8 +17,9 @@ export function readable(ctx: RenderContext): XmlNode[] {
     children.push(xmlElement("search_root", {}, [xmlText(window.searchRoot)]));
   }
 
+  // 展示状态从 window.state 读，向后兼容旧平铺字段。
   const viewport: TranscriptViewport =
-    window.resultsViewport ?? DEFAULT_RESULTS_VIEWPORT;
+    window.state?.resultsViewport ?? window.resultsViewport ?? DEFAULT_RESULTS_VIEWPORT;
   const { visible, earlierCount } = applyTranscriptViewport(
     window.matches,
     viewport,

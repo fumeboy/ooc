@@ -30,7 +30,7 @@ describe("viewport: file_window integration", () => {
       await execRootMethod("open_file", { thread, args: { path: file, title: "x" } });
       const fw = thread.contextWindows.find((w): w is FileWindow => w.type === "file");
       expect(fw).toBeDefined();
-      expect(fw!.viewport).toEqual({
+      expect(fw!.state!.viewport).toEqual({
         lineStart: 0,
         lineEnd: 200,
         columnStart: 0,
@@ -99,7 +99,7 @@ describe("viewport: file_window integration", () => {
       expect(opened.autoSubmitted).toBe(true);
 
       const after = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
-      expect(after.viewport).toEqual({
+      expect(after.state!.viewport).toEqual({
         lineStart: 0,
         lineEnd: 1000,
         columnStart: 0,
@@ -118,7 +118,7 @@ describe("viewport: file_window integration", () => {
       const thread = makeThread({ id: "t" });
       await execRootMethod("open_file", { thread, args: { path: file, title: "f" } });
       const fw = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
-      const origViewport = { ...fw.viewport! };
+      const origViewport = { ...fw.state!.viewport! };
 
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
       await mgr.openMethodExec({
@@ -132,7 +132,7 @@ describe("viewport: file_window integration", () => {
 
       // failed form 持有报错；window viewport 未变
       const after = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
-      expect(after.viewport).toEqual(origViewport);
+      expect(after.state!.viewport).toEqual(origViewport);
       const failedForm = thread.contextWindows.find(
         (w) => w.type === "method_exec" && (w as { command?: string }).command === "set_viewport",
       ) as { status: string; result?: string } | undefined;
@@ -181,7 +181,7 @@ describe("viewport: knowledge_window integration", () => {
         (w): w is KnowledgeWindow => w.type === "knowledge" && (w as KnowledgeWindow).source === "explicit",
       );
       expect(kw).toBeDefined();
-      expect(kw!.viewport).toEqual({
+      expect(kw!.state!.viewport).toEqual({
         lineStart: 0,
         lineEnd: 200,
         columnStart: 0,
@@ -212,7 +212,7 @@ describe("viewport: knowledge_window integration", () => {
       const after = thread.contextWindows.find(
         (w): w is KnowledgeWindow => w.type === "knowledge" && (w as KnowledgeWindow).source === "explicit",
       )!;
-      expect(after.viewport).toEqual({
+      expect(after.state!.viewport).toEqual({
         lineStart: 0,
         lineEnd: 500,
         columnStart: 0,

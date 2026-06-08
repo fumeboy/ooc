@@ -13,7 +13,10 @@
  * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 
-import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types.js";
+import type {
+  WindowMethodExecutionContext,
+  WindowMethodOutcome,
+} from "@ooc/core/_shared/types/window-method.js";
 import type { TranscriptViewport } from "@ooc/core/extendable/_shared/transcript-viewport.js";
 import { makeTranscriptViewportAdapter } from "@ooc/builtins/_shared/executable/viewport-adapter.js";
 
@@ -39,9 +42,9 @@ export function hasAnyHistoryViewportField(
   return adapter.hasAnyField(args);
 }
 
-/** set_history_window 的执行入口（委托共享 adapter）。 */
-export function executeProgramSetHistoryViewport(
-  ctx: MethodExecutionContext,
-): Promise<string | undefined> {
+/** set_history_window 的 window method 执行体（委托共享 adapter，返回新 state）。 */
+export function programSetHistoryViewport(
+  ctx: WindowMethodExecutionContext,
+): WindowMethodOutcome {
   return adapter.execute(ctx);
 }

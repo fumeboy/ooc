@@ -67,8 +67,9 @@ function renderTalkWindow(ctx: RenderContext): XmlNode[] {
     children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
   }
   const messages = filterMessagesForTalkWindow(window, ctx.thread);
+  // 展示状态从 window.state 读，向后兼容旧平铺字段。
   const viewport: TranscriptViewport =
-    window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
+    window.state?.transcriptViewport ?? window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
   const { visible, earlierCount } = applyTranscriptViewport(messages, viewport);
 
   // 始终暴露 viewport 元数据节点（让 LLM 知道当前渲染窗口 + 是否有省略）
@@ -352,7 +353,7 @@ const talkConstructor: ObjectMethod = {
       createdAt: Date.now(),
       target,
       conversationId: id,
-      transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
+      state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
     };
     return { ok: true, object: talkWindow };
   },
@@ -363,8 +364,10 @@ builtinRegistry.registerObjectType("talk", {
     say: sayCommand,
     wait: waitCommand,
     close: closeCommand,
-    set_transcript_window: setTranscriptWindowCommandForTalk,
     talk: talkConstructor,
+  },
+  windowMethods: {
+    set_transcript_window: setTranscriptWindowCommandForTalk,
   },
   onClose: onCloseTalkWindow,
   renderXml: renderTalkWindow,

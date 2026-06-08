@@ -21,7 +21,7 @@ import { serializeXml } from "../../../thinkable/context/xml.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {
   DEFAULT_RESULTS_VIEWPORT,
-  executeSearchSetResultsViewport,
+  searchSetResultsViewport,
   hasAnyResultsViewportField,
 } from "@ooc/builtins/search/executable/results-viewport.js";
 
@@ -53,7 +53,7 @@ function makeSearchWindow(opts: {
     matches: opts.matches,
     truncated: false,
     searchRoot: "/tmp",
-    resultsViewport: opts.resultsViewport,
+    state: opts.resultsViewport ? { resultsViewport: opts.resultsViewport } : undefined,
   };
 }
 
@@ -194,133 +194,104 @@ describe("search_window render: matches.count reflects full total (not visible)"
 
 // ─────────────────────────── command: set_results_window ────────────
 
-describe("set_results_window command", () => {
-  it("matches_tail updates window.resultsViewport", async () => {
-    const window = makeSearchWindow({
-      matches: makeMatches(10),
-      resultsViewport: { tail: 50 },
-    });
-    const out = await executeSearchSetResultsViewport({
+describe("set_results_window window method", () => {
+  it("matches_tail returns new state with resultsViewport", () => {
+    const out = searchSetResultsViewport({
       args: { matches_tail: 100 },
-      self: window,
-    });
-    expect(out).toBeUndefined();
-    expect(window.resultsViewport).toEqual({ tail: 100 });
+      windowState: { resultsViewport: { tail: 50 } },
+    } as any);
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.state.resultsViewport).toEqual({ tail: 100 });
   });
 
-  it("range mode replaces tail", async () => {
-    const window = makeSearchWindow({
-      matches: makeMatches(10),
-      resultsViewport: { tail: 50 },
-    });
-    const out = await executeSearchSetResultsViewport({
+  it("range mode replaces tail", () => {
+    const out = searchSetResultsViewport({
       args: { matches_start: 0, matches_end: 5 },
-      self: window,
-    });
-    expect(out).toBeUndefined();
-    expect(window.resultsViewport).toEqual({ rangeStart: 0, rangeEnd: 5 });
+      windowState: { resultsViewport: { tail: 50 } },
+    } as any);
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.state.resultsViewport).toEqual({ rangeStart: 0, rangeEnd: 5 });
   });
 
-  it("fail-loud: matches_tail + matches_start mutually exclusive", async () => {
-    const window = makeSearchWindow({
-      matches: makeMatches(10),
-      resultsViewport: { tail: 50 },
-    });
-    const out = await executeSearchSetResultsViewport({
+  it("does not mutate input windowState", () => {
+    const windowState = { resultsViewport: { tail: 50 } };
+    searchSetResultsViewport({ args: { matches_tail: 100 }, windowState } as any);
+    expect(windowState.resultsViewport).toEqual({ tail: 50 });
+  });
+
+  it("fail-loud: matches_tail + matches_start mutually exclusive", () => {
+    const out = searchSetResultsViewport({
       args: { matches_tail: 10, matches_start: 0, matches_end: 5 },
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("互斥");
-    // 错误信息应用 matches_* 命名（不暴露内部 tail / range_*）
-    expect(out as string).toContain("matches_tail");
-    expect(out as string).toContain("matches_start");
-    expect(out as string).toContain("matches_end");
-    // unchanged
-    expect(window.resultsViewport).toEqual({ tail: 50 });
+      windowState: { resultsViewport: { tail: 50 } },
+    } as any);
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error).toContain("互斥");
+      // 错误信息应用 matches_* 命名（不暴露内部 tail / range_*）
+      expect(out.error).toContain("matches_tail");
+      expect(out.error).toContain("matches_start");
+      expect(out.error).toContain("matches_end");
+    }
   });
 
-  it("fail-loud: invalid matches_tail (negative)", async () => {
-    const window = makeSearchWindow({
-      matches: makeMatches(10),
-      resultsViewport: { tail: 50 },
-    });
-    const out = await executeSearchSetResultsViewport({
+  it("fail-loud: invalid matches_tail (negative)", () => {
+    const out = searchSetResultsViewport({
       args: { matches_tail: -5 },
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("matches_tail");
-    expect(window.resultsViewport).toEqual({ tail: 50 });
+      windowState: { resultsViewport: { tail: 50 } },
+    } as any);
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.error).toContain("matches_tail");
   });
 
-  it("fail-loud: matches_start without matches_end", async () => {
-    const window = makeSearchWindow({
-      matches: makeMatches(10),
-      resultsViewport: { tail: 50 },
-    });
-    const out = await executeSearchSetResultsViewport({
+  it("fail-loud: matches_start without matches_end", () => {
+    const out = searchSetResultsViewport({
       args: { matches_start: 0 },
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("matches_start");
-    expect(out as string).toContain("matches_end");
-    expect(window.resultsViewport).toEqual({ tail: 50 });
+      windowState: { resultsViewport: { tail: 50 } },
+    } as any);
+    expect(out.ok).toBe(false);
+    if (!out.ok) {
+      expect(out.error).toContain("matches_start");
+      expect(out.error).toContain("matches_end");
+    }
   });
 
-  it("fail-loud: matches_start > matches_end", async () => {
-    const window = makeSearchWindow({
-      matches: makeMatches(10),
-      resultsViewport: { tail: 50 },
-    });
-    const out = await executeSearchSetResultsViewport({
+  it("fail-loud: matches_start > matches_end", () => {
+    const out = searchSetResultsViewport({
       args: { matches_start: 10, matches_end: 5 },
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("matches_start");
-    expect(window.resultsViewport).toEqual({ tail: 50 });
+      windowState: { resultsViewport: { tail: 50 } },
+    } as any);
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.error).toContain("matches_start");
   });
 
-  // P6.§3 (2026-06-02): self-type guard 已下放到 manager.submit；method 体不再 re-check。
-  // 旧测试 "rejects when not mounted on search_window" 已删除，跨类型拒绝由
-  // constructor-pathway / manager dispatch 测试覆盖。
-
-  it("no viewport args returns helpful error", async () => {
-    const window = makeSearchWindow({
-      matches: makeMatches(10),
-    });
-    const out = await executeSearchSetResultsViewport({
+  it("no viewport args returns ok with helpful result text", () => {
+    const out = searchSetResultsViewport({
       args: {},
-      self: window,
-    });
-    expect(typeof out).toBe("string");
-    expect(out as string).toContain("至少需要");
+      windowState: {},
+    } as any);
+    expect(out.ok).toBe(true);
+    if (out.ok) expect(out.result).toContain("至少需要");
   });
 });
 
-// ─────────────────────────── command registered on search type ──────
+// ─────────────────────────── windowMethod registered on search type ──
 
-describe("set_results_window registered on search window", () => {
-  it("search window definition has set_results_window command", () => {
+describe("set_results_window registered as windowMethod on search", () => {
+  it("search definition has set_results_window in windowMethods (not methods)", () => {
     const def = builtinRegistry.getObjectDefinition("search");
-    expect(def.methods["set_results_window"]).toBeDefined();
+    expect(def.windowMethods?.["set_results_window"]).toBeDefined();
+    expect(def.methods["set_results_window"]).toBeUndefined();
   });
 
-  it("registered command executes via window registry", async () => {
+  it("registered windowMethod executes returning new state", () => {
     const def = builtinRegistry.getObjectDefinition("search");
-    const cmd = def.methods["set_results_window"]!;
-    const window = makeSearchWindow({
-      matches: makeMatches(10),
-      resultsViewport: { tail: 50 },
-    });
-    const out = await cmd.exec({
+    const cmd = def.windowMethods!["set_results_window"]!;
+    const out = cmd.exec({
       args: { matches_tail: 25 },
-      self: window,
-    });
-    expect(out).toBeUndefined();
-    expect(window.resultsViewport).toEqual({ tail: 25 });
+      windowState: { resultsViewport: { tail: 50 } },
+    } as any) as any;
+    expect(out.ok).toBe(true);
+    expect(out.state.resultsViewport).toEqual({ tail: 25 });
   });
 });
 

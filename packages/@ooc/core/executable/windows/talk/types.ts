@@ -24,6 +24,6 @@ export interface TalkWindow extends BaseContextWindow {
   status: "open" | "closed";
   /** 标记为初始 creator talk_window（callee thread 自带的、指向 caller 的那一条），不可被 close。 */
   isCreatorWindow?: boolean;
-  /** transcript 渲染窗口；缺省 = DEFAULT_TRANSCRIPT_VIEWPORT（tail=20）。详见 _shared/transcript-viewport.ts。 */
+  /** @deprecated 移到 state.transcriptViewport（WindowDisplayState）；保留以兼容旧 thread.json。 */
   transcriptViewport?: TranscriptViewport;
 }

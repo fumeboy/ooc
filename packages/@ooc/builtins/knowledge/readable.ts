@@ -35,8 +35,9 @@ export async function readable(ctx: RenderContext): Promise<XmlNode[]> {
     children.push(xmlElement("description", {}, [xmlText(window.description)]));
   }
   const useViewport = window.source === "explicit" || !window.source;
+  // 展示状态从 window.state 读，向后兼容旧平铺字段。
   const viewport: Viewport | undefined = useViewport
-    ? window.viewport ?? DEFAULT_VIEWPORT
+    ? window.state?.viewport ?? window.viewport ?? DEFAULT_VIEWPORT
     : undefined;
   if (viewport) {
     children.push(

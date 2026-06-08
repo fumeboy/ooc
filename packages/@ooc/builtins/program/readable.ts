@@ -16,8 +16,9 @@ export function readable(ctx: RenderContext): XmlNode[] {
     return children;
   }
 
+  // 展示状态从 window.state 读，向后兼容旧平铺字段。
   const viewport: TranscriptViewport =
-    window.historyViewport ?? DEFAULT_HISTORY_VIEWPORT;
+    window.state?.historyViewport ?? window.historyViewport ?? DEFAULT_HISTORY_VIEWPORT;
   const indexed = window.history.map((rec, idx) => ({ rec, idx }));
   const { visible, earlierCount } = applyTranscriptViewport(indexed, viewport);
 

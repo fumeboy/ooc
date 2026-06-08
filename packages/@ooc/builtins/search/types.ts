@@ -34,9 +34,8 @@ export interface SearchWindow extends BaseContextWindow {
   /** 仅 grep kind：搜索的根目录（便于 LLM 理解 match.path 的相对性） */
   searchRoot?: string;
   /**
-   * matches 渲染视口；默认 { tail: 50 }；
-   * 通过 set_results_window 切换（语义同 transcript viewport，字段名前缀 matches_）。
-   * 详见 patches.viewport_protocol。
+   * @deprecated 移到 state.resultsViewport（WindowDisplayState）；保留以兼容旧 thread.json。
+   * matches 渲染视口；由 readable 维度的 window method `set_results_window` 调整。
    */
   resultsViewport?: ResultsViewport;
 }

@@ -13,6 +13,7 @@ import type {
   MethodExecutionContext,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/method-types.js";
+import type { WindowMethod } from "@ooc/core/_shared/types/window-method.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
@@ -28,12 +29,12 @@ export { runOneExec, type ProgramExecArgs } from "./runtime.js";
 import type { ProgramWindow } from "../types.js";
 import {
   DEFAULT_HISTORY_VIEWPORT,
-  executeProgramSetHistoryViewport,
+  programSetHistoryViewport,
   hasAnyHistoryViewportField,
 } from "./history-viewport.js";
 export {
   DEFAULT_HISTORY_VIEWPORT,
-  executeProgramSetHistoryViewport,
+  programSetHistoryViewport,
   hasAnyHistoryViewportField,
 } from "./history-viewport.js";
 import { readable } from "../readable.js";
@@ -143,7 +144,8 @@ const closeCommand: ObjectMethod = {
   exec: () => undefined,
 };
 
-const setHistoryWindowCommand: ObjectMethod = {
+const setHistoryWindowCommand: WindowMethod = {
+  kind: "window",
   paths: ["set_history_window"],
   schema: {
     args: {
@@ -168,7 +170,7 @@ const setHistoryWindowCommand: ObjectMethod = {
     }
     return buildGuidanceWindows(form, entries);
   },
-  exec: (ctx) => executeProgramSetHistoryViewport(ctx),
+  exec: (ctx) => programSetHistoryViewport(ctx),
 };
 
 /** program_window.exec：跑一次 exec，把 record append 到 window.history。 */
@@ -345,7 +347,7 @@ const programConstructor: ObjectMethod = {
       status: "open",
       createdAt: Date.now(),
       history: [record],
-      historyViewport: DEFAULT_HISTORY_VIEWPORT,
+      state: { historyViewport: DEFAULT_HISTORY_VIEWPORT },
     };
     return { ok: true, object: programWindow };
   },
@@ -355,8 +357,10 @@ builtinRegistry.registerObjectType("program", {
   methods: {
     exec: execCommand,
     close: closeCommand,
-    set_history_window: setHistoryWindowCommand,
     program: programConstructor,
+  },
+  windowMethods: {
+    set_history_window: setHistoryWindowCommand,
   },
   readable,
 });

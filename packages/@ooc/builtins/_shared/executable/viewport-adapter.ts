@@ -12,7 +12,11 @@
  * returned helpers under its existing public names (so importers are unchanged).
  */
 
-import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types.js";
+import type {
+  WindowMethodExecutionContext,
+  WindowMethodOutcome,
+} from "@ooc/core/_shared/types/window-method.js";
+import type { WindowDisplayState } from "@ooc/core/_shared/types/window-state.js";
 import {
   mergeTranscriptViewport,
   type TranscriptViewport,
@@ -26,20 +30,23 @@ export interface TranscriptViewportAdapterSpec {
    * 内部翻译为通用 `tail` / `range_start` / `range_end`。
    */
   prefix: string;
-  /** ctx.self 上存放 viewport 的字段名，例：`historyViewport` / `resultsViewport`。 */
-  windowField: string;
+  /**
+   * WindowDisplayState 上存放 viewport 的字段名，例：`historyViewport` / `resultsViewport`。
+   * window method 写回 ctx.windowState[windowField]。
+   */
+  windowField: keyof WindowDisplayState;
   /** 错误信息前缀标签，例：`program_window.set_history_window`。 */
   label: string;
   /** 默认 viewport（无字段时回退），例：`{ tail: 10 }` / `{ tail: 50 }`。 */
   defaultViewport: TranscriptViewport;
 }
 
-/** 一个 viewport adapter 暴露的三件套。 */
+/** 一个 viewport adapter 暴露的两件套（window method 执行体）。 */
 export interface TranscriptViewportAdapter {
   /** 是否带任意 `<prefix>_*` viewport 字段。 */
   hasAnyField(args: Record<string, unknown>): boolean;
-  /** set_*_window 的执行入口：校验 → 翻译 → merge → 写回 window 字段。 */
-  execute(ctx: MethodExecutionContext): Promise<string | undefined>;
+  /** set_*_window 的 window method 执行体：校验 → 翻译 → merge → 返回新 state（immutable）。 */
+  execute(ctx: WindowMethodExecutionContext): WindowMethodOutcome;
 }
 
 /**
@@ -67,13 +74,16 @@ export function makeTranscriptViewportAdapter(
     return translated;
   }
 
-  async function execute(ctx: MethodExecutionContext): Promise<string | undefined> {
-    // P6.§3: manager 在 dispatch 阶段已保证 self.type 正确，method 体不再 re-check。
-    const window = ctx.self as unknown as Record<string, unknown>;
+  function execute(ctx: WindowMethodExecutionContext): WindowMethodOutcome {
     if (!hasAnyField(ctx.args)) {
-      return `[${spec.label}] 至少需要传入 ${tailKey} / ${startKey}+${endKey} 之一。`;
+      return {
+        ok: true,
+        state: ctx.windowState,
+        result: `[${spec.label}] 至少需要传入 ${tailKey} / ${startKey}+${endKey} 之一。`,
+      };
     }
-    const current = (window[spec.windowField] as TranscriptViewport) ?? spec.defaultViewport;
+    const current =
+      (ctx.windowState[spec.windowField] as TranscriptViewport | undefined) ?? spec.defaultViewport;
     const merged = mergeTranscriptViewport(current, translateArgs(ctx.args));
     if (!merged.ok) {
       // 翻译错误信息里的通用字段名，对 LLM 暴露 <prefix>_* 命名
@@ -82,10 +92,9 @@ export function makeTranscriptViewportAdapter(
         .replace(/range_start/g, startKey)
         .replace(/range_end/g, endKey)
         .replace(/\btail\b/g, tailKey);
-      return `[${spec.label}] ${msg}`;
+      return { ok: false, error: `[${spec.label}] ${msg}` };
     }
-    Object.assign(window, { [spec.windowField]: merged.viewport });
-    return undefined;
+    return { ok: true, state: { ...ctx.windowState, [spec.windowField]: merged.viewport } };
   }
 
   return { hasAnyField, execute };
