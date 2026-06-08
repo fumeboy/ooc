@@ -11,7 +11,7 @@
 
 import React, { type ReactNode } from "react";
 import { FallbackJsonDiff } from "./FallbackJsonDiff";
-import type { WindowDiffRendererProps } from "./registry";
+import type { WindowDiffRendererProps } from "./types";
 
 interface ErrorBoundaryProps extends WindowDiffRendererProps {
   children: ReactNode;
