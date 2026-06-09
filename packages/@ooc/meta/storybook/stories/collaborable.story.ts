@@ -7,7 +7,7 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { mkServer, postJson, readThreadJson, StoryRecorder } from "../_harness/control-plane";
+import { mkServer, postJson, readThreadContextJson, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
 export async function runControlPlane(): Promise<StoryResult> {
@@ -36,9 +36,11 @@ export async function runControlPlane(): Promise<StoryResult> {
     }
 
     // TC-COLLAB-02: user.root 上挂了指向 target 的 talk_window（显式协作通道）
+    // §10：contextWindows 已从 thread.json 迁出，唯一权威是 thread-context.json
+    // （talk 是 builtin feature → 完整 inline，含 type/target）。
     {
-      const userRoot = readThreadJson(baseDir, sid, "user", "root");
-      const wins: any[] = userRoot?.contextWindows ?? [];
+      const userCtx = readThreadContextJson(baseDir, sid, "user", "root");
+      const wins: any[] = userCtx?.contextWindows ?? [];
       const talkWin = wins.find((w) => w?.type === "talk" && (w?.target === target || w?.targetObjectId === target));
       rec.ok("TC-COLLAB-02", "user.root 挂了指向 target 的 talk_window（cross-object talk 路由表）",
         !!talkWin, `windows=${JSON.stringify(wins.map((w) => ({ t: w?.type, tg: w?.target })))?.slice(0, 160)}`);

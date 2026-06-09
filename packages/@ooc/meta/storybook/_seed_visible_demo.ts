@@ -86,10 +86,19 @@ async function main() {
     console.error("could not find thread dirs — skipping manual reply injection");
   } else {
     // 从 sb_demo thread 上拿 talk window 的 id（window id = talk_window id，用于
-    // formatter 把 outbox 消息映射到 target）
+    // formatter 把 outbox 消息映射到 target）。
+    // §10：contextWindows 已迁出 thread.json → 读 thread-context.json（talk 是 builtin
+    // feature，完整 inline，含 id/type）。
     const sbThread = JSON.parse(await readFile(join(sbThreadDir, "thread.json"), "utf8"));
+    let sbContextWindows: any[] = [];
+    try {
+      const ctx = JSON.parse(await readFile(join(sbThreadDir, "thread-context.json"), "utf8"));
+      sbContextWindows = Array.isArray(ctx?.contextWindows) ? ctx.contextWindows : [];
+    } catch {
+      sbContextWindows = [];
+    }
     const talkWindowId =
-      (sbThread.contextWindows ?? []).find((w: any) => w.type === "talk")?.id ??
+      sbContextWindows.find((w: any) => w.type === "talk")?.id ??
       (sbThread.creatorWindowId as string | undefined) ??
       "";
 

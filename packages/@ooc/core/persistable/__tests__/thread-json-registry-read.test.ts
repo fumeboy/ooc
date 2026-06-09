@@ -40,18 +40,10 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
   });
 
   it("registry hit: 从 state.json 拉对象，按 params.order 排序", async () => {
-    // 写 thread.json (其 contextWindows[] 故意只有 root + 旧 todo, 用来验证 registry 覆盖)
+    // §10：thread-context.json 是最高权威；为可达 registry (P5'.1) 路径，thread.contextWindows
+    // 必须为空（writeThread 写出空 thread-context.json → 回落 registry）。
     const thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
-    thread.contextWindows = [
-      {
-        id: "todo_old",
-        type: "todo",
-        title: "stale entry from contextWindows[]",
-        status: "open",
-        content: "should be replaced by registry",
-        createdAt: 1,
-      } as never,
-    ];
+    thread.contextWindows = [];
     await writeThread(thread);
 
     // 写两个 flat state.json
@@ -90,10 +82,10 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
     const restored = await readThread(flowRef, "t_main");
     expect(restored).toBeDefined();
     const ids = restored!.contextWindows.map((w) => w.id);
-    // todo_a (order 0) 在前, todo_b (order 1) 在后, todo_old 兜底拼在尾部
+    // todo_a (order 0) 在前, todo_b (order 1) 在后（registry 排序）
     // 注意: initContextWindows 会兜底注入 creator do_window (id = parent objectId)
     const filtered = ids.filter((id) => id.startsWith("todo_"));
-    expect(filtered).toEqual(["todo_a", "todo_b", "todo_old"]);
+    expect(filtered).toEqual(["todo_a", "todo_b"]);
   });
 
   it("registry params 投影回 ContextWindow: compressLevel + parentObjectId", async () => {
@@ -147,20 +139,21 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
     expect(ghost).toBeUndefined();
   });
 
-  it("registry empty → fallback 到 thread.contextWindows[] / nested context/ 路径", async () => {
+  it("builtin window 经 writeThread 落 thread-context.json，reload 还原（§10 单点刷）", async () => {
+    // §10：builtin feature 窗（todo）由 writeThread 单点刷进 thread-context.json（inline），
+    // reload 经 thread-context.json hydrate 还原——不再依赖已退役的 thread.contextWindows fallback。
     const thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
     thread.contextWindows = [
       {
         id: "todo_legacy",
         type: "todo",
-        title: "legacy fallback",
+        title: "builtin todo",
         status: "open",
-        content: "from contextWindows[]",
+        content: "persisted via thread-context.json",
         createdAt: 1,
       } as never,
     ];
     await writeThread(thread);
-    // 没写 registry → 走旧路径
 
     const restored = await readThread(flowRef, "t_main");
     const ids = restored!.contextWindows.map((w) => w.id);

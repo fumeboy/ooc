@@ -112,6 +112,17 @@ export function readThreadJson(baseDir: string, sid: string, objectId: string, t
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return undefined; }
 }
 
+/**
+ * 读 thread-context.json（§10 退役 thread.json.contextWindows 后，contextWindows 的唯一权威）。
+ * 返回 `{ threadId, contextWindows }`；不存在/坏数据 → undefined。
+ * builtin feature 窗（talk/do/todo）以完整 inline 落盘，可直接读到 type/target 等字段。
+ */
+export function readThreadContextJson(baseDir: string, sid: string, objectId: string, threadId: string): any | undefined {
+  const p = join(baseDir, "flows", sid, "objects", objectId, "threads", threadId, "thread-context.json");
+  if (!existsSync(p)) return undefined;
+  try { return JSON.parse(readFileSync(p, "utf8")); } catch { return undefined; }
+}
+
 /** 收集 TC 结果的小记录器。 */
 export class StoryRecorder {
   readonly tcs: TcResult[] = [];

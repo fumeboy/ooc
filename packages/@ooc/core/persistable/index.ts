@@ -117,6 +117,7 @@ export {
   threadContextFile,
   writeThreadContext,
   readThreadContext,
+  buildThreadContextEntries,
   type ThreadContextRef,
   type ThreadContextEntry,
   type ThreadContextFile,

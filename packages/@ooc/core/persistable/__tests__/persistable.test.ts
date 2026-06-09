@@ -10,7 +10,8 @@ import {
   readThread,
   writeDebugInput,
   writeDebugOutput,
-  writeThread
+  writeThread,
+  writeThreadContext
 } from "../index";
 import type { ThreadContext } from "../../thinkable/context";
 
@@ -64,38 +65,42 @@ describe("persistable single object flow", () => {
     expect(restored?.persistence).toEqual({ ...ref, threadId: "root" });
   });
 
-  test("readThread filters out windows with unregistered types (Round 7 issue cleanup)", async () => {
-    // Round 7 移除 issue 看板后,历史 thread.json 可能含 type="issue" 等遗留 entries。
-    // readThread 应 graceful skip (warn + drop) 而非抛错阻塞所有调用方。
+  test("readThread filters out unregistered-type windows from thread-context.json (Round 7 issue cleanup)", async () => {
+    // §10 退役 thread.json.contextWindows 后，thread-context.json 是唯一完整权威。
+    // Round 7 移除 issue 看板后，历史 thread-context.json 可能含 inline type="issue" 等
+    // 已废弃 entries。readThread 应 graceful skip (warn + drop) 而非抛错阻塞所有调用方。
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-persistable-"));
     const ref = await createFlowObject({
       baseDir: tempRoot,
       sessionId: "s1",
       objectId: "obj"
     });
-    // 构造 thread.json 含一个已废弃 type ("issue") + 一个合法 type ("file")
-    const threadWithLegacy: ThreadContext = {
+    const persistence = { ...ref, threadId: "legacy" };
+    // 先写一份最小 thread.json（不含 contextWindows，§10 退役后的形态）。
+    const thread: ThreadContext = {
       id: "legacy",
       status: "running",
       events: [],
-      contextWindows: [
-        // @ts-expect-error - intentionally write legacy unregistered type
-        { id: "w_issue_x", type: "issue", title: "old issue ref", status: "open" },
-        // @ts-expect-error - minimal file window shape for test
-        { id: "w_file_x", type: "file", title: "real.ts", path: "/tmp/x", status: "open" },
-      ],
-      persistence: { ...ref, threadId: "legacy" }
+      contextWindows: [],
+      persistence
     };
-    await writeThread(threadWithLegacy);
+    await writeThread(thread);
+    // 直接构造 thread-context.json：inline 一个已废弃 type ("issue") + 一个合法 builtin
+    // feature ("todo")。issue 未注册 → drop；todo 已注册 → 保留。
+    await writeThreadContext(persistence, [
+      // @ts-expect-error - intentionally write legacy unregistered type inline
+      { id: "w_issue_x", type: "issue", title: "old issue ref", status: "open" },
+      { id: "w_todo_x", type: "todo", title: "real todo", status: "open", content: "", createdAt: 1 },
+    ]);
 
     const restored = await readThread(ref, "legacy");
 
     expect(restored).toBeDefined();
     expect(restored?.id).toBe("legacy");
-    // issue window 被 drop, file window 保留
+    // issue window 被 drop, todo window 保留
     const ids = (restored?.contextWindows ?? []).map((w) => w.id);
     expect(ids).not.toContain("w_issue_x");
-    expect(ids).toContain("w_file_x");
+    expect(ids).toContain("w_todo_x");
   });
 
   test("returns undefined when reading a missing thread", async () => {

@@ -7,9 +7,13 @@ import type { ObjectRegistry } from "../executable/windows/_shared/registry";
 import { builtinRegistry } from "../executable/windows/index.js";
 import { readContextRegistry } from "./flow-context-registry";
 import { readRuntimeObjectState } from "./flow-runtime-object";
-import { readThreadContext, type ThreadContextEntry } from "./flow-thread-context";
+import {
+  buildThreadContextEntries,
+  readThreadContext,
+  writeThreadContext,
+  type ThreadContextEntry,
+} from "./flow-thread-context";
 import type { ContextWindow } from "../executable/windows/_shared/types";
-import { isNonPersistedWindow } from "../executable/windows/_shared/types";
 import { persistInboxMessages, readInboxMessages } from "./inbox-store";
 import { observeWarn } from "../observable/log-aggregator";
 
@@ -30,51 +34,45 @@ export function threadFile(ref: ThreadPersistenceRef): string {
  * 持久化前剥离 in-process 内存字段。
  *
  * 当前规则:
- * - compressLevel = 0 / undefined 是默认值,不进 thread.json,避免在所有历史 window
- *   上增加噪音字段(design §risk)
+ * - inbox / intentCache → 独立目录或纯内存，不进 thread.json。
+ * - **contextWindows 字段已退役**（§10 收敛，2026-06-09）：thread-context.json 是
+ *   唯一完整权威，thread.json 不再携带 contextWindows。避免两文件双写漂移，
+ *   也删除了掩盖不同步 bug 的 hydrate legacy fallback。
  *
- * P0f note: ProcessEvent._foldedBy 同样下划线前缀但**保留**进 thread.json
- *   (fold 状态的唯一锚点,strip 掉会导致 reload 后折叠丢失)。
- *
- * 历史: 2026-05-26 移除 IssueWindow lastSeenCommentId / lastNotifiedAt 的 strip 逻辑
- *   (issue 看板已整体移除)。
+ * P0f note: ProcessEvent._foldedBy 等线程内字段仍随 thread.json 持久化（thread.json
+ *   仍是 thread 元数据的权威；只有 contextWindows 这一个字段被迁出）。
  */
-function stripVolatileForPersist(thread: ThreadContext): ThreadContext {
+function stripVolatileForPersist(thread: ThreadContext): Omit<ThreadContext, "contextWindows"> {
   // inbox 落独立 per-message 目录（inbox-store，append-only 并发安全），不进 thread.json——
   // 否则 worker 的 stale in-memory inbox 整体覆盖会丢并发回报（collaborable 竞态根因）。
-  const { intentCache: _dropIntentCache, inbox: _dropInbox, ...threadRest } = thread;
-  return {
-    ...threadRest,
-    // 不持久化的窗（volatile derived guidance + self 门面窗）不落 thread.json：二者都由
-    // enrichment / init 每轮确定性重建（self window 经 readThread→initContextWindows→
-    // injectSelfWindowIfObjectThread 幂等重注入），持久化只会在 reload 时变死 _ref 刷屏，
-    // 且与 thread-context.json（写盘端已用 isNonPersistedWindow 剔除 self）内容集合漂移。
-    // 2026-06-09: 由 isVolatileDerivedWindow 收敛为 isNonPersistedWindow，与 thread-context
-    // 写盘端对齐，根治 thread.json(含 self) vs thread-context.json(不含 self) 的双写漂移。
-    contextWindows: thread.contextWindows
-      .filter((window) => !isNonPersistedWindow(window))
-      .map((window) => {
-      let next = window;
-      if (!next.compressLevel) {
-        const { compressLevel: _drop, ...rest } = next;
-        next = rest as typeof next;
-      }
-      // P6.§7: effectiveVisibleType 是每轮 enrichment 产物，不持久化。
-      if (next.effectiveVisibleType !== undefined) {
-        const { effectiveVisibleType: _drop, ...rest } = next;
-        next = rest as typeof next;
-      }
-      return next;
-    }),
-  };
+  // contextWindows 退役 → 从持久化对象删除该字段，由 thread-context.json 单独权威落盘。
+  const {
+    intentCache: _dropIntentCache,
+    inbox: _dropInbox,
+    contextWindows: _dropContextWindows,
+    ...threadRest
+  } = thread;
+  return threadRest;
 }
 
-/** 把线程上下文持久化到 `thread.json`；线程未携带 persistence ref 时静默跳过。 */
+/**
+ * 把线程上下文持久化到 `thread.json`；线程未携带 persistence ref 时静默跳过。
+ *
+ * §10 单点刷（2026-06-09）：writeThread 是**唯一**持久化入口，因此让它单点刷
+ * thread-context.json，自动覆盖所有写路径——包括绕过 WindowManager 直接改
+ * thread.contextWindows 的路径（delivery / thinkloop reconcilePeerWindows /
+ * scheduler / service seedSession·addUserTalkWindow / worker）。entries 用与
+ * WindowManager.writeThreadContextSnapshot 同一份 buildThreadContextEntries 生成，
+ * 单一来源、不产生冲突写。
+ */
 export async function writeThread(thread: ThreadContext): Promise<void> {
   if (!thread.persistence) return;
   await mkdir(threadDir(thread.persistence), { recursive: true });
   // inbox → 独立 per-message 目录（append-only，并发安全），再从 thread.json strip 掉。
   await persistInboxMessages(thread.persistence, thread.inbox);
+  // contextWindows → 独立 thread-context.json（唯一完整权威，含 builtin inline + flow ref）。
+  const entries = buildThreadContextEntries(thread.contextWindows, builtinRegistry);
+  await writeThreadContext(thread.persistence, entries);
   const sanitized = stripVolatileForPersist(thread);
   await writeFile(threadFile(thread.persistence), toJson(sanitized), "utf8");
 }
@@ -89,27 +87,11 @@ export async function readThread(
   try {
     const raw = await readFile(threadFile(persistence), "utf8");
     const parsed = JSON.parse(raw) as ThreadContext;
-    // 过滤掉未注册 type 的 windows (Round 7 移除 issue 后, 历史 thread.json 可能含 type="issue"
-    // 等遗留 entries; 不过滤会让 getObjectDefinition 抛 INTERNAL_ERROR 阻塞所有依赖 thread
-    // 的 API。过滤是上游 graceful skip — registry 仍 fail-loud, 但读历史 thread 时不 crash。
-    // 打 console.warn 让运维知道发生了 silent drop, 符合 silent-swallow ban。)
-    const rawWindows = Array.isArray(parsed.contextWindows) ? parsed.contextWindows : [];
-    const known = new Set(registry.listRegisteredObjectTypes());
-    // ooc-6: self window 的 type === objectId（stone-backed type），它会在 synthesizer
-    // 的 ensureSelfObjectTypeRegistered 阶段才注册到 registry——读时还没注册。
-    // 所以放行 type === self objectId 的 window，避免被这里的 filter 误丢。
-    const selfTypeAllowance = persistence.objectId;
-    const filteredWindows = rawWindows.filter(
-      (w) => known.has(w.type) || w.type === selfTypeAllowance,
-    );
-    if (filteredWindows.length !== rawWindows.length) {
-      const dropped = rawWindows.filter((w) => !known.has(w.type));
-      console.warn(
-        `[readThread] ${persistence.objectId}/${threadId}: dropped ${dropped.length} window(s) with unregistered types:`,
-        dropped.map((w) => `${w.id}=${w.type}`).join(", "),
-      );
-    }
-    const contextWindows = filteredWindows as ContextWindow[];
+    // §10 退役（2026-06-09）：thread.json 不再携带 contextWindows——它由独立的
+    // thread-context.json 单独权威落盘。这里把 contextWindows 起始为空数组，
+    // 完全交给下方 thread-context.json hydrate + init 注入填充；不再以
+    // thread.json.contextWindows 为来源（旧数据若仍含该字段，一律忽略）。
+    const contextWindows: ContextWindow[] = [];
     const restored: ThreadContext = {
       ...parsed,
       contextWindows,
@@ -138,10 +120,16 @@ export async function readThread(
     let hydratedFromThreadContext = false;
     try {
       const threadCtx = await readThreadContext(persistence);
-      if (threadCtx && Array.isArray(threadCtx.contextWindows)) {
+      // §10：writeThread 现在恒写 thread-context.json（含空数组）。**非空**才视为权威；
+      // 空 thread-context.json 视同「无完整 context」，回落到 P5'.1 context.json registry
+      // / init 注入（保留 registry 路径可达性）。
+      if (
+        threadCtx &&
+        Array.isArray(threadCtx.contextWindows) &&
+        threadCtx.contextWindows.length > 0
+      ) {
         const knownTypes = new Set(registry.listRegisteredObjectTypes());
         const merged: ContextWindow[] = [];
-        const seenIds = new Set<string>();
         for (const entry of threadCtx.contextWindows as ThreadContextEntry[]) {
           if (!entry || typeof entry !== "object") continue;
           if ("_ref" in entry && (entry as { _ref?: unknown })._ref === true) {
@@ -169,7 +157,6 @@ export async function readThread(
               continue;
             }
             merged.push(win);
-            seenIds.add(win.id);
           } else {
             // inline ContextWindow（builtin feature）
             const win = entry as ContextWindow;
@@ -188,13 +175,11 @@ export async function readThread(
               // 注意：不主动 readRuntimeObjectState 探测（噪音太多）。
             }
             merged.push(win);
-            seenIds.add(win.id);
           }
         }
-        // legacy fallback：thread.contextWindows[] 中尚未被 thread-context.json 覆盖的
-        for (const win of contextWindows) {
-          if (!seenIds.has(win.id)) merged.push(win);
-        }
+        // §10 退役：thread-context.json 是唯一完整权威——不再把 thread.json.contextWindows
+        // 多余 window 补回（旧 fallback 掩盖了绕过 WindowManager 的写路径与 thread-context.json
+        // 不同步的 bug；writeThread 单点刷已根治不同步，fallback 删除）。
         restored.contextWindows = merged;
         hydratedFromThreadContext = true;
       }
@@ -204,10 +189,10 @@ export async function readThread(
         `[readThread] 读取 thread-context.json 失败（不阻塞，将回落到 contextRegistry）: ${(e as Error).message}`,
       );
     }
-    // 2026-06-02 ooc-6 Phase 5'.2/.3: 从 thread context.json registry 读
-    // 顺序：registry (权威) > thread.contextWindows[] (legacy fallback for pre-P5'.1 数据)
-    // P5'.3 起：嵌套 context/<id>/window.json 路径已下线
+    // 2026-06-02 ooc-6 Phase 5'.2/.3: 从 thread context.json registry 读（P5'.1 路径，§10 保留）。
+    // P5'.3 起：嵌套 context/<id>/window.json 路径已下线。
     // P6.§6 起：thread-context.json 命中后跳过此分支（避免双源冲突）。
+    // §10 起：删除 thread.json.contextWindows legacy fallback（该字段已退役，恒为空）。
     if (!hydratedFromThreadContext) try {
       const ctxRegistry = await readContextRegistry(persistence);
       if (ctxRegistry.members.length > 0) {
@@ -218,7 +203,6 @@ export async function readThread(
           return oa - ob;
         });
         const merged: typeof contextWindows = [];
-        const seenIds = new Set<string>();
         for (const member of sorted) {
           const win = await readRuntimeObjectState({
             baseDir: ref.baseDir,
@@ -248,11 +232,6 @@ export async function readThread(
             (projected as { parentWindowId?: string }).parentWindowId = member.params.parentObjectId;
           }
           merged.push(projected);
-          seenIds.add(win.id);
-        }
-        // legacy fallback：把 thread.contextWindows[] 中尚未被 registry 覆盖的 window 兜底加进来
-        for (const win of contextWindows) {
-          if (!seenIds.has(win.id)) merged.push(win);
         }
         restored.contextWindows = merged;
       }

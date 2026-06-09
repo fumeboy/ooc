@@ -25,7 +25,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "./common.js";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
-import type { ContextWindow } from "../executable/windows/_shared/types.js";
+import {
+  ROOT_WINDOW_ID,
+  isNonPersistedWindow,
+  type BaseContextWindow,
+  type ContextWindow,
+} from "../executable/windows/_shared/types.js";
 
 /**
  * thread-context.json 中一条 contextWindow 的形态：
@@ -40,6 +45,47 @@ export type ThreadContextEntry =
 export interface ThreadContextFile {
   threadId: string;
   contextWindows: ThreadContextEntry[];
+}
+
+/**
+ * buildThreadContextEntries —— 把一组内存里的 contextWindows 序列化成 thread-context.json
+ * 的 entry 数组（**唯一**生成规则来源，§10 收敛）。
+ *
+ * registry 以参数注入（最小结构 `{ isBuiltinFeatureType }`），避免 persistable ↔ runtime
+ * 循环 import。两处调用方共用本函数，保证 writeThread 单点刷与 WindowManager.snapshot
+ * 不产生不一致写：
+ *   - WindowManager.writeThreadContextSnapshot（manager.ts）
+ *   - writeThread（thread-json.ts，覆盖所有绕过 WindowManager 的写路径）
+ *
+ * 生成规则（与原 manager.ts:921-938 等价）：
+ *   - root window 跳过
+ *   - isNonPersistedWindow（volatile derived + self 门面窗）跳过——无 state.json，
+ *     落成 _ref 后 reload 必报 missing object。
+ *   - registry.isBuiltinFeatureType(type) === true → 完整 inline ContextWindow
+ *   - 否则（独立 flow object）→ 轻量 ref `{ id, type, _ref: true, refObjectId: id }`
+ */
+export function buildThreadContextEntries(
+  windows: Iterable<BaseContextWindow>,
+  registry: { isBuiltinFeatureType(type: string): boolean },
+): ThreadContextEntry[] {
+  const entries: ThreadContextEntry[] = [];
+  for (const window of windows) {
+    if (window.id === ROOT_WINDOW_ID) continue;
+    if (isNonPersistedWindow(window)) continue;
+    if (registry.isBuiltinFeatureType(window.type)) {
+      // 内置特性整窗 inline 落盘（state 即 context）。BaseContextWindow → ThreadContextEntry
+      // 的 inline 分支等价于 ContextWindow union 的结构基，cast 安全。
+      entries.push(window as ContextWindow);
+    } else {
+      entries.push({
+        id: window.id,
+        type: window.type,
+        _ref: true,
+        refObjectId: window.id,
+      });
+    }
+  }
+  return entries;
 }
 
 /**

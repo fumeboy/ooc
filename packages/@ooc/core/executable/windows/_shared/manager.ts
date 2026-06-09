@@ -47,7 +47,7 @@ import {
   type ContextRegistry,
   type ContextParams,
   writeThreadContext,
-  type ThreadContextEntry,
+  buildThreadContextEntries,
   createFlowObject,
 } from "../../../persistable/index.js";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common.js";
@@ -918,23 +918,10 @@ export class WindowManager {
   private async writeThreadContextSnapshot(thread: ThreadContext): Promise<void> {
     const tref = this.threadPersistRefFromThread(thread);
     if (!tref) return;
-    const entries: ThreadContextEntry[] = [];
-    for (const window of this.windows.values()) {
-      if (window.id === ROOT_WINDOW_ID) continue;
-      // 不持久化窗（volatile derived guidance + self 门面窗）不进 thread-context.json：无 state.json，
-      // 落成 _ref 后 reload 必报 missing object 并刷屏 + 随每轮 form 派生膨胀。
-      if (isNonPersistedWindow(window)) continue;
-      if (this.registry.isBuiltinFeatureType(window.type)) {
-        entries.push(window);
-      } else {
-        entries.push({
-          id: window.id,
-          type: window.type,
-          _ref: true,
-          refObjectId: window.id,
-        });
-      }
-    }
+    // §10 单一来源：用与 writeThread 同一份 buildThreadContextEntries 生成规则
+    //   （跳过 root + isNonPersistedWindow；builtin inline / flow object ref），
+    //   保证 manager snapshot 与 writeThread 单点刷不产生不一致写。
+    const entries = buildThreadContextEntries(this.windows.values(), this.registry);
     await writeThreadContext(tref, entries);
   }
 
