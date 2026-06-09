@@ -10,9 +10,9 @@
  * (并允许更新 self.md / readable.md),让 caller "请帮我把 X 沉淀为记忆" 这种请求
  * 真的落到磁盘。
  *
- * U7 扩展：本文件还导出 `REFLECTABLE_METAPROG_KNOWLEDGE` 与 `REFLECTABLE_METAPROG_PATH`，
- * 教 LLM 如何走 worktree 元编程协议（开 worktree / 试运行 / commit / merge / 处理
- * PR-Issue 反馈）。仅在 super session 里注入。
+ * U7 扩展：本文件还导出 `REFLECTABLE_GOVERNANCE_KNOWLEDGE` 与 `REFLECTABLE_GOVERNANCE_PATH`，
+ * 教 LLM 如何改自己的身体（业务 session write_file → super flow evolve_self 合入）与
+ * （supervisor）治理（PR-Issue resolve / stone rollback 经控制面端点）。仅在 super session 里注入。
  */
 
 export const REFLECTABLE_BASIC_PATH = "internal/executable/reflectable/basic";
@@ -112,18 +112,19 @@ activates_on:
 `.trim();
 
 /**
- * 元编程 knowledge —— 教 LLM 新模型下如何改自己的"身体"：业务 session 直接
+ * Governance / 改身体 knowledge —— 教 LLM 新模型下如何改自己的"身体"：业务 session 直接
  * write_file（落本 session 的 worktree 副本，即时生效、main 不变），经 super flow
  * evolve_self 合入 main；cross-object 改动 evolve_self 时自动转 PR-Issue 给 supervisor。
  *
  * 与 REFLECTABLE_KNOWLEDGE 的关系：上一段讲记忆沉淀（写 pool），本段讲改身体 + 合入闸门。
  *
- * 2026-06-09：随 metaprog 写路径去除重写——不再有 open_worktree/commit/merge 手动四步，
- * 改身体统一走「业务 session write_file → super flow evolve_self」。
+ * 2026-06-09：随固化 metaprog method 去除重写——不再有 open_worktree/commit/merge 手动四步，
+ * 改身体统一走「业务 session write_file → super flow evolve_self」；治理两动作（resolve /
+ * rollback）经控制面 HTTP 端点行使。
  */
-export const REFLECTABLE_METAPROG_PATH = "internal/executable/reflectable/metaprog";
+export const REFLECTABLE_GOVERNANCE_PATH = "internal/executable/reflectable/governance";
 
-export const REFLECTABLE_METAPROG_KNOWLEDGE = `
+export const REFLECTABLE_GOVERNANCE_KNOWLEDGE = `
 # 改自己的"身体"：业务 session 写，super flow 合入
 
 你对自己 self 文件的修改有两条线，分清楚就不会犯错。
@@ -175,11 +176,13 @@ open(method="create_object", args={
 
 ## supervisor 专属（你不是 supervisor 时跳过本节）
 
-- \`metaprog\` action \`resolve\` —— 评审一个 PR-Issue：
-  \`open(method="metaprog", args={ action:"resolve", issueId: <N>, decision: "merge" | "reject" | "request-changes" })\`
-- \`metaprog\` action \`rollback\` —— 把某个 Object 的 stone 回滚到先前 commit：
-  \`open(method="metaprog", args={ action:"rollback", objectId: "<id>", targetCommit: "<sha>" })\`
-  典型场景：启动期看到 \`[recovery-needed] <id> stone unloadable\` PR-Issue。回滚由你（supervisor）署名。
+治理两动作经**控制面 HTTP 端点**触发（不再是固化命令），控制面以 supervisor 治理身份代为执行：
+
+- 评审一个 PR-Issue：
+  \`POST /api/runtime/pr-issues/<N>/resolve\`，body \`{ decision: "merge" | "reject" | "request-changes" }\`
+- 把某个 Object 的 stone 回滚到先前 commit：
+  \`POST /api/runtime/stones/<id>/rollback\`，body \`{ targetCommit: "<sha>" }\`
+  典型场景：启动期看到 \`[recovery-needed] <id> stone unloadable\` PR-Issue。回滚由 supervisor 署名。
 
 ## 一条心法
 

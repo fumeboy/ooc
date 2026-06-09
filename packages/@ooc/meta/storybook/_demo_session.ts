@@ -54,7 +54,6 @@ async function processTrace(threadId: string): Promise<string[]> {
       const cmd = e.arguments?.method;
       const a = e.arguments?.args ?? {};
       if ("msg" in a) lines.push(`  → exec say：「${String(a.msg).replace(/\s+/g, " ").slice(0, 110)}」`);
-      else if (cmd === "metaprog") lines.push(`  → exec metaprog action=${a.action} ${a.objectId ?? a.name ?? ""}`);
       else if (cmd === "talk") lines.push(`  → exec talk target=${a.target ?? a.objectId ?? ""}`);
       else if (cmd === "end") lines.push(`  → exec end（本轮结束）`);
       else lines.push(`  → exec ${cmd}`);
@@ -80,7 +79,7 @@ async function main() {
   console.log(`=== Agent-native storybook 演示 ===`);
   console.log(`backend: ${BACKEND}  session: ${SESSION_ID}  新对象: ${NEW_OBJECT}\n`);
 
-  // ── Step 1：自我构建（programmable + persistable）——supervisor 用 metaprog 亲手建一个对象 ──
+  // ── Step 1：自我构建（programmable + persistable）——supervisor 用 create_object 亲手建一个对象 ──
   const task1 = `请为我创建一个名为 ${NEW_OBJECT} 的新 OOC Object，职责是「友好地打招呼」。`
     + `给它写好 self.md（身份/能力/边界）和一条 knowledge（典型互动示例）。创建好后用一句话告诉我你做了什么。`;
   const seed = await req("POST", "/api/sessions", {
@@ -100,7 +99,7 @@ async function main() {
     const self = await req("GET", `/api/stones/${NEW_OBJECT}/self`);
     const ok = created.status === 200 && (self.json?.text ?? "").length > 20;
     steps.push({
-      id: "STEP-1", title: "自我构建：supervisor 用 metaprog 亲手创建对象（programmable + persistable）",
+      id: "STEP-1", title: "自我构建：supervisor 用 create_object 亲手创建对象（programmable + persistable）",
       verified: ok, trace,
       detail: ok ? `${NEW_OBJECT} 已落盘，self.md ${self.json.text.length} 字符（由 supervisor 这个 agent 写的）`
         : `未验证到对象：getStone=${created.status}, self.len=${(self.json?.text ?? "").length}`,

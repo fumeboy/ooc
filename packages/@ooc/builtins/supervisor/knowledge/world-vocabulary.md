@@ -23,7 +23,7 @@ activates_on:
 | **do** | 派生子 thread 处理任务；子 thread 跑完会把结果交回 | `instruction`、可选 `share_windows`（让子线程复用父线程的某些 Window） |
 | **program** | 调用某个 Object 的 server method（详见下文 §3） | `target`、`method`、`args` |
 | **relation** | 读对方 Object 对自己的认知（readable + sediment 中的 relation 文件）；只读 | `target` |
-| **command** | 调用全局命令（metaprog / write_file 等） | `command`、`args` |
+| **command** | 调用全局命令（create_object / write_file 等） | `command`、`args` |
 | **file** | 读 / 写 / 浏览 World 文件 | `path` |
 | **peer Object window** | 同 stone 的 sibling / level-1 children Object，**自动作为 first-class ContextWindow 注入到我的 contextWindows 中**，可直接 exec 其 commands | id = `<objectId>`，type = `<objectId>`，command 集合为该对象 `executable/index.ts` 中声明的 commands |
 
@@ -92,14 +92,16 @@ activates_on:
    - **self-scope**（只触及 `objects/<self>/` 自己目录）→ 自动 fast-forward merge，立即生效。
    - **cross-scope**（触及 `objects/<other>/` 或新对象）→ 自动开 **PR-Issue** 待 supervisor 评审。
 
-### create_object / evolve_self / metaprog（操作 stone 的方法）
+### create_object / evolve_self（操作 stone 的方法）+ 治理端点（resolve / rollback）
 
-| method | 谁能调 | 用途 |
-|---|---|---|
-| `create_object` | 任何 Object（仅业务 session） | 原子落盘**新** Object 骨架（package.json/self/readable[/knowledge]）到 session worktree；不 commit，由 evolve_self 合入 |
-| `evolve_self` | 任何 Object（仅 super flow） | 把触发本 super 的业务 session 的 worktree 改动合入 main（self-scope ff-merge / cross-scope 自动 PR-Issue） |
-| `metaprog action="resolve"` | **supervisor 专属** | 决议 PR-Issue（decision: `merge` / `reject` / `request-changes`） |
-| `metaprog action="rollback"` | **supervisor 专属** | 强制回滚 stone 历史到指定 commit |
+写 stone 用 method（任何 Object，经 versioning 审计）；supervisor 专属治理动作不是 method，而是经控制面 HTTP 端点 enact（versioning 层强制校验治理身份）。
+
+| 动作 | 形态 | 谁能用 | 用途 |
+|---|---|---|---|
+| `create_object` | root method（仅业务 session） | 任何 Object | 原子落盘**新** Object 骨架（package.json/self/readable[/knowledge]）到 session worktree；不 commit，由 evolve_self 合入 |
+| `evolve_self` | root method（仅 super flow） | 任何 Object | 把触发本 super 的业务 session 的 worktree 改动合入 main（self-scope ff-merge / cross-scope 自动 PR-Issue） |
+| 决议 PR-Issue | 控制面端点 `POST /api/runtime/pr-issues/:issueId/resolve`，body `{ decision }` | **supervisor 专属** | 决议 PR-Issue（decision: `merge` / `reject` / `request-changes`） |
+| 回滚 stone | 控制面端点 `POST /api/runtime/stones/:objectId/rollback`，body `{ targetCommit }` | **supervisor 专属** | 强制回滚 stone 历史到指定 commit |
 
 ### PR-Issue（跨自治区改动审阅 Issue）
 
@@ -110,7 +112,7 @@ activates_on:
 - `prPayload.paths`：受影响的文件路径列表
 - `prPayload.baseSha`：临时分支基线 commit sha
 
-supervisor 读 diff → 调 `metaprog action="resolve"` 决议（args: `{ issueId, decision }`）：
+supervisor 读 diff → 经控制面端点 `POST /api/runtime/pr-issues/:issueId/resolve`（body `{ decision }`）决议：
 
 | decision | 含义 |
 |---|---|

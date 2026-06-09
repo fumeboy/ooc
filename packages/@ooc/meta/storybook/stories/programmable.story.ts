@@ -80,7 +80,7 @@ export async function runControlPlane(): Promise<StoryResult> {
 }
 
 /**
- * Tier B —— agent-native：supervisor 在 thinkloop 里用 metaprog 亲手创建一个带身份+知识的对象。
+ * Tier B —— agent-native：supervisor 在 thinkloop 里用 create_object 亲手创建一个带身份+知识的对象。
  * 过程作为可见动作留在 session；脚本核验产物（对象落盘 + self.md 非空）。需运行中的 world（含 supervisor）。
  */
 export async function runAgentNative(): Promise<StoryResult> {

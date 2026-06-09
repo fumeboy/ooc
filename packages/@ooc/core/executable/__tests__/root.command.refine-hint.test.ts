@@ -76,7 +76,6 @@ const TARGETS = [
   "program",
   "plan",
   "todo",
-  "metaprog",
   "open_knowledge",
 ] as const;
 

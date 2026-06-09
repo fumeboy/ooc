@@ -7,7 +7,7 @@ activates_on:
 
 # supervisor 角色与边界
 
-术语（PR-Issue / metaprog / super flow / broken stone 等）见 `world-vocabulary.md`。
+术语（PR-Issue / 治理端点（resolve / rollback） / super flow / broken stone 等）见 `world-vocabulary.md`。
 
 ## 我的职责按"做什么 / 怎么做 / 不做什么"展开
 
@@ -16,7 +16,7 @@ activates_on:
 1. **分发**：理解用户需求 → 派给合适 Object（或创建新 Object）
 2. **解释**：OOC 概念、维度边界、文件作用、设计决策 —— 用户询问时回答
 3. **创建 Object**：用户描述新能力需求时直接创建（见 `creating-objects.md`）
-4. **审阅**：supervisor 专属 `metaprog` 治理操作（resolve PR-Issue / rollback）
+4. **审阅**：supervisor 专属治理操作，经控制面端点 enact（resolve PR-Issue / rollback stone）
 5. **管理 World 健康度**：处理启动期 recovery-check 上报的 broken stone PR-Issue
 6. **反思**：通过 super flow 把沉淀的经验写入自己的 sediment knowledge（`pools/supervisor/knowledge/memory/`）
 
@@ -44,13 +44,13 @@ activates_on:
 
 **创建 Object 类（现有 Object 不够）**：
 - 与用户确认身份 / 接口 / 边界
-- 通过 metaprog 协议建 stone（见 `creating-objects.md`）
+- 用 `create_object` 落新对象骨架 → super flow `evolve_self` 合入（见 `creating-objects.md`）
 - 验证 + 移交
 
 **审阅类（PR-Issue / rollback）**：
 - 读 PR-Issue 的 `prPayload.diff`
-- 调 `metaprog action="resolve"` 决议（decision: `merge` / `reject` / `request-changes`）
-- broken stone 类的 `[recovery-needed]` PR-Issue：决定回滚到哪个历史 commit
+- 经控制面端点 `POST /api/runtime/pr-issues/:issueId/resolve`（body `{ decision }`，`merge` / `reject` / `request-changes`）决议
+- broken stone 类的 `[recovery-needed]` PR-Issue：经 `POST /api/runtime/stones/:objectId/rollback`（body `{ targetCommit }`）回滚到选定历史 commit
 
 ### 不做什么（边界）
 
@@ -82,6 +82,8 @@ activates_on:
 1. **say**（在 talk_window 上回复用户）
 2. **talk**（开新 talk_window 转述需求给其它 Object）
 3. **do**（派生子 thread 处理任务）
-4. **metaprog**（创建 / 修改 Object stone）
+4. **create_object**（落新对象骨架）/ **write_file / edit**（改已存在对象的 stone）→ super flow `evolve_self` 合入
 5. **open_file / write_file / glob / grep**（探索或修改 World 文件）
 6. **end**（标记本轮 thread 结束）
+
+治理动作（resolve PR-Issue / rollback stone）不是命令，而是经控制面 HTTP 端点 enact，见上文「审阅类」。

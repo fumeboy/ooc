@@ -111,7 +111,7 @@ export async function runAgentNative(): Promise<StoryResult> {
   return demoViaSupervisor("reflectable", `sb-an-refl-${tag}`,
     "请把这条约定记下来作为你的长期参考：本演示 world 的新对象统一用 sb_ 前缀命名。记好后告诉我你怎么记的。",
     async ({ execs, lastSay }) => {
-      const reflected = execs.some((e) => ["metaprog", "write_file", "evolve_self", "open_knowledge"].includes(e.cmd)) || lastSay.length > 10;
+      const reflected = execs.some((e) => ["write_file", "evolve_self", "open_knowledge"].includes(e.cmd)) || lastSay.length > 10;
       return { ok: reflected, detail: `自我演化动作：${JSON.stringify([...new Set(execs.map((e) => e.cmd))])}；回复：${lastSay.slice(0, 60)}` };
     });
 }

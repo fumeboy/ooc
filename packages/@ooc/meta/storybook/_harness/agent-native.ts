@@ -67,7 +67,6 @@ export async function threadExecs(sessionId: string, objectId: string, threadId:
 export function renderTrace(execs: Array<{ cmd: string; args: any; msg?: string }>): string[] {
   return execs.map((e) => {
     if (e.msg) return `  → exec say：「${e.msg.replace(/\s+/g, " ").slice(0, 100)}」`;
-    if (e.cmd === "metaprog") return `  → exec metaprog action=${e.args?.action} ${e.args?.objectId ?? e.args?.name ?? ""}`;
     if (e.cmd === "talk") return `  → exec talk target=${e.args?.target ?? e.args?.objectId ?? ""}`;
     return `  → exec ${e.cmd}`;
   });

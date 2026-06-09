@@ -11,8 +11,8 @@ import {
   END_REFLECTION_REMINDER_PATH,
   REFLECTABLE_BASIC_PATH,
   REFLECTABLE_KNOWLEDGE,
-  REFLECTABLE_METAPROG_KNOWLEDGE,
-  REFLECTABLE_METAPROG_PATH,
+  REFLECTABLE_GOVERNANCE_KNOWLEDGE,
+  REFLECTABLE_GOVERNANCE_PATH,
 } from "./reflectable-knowledge";
 import { makeThread } from "../../__tests__/make-thread";
 import type { MethodExecWindow } from "../../executable/windows/_shared/types";
@@ -44,8 +44,8 @@ describe("reflectable knowledge protocol injection", () => {
     });
     const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[REFLECTABLE_BASIC_PATH]).toBe(REFLECTABLE_KNOWLEDGE);
-    // U7: metaprog 协议指引也在 super 注入
-    expect(out.knowledgeEntries[REFLECTABLE_METAPROG_PATH]).toBe(REFLECTABLE_METAPROG_KNOWLEDGE);
+    // U7: governance / 改身体协议指引也在 super 注入
+    expect(out.knowledgeEntries[REFLECTABLE_GOVERNANCE_PATH]).toBe(REFLECTABLE_GOVERNANCE_KNOWLEDGE);
     // 同时检查合成的 KnowledgeWindow 出现
     const kn = (out.contextWindows ?? []).find(
       (w) => w.type === "knowledge" && (w as { path?: string }).path === REFLECTABLE_BASIC_PATH,
@@ -54,7 +54,7 @@ describe("reflectable knowledge protocol injection", () => {
     expect((kn as { source?: string }).source).toBe("protocol");
 
     const mn = (out.contextWindows ?? []).find(
-      (w) => w.type === "knowledge" && (w as { path?: string }).path === REFLECTABLE_METAPROG_PATH,
+      (w) => w.type === "knowledge" && (w as { path?: string }).path === REFLECTABLE_GOVERNANCE_PATH,
     );
     expect(mn).toBeDefined();
   });
@@ -68,24 +68,24 @@ describe("reflectable knowledge protocol injection", () => {
     });
     const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[REFLECTABLE_BASIC_PATH]).toBeUndefined();
-    expect(out.knowledgeEntries[REFLECTABLE_METAPROG_PATH]).toBeUndefined();
+    expect(out.knowledgeEntries[REFLECTABLE_GOVERNANCE_PATH]).toBeUndefined();
   });
 
   it("does NOT inject when thread has no persistence (in-memory mode)", async () => {
     const thread = makeThread({ id: "t_in_memory" });
     const out = { knowledgeEntries: collectProtocolEntries(thread), contextWindows: buildProtocolKnowledgeWindows(thread) };
     expect(out.knowledgeEntries[REFLECTABLE_BASIC_PATH]).toBeUndefined();
-    expect(out.knowledgeEntries[REFLECTABLE_METAPROG_PATH]).toBeUndefined();
+    expect(out.knowledgeEntries[REFLECTABLE_GOVERNANCE_PATH]).toBeUndefined();
   });
 
-  it("metaprog knowledge mentions key protocol elements", () => {
-    // 2026-06-09 去 metaprog 写路径后：改身体走「业务 session write_file → super flow evolve_self」，
-    // cross-object 转 PR-Issue；metaprog 命令只剩 resolve/rollback 治理。
-    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("evolve_self");
-    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("业务 session");
-    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("PR-Issue");
-    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("metaprog");
-    expect(REFLECTABLE_METAPROG_KNOWLEDGE).toContain("rollback");
+  it("governance knowledge mentions key protocol elements", () => {
+    // 2026-06-09 去固化 metaprog method 后：改身体走「业务 session write_file → super flow evolve_self」，
+    // cross-object 转 PR-Issue；治理两动作（resolve / rollback）经控制面 HTTP 端点行使。
+    expect(REFLECTABLE_GOVERNANCE_KNOWLEDGE).toContain("evolve_self");
+    expect(REFLECTABLE_GOVERNANCE_KNOWLEDGE).toContain("业务 session");
+    expect(REFLECTABLE_GOVERNANCE_KNOWLEDGE).toContain("PR-Issue");
+    expect(REFLECTABLE_GOVERNANCE_KNOWLEDGE).toContain("/api/runtime/pr-issues/");
+    expect(REFLECTABLE_GOVERNANCE_KNOWLEDGE).toContain("rollback");
   });
 
   it("REFLECTABLE_KNOWLEDGE includes sediment write contract with frontmatter template", () => {

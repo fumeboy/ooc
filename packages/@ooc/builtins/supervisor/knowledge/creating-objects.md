@@ -75,10 +75,10 @@ open(method="evolve_self", args={ message: "feat: introduce <newId> agent" })
 
 新对象 `objects/<newId>/` 不在我（supervisor）自己的自治区 `objects/supervisor/` 下，
 属 **cross-scope** → evolve_self 自动开 PR-Issue（返回值带 `prIssueId`），我作为 supervisor
-评审 `resolve` 合入 main（合法"自审"，git log 留下审计线索）：
+经控制面端点决议 `merge` 合入 main（合法"自审"，git log 留下审计线索）：
 
 ```
-open(method="metaprog", args={ action: "resolve", issueId: <N>, decision: "merge" })
+POST /api/runtime/pr-issues/<prIssueId>/resolve   body { "decision": "merge" }
 ```
 
 ### 5. 自治区与权限
@@ -124,7 +124,7 @@ Object 能响应，然后向用户回报新 Object 已就绪。
 | `WORKTREE` | session worktree 建失败（兜底回 main，拒绝直写 main） | 上报；通常是 world 状态异常，需研判 |
 
 合入阶段（evolve_self）的错误：
-- evolve_self 返回 `kind: "pr-issue"` + `prIssueId` → 这是预期的（cross-scope 新对象），调
-  `metaprog action="resolve"` 自审 merge。
+- evolve_self 返回 `kind: "pr-issue"` + `prIssueId` → 这是预期的（cross-scope 新对象），经控制面端点
+  `POST /api/runtime/pr-issues/:issueId/resolve`（body `{ decision: "merge" }`）自审 merge。
 - 想改其它 Object 的**已有** stone（非新建）→ 业务 session `write_file` + super flow `evolve_self`
-  （cross-scope PR-Issue，我自己 resolve）；或回滚历史用 `metaprog action="rollback"`。
+  （cross-scope PR-Issue，我自己 resolve）；或回滚历史经 `POST /api/runtime/stones/:objectId/rollback`（body `{ targetCommit }`）。

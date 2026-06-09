@@ -676,8 +676,9 @@ export async function rollback(input: RollbackInput): Promise<RollbackResult> {
   if (!isValidObjectId(supervisorAuthor)) {
     return { ok: false, code: "INVALID_INPUT", message: `invalid supervisorAuthor '${supervisorAuthor}'` };
   }
-  // R12 supervisor-only: persistable 层强制最深防御，与 method.metaprog.ts:188 的
-  // caller-side check 形成双层防御。任何绕过 LLM 命令层的入口都过不去这一关。
+  // R12 supervisor-only: persistable 层强制最深防御。治理 rollback 经控制面 HTTP 端点
+  // （POST /api/runtime/stones/<id>/rollback，固定传 SUPERVISOR_OBJECT_ID）行使；
+  // 本关是唯一可信防线，任何绕过控制面的入口都过不去。
   if (supervisorAuthor !== SUPERVISOR_OBJECT_ID) {
     return {
       ok: false,

@@ -14,8 +14,12 @@ import {
   loopMetaFile,
   loopOutputFile,
   readThread,
+  resolvePrIssue,
+  rollback,
+  SUPERVISOR_OBJECT_ID,
   threadDir,
   writeThread,
+  type PrIssueDecision,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
 import type { ListLoopsResponse, LoopListEntry, LoopMeta } from "./model";
@@ -142,6 +146,25 @@ export interface RuntimeService {
     eventId: string;
     newStatus: "running";
   }>;
+  /**
+   * 治理（去固化 metaprog method 后，2026-06-09）：经控制面以 supervisor 治理身份
+   * 标 PR-Issue 决议。底层走 persistable 的 resolvePrIssue（保留不动）。失败转 AppServerError：
+   * NOT_FOUND / INVALID_STATE → 4xx，git/issue-service 失败 → 5xx。
+   */
+  resolvePrIssue(args: {
+    issueId: number;
+    decision: PrIssueDecision;
+  }): Promise<Record<string, unknown>>;
+  /**
+   * 治理（去固化 metaprog method 后，2026-06-09）：经控制面以 supervisor 治理身份
+   * 回滚某 Object 的 stone 到先前 commit。底层走 persistable 的 rollback（保留不动），
+   * supervisorAuthor 固定 SUPERVISOR_OBJECT_ID。失败转 AppServerError：INVALID_INPUT /
+   * FORBIDDEN → 4xx，git 失败 → 5xx。
+   */
+  rollbackStone(args: {
+    objectId: string;
+    targetCommit: string;
+  }): Promise<{ ok: true; commitSha: string }>;
 }
 
 export function createRuntimeService(deps: {
@@ -339,6 +362,55 @@ export function createRuntimeService(deps: {
         eventId: target.id,
         newStatus: "running" as const,
       };
+    },
+    async resolvePrIssue({ issueId, decision }: { issueId: number; decision: PrIssueDecision }) {
+      const r = await resolvePrIssue({ baseDir: deps.baseDir, issueId, decision });
+      if (!r.ok) {
+        if (r.code === "NOT_FOUND") {
+          throw new AppServerError("NOT_FOUND", r.message, { issueId, decision });
+        }
+        if (r.code === "INVALID_STATE") {
+          throw new AppServerError("CONFLICT", r.message, { issueId, decision });
+        }
+        if (r.code === "ISSUE_SERVICE") {
+          throw new AppServerError("INTERNAL_ERROR", r.message, { issueId, decision });
+        }
+        // code === "GIT"
+        throw new AppServerError(
+          "INTERNAL_ERROR",
+          `resolvePrIssue git failure (${r.gitCode}): ${r.stderr}`,
+          { issueId, decision, gitCode: r.gitCode },
+        );
+      }
+      return {
+        ok: true,
+        kind: r.kind,
+        ...("commitSha" in r ? { commitSha: r.commitSha } : {}),
+        ...("archivedRef" in r ? { archivedRef: r.archivedRef } : {}),
+      };
+    },
+    async rollbackStone({ objectId, targetCommit }: { objectId: string; targetCommit: string }) {
+      const r = await rollback({
+        baseDir: deps.baseDir,
+        objectId,
+        targetCommit,
+        supervisorAuthor: SUPERVISOR_OBJECT_ID,
+      });
+      if (!r.ok) {
+        if (r.code === "INVALID_INPUT") {
+          throw new AppServerError("INVALID_INPUT", r.message, { objectId, targetCommit });
+        }
+        if (r.code === "FORBIDDEN") {
+          throw new AppServerError("CONFLICT", r.message, { objectId, targetCommit });
+        }
+        // code === "GIT"
+        throw new AppServerError(
+          "INTERNAL_ERROR",
+          `rollback git failure (${r.gitCode}): ${r.stderr}`,
+          { objectId, targetCommit, gitCode: r.gitCode },
+        );
+      }
+      return { ok: true as const, commitSha: r.commitSha };
     },
     async getLoopDebug(ref: ThreadPersistenceRef, loopIndex: number) {
       const details = {

@@ -50,7 +50,7 @@ export const EXEC_TOOL: LlmTool = {
         },
         description:
           "要在 target window 上调用的 method 名。" +
-          "root 上典型有 do/talk/program/plan/end/todo/open_file/open_knowledge/write_file/glob/grep/metaprog 等；" +
+          "root 上典型有 do/talk/program/plan/end/todo/open_file/open_knowledge/write_file/glob/grep/evolve_self/create_object 等；" +
           "其它 window 上注册的方法（如 do_window.continue / talk_window.say / form 自身的 refine/submit / custom 方法）" +
           "也通过本字段传入，运行时按 window_id 路由。",
       },

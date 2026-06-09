@@ -29,7 +29,6 @@ import { programMethod } from "./method.program.js";
 import { talkMethod } from "./method.talk.js";
 import { todoMethod } from "./method.todo.js";
 import { writeFileMethod } from "./method.write-file.js";
-import { metaprogMethod } from "./method.metaprog.js";
 import { evolveSelfMethod } from "./method.evolve-self.js";
 import { createObjectMethod } from "./method.create-object.js";
 import { exampleMethod } from "./method.example.js";
@@ -67,7 +66,6 @@ export const ROOT_METHODS: Record<string, ObjectMethod> = {
   write_file: writeFileMethod,
   glob: globMethod,
   grep: grepMethod,
-  metaprog: metaprogMethod,
   evolve_self: evolveSelfMethod,
   create_object: createObjectMethod,
   example: exampleMethod,

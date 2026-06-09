@@ -2,27 +2,33 @@
  * Stones git versioning e2e —— 端到端跑一遍 stone 写 → 合入 main 的协议，覆盖 origin
  * doc AE1-AE8 的关键 happy path。
  *
- * 去 metaprog（2026-06-09，docs/2026-06-09-remove-metaprog-unify-session-worktree-design.md）：
- * stone 写不再走 metaprog open_worktree/commit/merge/create_object，而是——
+ * 去固化 metaprog method（2026-06-09，docs/2026-06-09-remove-metaprog-unify-session-worktree-design.md）：
+ * stone 写不走固化命令，而是——
  * - 业务 session 内 `write_file` 写**任何** stone（own + cross）→ 落 session worktree；
  * - super flow 内 `evolve_self` 把该业务 session 的 worktree 改动合入 main
  *   （self-scope ff-merge / cross-scope → PR-Issue）；
- * - supervisor `metaprog resolve/rollback` 治理 PR-Issue / 回滚（保留）。
+ * - 治理两动作（resolve PR-Issue / rollback stone）经控制面 HTTP 端点行使，底层走
+ *   persistable 的 resolvePrIssue / rollback（保留不动）；本测试直接调这两个函数验证 git 协议。
  *
- * 不依赖真 LLM，直接调 method exec（绕过 LLM 解析）；fixture 用 mkdtemp 的干净 world。
+ * 不依赖真 LLM，直接调 method exec / persistable 函数（绕过 LLM 解析）；fixture 用 mkdtemp 的干净 world。
  */
 
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { __resetSerialQueueForTests, readPrIssueIndex, ensureStoneRepo } from "@ooc/core/persistable";
-import { executeMetaprog } from "@ooc/builtins/root/executable/method.metaprog";
+import {
+  __resetSerialQueueForTests,
+  readPrIssueIndex,
+  ensureStoneRepo,
+  resolvePrIssue,
+  rollback,
+  SUPERVISOR_OBJECT_ID,
+} from "@ooc/core/persistable";
 import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import { executeEvolveSelf } from "@ooc/builtins/root/executable/method.evolve-self";
 import { runRecoveryCheck } from "@ooc/core/app/server/bootstrap/recovery-check";
 import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 let tempRoot: string | undefined;
 
@@ -57,30 +63,6 @@ async function newWorld(agents: string[]): Promise<string> {
   }
   await ensureStoneRepo({ baseDir: tempRoot });
   return tempRoot;
-}
-
-function makeCtx(opts: {
-  baseDir: string;
-  callerId: string;
-  args: Record<string, unknown>;
-}): MethodExecutionContext {
-  const thread: ThreadContext = {
-    id: "t-test",
-    inbox: [],
-    contextWindows: [],
-    status: "running",
-    persistence: {
-      baseDir: opts.baseDir,
-      sessionId: "super",
-      objectId: opts.callerId,
-      threadId: "root",
-    },
-  } as unknown as ThreadContext;
-  return {
-    thread,
-    args: opts.args,
-    manager: undefined,
-  } as MethodExecutionContext;
 }
 
 /** 业务 session ctx（write_file 落 session worktree）。 */
@@ -187,18 +169,10 @@ describe("e2e: supervisor resolve merge / reject", () => {
     );
     expect(m1.kind).toBe("pr-issue");
 
-    // supervisor resolve merge
-    const r1 = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({
-          baseDir,
-          callerId: "supervisor",
-          args: { action: "resolve", issueId: m1.prIssueId, decision: "merge" },
-        }),
-      )) as string,
-    );
+    // supervisor resolve merge（控制面治理：底层 persistable resolvePrIssue）
+    const r1 = await resolvePrIssue({ baseDir, issueId: m1.prIssueId, decision: "merge" });
     expect(r1.ok).toBe(true);
-    expect(r1.kind).toBe("merged");
+    expect(r1.ok && r1.kind).toBe("merged");
 
     // y/self.md 已合并
     const y = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
@@ -213,17 +187,9 @@ describe("e2e: supervisor resolve merge / reject", () => {
     );
     expect(m2.kind).toBe("pr-issue");
 
-    const r2 = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({
-          baseDir,
-          callerId: "supervisor",
-          args: { action: "resolve", issueId: m2.prIssueId, decision: "reject" },
-        }),
-      )) as string,
-    );
+    const r2 = await resolvePrIssue({ baseDir, issueId: m2.prIssueId, decision: "reject" });
     expect(r2.ok).toBe(true);
-    expect(r2.kind).toBe("rejected");
+    expect(r2.ok && r2.kind).toBe("rejected");
 
     // main 上 y/self.md 仍是 "approved"（未被 rejected 的 PR 改回去）
     const y2 = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
@@ -249,16 +215,13 @@ describe("e2e: AE4/AE8 supervisor rollback + Supervisor 例外", () => {
     );
     await executeEvolveSelf(superCtx(baseDir, "agent_of_x", "s1", { message: "broken" }));
 
-    // supervisor rollback
-    const r = JSON.parse(
-      (await executeMetaprog(
-        makeCtx({
-          baseDir,
-          callerId: "supervisor",
-          args: { action: "rollback", objectId: "agent_of_x", targetCommit: target },
-        }),
-      )) as string,
-    );
+    // supervisor rollback（控制面治理：底层 persistable rollback，supervisorAuthor=SUPERVISOR_OBJECT_ID）
+    const r = await rollback({
+      baseDir,
+      objectId: "agent_of_x",
+      targetCommit: target,
+      supervisorAuthor: SUPERVISOR_OBJECT_ID,
+    });
     expect(r.ok).toBe(true);
 
     // self.md 回到 v1
@@ -273,30 +236,25 @@ describe("e2e: AE4/AE8 supervisor rollback + Supervisor 例外", () => {
     expect(new TextDecoder().decode(author.stdout)).toBe("supervisor");
   });
 
-  test("非 supervisor 调 rollback 被拒绝", async () => {
+  test("persistable rollback 强制 supervisorAuthor === SUPERVISOR_OBJECT_ID（非 supervisor author → FORBIDDEN）", async () => {
     const baseDir = await newWorld(["agent_of_x", "supervisor"]);
-    const r = await executeMetaprog(
-      makeCtx({
-        baseDir,
-        callerId: "agent_of_x",
-        args: { action: "rollback", objectId: "agent_of_x", targetCommit: "HEAD" },
-      }),
-    );
-    expect(typeof r).toBe("string");
-    expect((r as string).includes("仅 supervisor 可调")).toBe(true);
+    // 控制面 governance 端点固定传 SUPERVISOR_OBJECT_ID；此处直接以非 supervisor author 调
+    // 底层函数验证最深防御线（R12 enforcement at persistable layer）。
+    const r = await rollback({
+      baseDir,
+      objectId: "agent_of_x",
+      targetCommit: "HEAD",
+      supervisorAuthor: "agent_of_x",
+    });
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.code).toBe("FORBIDDEN");
   });
 
-  test("非 supervisor 调 resolve 被拒绝", async () => {
+  test("resolve 不存在的 PR-Issue → NOT_FOUND", async () => {
     const baseDir = await newWorld(["agent_of_x", "supervisor"]);
-    const r = await executeMetaprog(
-      makeCtx({
-        baseDir,
-        callerId: "agent_of_x",
-        args: { action: "resolve", issueId: 1, decision: "merge" },
-      }),
-    );
-    expect(typeof r).toBe("string");
-    expect((r as string).includes("仅 supervisor 可调")).toBe(true);
+    const r = await resolvePrIssue({ baseDir, issueId: 9999, decision: "merge" });
+    expect(r.ok).toBe(false);
+    expect(r.ok === false && r.code).toBe("NOT_FOUND");
   });
 });
 

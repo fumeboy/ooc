@@ -261,7 +261,7 @@ if (import.meta.main) {
   const config = await readServerConfig();
 
   // 2026-05-20: stones/ git repo bootstrap — init bare repo + main worktree,
-  // migrate old flat layout if needed. Must come before any metaprog write.
+  // migrate old flat layout if needed. Must come before any stone write.
   try {
     const repo = await ensureStoneRepo({ baseDir: config.baseDir });
     if (repo.initialized) {

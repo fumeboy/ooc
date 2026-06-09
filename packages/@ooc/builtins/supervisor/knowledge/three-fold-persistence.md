@@ -26,7 +26,7 @@ OOC World 文件系统按四种持久性质分层。术语解释（stone-version
 - `visible/index.tsx`：UI 页面
 - `knowledge/<slug>.md`：seed knowledge
 
-**Agent 不可写 Builtin**：Builtin 由 OOC runtime 代码保证，metaprog 尝试改 Builtin 会被拒绝。升级 supervisor / user 的定义通过 OOC 发版完成。
+**Agent 不可写 Builtin**：Builtin 由 OOC runtime 代码保证，任何写（`write_file` / `create_object`）尝试改 Builtin 会被拒绝。升级 supervisor / user 的定义通过 OOC 发版完成。
 
 当前 Builtin Object：`supervisor`、`user`、`root`、`file`、`plan`、`todo`、`program`、`knowledge`、`search`、`skill_index`。
 

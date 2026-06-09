@@ -19,8 +19,8 @@ import {
   END_REFLECTION_REMINDER_PATH,
   REFLECTABLE_BASIC_PATH,
   REFLECTABLE_KNOWLEDGE,
-  REFLECTABLE_METAPROG_KNOWLEDGE,
-  REFLECTABLE_METAPROG_PATH,
+  REFLECTABLE_GOVERNANCE_KNOWLEDGE,
+  REFLECTABLE_GOVERNANCE_PATH,
 } from "../reflectable/reflectable-knowledge.js";
 import { SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
 import type { ThreadContext } from "./index.js";
@@ -118,7 +118,7 @@ export function buildProtocolKnowledgeWindows(
   // 2) Super session reflectable knowledge
   if (thread.persistence?.sessionId === SUPER_SESSION_ID) {
     entries.set(REFLECTABLE_BASIC_PATH, REFLECTABLE_KNOWLEDGE);
-    entries.set(REFLECTABLE_METAPROG_PATH, REFLECTABLE_METAPROG_KNOWLEDGE);
+    entries.set(REFLECTABLE_GOVERNANCE_PATH, REFLECTABLE_GOVERNANCE_KNOWLEDGE);
   }
 
   // 3) Type-level basicKnowledge — inject per window type present

@@ -2,7 +2,8 @@
  * Recovery 启动自检（U8）—— Server 启动时遍历 `stones/main/objects/` 下所有用户 Object，
  * 试加载它们的 `executable/index.ts`；任何 Object 加载失败则在 super session 创一条
  * `[recovery-needed]` PR-Issue（不带 prPayload，因为这不是元编程修改而是诊断信号），
- * 让 Supervisor 在自己的 super flow 中看到并决定是否触发 metaprog rollback。
+ * 让 Supervisor 在自己的 super flow 中看到并决定是否触发 rollback（控制面 governance
+ * 端点 `POST /api/runtime/stones/<id>/rollback`）。
  *
  * 不阻塞 server 启动：失败的 Object 仍在磁盘上，但被 worker 实质性跳过（loader
  * 在 worker 调用时再次抛错）。Supervisor 通过 PR-Issue 收到通知。
@@ -92,13 +93,13 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
     if (existingTitles.has(title)) continue;
 
     // recovery-needed 是诊断信号（无 diff/branch），用 createRecoveryIssue 落到 super session。
-    // Supervisor 在自己的 super flow 看到后决定走 metaprog rollback。
+    // Supervisor 在自己的 super flow 看到后决定走控制面 rollback 端点。
     let issue: PrIssueRecord | undefined;
     try {
       issue = await createRecoveryIssue({
         baseDir: opts.baseDir,
         title,
-        description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/executable/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider \`metaprog rollback\` to a previous commit, or directly fix the stone.`,
+        description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/executable/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider rollback via 控制面 governance 端点 \`POST /api/runtime/stones/<id>/rollback\` to a previous commit, or directly fix the stone.`,
         createdByObjectId: "supervisor",
       });
     } catch {

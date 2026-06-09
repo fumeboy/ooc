@@ -82,7 +82,6 @@ describe("executable methods", () => {
       "example",
       "glob",
       "grep",
-      "metaprog",
       "open_feishu_chat",
       "open_feishu_doc",
       "open_file",
