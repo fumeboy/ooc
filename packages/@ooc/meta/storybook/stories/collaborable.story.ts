@@ -3,7 +3,7 @@
  *
  * 控制面（无 LLM）只验**通道**：① seed 一个 talk（user→target）后，target 的 callee thread inbox
  * 真实收到该消息（talk-delivery 双写）；② user.root 上挂了指向 target 的 talk_window。
- * 「对端真实回应」属 Tier B（需对端 thinkloop）。规格见 specs/capability_collaborable.md。
+ * 「对端真实回应」属 Tier B（需对端 thinkloop）。规格见 collaborable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

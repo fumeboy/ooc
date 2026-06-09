@@ -3,7 +3,7 @@
  *
  * 控制面（无 LLM）验**持久化落点与 git 版本化**：① createStone 落 stones/main/objects 且进 git；
  * ② 经 HTTP 改 self 产生新 commit（worktree 版本化，可审计）；③ 三子树（stones/pools/flows）落点。
- * 「session worktree 试验层 / evolve_self 合入」属 Tier B。规格见 specs/capability_persistable.md。
+ * 「session worktree 试验层 / evolve_self 合入」属 Tier B。规格见 persistable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";

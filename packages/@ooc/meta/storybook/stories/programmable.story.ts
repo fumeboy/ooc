@@ -2,7 +2,7 @@
  * Story: programmable —— Object 自定义方法（executable）。
  *
  * 能力：Object 通过 executable/index.ts 定义自定义方法，经 HTTP 被外部调用，方法执行时拿到
- * 自己的 stone 目录（ctx.self.dir）；改源码后热更新立即生效。规格见 specs/capability_programmable.md。
+ * 自己的 stone 目录（ctx.self.dir）；改源码后热更新立即生效。规格见 programmable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { statSync } from "node:fs";
 import { join } from "node:path";

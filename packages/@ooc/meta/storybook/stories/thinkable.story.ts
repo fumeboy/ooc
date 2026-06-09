@@ -3,7 +3,7 @@
  *
  * 控制面（无 LLM）只验**结构/通道**：① seed knowledge（带 activates_on）经 loadKnowledgeIndex
  * 被加载、可被 root window trigger 激活；② Object self.md 作为身份被 readSelf 加载（→ LLM instructions）。
- * 「多轮连贯 / 激活质量」属 Tier B（需真 LLM）。规格见 specs/capability_thinkable.md。
+ * 「多轮连贯 / 激活质量」属 Tier B（需真 LLM）。规格见 thinkable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";

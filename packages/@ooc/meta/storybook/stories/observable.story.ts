@@ -2,7 +2,7 @@
  * Story: observable —— thinkloop 周围加观测点，每轮 LLM 输入输出/tool/context 可记录可查可暂停。
  *
  * 控制面（无 LLM）只验**可观测面板的结构**：① 系统活动快照 /api/runtime/activity；② debug 开关
- * enable→status。「每轮 loop-debug 落盘」需真 thinkloop（Tier B）。规格见 specs/capability_observable.md。
+ * enable→status。「每轮 loop-debug 落盘」需真 thinkloop（Tier B）。规格见 observable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { mkServer, postJson, getJson, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult } from "../_harness/types";

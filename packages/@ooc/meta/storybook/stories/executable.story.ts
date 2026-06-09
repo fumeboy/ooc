@@ -3,7 +3,7 @@
  *
  * 控制面（无 LLM）只验**结构**：① Object 自定义 ui_methods 在 ContextObject 上执行（method 调用）；
  * ② Object 定义的 window.commands（LLM 路径命令）经 loader 可加载。深度（4 原语 exec/close/wait/compress
- * 驱动真实编辑）属 Tier B + e2e S1/S2。规格见 specs/capability_executable.md。
+ * 驱动真实编辑）属 Tier B + e2e S1/S2。规格见 executable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { setTimeout as sleep } from "node:timers/promises";
 import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";

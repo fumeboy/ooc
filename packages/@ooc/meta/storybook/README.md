@@ -7,12 +7,16 @@ storybook = OOC 的**能力目录 / showcase**：每个能力（8 维度 + class
 ## 结构
 
 ```
-_harness/{types,control-plane,agent-native}.ts   # 共享驱动
-stories/<cap>.story.ts                           # 9 特性纯模块（runControlPlane/runAgentNative）
-stories/_control-plane.test.ts                   # bun:test 汇总入口（CI gate）
-specs/capability_<cap>.md                         # 9 份能力规格（Tier A TC + Tier B rubric，收编自 harness playbook）
-runner.ts                                        # 聚合 → 覆盖矩阵 + docs/ooc-6/storybook/dashboard.md
+_harness/{types,control-plane,agent-native,story}.ts  # 共享驱动（含单元化 story 骨架）
+stories/<cap>.story.ts                           # 9 能力 story（runControlPlane/runAgentNative，Tier A/B）
+stories/L<n>_<layer>.stories.ts + _catalog.ts    # 单元化 catalog（一条 story 一个预期）
+stories/{_control-plane,_catalog}.test.ts        # bun:test 汇总入口（CI gate）
+runner.ts / catalog-runner.ts                    # 聚合 → dashboard / stories-report（docs/ooc-6/storybook/）
 ```
+
+> **测试规格已归属对象树（Phase 3，2026-06-09）**：每个能力的 Tier A TC + Tier B rubric 由对应 OOC Object
+> 的 `knowledge/tests.md` 持有（`.ooc-world-meta/.../children/<dim>/`）；原 `specs/capability_<cap>.md` 已删。
+> 体验官 orchestrate 读对象树的 tests.md 作剧本。测试**代码**留本目录（可跑、进 CI）。
 
 ## 怎么跑
 
@@ -26,11 +30,11 @@ runner.ts                                        # 聚合 → 覆盖矩阵 + doc
 
 - **storybook**（本框架）：能力目录，9 特性 × {控制面确定性 + agent-native 演示}。
 - **e2e backend/frontend**（`tests/e2e`，S1-S6/F1-F7）：用户任务场景端到端不退化。
-- **harness orchestrate**（`tests/harness`）：深度主观评估（spawn 体验官）；场景定义收编入本框架的 `specs/`。
+- **harness orchestrate**（`tests/harness`）：深度主观评估（spawn 体验官）；剧本（场景 + rubric）读对象树 `children/<dim>/knowledge/tests.md`。
 
-## 迁移状态（2026-06-07）
+## 迁移状态
 
-- `_verify.ts`：**已迁入** `stories/*.story.ts` 的 Tier A（PROG/REFL/VIS/CLASS）+ 补齐 5 特性。保留作历史参考，新增/修改请改 stories。
+- `_verify.ts`：**已迁入** `stories/*.story.ts` 的 Tier A。保留作历史参考，新增/修改请改 stories。
 - `_demo_session.ts`：agent-native 演示模式源，Tier B 的 `_harness/agent-native.ts` 从它抽公共驱动。
-- `test_object_{programmable,reflectable,visible}.md`：**已收编** 进 `specs/capability_*.md`（9 份齐全）。
-- `tests/harness/playbooks/*.playbook.md`：场景 + rubric **已收编** 进 `specs/`，作为 Tier B 判据来源。
+- 测试规格（Tier A TC + Tier B rubric）**已归属各维度 OOC Object 的 `knowledge/tests.md`**（Phase 3，2026-06-09）；
+  原 storybook `specs/` 已删，orchestrate 改读对象树。

@@ -3,7 +3,7 @@
  *
  * 能力：Object 经 HTTP API 读/改自己的 self.md（身份）、readable（对外）、executable（行为）、
  * knowledge（seed/sediment 双写）；自改 executable 后热更新生效（reflectable × programmable 闭环）。
- * 全程经 HTTP（worktree 版本化），不直写磁盘（避免与 ff-merge 冲突）。规格见 specs/capability_reflectable.md。
+ * 全程经 HTTP（worktree 版本化），不直写磁盘（避免与 ff-merge 冲突）。规格见 reflectable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";

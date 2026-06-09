@@ -25,9 +25,10 @@ const ALL_DIMENSIONS = [
 
 const REPO_ROOT = process.cwd();
 const HARNESS_DIR = join(REPO_ROOT, "packages/@ooc/tests/harness");
-// 2026-06-07 收编：体验官剧本（场景 + rubric）的单一来源已迁到 storybook specs。
-// orchestrate 不再读 harness/playbooks/，改读 storybook/specs/capability_<dim>.md。
-const STORYBOOK_SPECS_DIR = join(REPO_ROOT, "packages/@ooc/meta/storybook/specs");
+// 2026-06-09 测试归属（Phase 3）：体验官剧本（场景 + rubric）的单一来源已从 storybook specs/
+// 进一步收编进 .ooc-world-meta 对象树——每个维度对象的 knowledge/tests.md 持有自己的 Tier A TC +
+// Tier B rubric。orchestrate 读对应维度对象的 tests.md（storybook/specs/ 已删）。
+const OBJECT_TREE_DIR = join(REPO_ROOT, ".ooc-world-meta/stones/main/objects/supervisor/children");
 const SERVER_ENTRY = join(REPO_ROOT, "packages/@ooc/core/app/server/index.ts");
 const PORT_BASE = 4100;
 const NO_PROXY = "localhost,127.0.0.1";
@@ -142,7 +143,7 @@ async function runDimension(
     } else {
       const prompt = buildOfficerPrompt(promptTpl, {
         DIMENSION: dim, PORT: String(port), WORLD_DIR: world, RUN_TS: runTs,
-        PLAYBOOK_PATH: join(STORYBOOK_SPECS_DIR, `capability_${dim}.md`),
+        PLAYBOOK_PATH: join(OBJECT_TREE_DIR, dim, "knowledge/tests.md"),
         CHEATSHEET_PATH: join(HARNESS_DIR, "driver/cheatsheet.md"),
         SCHEMA_PATH: join(HARNESS_DIR, "report-schema.md"),
         REPORT_PATH: reportPath,

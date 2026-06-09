@@ -3,7 +3,7 @@
  *
  * 能力：client-source-url 暴露组件入口；Vite serve /@fs（有 Vite 时实测，否则 SKIP）；
  * 安全边界拒绝 executable 路径；visible 变更触发后端 stone:changed kind=view 事件；
- * UI↔行为闭环（callMethod 端点调通 executable）。规格见 specs/capability_visible.md。
+ * UI↔行为闭环（callMethod 端点调通 executable）。规格见 visible 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
