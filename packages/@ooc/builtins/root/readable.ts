@@ -1,4 +1,4 @@
-import { type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import type { XmlNode } from "@ooc/core/thinkable/context/xml.js";
 
 /**
@@ -10,3 +10,6 @@ import type { XmlNode } from "@ooc/core/thinkable/context/xml.js";
 export function readable(_ctx: RenderContext): XmlNode[] {
   return [];
 }
+
+// readable 维度自注册（root 仅有 readable，无 window method / compressView）。
+builtinRegistry.registerReadable("root", { readable });

@@ -20,25 +20,20 @@
 import type {
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/method-types.js";
-import type { WindowMethod } from "@ooc/core/_shared/types/window-method.js";
-import { builtinRegistry, type OnCloseContext } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import {
-  windowSetViewport,
-  hasAnyViewportField,
   DEFAULT_VIEWPORT,
 } from "@ooc/core/extendable/_shared/viewport.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type KnowledgeWindow,
-  type ContextWindow,
 } from "@ooc/core/extendable/_shared/types.js";
 import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
 import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
-import { readable } from "../readable.js";
+import "../readable.js"; // side-effect: readable 维度自注册（registerReadable）
 
-import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
 import { basenameOfPath, emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
@@ -46,8 +41,6 @@ import { basenameOfPath, emptyIntent } from "@ooc/builtins/_shared/executable/ut
 
 const KNOWLEDGE_WINDOW_RELOAD_BASIC = "internal/windows/knowledge/reload/basic";
 const KNOWLEDGE_WINDOW_CLOSE_BASIC = "internal/windows/knowledge/close/basic";
-const KNOWLEDGE_WINDOW_SET_VIEWPORT_BASIC = "internal/windows/knowledge/set_viewport/basic";
-const KNOWLEDGE_WINDOW_SET_VIEWPORT_INPUT = "internal/windows/knowledge/set_viewport/input";
 
 const RELOAD_KNOWLEDGE = `
 knowledge_object.reload 强制下一轮重新计算激活集合。当前 loader 已按 mtime 自动失效缓存，
@@ -60,23 +53,6 @@ knowledge_object.close 释放 window；不影响 knowledge 文件本身。
 注意：source=protocol / source=activator 的 knowledge_object 是系统每轮自动合成的，
 不存在于 thread.contextWindows 持久状态——LLM 也无法 close 它们（hook 会拒绝）。
 仅 source=explicit（来自 open_knowledge）的 window 可被 close。
-`.trim();
-
-const SET_VIEWPORT_KNOWLEDGE = `
-knowledge_object.set_viewport 精细化调整渲染窗口（行+列）。
-
-打开 explicit knowledge_object 时默认 viewport = { line_start: 0, line_end: 200, column_start: 0, column_end: 200 }。
-对大多数短 markdown 知识等价"全文显示"；超长知识需要扩窗时显式 set_viewport。
-
-参数（**全部可选**，未传字段保留当前值）：
-- line_start / line_end / column_start / column_end
-
-约束：非负整数；line_start <= line_end；column_start <= column_end。
-
-渲染：超 line_end 标 \`…(+N more lines)\`；行长 > column_end 标 \`…(+N more)\`。
-
-注意：viewport 仅对 source=explicit 的 knowledge_object 有效；
-protocol / activator / relation 来源的 knowledge_object 由系统按 description / full / summary 决定展示形态。
 `.trim();
 
 const reloadMethod: ObjectMethod = {
@@ -99,54 +75,7 @@ const closeMethod: ObjectMethod = {
   exec: () => undefined,
 };
 
-const setViewportMethod: WindowMethod = {
-  kind: "window",
-  paths: ["set_viewport"],
-  schema: {
-    args: {
-      line_start: { type: "number", description: "起始行（含；从0开始）" },
-      line_end: { type: "number", description: "结束行（不含）" },
-      column_start: { type: "number", description: "起始字符列（含；从0开始）" },
-      column_end: { type: "number", description: "结束字符列（不含）" },
-    },
-  },
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = {
-      [KNOWLEDGE_WINDOW_SET_VIEWPORT_BASIC]: SET_VIEWPORT_KNOWLEDGE,
-    };
-    if (formStatus === "open" && !hasAnyViewportField(args)) {
-      entries[KNOWLEDGE_WINDOW_SET_VIEWPORT_INPUT] =
-        "set_viewport 至少需要传入 line_start / line_end / column_start / column_end 之一。\n" +
-        "未传字段保留当前值。请 refine 补齐后 submit。";
-    }
-    return buildGuidanceWindows(form, entries);
-  },
-  exec: (ctx) => windowSetViewport(ctx, "knowledge"),
-};
-
-/** 拒绝 close 非 explicit 来源的 knowledge_object（合成 window 不可关闭）。 */
-function onCloseKnowledgeWindow(ctx: OnCloseContext): boolean | void {
-  if (ctx.window.type !== "knowledge") return;
-  // batch C narrowing(N1): ctx.window 契约层是 base ContextWindow；type==="knowledge" 守卫后
-  // narrow 回 KnowledgeWindow 以读 source/path（runtime 保证此 window 即 knowledge 实例）。
-  const w = ctx.window as KnowledgeWindow;
-  // 历史 window 没有 source 字段时按 explicit 处理（向后兼容）
-  if (w.source && w.source !== "explicit") {
-    ctx.thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `[close 拒绝] knowledge_object "${w.path}" 来自 ${w.source}，由系统每轮合成，不可显式关闭。`,
-    });
-    return false;
-  }
-}
-
-/** knowledge_object 的 renderXml hook 已迁出到 ../readable.ts。 */
+/** knowledge_object 的 readable 维度（readable + window method set_viewport + onClose）在 ../readable.ts。 */
 
 // ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
 
@@ -253,10 +182,4 @@ builtinRegistry.registerExecutable("knowledge", {
     open_knowledge: knowledgeConstructor,
   },
 });
-builtinRegistry.registerReadable("knowledge", {
-  windowMethods: {
-    set_viewport: setViewportMethod,
-  },
-  onClose: onCloseKnowledgeWindow,
-  readable,
-});
+// readable 维度（registerReadable）在 ../readable.ts 自注册（顶部 side-effect import 触发）。

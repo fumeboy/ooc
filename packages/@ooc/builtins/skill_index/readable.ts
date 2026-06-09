@@ -1,6 +1,25 @@
-import { type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import {
+  builtinRegistry,
+  type OnCloseContext,
+  type RenderContext,
+} from "@ooc/core/extendable/_shared/registry.js";
 import type { SkillIndexWindow } from "./types.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
+
+const SKILL_INDEX_BASIC_KNOWLEDGE = `
+skill_index object 列出当前 stone 上可用的 skills——每个 skill 是一个独立目录（含
+SKILL.md + 任意辅助文件），用于复用某种操作模式或协议。
+
+- 来源（双层；同名时 object 级优先）:
+  - branch 级（公共，跨 Object 共享）：\`stones/<branch>/skills/<name>/SKILL.md\`
+  - object 级（仅 self）：\`stones/<branch>/objects/<self>/skills/<name>/SKILL.md\`
+- 索引中可见 name + description（来自 SKILL.md frontmatter）+ scope 徽标（branch / object）
+- 进入某 skill：\`exec(method="open_file", args={ path: "<skillFilePath>" })\` 打开 SKILL.md
+  阅读完整说明；按需用 \`open_file\` 继续读 references / scripts 等辅助文件
+- skills 目录变动 ≤10s 后才反映到索引（缓存 TTL）
+
+如果当前 stone 没有任何 skills，本 window 不会出现。
+`.trim();
 
 /**
  * skill_index 的 readable hook。
@@ -30,3 +49,16 @@ export function readable(ctx: RenderContext): XmlNode[] {
     ),
   ];
 }
+
+function onCloseSkillIndex(_ctx: OnCloseContext): boolean {
+  // skill_index 是 protocol 派生 window；理论上不会被 close（不入 thread.json，每轮重建）
+  // 即使被显式 close，也拒绝（与 root window 同级）
+  return false;
+}
+
+// readable 维度自注册（readable + onClose + basicKnowledge）。
+builtinRegistry.registerReadable("skill_index", {
+  onClose: onCloseSkillIndex,
+  readable,
+  basicKnowledge: SKILL_INDEX_BASIC_KNOWLEDGE,
+});

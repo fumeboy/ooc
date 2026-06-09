@@ -1,4 +1,4 @@
-import { type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import { xmlElement, xmlText, renderPathList, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
 import type { TodoWindow } from "./types.js";
 
@@ -12,3 +12,6 @@ export function readable(ctx: RenderContext): XmlNode[] {
   }
   return children;
 }
+
+// readable 维度自注册（todo 仅有 readable，无 window method / compressView）。
+builtinRegistry.registerReadable("todo", { readable });

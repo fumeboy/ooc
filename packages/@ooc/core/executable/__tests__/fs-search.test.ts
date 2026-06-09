@@ -24,7 +24,7 @@ import {
 } from "../windows/index";
 import {
   SEARCH_WINDOW_BASIC_KNOWLEDGE,
-} from "@ooc/builtins/search";
+} from "@ooc/builtins/search/readable.js";
 import { renderContextXml } from "../../__tests__/render-context-xml";
 import { makeThread } from "../../__tests__/make-thread";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";

@@ -19,7 +19,7 @@ import {
   type TodoWindow,
   type ContextWindow,
 } from "@ooc/core/extendable/_shared/types.js";
-import { readable } from "../readable.js";
+import "../readable.js"; // side-effect: readable 维度自注册（registerReadable）
 
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
@@ -120,4 +120,4 @@ builtinRegistry.registerExecutable("todo", {
   // P6.§6: todo_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
   isBuiltinFeature: true,
 });
-builtinRegistry.registerReadable("todo", { readable });
+// readable 维度（registerReadable）已搬到 ../readable.ts 自注册（上方 side-effect import 触发）。

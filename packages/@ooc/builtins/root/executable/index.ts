@@ -182,10 +182,9 @@ export function deriveRootIntentPaths(
   }
 }
 
-/** root window 的 renderXml hook 已迁出到 ../readable.ts。 */
-import { readable } from "../readable.js";
+/** root 的 readable 维度（readable hook + registerReadable）在 ../readable.ts 自注册。 */
+import "../readable.js"; // side-effect: registerReadable("root", { readable })
 
-// 向 object registry 注入 root window type 的契约（按维度分注册）。
+// 向 object registry 注入 root window type 的 executable 维度。
 // side-effect 注册：windows/index.ts 通过 import "./root/index.js" 触发本模块加载。
 builtinRegistry.registerExecutable("root", { methods: ROOT_METHODS });
-builtinRegistry.registerReadable("root", { readable });

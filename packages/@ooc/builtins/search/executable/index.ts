@@ -24,7 +24,7 @@ import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/
 import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
 import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
 import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
-import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import { Glob } from "bun";
 import { isAbsolute, resolve } from "node:path";
 import {
@@ -35,52 +35,19 @@ import {
 } from "@ooc/core/extendable/_shared/types.js";
 import type { SearchWindow } from "../types.js";
 import { resolveSessionPath } from "@ooc/core/extendable/_shared/session-path.js";
-import { xmlElement, xmlText, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
-import {
-  applyTranscriptViewport,
-  type TranscriptViewport,
-} from "@ooc/core/extendable/_shared/transcript-viewport.js";
 import { DEFAULT_RESULTS_VIEWPORT } from "./results-viewport.js";
-import { setResultsWindowCommandForSearch } from "./method.set-results-window.js";
 import {
   runRipgrep,
   runJsFallback,
   type GrepHit,
 } from "@ooc/builtins/root/executable/method.grep.impl.js";
-import { readable } from "../readable.js";
+import "../readable.js"; // side-effect: readable 维度自注册（registerReadable）
 
 
 export const SEARCH_WINDOW_BASIC_PATH = "internal/windows/search/basic";
 export const SEARCH_WINDOW_CLOSE_BASIC = "internal/windows/search/close/basic";
 export const SEARCH_WINDOW_OPEN_MATCH_BASIC = "internal/windows/search/open_match/basic";
 export const SEARCH_WINDOW_OPEN_MATCH_INPUT = "internal/windows/search/open_match/input";
-
-export const SEARCH_WINDOW_BASIC_KNOWLEDGE = `
-search_window 是一次 glob 或 grep 搜索的结果窗口，由 \`root.glob\` 或 \`root.grep\` 直建。
-
-每条 match 有一个稳定的 \`index\`，可以通过
-
-\`\`\`
-open(parent_window_id="<search_window_id>", method="open_match", args={ index: <N> })
-\`\`\`
-
-在该 match 对应的文件上 spawn 一个 file_window，便于继续阅读 / 编辑。
-
-| command            | 作用 |
-|--------------------|------|
-| open_match         | 在指定 match 的 path 上 spawn 一个 file_window |
-| set_results_window | 调整 matches 渲染视口（matches_tail / matches_start+matches_end；默认 tail=50） |
-| close              | 释放本搜索窗口 |
-
-提醒：
-- search_window.matches 截断到 200 条；如果 \`truncated=true\` 表示有更多结果未显示，
-  请通过更精确的 query 重新 \`root.glob\` / \`root.grep\`
-- 想"翻页"或"改 query 重搜"目前都通过新建 search_window 完成，本期不提供 next_page / refine_query
-- grep kind 的 match 带 line + snippet；glob kind 只带 path
-- open_match grep 命中时，自动用 [match.line ± 40] 给 file_window 设置 lines 切片，便于看上下文
-- 渲染层默认按 resultsViewport={ tail: 50 } 只展示末 50 个 match；\`<results_viewport total=N tail=50 earlier_omitted=M/>\`
-  元节点暴露省略数；想看其它区间用 set_results_window；open_match 依然按完整 matches 的 index 寻址，不受 viewport 影响
-`.trim();
 
 const CLOSE_KNOWLEDGE = `
 search_window.close 释放本搜索窗口；不影响任何 match 对应的文件。
@@ -206,55 +173,8 @@ export async function executeSearchOpenMatch(
   return undefined;
 }
 
-/** search_window 的 renderXml hook 已迁出到 ../readable.ts。 */
-
-const SEARCH_PREVIEW_COUNT = 3;
-const SEARCH_SNIPPET_TRUNCATE = 200;
-
-/**
- * search_window 的 compressView hook（design §4.1）。
- *
- * - Level 1 (folded):  kind + query + matches.count + 前 3 条 match 预览(仅 path + line)
- * - Level 2 (snapshot): kind + query + matches.count
- *
- * snippet 在预览节点内截断到 SEARCH_SNIPPET_TRUNCATE 字符,避免单次 grep 命中一行特别长
- * 时把折叠态又撑回去。
- */
-function compressSearchWindow(
-  ctx: RenderContext,
-  level: 1 | 2,
-): XmlNode[] {
-  const window = ctx.window as SearchWindow;
-  const children: XmlNode[] = [
-    xmlElement("kind", {}, [xmlText(window.kind)]),
-    xmlElement("query", {}, [xmlText(window.query)]),
-    xmlElement("matches", {
-      count: String(window.matches.length),
-      truncated: window.truncated ? "true" : "false",
-    }),
-  ];
-  if (level === 1 && window.matches.length > 0) {
-    const previewNodes: XmlNode[] = window.matches
-      .slice(0, SEARCH_PREVIEW_COUNT)
-      .map((m) => {
-        const attrs: Record<string, string> = {
-          index: String(m.index),
-          path: m.path,
-        };
-        if (typeof m.line === "number") attrs.line = String(m.line);
-        const snippet = m.snippet ? m.snippet.slice(0, SEARCH_SNIPPET_TRUNCATE) : undefined;
-        return xmlElement("preview", attrs, snippet ? [xmlText(snippet)] : []);
-      });
-    children.push(xmlElement("preview_list", {}, previewNodes));
-  }
-  children.push(
-    xmlElement("compressed", {
-      level: String(level),
-      hint: "exec(window_id, 'expand') to restore",
-    }),
-  );
-  return children;
-}
+// search_window 的 readable 维度（readable + window method set_results_window + compressView
+// + basicKnowledge SEARCH_WINDOW_BASIC_KNOWLEDGE）已迁出到 ../readable.ts。
 
 builtinRegistry.registerExecutable("search", {
   methods: {
@@ -262,14 +182,7 @@ builtinRegistry.registerExecutable("search", {
     open_match: openMatchMethod,
   },
 });
-builtinRegistry.registerReadable("search", {
-  windowMethods: {
-    set_results_window: setResultsWindowCommandForSearch,
-  },
-  readable,
-  compressView: compressSearchWindow,
-  basicKnowledge: SEARCH_WINDOW_BASIC_KNOWLEDGE,
-});
+// readable 维度（registerReadable）在 ../readable.ts 自注册（顶部 side-effect import 触发）。
 
 // ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
 
