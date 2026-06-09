@@ -23,18 +23,12 @@ readable/visible/persistable + 横向 app/class）。每个对象 self.md 先陈
 **任何"X 维度/模块是什么、怎么设计的"先看对应对象。** `meta/` 与 `docs/ooc-6/` 的旧设计文档正按维度
 吸收进对象树后逐步删除；与代码冲突时一律信代码。
 
-OOC 的定义、维度设计、工程协作模型、测试策略**已全部迁入对象树**——`object.doc.ts` /
-`engineering.harness.doc.ts` / `engineering.testing.doc.ts` / `ooc-object-oriented-philosophy.md` /
-`harness.md` 已删除，内容在 `.ooc-world-meta/.../objects/supervisor/`（self.md + knowledge/{ooc-philosophy,
-ooc-glossary,engineering-harness,testing-strategy}.md）及各 `children/<dim>/`。
-
-`meta/` 仍存的参考文档（待后续吸收/退役）：
-
-| 文件 | 看什么 |
-|------|------|
-| `meta/app.client.doc.ts` | Web 控制面（vite + React）：AppShell、URL routing、chat 模型、ObjectClientRenderer。控制面框架归 app 对象、ooc:// 渲染归 visible 对象。 |
-| `meta/case.factor-dev-agents.doc.ts` | **外部场景 case**：哨兵平台因子开发助手收编成 3 个 OOC Agent + 1 个项目级 skill。展示外部场景如何用 Agent + skill 层次表达。 |
-| `meta/cookbook.add-new-agent.doc.ts` | **添加新 Agent 的 cookbook**：5 步从空到能跑。 |
+OOC 的定义、维度设计、工程协作模型、测试策略、外部场景 case、建对象 cookbook **已全部迁入对象树**。
+`packages/@ooc/meta/` 旧文档（object.doc.ts / engineering.* / app.*.doc.ts / case.* / cookbook.* /
+ooc-object-oriented-philosophy.md / object-context-composition.md / world-core-interface-and-hot-reload.md /
+harness.md）已删除——内容现在在 `.ooc-world-meta/.../objects/supervisor/`（self.md + `knowledge/`：
+ooc-philosophy / ooc-glossary / engineering-harness / testing-strategy / authoring-objects / example-cases）
+及各 `children/<dim>/`（self.md 核心设计 + knowledge）。`meta/` 现仅剩 `storybook/`（能力测试框架）。
 
 阅读顺序建议：
 1. 先 `.ooc-world-meta/.../supervisor/self.md` 建立"OOC 是什么 + 9 维度"的心智模型（+ knowledge/ooc-philosophy / ooc-glossary）。

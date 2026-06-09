@@ -33,24 +33,26 @@ src/
 ├── persistable/     # 持久化 (stones/、flows/、Issue 文件)
 └── app/server/      # HTTP 控制面 + worker
 web/                 # 前端控制面 (vite + React)
-meta/                # 概念文档 (树形 DocTreeNode 源)
+meta/storybook/      # 能力测试框架（stories + 单元化 catalog）
 tests/e2e/           # 端到端测试场景
+.ooc-world-meta/     # OOC 自举 world：用 OOC 对象树管理 OOC 自身的定义/文档/测试（submodule → ooc-0）
 ```
 
 ## 文档地图
 
-OOC 文档**树形组织**在 `meta/`，每份文件顶部有维护说明。建议阅读顺序：
+**OOC 的定义、9 维度设计、工程协作模型、测试规格已全部活在 `.ooc-world-meta` 对象树**——
+由 supervisor + 各维度 OOC Object 自管（OOC 用自己描述自己）。建议阅读顺序：
 
 | 想知道 | 看这里 |
 |---|---|
-| OOC 是什么、8 个能力维度边界 | `meta/object.doc.ts` |
-| 工程协作模型 (Supervisor + AgentOfX harness) | `meta/engineering.harness.doc.ts` |
-| 测试策略 (Good/OK/Bad 三档 / e2e 场景集) | `meta/engineering.testing.doc.ts` |
-| HTTP API 路由表 + 错误模型 | `meta/app.server.doc.ts` |
-| Web 控制面架构 | `meta/app.client.doc.ts` |
-| **想加一个新 AgentOfX？** | `meta/cookbook.add-new-agent.doc.ts` |
+| OOC 是什么、9 个能力维度边界、核心哲学 | `.ooc-world-meta/.../supervisor/self.md` + `knowledge/{ooc-philosophy,ooc-glossary}.md` |
+| 工程协作模型 (Supervisor + AgentOfX harness) | supervisor `knowledge/engineering-harness.md` |
+| 测试策略 + 各能力测试规格 | supervisor `knowledge/testing-strategy.md` + 各 `children/<dim>/knowledge/tests.md` |
+| 某维度怎么设计的 | `children/<dim>/self.md`（核心设计先行）+ `knowledge/` |
+| 想加一个新对象 / 外部场景 case | supervisor `knowledge/{authoring-objects,example-cases}.md` |
 
-每个维度的工程实现细节在 `meta/object.doc.ts` 的对应 children 节点；与源代码文件路径用 `src/...:行号` 锚定。
+每个维度对象的断言锚定真实代码 `packages/@ooc/.../*.ts:行号`；与代码冲突时一律信代码。
+`meta/` 现仅剩 `storybook/`（能力测试框架，测试代码与 CI gate）。
 
 ## 测试
 
@@ -69,7 +71,7 @@ OOC 自身就是用 OOC 架构协作开发的（**dogfooding**）。当前 inter
 - AgentOfX (sub agent) 各自负责一个维度的工程实现
 - AgentOfExperience 以真用户视角校准, 把发现转 Issue
 
-详见 `meta/engineering.harness.doc.ts`。
+详见 supervisor `knowledge/engineering-harness.md`（`.ooc-world-meta`）。
 
 ## 工具栈
 
