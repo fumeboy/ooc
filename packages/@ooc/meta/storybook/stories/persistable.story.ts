@@ -52,7 +52,7 @@ export async function runControlPlane(): Promise<StoryResult> {
   return { capability: "persistable", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
 }
 
-import { demoViaSupervisor, req } from "../_harness/agent-native";
+import { demoViaSupervisor, getStoneSelfWithRetry } from "../_harness/agent-native";
 
 /** Tier B —— agent-native：supervisor 建对象写身份，离开内存后经 HTTP 重读可恢复。 */
 export async function runAgentNative(): Promise<StoryResult> {
@@ -61,8 +61,9 @@ export async function runAgentNative(): Promise<StoryResult> {
   return demoViaSupervisor("persistable", `sb-an-pers-${tag}`,
     `请创建一个名为 ${obj} 的对象，写好它的 self.md 身份，让它的身份能持久保存。`,
     async () => {
-      const self = await req("GET", `/api/stones/${obj}/self`);
-      const ok = self.status === 200 && (self.json?.text ?? "").length > 20;
-      return { ok, detail: ok ? `${obj} 身份持久化（重读 self.md ${self.json.text.length} 字符，可恢复）` : `self=${self.status}, len=${(self.json?.text ?? "").length}` };
+      // 新模型：建对象→evolve_self 合入 main 有延迟，GET 重试容忍之。
+      const self = await getStoneSelfWithRetry(obj);
+      const ok = self.status === 200 && self.text.length > 20;
+      return { ok, detail: ok ? `${obj} 身份持久化（evolve 合入 main 后重读 self.md ${self.text.length} 字符，可恢复）` : `self=${self.status}, len=${self.text.length}（重试后仍未合入 main）` };
     });
 }

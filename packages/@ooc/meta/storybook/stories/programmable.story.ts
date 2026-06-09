@@ -8,7 +8,7 @@ import { statSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
-import { seedTask, waitJob, processTrace, req } from "../_harness/agent-native";
+import { seedTask, waitJob, processTrace, getStoneSelfWithRetry, threadLlmInfraFailed } from "../_harness/agent-native";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
 const EXEC = (body: string) => `${body}\nexport const window = { methods: {} };`;
@@ -93,14 +93,26 @@ export async function runAgentNative(): Promise<StoryResult> {
   let trace: string[] = [];
   let verified = false;
   let detail = "seed 失败";
+  let infraDetail: string | null = null;
   if (seed.ok && seed.threadId) {
     await waitJob(seed.jobId!);
-    trace = await processTrace(sid, "supervisor", seed.threadId);
-    const created = await req("GET", `/api/stones/${id}`);
-    const self = await req("GET", `/api/stones/${id}/self`);
-    verified = created.status === 200 && (self.json?.text ?? "").length > 20;
-    detail = verified ? `${id} 已由 supervisor 亲手创建，self.md ${self.json.text.length} 字符` : `getStone=${created.status}, self.len=${(self.json?.text ?? "").length}`;
+    infraDetail = await threadLlmInfraFailed(sid, "supervisor", seed.threadId);
+    if (!infraDetail) {
+      trace = await processTrace(sid, "supervisor", seed.threadId);
+      // 新模型：建对象 write_file 落 session worktree → super flow evolve_self 合入 main 才可见（有延迟），故重试。
+      const self = await getStoneSelfWithRetry(id);
+      verified = self.status === 200 && self.text.length > 20;
+      detail = verified
+        ? `${id} 已由 supervisor 亲手创建（write_file→evolve_self 合入 main），self.md ${self.text.length} 字符`
+        : `self=${self.status}, len=${self.text.length}（重试后仍未合入 main——agent 未建/未 evolve）`;
+    }
   }
-  const tcs = [{ id: "AN-PROG-01", name: "supervisor 经 metaprog 亲手创建带身份+知识的对象", status: verified ? "PASS" as const : "FAIL" as const, detail }];
+  // LLM 端点 infra 抖动（超时/socket）= 非能力问题 → SKIP（rollupTier→OK），不计能力 Bad。
+  const tcs = [{
+    id: "AN-PROG-01",
+    name: "supervisor 经 write_file+evolve_self 亲手创建带身份+知识的对象",
+    status: (infraDetail ? "SKIP" : verified ? "PASS" : "FAIL") as "SKIP" | "PASS" | "FAIL",
+    detail: infraDetail ? `LLM 端点 infra 抖动（非能力问题）：${infraDetail}` : detail,
+  }];
   return { capability: "programmable", tier: "agent-native", tcs, storyTier: rollupTier(tcs), trace };
 }

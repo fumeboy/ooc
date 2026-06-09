@@ -78,6 +78,47 @@ export async function processTrace(sessionId: string, objectId: string, threadId
   return renderTrace(await threadExecs(sessionId, objectId, threadId));
 }
 
+/**
+ * 检测 supervisor thread 是否因 **LLM 传输层错误**（调用超时 / socket 断 / 连接关闭）而 failed。
+ * 这类属 LLM 端点 infra 抖动、**非能力问题**——caller 应把它标 SKIP（rollupTier→OK）而非 Bad，
+ * 避免端点抖动污染能力回归矩阵。命中返回简短错误文本，否则 null。
+ */
+export async function threadLlmInfraFailed(sid: string, objectId: string, threadId: string): Promise<string | null> {
+  const r = await req("GET", `/api/flows/${sid}/${objectId}/threads/${threadId}`);
+  if (r.json?.status !== "failed") return null;
+  for (const e of (r.json?.events ?? [])) {
+    const text = String(e.text ?? e.message ?? "");
+    if (/超时|socket|connection (was )?closed|timeout|ECONNRESET|ETIMEDOUT|unexpectedly/i.test(text)) {
+      return text.replace(/\s+/g, " ").slice(0, 120);
+    }
+  }
+  return null;
+}
+
+/**
+ * GET 一个 stone 的 self.md，带重试。
+ *
+ * 新模型（去 metaprog）下建对象 = 业务 session write_file 落 session worktree → super flow evolve_self
+ * 合入 main 才在 /api/stones 可见（有延迟，且 evolve 是发起 job 之后的独立 super flow job）。建对象类
+ * 判据若 seed-job done 后立即 GET main 会假阴性。本 helper 重试等待 evolve 合入完成。
+ * 仍 404 = 对象确实没合入 main（agent 没建/没 evolve，真问题）。
+ */
+export async function getStoneSelfWithRetry(
+  objectId: string,
+  opts: { tries?: number; delayMs?: number } = {},
+): Promise<{ status: number; text: string }> {
+  const tries = opts.tries ?? 8;
+  const delayMs = opts.delayMs ?? 2000;
+  let last = { status: 0, text: "" };
+  for (let i = 0; i < tries; i++) {
+    const r = await req("GET", `/api/stones/${objectId}/self`);
+    last = { status: r.status, text: r.json?.text ?? "" };
+    if (last.status === 200 && last.text.length > 0) return last;
+    await sleep(delayMs);
+  }
+  return last;
+}
+
 export type VerifyCtx = { sid: string; threadId: string; execs: Array<{ cmd: string; args: any; msg?: string }>; lastSay: string };
 
 /**
@@ -97,6 +138,15 @@ export async function demoViaSupervisor(
     return { capability, tier: "agent-native", tcs, storyTier: "Bad", trace: [] };
   }
   await waitJob(seed.jobId!);
+  // LLM 传输层失败（调用超时 / socket 断）= 端点 infra 抖动，非能力问题 → 标 SKIP（rollupTier→OK），
+  // 不让端点抖动污染能力回归矩阵（区分「能力坏」与「环境噪音」）。
+  const infra = await threadLlmInfraFailed(sid, "supervisor", seed.threadId);
+  if (infra) {
+    const tcs: TcResult[] = [
+      { id: `AN-${capability}`, name: capability, status: "SKIP", detail: `LLM 端点 infra 抖动（非能力问题）：${infra}` },
+    ];
+    return { capability, tier: "agent-native", tcs, storyTier: rollupTier(tcs), trace: [] };
+  }
   const execs = await threadExecs(sid, "supervisor", seed.threadId);
   const lastSay = [...execs].reverse().find((e) => e.msg)?.msg ?? "";
   const v = await verify({ sid, threadId: seed.threadId, execs, lastSay });
