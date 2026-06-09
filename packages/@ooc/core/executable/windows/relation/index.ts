@@ -250,10 +250,12 @@ function renderRelationWindow(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
-builtinRegistry.registerObjectType("relation", {
+builtinRegistry.registerExecutable("relation", {
   methods: {
     edit: editMethod,
   },
+});
+builtinRegistry.registerReadable("relation", {
   renderXml: renderRelationWindow,
   basicKnowledge: RELATION_WINDOW_BASIC_KNOWLEDGE,
 });

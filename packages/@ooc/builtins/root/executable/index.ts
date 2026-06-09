@@ -4,7 +4,7 @@
  * Step 2 重构（spec 2026-05-14）：
  * - 旧 src/executable/commands/index.ts 拆分到这里 + windows/_shared/registry.ts；
  *   commands/ 目录已迁到 windows/root/，体现 "root 是一种 window type" 的从属关系
- * - 通过 registerObjectType("root", { commands }) 注入；与其它 window type 形态一致
+ * - 通过 registerExecutable("root", { methods }) + registerReadable("root", { readable }) 注入；与其它 window type 形态一致
  * - 暴露的工具函数（getOpenableMethods / deriveRootIntentPaths）只服务于 root 上的 method
  * - 暴露 ROOT_BASIC_PATH / ROOT_KNOWLEDGE：列出 root 注册的命令清单 + 用法摘要，
  *   由 src/executable/index.ts:collectExecutableKnowledgeEntries 合成为
@@ -32,11 +32,12 @@ import { writeFileMethod } from "./method.write-file.js";
 import { metaprogMethod } from "./method.metaprog.js";
 import { evolveSelfMethod } from "./method.evolve-self.js";
 import { createObjectMethod } from "./method.create-object.js";
+import { exampleMethod } from "./method.example.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 
 // 2026-06-02 P6.§4-§5: root commands 现在是 thin delegator，需要对应 builtin object module
-// 通过 registerObjectType 注册 constructor。这里 side-effect import 各 builtin，确保
+// 通过 registerExecutable 注册 constructor。这里 side-effect import 各 builtin，确保
 // `lookupConstructor("file" | "plan" | "program" | "knowledge" | "search" | "todo")` 能命中。
 // （core 自带的 "talk" / "do" 仍由 windows/talk + windows/do 通过 windows/index.ts 触发注册。）
 import "@ooc/builtins/file";
@@ -45,6 +46,8 @@ import "@ooc/builtins/program";
 import "@ooc/builtins/knowledge";
 import "@ooc/builtins/search";
 import "@ooc/builtins/todo";
+// example 标准对象样板：其 example_window constructor 经 ./method.example.js 的
+// side-effect import 注册（root.example 命令委托到它）。
 
 /**
  * Root window 上注册的 method 清单（核心数据；2026-05-28 ooc-6 Object Unification 改名）。
@@ -67,6 +70,7 @@ export const ROOT_METHODS: Record<string, ObjectMethod> = {
   metaprog: metaprogMethod,
   evolve_self: evolveSelfMethod,
   create_object: createObjectMethod,
+  example: exampleMethod,
   open_feishu_chat: openFeishuChatMethod,
   open_feishu_doc: openFeishuDocMethod,
 };
@@ -100,6 +104,7 @@ exec(method="<name>", title="...", args={...}) 调用（args 给齐时部分 met
 | open_knowledge  | 显式打开 stone knowledge doc                  | 创建 knowledge_window（force-full 渲染）   |
 | write_file      | 创建/覆盖**已存在对象**的文件内容              | 写盘 + 自动 spawn file_window；后续可走 file_window.edit |
 | create_object   | 建一个**全新对象**的骨架（仅业务 session）      | 落 session worktree objects/<newId>/{package.json,self.md,readable.md[,knowledge]}；end→super flow evolve_self 合入 |
+| example         | 构造 example_window（标准对象定义样板）          | 创建 example_window；后续可 bump / set_viewport / close |
 | glob            | 按 glob pattern 匹配文件名                     | 创建 search_window kind=glob；后续可 open_match(index) |
 | grep            | 按正则在文件内容里搜索                          | 创建 search_window kind=grep（含 line+snippet）；后续可 open_match(index) |
 | open_feishu_chat | 把飞书群聊 / 单聊作为 ContextWindow 引入        | 创建 feishu_chat_window；不立即拉取，建议随后 refresh |
@@ -180,6 +185,7 @@ export function deriveRootIntentPaths(
 /** root window 的 renderXml hook 已迁出到 ../readable.ts。 */
 import { readable } from "../readable.js";
 
-// 向 object registry 注入 root window type 的契约。
+// 向 object registry 注入 root window type 的契约（按维度分注册）。
 // side-effect 注册：windows/index.ts 通过 import "./root/index.js" 触发本模块加载。
-builtinRegistry.registerObjectType("root", { methods: ROOT_METHODS, readable });
+builtinRegistry.registerExecutable("root", { methods: ROOT_METHODS });
+builtinRegistry.registerReadable("root", { readable });

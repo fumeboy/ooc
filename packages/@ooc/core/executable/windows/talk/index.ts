@@ -361,13 +361,17 @@ const talkConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerObjectType("talk", {
+builtinRegistry.registerExecutable("talk", {
   methods: {
     say: sayMethod,
     wait: waitMethod,
     close: closeMethod,
     talk: talkConstructor,
   },
+  // P6.§6: talk_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
+  isBuiltinFeature: true,
+});
+builtinRegistry.registerReadable("talk", {
   windowMethods: {
     set_transcript_window: setTranscriptWindowCommandForTalk,
   },
@@ -379,6 +383,4 @@ builtinRegistry.registerObjectType("talk", {
   // 无需直接 import 本模块即可拿到 talk_window transcript 消费的消息 id。
   consumedMessageIds: (ctx) =>
     filterMessagesForTalkWindow(ctx.window as TalkWindow, ctx.thread),
-  // P6.§6: talk_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
-  isBuiltinFeature: true,
 });

@@ -12,9 +12,9 @@
 | collaborable | 🟢 Good | 2/0/0 | 🔴 Bad |
 | observable | 🟢 Good | 2/0/0 | 🟢 Good |
 | reflectable | 🟢 Good | 6/0/0 | 🟢 Good |
-| programmable | 🟢 Good | 4/0/0 | 🔴 Bad |
-| visible | 🟡 OK | 3/0/2 | 🔴 Bad |
-| persistable | 🟢 Good | 3/0/0 | 🔴 Bad |
+| programmable | 🟢 Good | 4/0/0 | 🟢 Good |
+| visible | 🟡 OK | 3/0/2 | 🟢 Good |
+| persistable | 🟢 Good | 3/0/0 | 🟢 Good |
 | class | 🟢 Good | 4/0/0 | 🟢 Good |
 
 _注：SKIP 多为环境依赖（如 visible 的 Vite serve 需 live Vite 指向同 world）。Tier B 质量判据见各 spec。_

@@ -41,8 +41,8 @@ function onCloseSkillIndex(_ctx: OnCloseContext): boolean {
   return false;
 }
 
-builtinRegistry.registerObjectType("skill_index", {
-  methods: {},
+builtinRegistry.registerExecutable("skill_index", { methods: {} });
+builtinRegistry.registerReadable("skill_index", {
   onClose: onCloseSkillIndex,
   readable,
   basicKnowledge: SKILL_INDEX_BASIC_KNOWLEDGE,

@@ -9,9 +9,10 @@
  * - 从 `_shared` re-export 所有 hook/定义类型 + `filterMethodsByVisibility` 纯函数。
  *
  * 使用迁移指引：
- * - Builtin 注册：import { builtinRegistry } from "./registry.js"; builtinRegistry.registerObjectType(...)
+ * - Builtin 注册：import { builtinRegistry } from "./registry.js";
+ *   executable 维度 builtinRegistry.registerExecutable(...) + readable 维度 builtinRegistry.registerReadable(...)
  * - 运行时查找：通过 WorldRuntime.objects（per-world registry）或 WindowManager.registry
- * - 测试/独立场景：const reg = createObjectRegistry(); reg.registerObjectType(...)
+ * - 测试/独立场景：const reg = createObjectRegistry(); reg.registerExecutable(...) / reg.registerReadable(...)
  */
 
 export type {

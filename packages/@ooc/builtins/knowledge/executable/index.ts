@@ -246,12 +246,14 @@ const knowledgeConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerObjectType("knowledge", {
+builtinRegistry.registerExecutable("knowledge", {
   methods: {
     reload: reloadMethod,
     close: closeMethod,
     open_knowledge: knowledgeConstructor,
   },
+});
+builtinRegistry.registerReadable("knowledge", {
   windowMethods: {
     set_viewport: setViewportMethod,
   },

@@ -128,7 +128,7 @@ function ts(): string {
 // ─────────────────────────── fixture: fake commands ───────────────────────────
 
 beforeAll(() => {
-  builtinRegistry.registerObjectType("root", {
+  builtinRegistry.registerExecutable("root", {
     methods: {
       _test_q0c_safe: {
         paths: ["_test_q0c_safe"],

@@ -353,12 +353,14 @@ const programConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerObjectType("program", {
+builtinRegistry.registerExecutable("program", {
   methods: {
     exec: execMethod,
     close: closeMethod,
     program: programConstructor,
   },
+});
+builtinRegistry.registerReadable("program", {
   windowMethods: {
     set_history_window: setHistoryWindowMethod,
   },

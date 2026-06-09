@@ -30,8 +30,7 @@ const failViewport: WindowMethod = {
 
 function fileWindowFixture() {
   const registry = new ObjectRegistry();
-  registry.registerObjectType("file", {
-    methods: {},
+  registry.registerReadable("file", {
     windowMethods: { set_viewport: setViewport, set_bad: failViewport },
   });
   const thread = makeThread({

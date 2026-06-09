@@ -768,13 +768,15 @@ const fileConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerObjectType("file", {
+builtinRegistry.registerExecutable("file", {
   methods: {
     reload: reloadMethod,
     edit: editMethod,
     close: closeMethod,
     file: fileConstructor,
   },
+});
+builtinRegistry.registerReadable("file", {
   windowMethods: {
     set_range: setRangeMethod,
     set_viewport: setViewportMethod,

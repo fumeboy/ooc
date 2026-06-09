@@ -23,8 +23,7 @@ const setViewport: WindowMethod = {
 
 function fixture(initialState: unknown) {
   const registry = new ObjectRegistry();
-  registry.registerObjectType("file", {
-    methods: {},
+  registry.registerReadable("file", {
     windowMethods: { set_viewport: setViewport },
   });
   const thread = makeThread({

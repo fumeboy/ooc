@@ -34,6 +34,7 @@ export type ObjectType =
   | "feishu_chat"
   | "feishu_doc"
   | "plan"
+  | "example"
   | "guidance"
   | (string & {});
 

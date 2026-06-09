@@ -11,7 +11,7 @@
  * （registerObjectType / getObjectDefinition / listRegisteredObjectTypes /
  *  assertAllObjectDefinitionsRegistered / lookupMethod / lookupMethodEntry /
  *  lookupConstructor / resolveParentClassChain / resolveEffectiveVisibleType）。
- * 调用方应直接使用 builtinRegistry.registerObjectType(...) 或 WorldRuntime.objects.*。
+ * 调用方应直接使用 builtinRegistry.registerExecutable(...) / registerReadable(...) 或 WorldRuntime.objects.*。
  */
 
 export type {

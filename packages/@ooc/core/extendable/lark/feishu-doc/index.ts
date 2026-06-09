@@ -564,7 +564,7 @@ function renderFeishuDoc(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
-builtinRegistry.registerObjectType("feishu_doc", {
+builtinRegistry.registerExecutable("feishu_doc", {
   methods: {
     read: readMethod,
     search_in_doc: searchInDocMethod,
@@ -574,6 +574,8 @@ builtinRegistry.registerObjectType("feishu_doc", {
     attach_to_chat: attachToChatMethod,
     close: closeMethod,
   },
+});
+builtinRegistry.registerReadable("feishu_doc", {
   renderXml: renderFeishuDoc,
   basicKnowledge: PROTOCOL_KNOWLEDGE,
 });

@@ -75,11 +75,14 @@ export class ObjectTypeRegistrar {
         this.deps.registry.registerNewObjectType(parentClass as any, { methods: {} });
       }
 
-      // registerObjectType = merge into existing; registerNewObjectType = create new
+      // 已存在 type → 按维度分别 merge（executable / readable）；新 type → registerNewObjectType 一次创建。
       const mergedMethods = { ...(windowDef?.methods ?? {}) };
       if (this.deps.registry.has(objectId)) {
-        this.deps.registry.registerObjectType(objectId as any, {
+        this.deps.registry.registerExecutable(objectId as any, {
           methods: mergedMethods,
+          parentClass,
+        });
+        this.deps.registry.registerReadable(objectId as any, {
           renderXml: windowDef?.renderXml,
           readable: windowDef?.readable,
           onClose: windowDef?.onClose,
@@ -87,7 +90,6 @@ export class ObjectTypeRegistrar {
             typeof windowDef?.basicKnowledge === "string"
               ? windowDef.basicKnowledge
               : undefined,
-          parentClass,
         });
       } else {
         this.deps.registry.registerNewObjectType(objectId as any, {

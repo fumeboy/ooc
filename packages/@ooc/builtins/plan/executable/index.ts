@@ -607,7 +607,7 @@ const planConstructor: ObjectMethod = {
 
 // ─────────────────────────── register ────────────────────────────────────────
 
-builtinRegistry.registerObjectType("plan", {
+builtinRegistry.registerExecutable("plan", {
   methods: {
     update_plan: updatePlanMethod,
     add_step: addStepMethod,
@@ -618,6 +618,8 @@ builtinRegistry.registerObjectType("plan", {
     close: closeMethod,
     plan: planConstructor,
   },
+});
+builtinRegistry.registerReadable("plan", {
   onClose: onClosePlanWindow,
   readable,
   compressView: compressPlanWindow,

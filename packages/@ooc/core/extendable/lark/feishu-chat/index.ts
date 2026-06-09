@@ -553,7 +553,7 @@ function formatMessageLine(m: FeishuChatMessage): string {
   return `${ts} ${kind}${m.sender} (${m.messageId.slice(-8)})${reply}: ${m.text}`;
 }
 
-builtinRegistry.registerObjectType("feishu_chat", {
+builtinRegistry.registerExecutable("feishu_chat", {
   methods: {
     refresh: refreshMethod,
     search: searchMethod,
@@ -562,6 +562,8 @@ builtinRegistry.registerObjectType("feishu_chat", {
     subscribe: subscribeMethod,
     close: closeMethod,
   },
+});
+builtinRegistry.registerReadable("feishu_chat", {
   renderXml: renderFeishuChat,
   basicKnowledge: PROTOCOL_KNOWLEDGE,
 });

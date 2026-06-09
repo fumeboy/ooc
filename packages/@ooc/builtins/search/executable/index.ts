@@ -256,11 +256,13 @@ function compressSearchWindow(
   return children;
 }
 
-builtinRegistry.registerObjectType("search", {
+builtinRegistry.registerExecutable("search", {
   methods: {
     close: closeMethod,
     open_match: openMatchMethod,
   },
+});
+builtinRegistry.registerReadable("search", {
   windowMethods: {
     set_results_window: setResultsWindowCommandForSearch,
   },
@@ -464,9 +466,9 @@ const searchConstructor: ObjectMethod = {
   },
 };
 
-// 二次注册：把 constructor 加进 methods 表（registerObjectType 替换 methods；
-// windowMethods 已在首次注册携带，registerObjectType 未传时保留 existing）。
-builtinRegistry.registerObjectType("search", {
+// 二次注册：把 constructor 加进 methods 表（registerExecutable 替换 methods；
+// 首次注册的 readable 维度 windowMethods/readable/... 不受影响，保留 existing）。
+builtinRegistry.registerExecutable("search", {
   methods: {
     close: closeMethod,
     open_match: openMatchMethod,

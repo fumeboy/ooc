@@ -79,6 +79,7 @@ describe("executable methods", () => {
       "do",
       "end",
       "evolve_self",
+      "example",
       "glob",
       "grep",
       "metaprog",

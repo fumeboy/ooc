@@ -123,7 +123,7 @@ function writePoliciesJson(ref: ThreadPersistenceRef, raw: string): void {
 
 // 注册仅供测试用的 root commands: "_test_q0b_danger" (deny), "_test_q0b_safe" (无声明)
 beforeAll(() => {
-  builtinRegistry.registerObjectType("root", {
+  builtinRegistry.registerExecutable("root", {
     methods: {
       _test_q0b_danger: {
         paths: ["_test_q0b_danger"],

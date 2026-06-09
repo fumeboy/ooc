@@ -50,14 +50,16 @@ const sharedMethods = {
   submit: submitMethod,
 };
 
-builtinRegistry.registerObjectType("method_exec", {
+builtinRegistry.registerExecutable("method_exec", {
   methods: sharedMethods,
-  readable,
-  basicKnowledge: METHOD_EXEC_BASIC_KNOWLEDGE,
   // P6.§6: form 是 method 调用过程的临时载体（Object 内置特性）—— 不写独立 dir，
   //         状态 inline 进所属 thread 的 context.json。
   isBuiltinFeature: true,
   // P6.§7: form lifecycle 内部 type，方法表只能含 refine/submit；不该继承 root 的 talk/do/...
   parentClass: null,
+});
+builtinRegistry.registerReadable("method_exec", {
+  readable,
+  basicKnowledge: METHOD_EXEC_BASIC_KNOWLEDGE,
 });
 

@@ -27,11 +27,11 @@ export * from "../../../_shared/types/viewport.js";
  * - 无 viewport 字段：no-op，返回原 state + 提示文案（result）
  * - 合并 fail-loud：返回 { ok:false, error }
  *
- * @param expectedType 仅用于错误文案 label（file / knowledge）。
+ * @param expectedType 仅用于错误文案 label（如 file / knowledge / example）；不是类型判别式。
  */
 export function windowSetViewport(
   ctx: WindowMethodExecutionContext,
-  expectedType: "file" | "knowledge",
+  expectedType: string,
 ): WindowMethodOutcome {
   if (!hasAnyViewportField(ctx.args)) {
     return {

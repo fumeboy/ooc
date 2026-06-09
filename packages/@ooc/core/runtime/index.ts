@@ -7,7 +7,7 @@
  *
  * 长期所有 per-world 状态都通过 `WorldRuntime` 访问：
  *   const runtime = await createWorldRuntime({ worldPath });
- *   runtime.objects.registerObjectType(...);
+ *   runtime.objects.registerExecutable(...); // + registerReadable(...) 按维度注册
  *   runtime.observable.enableDebug();
  *
  * 过渡期：module-level 默认实例（defaultObservableStore /

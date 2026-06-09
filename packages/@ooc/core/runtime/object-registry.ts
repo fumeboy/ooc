@@ -88,6 +88,8 @@ const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
   ["feishu_chat", { type: "feishu_chat", methods: {} } as ObjectDefinition],
   ["feishu_doc", { type: "feishu_doc", methods: {} } as ObjectDefinition],
   ["plan", { type: "plan", methods: {} } as ObjectDefinition],
+  // example —— 标准对象定义样板（executable/index.ts + readable.ts 两维度分注册示范）。
+  ["example", { type: "example", methods: {} } as ObjectDefinition],
 ];
 
 export class ObjectRegistry {
@@ -99,11 +101,58 @@ export class ObjectRegistry {
     }
   }
 
-  registerObjectType(type: ObjectType, partial: Partial<Omit<ObjectDefinition, "type">>): void {
+  /**
+   * 注册 **executable 维度**：object methods（含 constructor）+ 类元信息
+   * （`parentClass` 继承声明 / `isBuiltinFeature` 标记）。
+   *
+   * 与 {@link registerReadable} 按维度分工——本方法**只**接受 executable 字段，
+   * readable 维度（readable / renderXml / windowMethods / compressView / onClose /
+   * basicKnowledge / consumedMessageIds）走 registerReadable。类型层即拒绝越界字段，
+   * 避免两个维度的注册再挤进同一次调用（符号/职责膨胀）。
+   *
+   * 只更新**已 seed 的 type**（BASE_TYPE_DEFINITIONS）；新 type 走 registerNewObjectType。
+   */
+  registerExecutable(
+    type: ObjectType,
+    patch: Pick<Partial<ObjectDefinition>, "methods" | "parentClass" | "isBuiltinFeature">,
+  ): void {
+    this.mergeExistingDefinition(type, patch, "registerExecutable");
+  }
+
+  /**
+   * 注册 **readable 维度**：`readable` / `renderXml`（二选一的展示构造 hook）、
+   * `windowMethods`（控制展示的 window method 表）、`compressView`（压缩态渲染）、
+   * `onClose`（关闭副作用）、`basicKnowledge`（窗口在场时注入的协议知识）、
+   * `consumedMessageIds`（transcript 去重 hook）。
+   *
+   * 与 {@link registerExecutable} 配对：同一 type 的两个维度分别注册、互不覆盖
+   * （未传字段保留 existing）。标准对象定义里 readable 维度由 `readable.ts` 自注册。
+   */
+  registerReadable(
+    type: ObjectType,
+    patch: Pick<
+      Partial<ObjectDefinition>,
+      "readable" | "renderXml" | "windowMethods" | "compressView" | "onClose" | "basicKnowledge" | "consumedMessageIds"
+    >,
+  ): void {
+    this.mergeExistingDefinition(type, patch, "registerReadable");
+  }
+
+  /**
+   * 维度注册的共用 merge：把 partial 合入已存在的 ObjectDefinition（未传字段保留 existing），
+   * 并校验 object method / window method 同名冲突。executable 与 readable 两个维度入口都走这里，
+   * 故 method↔windowMethod 同名无论先注册哪个维度都能 fail-loud。
+   */
+  private mergeExistingDefinition(
+    type: ObjectType,
+    partial: Partial<Omit<ObjectDefinition, "type">>,
+    caller: string,
+  ): void {
     const existing = this.store.get(type);
-    if (!existing) throw new Error(`registerObjectType: unknown object type "${type}"`);
+    if (!existing) throw new Error(`${caller}: unknown object type "${type}"`);
     const nextMethods = partial.methods !== undefined ? partial.methods : existing.methods;
-    const nextWindowMethods = partial.windowMethods ?? existing.windowMethods;
+    const nextWindowMethods =
+      partial.windowMethods !== undefined ? partial.windowMethods : existing.windowMethods;
     assertNoMethodNameCollision(type, nextMethods, nextWindowMethods);
     const nextParentClass = resolveEffectiveParentClass(partial, existing);
     this.store.set(type, {
@@ -314,8 +363,9 @@ export class ObjectRegistry {
  * plan, program, todo, search, knowledge, skill_index, do, talk, method_exec,
  * feishu_chat, feishu_doc, relation).
  *
- * Builtin modules populate this via side-effect imports at module load time
- * (e.g. `builtinRegistry.registerObjectType("file", {...})`).
+ * Builtin modules populate this via side-effect imports at module load time:
+ * executable/index.ts 调 `builtinRegistry.registerExecutable("file", { methods })`，
+ * readable.ts 调 `builtinRegistry.registerReadable("file", { readable, windowMethods, ... })`。
  *
  * Each per-world `WorldRuntime.objects` seeds itself from this registry at
  * construction time, so builtins are available in every world without being
