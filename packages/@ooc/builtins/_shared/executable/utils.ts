@@ -32,3 +32,20 @@ export function basenameOfPath(p: string): string {
  * 共享单一引用，替代散落各处的 `intent: () => []` / `intent: (): Intent[] => []`。
  */
 export const emptyIntent = (): Intent[] => [];
+
+/**
+ * 解析 `[number, number]` 元组；非法返回 undefined。
+ * 同时被 readable 维度（file set_range window method）与 executable 维度
+ * （open_file constructor 的 lines/columns）使用，故放共享层避免两维度互相 import。
+ */
+export function asTuple(value: unknown): [number, number] | undefined {
+  if (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    typeof value[0] === "number" &&
+    typeof value[1] === "number"
+  ) {
+    return [value[0], value[1]];
+  }
+  return undefined;
+}

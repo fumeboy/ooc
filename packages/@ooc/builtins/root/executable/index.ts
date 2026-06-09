@@ -183,7 +183,7 @@ export function deriveRootIntentPaths(
 }
 
 /** root 的 readable 维度（readable hook + registerReadable）在 ../readable.ts 自注册。 */
-import "../readable.js"; // side-effect: registerReadable("root", { readable })
+// readable 维度由 barrel index.ts 的 import "./readable.js" 加载（executable 不 import readable）。
 
 // 向 object registry 注入 root window type 的 executable 维度。
 // side-effect 注册：windows/index.ts 通过 import "./root/index.js" 触发本模块加载。

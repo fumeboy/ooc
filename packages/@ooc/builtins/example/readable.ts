@@ -7,7 +7,7 @@
  * - `compressView`：折叠/快照态渲染。
  *
  * 这三者都属于 readable 维度——与 executable 维度（object method / constructor，在
- * `executable/index.ts`）物理分离、分注册。`executable/index.ts` side-effect import 本文件触发注册。
+ * `executable/index.ts`）物理分离、分注册。本文件由 barrel `./index.ts` 的 side-effect import 加载。
  */
 
 import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";

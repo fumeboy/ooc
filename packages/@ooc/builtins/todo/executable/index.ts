@@ -19,7 +19,7 @@ import {
   type TodoWindow,
   type ContextWindow,
 } from "@ooc/core/extendable/_shared/types.js";
-import "../readable.js"; // side-effect: readable 维度自注册（registerReadable）
+// readable 维度由 barrel index.ts 的 import "./readable.js" 加载（executable 不 import readable）。
 
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";

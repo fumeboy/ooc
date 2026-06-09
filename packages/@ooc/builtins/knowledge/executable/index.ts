@@ -32,7 +32,7 @@ import {
 import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
 import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
-import "../readable.js"; // side-effect: readable 维度自注册（registerReadable）
+// readable 维度由 barrel index.ts 的 import "./readable.js" 加载（executable 不 import readable）。
 
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";

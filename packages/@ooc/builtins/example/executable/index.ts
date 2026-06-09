@@ -3,8 +3,8 @@
  *
  * 本文件**只**注册 executable 维度：object method（控制业务数据）+ constructor。
  * readable 维度（readable / window method / compressView）在隔壁 `../readable.ts`，
- * 由本文件 side-effect import 触发其自注册。两个维度分文件、经 registry 的
- * `registerExecutable` / `registerReadable` 两个入口分别注册——这正是本 example 要示范的。
+ * 两个维度由 barrel `../index.ts` 分别加载、经 registry 的 `registerExecutable` /
+ * `registerReadable` 两个入口分别注册——这正是本 example 要示范的（executable 不 import readable）。
  *
  * - constructor `example`：构造 example_window（message 业务数据 + 默认 viewport）。
  * - object method `bump`：累加 bumpCount（业务数据，Object.assign mutate ctx.self）。
@@ -24,8 +24,7 @@ import {
 import { emptyIntent, isString } from "@ooc/builtins/_shared/executable/utils.js";
 import type { ExampleWindow } from "../types.js";
 
-// side-effect：加载 readable 维度，触发 registerReadable("example", {...})。
-import "../readable.js";
+// readable 维度由 barrel index.ts 的 import "./readable.js" 加载（executable 不 import readable）。
 
 const bumpMethod: ObjectMethod = {
   paths: ["bump"],

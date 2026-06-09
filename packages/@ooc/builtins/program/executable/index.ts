@@ -33,7 +33,7 @@ export {
   programSetHistoryViewport,
   hasAnyHistoryViewportField,
 } from "./history-viewport.js";
-import "../readable.js"; // side-effect: readable 维度自注册（registerReadable）
+// readable 维度由 barrel index.ts 的 import "./readable.js" 加载（executable 不 import readable）。
 
 
 const PROGRAM_WINDOW_EXEC_BASIC = "internal/windows/program/exec/basic";

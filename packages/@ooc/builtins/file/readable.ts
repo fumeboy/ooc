@@ -16,7 +16,7 @@ import type {
 } from "@ooc/core/_shared/types/window-method.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
-import { isString, emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
+import { isString, emptyIntent, asTuple } from "@ooc/builtins/_shared/executable/utils.js";
 
 const MAX_FILE_WINDOW_BYTES = 32768;
 
@@ -122,19 +122,6 @@ export async function readable(ctx: RenderContext): Promise<XmlNode[]> {
     children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
   }
   return children;
-}
-
-/** 解析 [number, number] 元组；用于 set_range（window method）与 open_file constructor 的 lines/columns。 */
-export function asTuple(value: unknown): [number, number] | undefined {
-  if (
-    Array.isArray(value) &&
-    value.length === 2 &&
-    typeof value[0] === "number" &&
-    typeof value[1] === "number"
-  ) {
-    return [value[0], value[1]];
-  }
-  return undefined;
 }
 
 const setRangeMethod: WindowMethod = {

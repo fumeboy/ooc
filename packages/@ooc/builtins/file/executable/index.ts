@@ -38,12 +38,10 @@ import {
   resolveStoneIdentityRef,
 } from "@ooc/core/persistable/index.js";
 import { stoneDir } from "@ooc/core/persistable/common.js";
-// asTuple 在 ../readable.ts（readable 维度）；import 它同时触发 readable 自注册（registerReadable）。
-import { asTuple } from "../readable.js";
 
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
-import { isString, basenameOfPath, emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
+import { isString, basenameOfPath, emptyIntent, asTuple } from "@ooc/builtins/_shared/executable/utils.js";
 
 
 const MAX_FILE_WINDOW_BYTES = 32768;

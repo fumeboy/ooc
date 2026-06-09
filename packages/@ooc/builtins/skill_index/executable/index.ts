@@ -16,7 +16,7 @@
  */
 
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
-import "../readable.js"; // side-effect: readable 维度自注册（registerReadable）
+// readable 维度由 barrel index.ts 的 import "./readable.js" 加载（executable 不 import readable）。
 
 // skill_index 无 object method / constructor —— executable 维度只声明空方法表。
 builtinRegistry.registerExecutable("skill_index", { methods: {} });
