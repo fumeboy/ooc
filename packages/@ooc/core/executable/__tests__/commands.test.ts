@@ -75,6 +75,7 @@ describe("executable methods", () => {
       expect("openable" in entry).toBe(false);
     }
     expect(getOpenableMethods()).toEqual([
+      "create_object",
       "do",
       "end",
       "evolve_self",

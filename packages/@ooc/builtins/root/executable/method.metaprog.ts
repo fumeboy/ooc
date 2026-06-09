@@ -33,20 +33,19 @@ const METAPROG_INPUT_PATH = "internal/executable/metaprog/input";
 const KNOWLEDGE = `
 metaprog = **治理协议**（PR-Issue 评审 + 回滚），仅 supervisor 可调。
 
-## 写自己 / 建别人 / 改别人怎么做（不经本命令）
+## 写自己 / 改别人 / 建新对象怎么做（不经本命令）
 
 直接写文件即可——不需要任何 worktree 命令：
 
-1. \`write_file(path="stones/<self>/self.md", content="...")\` 改自己的身份；
-   \`write_file(path="stones/<otherId>/self.md", content="...")\` 改/建别人的对象。
-2. 写落到**本 session 的 worktree**（main 未变），本 session 内即时生效。
-3. 去 super flow 调 \`evolve_self\` 把改动合入 main：
+1. 改**已存在**对象的文件：\`write_file(path="stones/<self>/self.md", content="...")\` 改自己；
+   \`write_file(path="stones/<otherId>/self.md", content="...")\` 改别人。
+2. 建一个**全新**对象：用 \`create_object\`（原子建骨架；**不能**裸 write_file——
+   新对象还没 package.json 会被拒）：
+   \`open(method="create_object", args={ objectId:"<newId>", selfMd:"...", readableMd:"...", knowledge?:{...} })\`
+3. 写落到**本 session 的 worktree**（main 未变），本 session 内即时生效。
+4. 去 super flow 调 \`evolve_self\` 把改动合入 main：
    - 只改了自己（self-scope）→ 直接 ff-merge 到 main。
    - 动了别人 / 建了新对象（cross-scope）→ 自动开 PR-Issue，等 supervisor \`resolve\`。
-
-**建新对象**：supervisor 在 session 内 \`write_file\` 写
-\`stones/<newId>/{self.md,readable.md,...}\`，再走 super flow evolve_self →
-cross-scope → supervisor 自审 \`resolve\` 合入 main。
 
 ## actions（治理，仅 supervisor）
 

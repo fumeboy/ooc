@@ -31,6 +31,7 @@ import { todoMethod } from "./method.todo.js";
 import { writeFileMethod } from "./method.write-file.js";
 import { metaprogMethod } from "./method.metaprog.js";
 import { evolveSelfMethod } from "./method.evolve-self.js";
+import { createObjectMethod } from "./method.create-object.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 
@@ -65,6 +66,7 @@ export const ROOT_METHODS: Record<string, ObjectMethod> = {
   grep: grepMethod,
   metaprog: metaprogMethod,
   evolve_self: evolveSelfMethod,
+  create_object: createObjectMethod,
   open_feishu_chat: openFeishuChatMethod,
   open_feishu_doc: openFeishuDocMethod,
 };
@@ -96,7 +98,8 @@ exec(method="<name>", title="...", args={...}) 调用（args 给齐时部分 met
 | end             | 标记 thread 完成                              | 仅副作用                                   |
 | open_file       | 把指定文件引入 context                        | 创建 file_window；后续 set_range/reload    |
 | open_knowledge  | 显式打开 stone knowledge doc                  | 创建 knowledge_window（force-full 渲染）   |
-| write_file      | 创建/覆盖文件内容                              | 写盘 + 自动 spawn file_window；后续可走 file_window.edit |
+| write_file      | 创建/覆盖**已存在对象**的文件内容              | 写盘 + 自动 spawn file_window；后续可走 file_window.edit |
+| create_object   | 建一个**全新对象**的骨架（仅业务 session）      | 落 session worktree objects/<newId>/{package.json,self.md,readable.md[,knowledge]}；end→super flow evolve_self 合入 |
 | glob            | 按 glob pattern 匹配文件名                     | 创建 search_window kind=glob；后续可 open_match(index) |
 | grep            | 按正则在文件内容里搜索                          | 创建 search_window kind=grep（含 line+snippet）；后续可 open_match(index) |
 | open_feishu_chat | 把飞书群聊 / 单聊作为 ContextWindow 引入        | 创建 feishu_chat_window；不立即拉取，建议随后 refresh |

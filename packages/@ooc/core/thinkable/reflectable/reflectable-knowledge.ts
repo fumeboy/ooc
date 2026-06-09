@@ -148,12 +148,30 @@ open(method="evolve_self", args={ message: "为什么改" })   # 整个 session 
 合入成功后下一轮新 session 见新身份。**super flow 自己不直接 write_file 改 stone**——它的职责是
 合入（evolve_self）、沉淀记忆、以及（supervisor）治理。改身体永远在业务 session 做。
 
-## 改别人 / 建新对象（cross-object）
+## 改别人已存在对象（cross-object）
 
-同样在业务 session 直接 \`write_file\` 写 \`stones/<对方或新 id>/...\`（建新对象就写
-\`objects/<newId>/self.md\` / \`readable.md\` 等）。evolve_self 合入时，凡触及别人自治区的改动会
-**自动转 PR-Issue 给 supervisor**（返回值带 \`prIssueId\`），等 supervisor 评审 \`resolve\`；
-其间 main 不变。
+在业务 session 直接 \`write_file\` 写 \`stones/<对方 id>/...\` 改对方**已存在**的文件。
+evolve_self 合入时，凡触及别人自治区的改动会**自动转 PR-Issue 给 supervisor**
+（返回值带 \`prIssueId\`），等 supervisor 评审 \`resolve\`；其间 main 不变。
+
+## 建**全新**对象 → 用 create_object（不是裸 write_file）
+
+建一个还不存在的对象，**必须用 \`create_object\`**（原子建骨架），不能裸 write_file——
+write_file 靠 package.json 判 owner 边界，新对象还没 package.json 会被拒。
+
+\`\`\`
+open(method="create_object", args={
+  objectId: "<newId>",
+  selfMd: "...",            # 新对象第一人称身份
+  readableMd: "...",        # 新对象对外自述
+  knowledge: { "x.md": "..." }   # 可选 seed 知识
+})
+\`\`\`
+- 骨架落本 session worktree（\`objects/<newId>/{package.json,self.md,readable.md[,knowledge/]}\`），main 不变。
+- 仅业务 session 可调（super flow 是合入闸门不建对象；控制面建对象走 HTTP）。
+- end → super flow \`evolve_self\` 合入：建新对象 ≠ 你自己（cross-scope）→ 自动开 PR-Issue 给 supervisor \`resolve\`。
+
+**口诀**：建新对象 = create_object；改已存在对象（自己/别人）的文件 = write_file/edit。
 
 ## supervisor 专属（你不是 supervisor 时跳过本节）
 

@@ -16,7 +16,7 @@ activates_on:
 1. **分发**：理解用户需求 → 派给合适 Object（或创建新 Object）
 2. **解释**：OOC 概念、维度边界、文件作用、设计决策 —— 用户询问时回答
 3. **创建 Object**：用户描述新能力需求时直接创建（见 `creating-objects.md`）
-4. **审阅**：supervisor 专属 metaprog 操作（rollback / resolve PR-Issue / create_object）
+4. **审阅**：supervisor 专属 `metaprog` 治理操作（resolve PR-Issue / rollback）
 5. **管理 World 健康度**：处理启动期 recovery-check 上报的 broken stone PR-Issue
 6. **反思**：通过 super flow 把沉淀的经验写入自己的 sediment knowledge（`pools/supervisor/knowledge/memory/`）
 

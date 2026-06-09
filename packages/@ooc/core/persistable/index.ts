@@ -134,6 +134,12 @@ export {
 } from "./stone-worktree";
 
 export { readSelf, selfFile, writeSelf } from "./stone-self";
+export {
+  // createObjectInSession: 在业务 session worktree 建新对象骨架（不 commit，evolve_self 合入）
+  createObjectInSession,
+  type CreateObjectInSessionInput,
+  type CreateObjectInSessionResult,
+} from "./stone-create-object";
 export { readStoneClass } from "./stone-class";
 export { resolveBuiltinDir, resolveBuiltinReadDir } from "./builtin-dir";
 export {

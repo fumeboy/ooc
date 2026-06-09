@@ -78,28 +78,28 @@ activates_on:
 
 ### stone-versioning（stone 改动审计协议）
 
-任何对 world 内 `packages/`（Stone）的写入都必经此流程，不能绕过。
+任何对 world 内 Stone 的写入都必经此流程，不能绕过。
 **Builtin Object 不在此协议覆盖范围内**——Builtin 由 OOC 代码仓版本化，Agent 不能改写。
 
-1. **open_worktree** — 拉一个临时 git worktree（独立分支 + 工作目录）给写者
-2. 写者在 worktree 里改文件
-3. **commit** — 把 worktree 改动落 commit 到那个临时分支
-4. **merge** — 把临时分支并回 main：
-   - **intra-scope**（改动只触及 `objects/<self>/` 自己的目录）→ 自动 fast-forward merge，立即生效
-   - **cross-scope**（触及 `objects/<other>/`）→ 自动开 **PR-Issue** 待 supervisor 评审
+模型（去 metaprog 写路径后，2026-06-09）：**业务 session 写 → super flow 合入**。
 
-### metaprog（操作 stone 的命令族）
+1. 在**业务 session** 里改 Stone：
+   - 改**已存在**对象的文件 → `write_file` / `edit` 写 `stones/<id>/...`。
+   - 建一个**全新**对象 → root method `create_object`（裸 write_file 建对象会被拒）。
+2. 改动落**本 session 的 git worktree**（`flows/<sid>/objects/...`，main 的完整副本），
+   本 session 内即时生效、**main 不变**。
+3. 在 **super flow** 调 `evolve_self` 把这个业务 session 的 worktree 改动合入 main：
+   - **self-scope**（只触及 `objects/<self>/` 自己目录）→ 自动 fast-forward merge，立即生效。
+   - **cross-scope**（触及 `objects/<other>/` 或新对象）→ 自动开 **PR-Issue** 待 supervisor 评审。
 
-通过 `open(type="command", command="metaprog", args={action:"<action>", ...})` 调用：
+### create_object / evolve_self / metaprog（操作 stone 的方法）
 
-| action | 谁能调 | 用途 |
+| method | 谁能调 | 用途 |
 |---|---|---|
-| `open_worktree` | 任何 Object | 开始一次 stone 改动，返回临时 branch + worktree path |
-| `commit` | 任何 Object | 把 worktree 里 staged 改动落 commit |
-| `merge` | 任何 Object | 尝试把临时分支合回 main；跨 scope 时返回 `{ok:true, kind:"must-pr-issue", issueId, paths}`，自动开 PR-Issue |
-| `resolve` | **supervisor 专属** | 决议 PR-Issue（decision: `merge` / `reject` / `request-changes`） |
-| `rollback` | **supervisor 专属** | 强制回滚 stone 历史到指定 commit |
-| `create_object` | **supervisor 专属** | 一次性原子落盘新 Object 骨架（self/readable/knowledge）+ commit on main |
+| `create_object` | 任何 Object（仅业务 session） | 原子落盘**新** Object 骨架（package.json/self/readable[/knowledge]）到 session worktree；不 commit，由 evolve_self 合入 |
+| `evolve_self` | 任何 Object（仅 super flow） | 把触发本 super 的业务 session 的 worktree 改动合入 main（self-scope ff-merge / cross-scope 自动 PR-Issue） |
+| `metaprog action="resolve"` | **supervisor 专属** | 决议 PR-Issue（decision: `merge` / `reject` / `request-changes`） |
+| `metaprog action="rollback"` | **supervisor 专属** | 强制回滚 stone 历史到指定 commit |
 
 ### PR-Issue（跨自治区改动审阅 Issue）
 
