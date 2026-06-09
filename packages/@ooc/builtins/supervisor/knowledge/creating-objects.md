@@ -2,7 +2,8 @@
 title: 怎么创建新 OOC Object（协议详情）
 description: supervisor 用对话方式为用户创建 Agent 的具体协议
 activates_on:
-  "object::root": "show_content"
+  "object::root": "show_description"
+  "method::root::create_object": "show_content"
 ---
 
 # 创建新 OOC Object

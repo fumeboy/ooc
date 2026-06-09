@@ -2,7 +2,7 @@
 title: 四分语义 - Builtin / Stone / Pool / Flow
 description: OOC 持久层四分边界（Builtin 运行时定义层 + Stone / Pool / Flow 三分），supervisor 管理 World 时的核心心智模型
 activates_on:
-  "object::root": "show_content"
+  "object::root": "show_description"
 ---
 
 # 四分语义
