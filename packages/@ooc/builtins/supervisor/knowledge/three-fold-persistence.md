@@ -2,7 +2,7 @@
 title: 四分语义 - Builtin / Stone / Pool / Flow
 description: OOC 持久层四分边界（Builtin 运行时定义层 + Stone / Pool / Flow 三分），supervisor 管理 World 时的核心心智模型
 activates_on:
-  "window::root": "show_content"
+  "object::root": "show_content"
 ---
 
 # 四分语义
@@ -32,7 +32,7 @@ OOC World 文件系统按四种持久性质分层。术语解释（stone-version
 
 ## Stone（设计层，world 内进 git）
 
-`packages/<id>/`：
+`stones/main/objects/<id>/`：
 - `self.md` / `readable.md`：身份（对内 + 对外）
 - `executable/index.ts`：executable methods（含 ui_method）
 - `visible/index.tsx`：UI 页面

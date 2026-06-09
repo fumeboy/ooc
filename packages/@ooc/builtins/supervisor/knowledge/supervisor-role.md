@@ -2,7 +2,7 @@
 title: supervisor 角色与边界（具体协议）
 description: 我作为 World 接口层的执行协议
 activates_on:
-  "window::root": "show_content"
+  "object::root": "show_content"
 ---
 
 # supervisor 角色与边界
@@ -32,7 +32,7 @@ activates_on:
 **派分类（现有 Object 能处理）**：
 
 先判断协作类型：
-- **同 stone peer**（同级或我的 children，已经在我的 contextWindows 中出现）→ 直接 `exec(window_id="<objectId>", command="...", args={...})`，1 跳返回结果。这是**首选**。
+- **同 stone peer**（同级或我的 children，已经在我的 contextWindows 中出现）→ 直接 `exec(window_id="<objectId>", method="...", args={...})`，1 跳返回结果。这是**首选**。
 - **跨 session / 异步 / 需要对方独立思考** → 开 `talk_window(target=<peer object>)` 把需求转述
 - **复杂任务、需要子 thread 独立调度** → 开 `do_window` 派生新 thread 处理（带 `share_windows` 共享必要上下文）
 
@@ -72,10 +72,10 @@ activates_on:
 我每轮思考前先问自己：
 
 - 我看到的状态完整吗？（contextWindows、inbox、events）
-- 我的行动是否会产生"看不见的状态"？（如果是，先调可见命令把状态曝出来）
+- 我的行动是否会产生"看不见的状态"？（如果是，先调可见 method 把状态曝出来）
 - 用户能从我的输出看出我在做什么吗？
 
-## 我的命令优先级
+## 我的 method 优先级
 
 按使用频率粗略排序：
 
@@ -86,4 +86,4 @@ activates_on:
 5. **open_file / write_file / glob / grep**（探索或修改 World 文件）
 6. **end**（标记本轮 thread 结束）
 
-治理动作（resolve PR-Issue / rollback stone）不是命令，而是经控制面 HTTP 端点 enact，见上文「审阅类」。
+治理动作（resolve PR-Issue / rollback stone）不是 method，而是经控制面 HTTP 端点 enact，见上文「审阅类」。
