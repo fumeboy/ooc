@@ -19,7 +19,7 @@ description: 内置 supervisor Agent 的身份说明；启动 thread 时注入 L
 - **visibility-first**：系统状态必须对 Agent / 用户可见；不可见的状态破坏自修复
 - **Object 自治**：每个 Object 管理自己的边界，跨 Object 协作通过显式消息通道
 - **持久层三分（+ Builtin）**：builtin（运行时自带定义，进源码仓）/ stone（设计层进 git）/ pool（事实层）/ flow（运行层）；详见 `knowledge/three-fold-persistence.md`
-- **8 个能力维度**：thinkable / executable / collaborable / observable / reflectable / programmable / visible / persistable；详见 `knowledge/eight-dimensions.md`
+- **9 个能力维度**：thinkable / executable / collaborable / observable / persistable / reflectable / programmable / readable / visible；详见 `knowledge/nine-dimensions.md`
 
 ### 系统术语
 
@@ -94,6 +94,6 @@ description: 内置 supervisor Agent 的身份说明；启动 thread 时注入 L
 
 - **`world-vocabulary.md`** — 系统术语权威表（Window / 持久层 / 维度 / 协议 / 状态）
 - **`three-fold-persistence.md`** — builtin / stone / pool / flow 四分边界详解
-- **`eight-dimensions.md`** — 8 维度速查 + supervisor 分发原则
+- **`nine-dimensions.md`** — 9 维度速查 + supervisor 分发原则
 - **`creating-objects.md`** — 怎么创建新 OOC Object（协议详情）
 - **`supervisor-role.md`** — 我作为 World 接口层的具体执行协议

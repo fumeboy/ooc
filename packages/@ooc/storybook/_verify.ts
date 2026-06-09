@@ -598,10 +598,10 @@ async function main() {
     const idx = await loadKnowledgeIndex(
       { stone: { baseDir: worldDir, objectId: "supervisor" }, pool: { baseDir: worldDir, objectId: "supervisor" } }, reg);
     const paths = [...idx.byPath.keys()];
-    const inherits = paths.some((p) => p.includes("eight-dimensions")) && paths.some((p) => p.includes("world-vocabulary"));
+    const inherits = paths.some((p) => p.includes("nine-dimensions")) && paths.some((p) => p.includes("world-vocabulary"));
     record({
       id: "TC-CLASS-03",
-      name: "instance 经 class 链继承框架 class 的 seed knowledge（eight-dimensions / world-vocabulary）",
+      name: "instance 经 class 链继承框架 class 的 seed knowledge（nine-dimensions / world-vocabulary）",
       status: inherits ? "PASS" : "FAIL",
       detail: inherits ? undefined : `inherited paths=${JSON.stringify(paths)}`,
     });

@@ -65,7 +65,7 @@ export const L2_STORIES: Story[] = [
       reg.registerNewObjectType("supervisor" as any, { methods: {}, parentClass: "_builtin/supervisor" });
       const idx = await loadKnowledgeIndex({ stone: { baseDir, objectId: "supervisor" }, pool: { baseDir, objectId: "supervisor" } }, reg);
       const paths = [...idx.byPath.keys()];
-      check(paths.some((p) => p.includes("eight-dimensions")), `未继承 eight-dimensions：${JSON.stringify(paths)}`);
+      check(paths.some((p) => p.includes("nine-dimensions")), `未继承 nine-dimensions：${JSON.stringify(paths)}`);
     },
   }),
 

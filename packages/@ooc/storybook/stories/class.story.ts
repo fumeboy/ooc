@@ -49,8 +49,8 @@ export async function runControlPlane(): Promise<StoryResult> {
       const idx = await loadKnowledgeIndex(
         { stone: { baseDir, objectId: "supervisor" }, pool: { baseDir, objectId: "supervisor" } }, reg);
       const paths = [...idx.byPath.keys()];
-      rec.ok("TC-CLASS-03", "instance 经 class 链继承框架 class 的 seed knowledge（eight-dimensions / world-vocabulary）",
-        paths.some((p) => p.includes("eight-dimensions")) && paths.some((p) => p.includes("world-vocabulary")),
+      rec.ok("TC-CLASS-03", "instance 经 class 链继承框架 class 的 seed knowledge（nine-dimensions / world-vocabulary）",
+        paths.some((p) => p.includes("nine-dimensions")) && paths.some((p) => p.includes("world-vocabulary")),
         `inherited=${JSON.stringify(paths)}`);
     }
 
