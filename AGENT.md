@@ -16,15 +16,21 @@ OOC Agent 由 8 个能力维度组合：thinkable / executable / collaborable / 
 
 ## 进入项目时必读
 
-文档全部在 `meta/` 目录，**树形 DocTreeNode 格式**（每份文件顶部有简短维护说明）：
+**维度/模块设计的权威正在迁入 `.ooc-world-meta` 对象树**（OOC 自举 world，submodule → ooc-0）：
+`.ooc-world-meta/stones/main/objects/supervisor/`（大局观+核心哲学+harness 组织+测试策略，见其 knowledge/）
+及其 `children/<dim>/`（9 维度 thinkable/executable/collaborable/observable/reflectable/programmable/
+readable/visible/persistable + 横向 app/class）。每个对象 self.md 先陈述**核心设计**、含**名词解释** + knowledge。
+**任何"X 维度/模块是什么、怎么设计的"先看对应对象。** `meta/` 与 `docs/ooc-6/` 的旧设计文档正按维度
+吸收进对象树后逐步删除；与代码冲突时一律信代码。
+
+`meta/` 目录仍存的参考文档（**树形 DocTreeNode 格式**，待吸收/退役）：
 
 | 文件 | 看什么 |
 |------|------|
-| `meta/object.doc.ts` | **概念权威**：OOC 是什么、8 个能力维度各自的定义、子组件、边界。任何"X 维度是什么"问题都先来这里。 |
-| `meta/engineering.harness.doc.ts` | **组织结构**：本仓库的工程协作模型——1 Supervisor + 9 个 Agent（8 AgentOfX + 1 AgentOfExperience 体验官）。说明你作为一个 sub agent 在这个组织里扮演哪个角色。 |
-| `meta/engineering.testing.doc.ts` | **测试策略**：e2e 三档评分（Good/OK/Bad）、A/B 两个观察孔、backend/frontend 入口分离。改完代码若涉及链路，照这里写场景。 |
-| `meta/app.server.doc.ts` | HTTP 控制面（Elysia）：路由表、worker 调度、jobManager、debug 文件落盘。 |
-| `meta/app.client.doc.ts` | Web 控制面（vite + React）：AppShell、URL routing、chat 模型（cross-object talk_window）、ObjectClientRenderer。 |
+| `meta/object.doc.ts` | **历史概念权威**（待吸收）：OOC 是什么、能力维度定义、子组件、边界。维度权威正迁往对象树。 |
+| `meta/engineering.harness.doc.ts` | 工程协作模型 1 Supervisor + AgentOfX + 体验官（已吸收进 supervisor/knowledge/engineering-harness.md；留待退役）。 |
+| `meta/engineering.testing.doc.ts` | 测试策略 Good/OK/Bad、A/B 观察孔（已吸收进 supervisor/knowledge/testing-strategy.md；留待退役）。 |
+| `meta/app.client.doc.ts` | Web 控制面（vite + React）：AppShell、URL routing、chat 模型、ObjectClientRenderer。控制面框架归 app 对象、ooc:// 渲染归 visible 对象。 |
 | `meta/harness.md` | harness 组织结构的原始 narrative（被 `engineering.harness.doc.ts` 结构化收编，留作历史背景）。 |
 | `meta/case.factor-dev-agents.doc.ts` | **第一个外部场景 case**：把哨兵平台因子开发助手（`plugins_with_agent` 项目，15 个 Claude Code SKILL.md）收编成 **3 个 OOC Agent + 1 个项目级 skill**——`sentry_factor_dev`（流程编排）/ `sentry_event_factor` / `sentry_factor_group` + branch 级 `psm-query` skill。展示外部场景如何用 Agent + skill 的层次表达。 |
 | `meta/cookbook.add-new-agent.doc.ts` | **添加新 Agent 的 cookbook**：5 步从空到能跑（meta 概念 → stone 目录 → self/readme → server/client → 验证）。 |
