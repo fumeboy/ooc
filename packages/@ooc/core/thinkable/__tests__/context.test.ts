@@ -503,7 +503,7 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml.match(/program 用于执行一段 shell \/ ts \/ js 代码/g)?.length).toBe(1);
   });
 
-  it("wraps text content in CDATA when plain text would require XML escaping", async () => {
+  it("emits text content raw — no XML escaping, no CDATA (表意为主)", async () => {
     const thread = makeThread({
       id: "t_cdata",
       extraWindows: [
@@ -517,8 +517,11 @@ describe("buildContext (ContextWindow model)", () => {
     });
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
-    expect(xml).toContain("<![CDATA[");
-    expect(xml).not.toContain("&quot;hello&quot;");
+    // 原样输出：既不转义也不包 CDATA
+    expect(xml).not.toContain("<![CDATA[");
+    expect(xml).not.toContain("&quot;");
+    expect(xml).not.toContain("&lt;");
+    expect(xml).not.toContain("&amp;");
   });
 });
 

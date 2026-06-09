@@ -28,30 +28,13 @@ export type XmlNode =
       value: string;
     };
 
-/** 转义 XML 特殊字符，保证 context 内容不会破坏标签结构。 */
-export function escapeXml(text: string | undefined | null): string {
-  if (text === undefined || text === null) return "";
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function shouldUseCdata(text: string | undefined | null): boolean {
-  if (text === undefined || text === null) return false;
-  return escapeXml(text) !== text;
-}
-
-function wrapCdata(text: string | undefined | null): string {
-  if (text === undefined || text === null) return "<![CDATA[]]>";
-  return `<![CDATA[${text.replaceAll("]]>", "]]]]><![CDATA[>")}]]>`;
-}
-
+/**
+ * 渲染 text 内容：**表意为主，原样输出**——不做 XML 转义、不包 CDATA。
+ * 构造给 LLM 的 system prompt 不要求严格合法 XML；转义符号（`&quot;` / `&lt;` / CDATA）
+ * 反而会让 LLM 误读内容。结构靠缩进与标签名传达，内容保持人类可读的原文。
+ */
 function renderXmlTextValue(text: string | undefined | null): string {
-  if (text === undefined || text === null) return "";
-  return shouldUseCdata(text) ? wrapCdata(text) : escapeXml(text);
+  return text ?? "";
 }
 
 function escapeXmlComment(text: string | undefined | null): string {
@@ -112,7 +95,7 @@ export function serializeXml(node: XmlNode, depth = 0): string {
   }
 
   const attrs = Object.entries(node.attrs ?? {})
-    .map(([key, value]) => ` ${key}="${escapeXml(value)}"`)
+    .map(([key, value]) => ` ${key}="${value ?? ""}"`)
     .join("");
   const children = node.children ?? [];
 
