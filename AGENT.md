@@ -23,22 +23,23 @@ readable/visible/persistable + 横向 app/class）。每个对象 self.md 先陈
 **任何"X 维度/模块是什么、怎么设计的"先看对应对象。** `meta/` 与 `docs/ooc-6/` 的旧设计文档正按维度
 吸收进对象树后逐步删除；与代码冲突时一律信代码。
 
-`meta/` 目录仍存的参考文档（**树形 DocTreeNode 格式**，待吸收/退役）：
+OOC 的定义、维度设计、工程协作模型、测试策略**已全部迁入对象树**——`object.doc.ts` /
+`engineering.harness.doc.ts` / `engineering.testing.doc.ts` / `ooc-object-oriented-philosophy.md` /
+`harness.md` 已删除，内容在 `.ooc-world-meta/.../objects/supervisor/`（self.md + knowledge/{ooc-philosophy,
+ooc-glossary,engineering-harness,testing-strategy}.md）及各 `children/<dim>/`。
+
+`meta/` 仍存的参考文档（待后续吸收/退役）：
 
 | 文件 | 看什么 |
 |------|------|
-| `meta/object.doc.ts` | **历史概念权威**（待吸收）：OOC 是什么、能力维度定义、子组件、边界。维度权威正迁往对象树。 |
-| `meta/engineering.harness.doc.ts` | 工程协作模型 1 Supervisor + AgentOfX + 体验官（已吸收进 supervisor/knowledge/engineering-harness.md；留待退役）。 |
-| `meta/engineering.testing.doc.ts` | 测试策略 Good/OK/Bad、A/B 观察孔（已吸收进 supervisor/knowledge/testing-strategy.md；留待退役）。 |
 | `meta/app.client.doc.ts` | Web 控制面（vite + React）：AppShell、URL routing、chat 模型、ObjectClientRenderer。控制面框架归 app 对象、ooc:// 渲染归 visible 对象。 |
-| `meta/harness.md` | harness 组织结构的原始 narrative（被 `engineering.harness.doc.ts` 结构化收编，留作历史背景）。 |
-| `meta/case.factor-dev-agents.doc.ts` | **第一个外部场景 case**：把哨兵平台因子开发助手（`plugins_with_agent` 项目，15 个 Claude Code SKILL.md）收编成 **3 个 OOC Agent + 1 个项目级 skill**——`sentry_factor_dev`（流程编排）/ `sentry_event_factor` / `sentry_factor_group` + branch 级 `psm-query` skill。展示外部场景如何用 Agent + skill 的层次表达。 |
-| `meta/cookbook.add-new-agent.doc.ts` | **添加新 Agent 的 cookbook**：5 步从空到能跑（meta 概念 → stone 目录 → self/readme → server/client → 验证）。 |
+| `meta/case.factor-dev-agents.doc.ts` | **外部场景 case**：哨兵平台因子开发助手收编成 3 个 OOC Agent + 1 个项目级 skill。展示外部场景如何用 Agent + skill 层次表达。 |
+| `meta/cookbook.add-new-agent.doc.ts` | **添加新 Agent 的 cookbook**：5 步从空到能跑。 |
 
 阅读顺序建议：
-1. 先 `object.doc.ts` 建立"OOC 是什么"的心智模型（root.content 即可，子节点按需深入）。
-2. 再 `engineering.harness.doc.ts` 看你所在的角色与协作模式。
-3. 接到具体任务后，按任务领域去对应的 `app.*` / `engineering.testing` / `object.doc.ts` 子节点。
+1. 先 `.ooc-world-meta/.../supervisor/self.md` 建立"OOC 是什么 + 9 维度"的心智模型（+ knowledge/ooc-philosophy / ooc-glossary）。
+2. 再 supervisor `knowledge/engineering-harness.md` 看你所在的角色与协作模式。
+3. 接到具体任务后，去对应维度对象 `children/<dim>/`（self.md 核心设计 + knowledge）。
 
 ## 你的工作模式（当前 interim runtime）
 
@@ -74,7 +75,7 @@ tests/e2e/           # 端到端测试场景
 1. **app server 启动必须显式 `--world ./.ooc-world则 `config.ts` 回退到 `process.cwd()` 把仓库源码目录当 world——这会污染源码树。
 2. **改 `meta/*.doc.ts` 后立刻 `bun tsc --noEmit meta/<file>.doc.ts` 验证**，不要批量改完再验证。`DocTreeNode.sources` 是 `[[any, string]]`——只允许 1 个 source entry，多个要折叠成一个。
 3. **文档断言要锚定真实代码**：叶节点写"代码里有 X"时用 `src/path/file.ts:行号` 形式锚定。源代码与文档分歧时优先信任源代码。
-4. **不要直接修源代码绕开 review**：体验官（AgentOfExperience）发现的问题转 Issue + e2e 场景；具体维度的 AgentOfX 才动 `src/`。当前由 Claude Code 主会话承担 Supervisor 角色，sub agent 承担各 AgentOfX 角色（详见 `engineering.harness.doc.ts:patches.interim_runtime`）。
+4. **不要直接修源代码绕开 review**：体验官（AgentOfExperience）发现的问题转 Issue + e2e 场景；具体维度的 AgentOfX 才动 `src/`。当前由 Claude Code 主会话承担 Supervisor 角色，sub agent 承担各 AgentOfX 角色（详见 supervisor `knowledge/engineering-harness.md` 的 interim runtime）。
 
 ## 当前状态
 
