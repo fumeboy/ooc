@@ -2,8 +2,13 @@
 # scripts/check-no-deprecated-symbols.sh
 #
 # plan §7 — 防回退守门：旧的 llm_methods / loadLlmServerMethods /
-# program.function / runFunctionProgram / self.callMethod 全部已被硬切删除（D6）。
+# program.function / runFunctionProgram 等已被硬切删除（D6）。
 # 本脚本扫源码 + 测试，发现任何旧符号回流就 fail。
+#
+# 注意（2026-06-09 修正）：self.callMethod 曾在 D6 改名为 self.callCommand 而被列入禁单；
+# 但后续 command→method 大重命名又把 callCommand 改回 callMethod，使 self.callMethod 重新成为
+# ts/js sandbox 的合法当前 API（packages/@ooc/core/executable/object/self.ts:31 有实现，
+# runtime.ts:12 保留）。故移除 self.callMethod 禁令——它误禁了当前合法 API。
 #
 # 使用：
 #   bash scripts/check-no-deprecated-symbols.sh
@@ -23,7 +28,6 @@ set -e
 # 注意：禁用名单中的字面量本身会出现在本脚本里 —— 自动 self-exclude
 declare -a FORBIDDEN_PATTERNS=(
   "llm_methods"
-  "self\\.callMethod\\b"
   "loadLlmServerMethods"
   "loadServerMethods\\b"
   "runFunctionProgram"
