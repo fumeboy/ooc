@@ -5,7 +5,7 @@
  * 字符串，前端在这里 1:1 映射成 SPA in-app 路由，不让 react-router path / 端口细节漏进
  * Agent 知识（见 src/thinkable/knowledge/basic-knowledge.ts:332 的 flow 形态）。
  *
- * URI 契约（与知识/已弃 meta_deprecated/object/executable/client/index.doc.ts 对齐）：
+ * URI 契约（权威见 .ooc-world-meta visible 对象 knowledge/ooc-uri-addressing.md）：
  * - ooc://client/flows/<sid>/<self>/pages/<name>  ↔  /flows/<sid>/<self>/pages/<name>
  * - ooc://client/stones/<self>[/]                          ↔  /stones/<self>
  *

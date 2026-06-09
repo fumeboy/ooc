@@ -50,12 +50,10 @@ ALLOW_LIST=(
   "packages/@ooc/core/executable/__tests__/server-loader.test.ts"
   "packages/@ooc/core/executable/windows/_shared/command-types.ts"  # 历史变更说明注释
   "scripts/check-no-deprecated-symbols.sh"
-  "packages/@ooc/meta/object.doc.ts"  # 概念文档需说明 D6 硬切
   "packages/@ooc/meta/cookbook.author-ooc-agent.doc.ts"  # 新模式 cookbook 含迁移说明
 )
 
 EXCLUDE_DIRS=(
-  "meta_deprecated"
   "node_modules"
   ".git"
   ".ooc-world"
