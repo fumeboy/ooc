@@ -67,7 +67,7 @@ describe("talk-delivery target='super' alias", () => {
       expect(delivered.calleeObjectId).toBe("bob");
       // bob 落在 caller 的 session (web-test)，不是 super
       const bobThreadDir = join(
-        tempRoot, "flows", "web-test", ...nestedObjectPath("bob"), "threads", delivered.calleeThreadId,
+        tempRoot, "flows", "web-test", "objects", ...nestedObjectPath("bob"), "threads", delivered.calleeThreadId,
       );
       await expect(stat(bobThreadDir)).resolves.toBeDefined();
       // 显式断言 callee thread persistence 写的就是 caller 的 sessionId，不是 super
@@ -96,7 +96,7 @@ describe("talk-delivery target='super' alias", () => {
       const superSessionFile = join(tempRoot, "flows", SUPER_SESSION_ID, ".session.json");
       await expect(stat(superSessionFile)).resolves.toBeDefined();
       const superAliceThreadDir = join(
-        tempRoot, "flows", SUPER_SESSION_ID, ...nestedObjectPath("alice"), "threads", delivered.calleeThreadId,
+        tempRoot, "flows", SUPER_SESSION_ID, "objects", ...nestedObjectPath("alice"), "threads", delivered.calleeThreadId,
       );
       await expect(stat(superAliceThreadDir)).resolves.toBeDefined();
       // 读 callee thread 验证 persistence 字段
@@ -124,7 +124,7 @@ describe("talk-delivery target='super' alias", () => {
       expect(delivered.calleeObjectId).toBe("alice");
       // 同 super session 内自指——不递归创建嵌套 super
       const calleeDir = join(
-        tempRoot, "flows", SUPER_SESSION_ID, ...nestedObjectPath("alice"), "threads", delivered.calleeThreadId,
+        tempRoot, "flows", SUPER_SESSION_ID, "objects", ...nestedObjectPath("alice"), "threads", delivered.calleeThreadId,
       );
       await expect(stat(calleeDir)).resolves.toBeDefined();
     } finally {
@@ -220,7 +220,7 @@ describe("talk-delivery target='super' alias", () => {
         });
         expect(delivered.calleeObjectId).toBe("alice");
         const superAliceDir = join(
-          tempRoot, "flows", SUPER_SESSION_ID, ...nestedObjectPath("alice"), "threads", delivered.calleeThreadId,
+          tempRoot, "flows", SUPER_SESSION_ID, "objects", ...nestedObjectPath("alice"), "threads", delivered.calleeThreadId,
         );
         await expect(stat(superAliceDir)).resolves.toBeDefined();
       } finally {

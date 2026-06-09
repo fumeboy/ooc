@@ -708,10 +708,10 @@ export function createFlowsService(deps: {
      */
     async listThreads({ sessionId }: { sessionId: string }): Promise<ListThreadsResponse> {
       await ensureSessionExists(sessionId);
-      // F3 修复（harness 首轮 sweep X1，5 维度命中 list 端点恒空）：flow object 是
-      // `flows/<sid>/` 的**直接子目录**（objectDir = flows/<sid>/<nestedObjectPath>，无 `objects/` 段）。
-      // 旧 listThreads 沿用 9bd8640b^ 的 `flows/<sid>/objects/` 布局扫描 → 目录不存在 → items 恒空。
-      const sessionRoot = join(deps.baseDir, "flows", sessionId);
+      // 方案 A 续（2026-06-09）：flow object 落 `flows/<sid>/objects/<nestedObjectPath>`
+      //（objectDir = flows/<sid>/objects/<id>），与 stone identity 同落点。扫描起点是
+      // `flows/<sid>/objects/` 的直接子目录（找 .flow.json 判 flow object，递归仍下 children/）。
+      const sessionRoot = join(deps.baseDir, "flows", sessionId, "objects");
       const isSuperFlow = isSuperSessionId(sessionId) || undefined;
       const items: ListThreadsItem[] = [];
 

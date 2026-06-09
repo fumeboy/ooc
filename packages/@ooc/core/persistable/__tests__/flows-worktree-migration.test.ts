@@ -18,8 +18,10 @@ import {
   createFlowSession,
   createFlowObject,
   sessionMetadataFile,
+  writeThread,
   __resetSerialQueueForTests,
 } from "@ooc/core/persistable";
+import { scanRunningThreads } from "@ooc/core/app/server/runtime/thread-query";
 import { evolveSelfMerge } from "@ooc/core/programmable/evolve-self";
 import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
@@ -103,23 +105,29 @@ describe("flows-worktree-migration（方案 A 真实-world 实测）", () => {
     const selfInWt = await readFile(join(wtRoot, "objects", objectId, "self.md"), "utf8");
     expect(selfInWt).toBe(`${objectId} v1\n`);
 
-    // ---- (b) 写运行时数据后 git status 不列运行时文件（gitignore 生效），只可能列 objects/ ----
-    // createFlowSession 写 .session.json（运行时，幂等 mkdir 命中已建 worktree）
+    // ---- (b) 写运行时数据后 git status 不列运行时文件（gitignore 黑名单生效）----
+    // createFlowSession 写 .session.json（session 级运行时，幂等 mkdir 命中已建 worktree）
     await createFlowSession(baseDir, sid);
     expect((await stat(sessionMetadataFile(baseDir, sid))).isFile()).toBe(true);
-    // 写一个 flow object 运行时目录（objectDir = flows/<sid>/<objectId>，无 objects/ 前缀）+ .flow.json
+    // 写一个 flow object 运行时目录（objectDir 续案 = flows/<sid>/objects/<objectId>）+ .flow.json
     await createFlowObject({ baseDir, sessionId: sid, objectId });
-    // 再写一个 threads/ 运行时文件
-    await mkdir(join(wtRoot, objectId, "threads", "root"), { recursive: true });
-    await writeFile(join(wtRoot, objectId, "threads", "root", "thread.json"), "{}\n", "utf8");
+    // .flow.json 落 objects/<id>/ 下，与 stone identity 同目录
+    expect((await stat(join(wtRoot, "objects", objectId, ".flow.json"))).isFile()).toBe(true);
+    // 再写一个 threads/ 运行时文件（objects/<id>/threads/root/thread.json）
+    await mkdir(join(wtRoot, "objects", objectId, "threads", "root"), { recursive: true });
+    await writeFile(
+      join(wtRoot, "objects", objectId, "threads", "root", "thread.json"),
+      "{}\n",
+      "utf8",
+    );
 
     const statusBefore = gitStatusPorcelain(wtRoot);
     // 运行时产物全部 untracked-excluded：不出现在 porcelain 输出
     expect(statusBefore).not.toContain(".session.json");
     expect(statusBefore).not.toContain(".flow.json");
     expect(statusBefore).not.toContain("thread.json");
-    expect(statusBefore).not.toContain(`${objectId}/threads`);
-    // 此刻还没写 objects/ → 工作树对 git 而言干净
+    expect(statusBefore).not.toContain(`objects/${objectId}/threads`);
+    // 此刻还没改 stone 身份文件 → 工作树对 git 而言干净（黑名单吃掉所有运行时）
     expect(statusBefore.trim()).toBe("");
 
     // ---- (c) 在该 session write_file 改自己 self.md → 落 flows/<sid>/objects/<id>/self.md，main 不变 ----
@@ -168,7 +176,62 @@ describe("flows-worktree-migration（方案 A 真实-world 实测）", () => {
     // worktree 身份已解除（.git link 删除），但目录与运行时数据保留——session 对话历史不随 evolve 丢失
     expect((await stat(wtRoot)).isDirectory()).toBe(true);
     await expect(stat(join(wtRoot, ".git"))).rejects.toMatchObject({ code: "ENOENT" });
-    // 运行时数据（thread.json）仍在
-    expect((await stat(join(wtRoot, objectId, "threads", "root", "thread.json"))).isFile()).toBe(true);
+    // 运行时数据（thread.json）仍在（objects/<id>/threads/root/）
+    expect(
+      (await stat(join(wtRoot, "objects", objectId, "threads", "root", "thread.json"))).isFile(),
+    ).toBe(true);
+  });
+
+  test("gate-5：运行时与 stone identity 同落 objects/<id>/ + listThreads 枚举 + gitignore 黑名单", async () => {
+    const sid = "_test_g5";
+    const objectId = "agent_of_x";
+    const baseDir = await bootstrapWorld([objectId]);
+
+    const ok = await ensureSessionWorktree(baseDir, sid);
+    expect(ok).toBe(true);
+    const wtRoot = join(baseDir, "flows", sid);
+
+    await createFlowSession(baseDir, sid);
+    await createFlowObject({ baseDir, sessionId: sid, objectId });
+
+    // 写一个完整 thread（用 writeThread 走真实落盘路径），确保 listThreads 能枚举。
+    await writeThread(
+      {
+        persistence: { baseDir, objectId, sessionId: sid, threadId: "root" },
+        contextWindows: [],
+        events: [],
+        status: "running",
+      } as never,
+    );
+
+    // ---- (a) 运行时数据落 flows/<sid>/objects/<id>/，不再在 flows/<sid>/<id>/ ----
+    expect((await stat(join(wtRoot, "objects", objectId, ".flow.json"))).isFile()).toBe(true);
+    expect(
+      (await stat(join(wtRoot, "objects", objectId, "threads", "root", "thread.json"))).isFile(),
+    ).toBe(true);
+    // 旧扁平落点不存在
+    await expect(stat(join(wtRoot, objectId, ".flow.json"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+
+    // ---- (b) stone identity 也在 flows/<sid>/objects/<id>/self.md（同目录） ----
+    const selfInWt = await readFile(join(wtRoot, "objects", objectId, "self.md"), "utf8");
+    expect(selfInWt).toBe(`${objectId} v1\n`);
+
+    // ---- (c) git status 不列任何运行时文件（gitignore 黑名单生效），stone 改动正常可见 ----
+    const statusClean = gitStatusPorcelain(wtRoot);
+    expect(statusClean).not.toContain(".flow.json");
+    expect(statusClean).not.toContain("thread.json");
+    expect(statusClean).not.toContain(".session.json");
+    expect(statusClean.trim()).toBe("");
+    // 改 stone 身份文件 → git status 列出该改动
+    await writeFile(join(wtRoot, "objects", objectId, "self.md"), `${objectId} v2\n`, "utf8");
+    const statusDirty = gitStatusPorcelain(wtRoot);
+    expect(statusDirty).toContain(`objects/${objectId}/self.md`);
+
+    // ---- (d) walkObjectDir（scanThreadsByStatus 同款 flows/<sid>/objects/ 入口）能枚举该 session 的 thread ----
+    const running = await scanRunningThreads(baseDir, sid);
+    const match = running.find((i) => i.objectId === objectId && i.threadId === "root");
+    expect(match).toBeDefined();
   });
 });

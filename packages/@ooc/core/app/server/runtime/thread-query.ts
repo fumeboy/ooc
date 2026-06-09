@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { readThread, STONE_CHILDREN_SUBDIR } from "@ooc/core/persistable";
 
 /**
- * 扫 flows/{sessionId}/ 下所有 object 的 threads/，
+ * 扫 flows/{sessionId}/objects/ 下所有 object 的 threads/，
  * 返回 status=paused 的 {objectId, threadId} 列表。
  * 任一层目录不存在直接当作空集，不抛异常。
  */
@@ -16,7 +16,7 @@ export async function scanPausedThreads(
 }
 
 /**
- * 扫 flows/{sessionId}/ 下所有 object 的 threads/，
+ * 扫 flows/{sessionId}/objects/ 下所有 object 的 threads/，
  * 返回 status=running OR waiting 的 {objectId, threadId} 列表。
  *
  * 用途:worker 跑完一个 job 后,扫该 session 找"running 但还没被调度"的 thread
@@ -37,20 +37,20 @@ export async function scanRunningThreads(
 }
 
 /**
- * 递归扫 flows/{sessionId}/ 下任意深度的 flow object 目录，按 thread.json
+ * 递归扫 flows/{sessionId}/objects/ 下任意深度的 flow object 目录，按 thread.json
  * 的 status 过滤。
  *
- * 子 object 嵌套布局（与 stone 对齐——`children/` marker，2026-05-27）：
- *   flows/<sid>/<a>/threads/<t1>                          → objectId="a"
- *   flows/<sid>/<a>/children/<b>/threads/<t2>             → objectId="a/b"
- *   flows/<sid>/<a>/children/<b>/children/<c>/threads/<t3>→ objectId="a/b/c"
+ * 子 object 嵌套布局（方案 A 续 2026-06-09——object 落 objects/，与 stone 对齐 `children/` marker）：
+ *   flows/<sid>/objects/<a>/threads/<t1>                          → objectId="a"
+ *   flows/<sid>/objects/<a>/children/<b>/threads/<t2>             → objectId="a/b"
+ *   flows/<sid>/objects/<a>/children/<b>/children/<c>/threads/<t3>→ objectId="a/b/c"
  *
  * 一个目录被识别为 flow object iff 它直接含 `.flow.json`（与 createFlowObject 一致）。
  * 该目录内 `threads/` 子目录读 thread.json，按 status 过滤；同时进入它的 `children/`
  * 子目录对每个条目递归——`children/` 是 sub-object 的唯一物理出入口。
  *
- * objectId 派生规则：路径相对 sessionDir 的所有 segment **剥掉 `children/` 段**后用
- * "/" 拼。例：`<sid>/a/children/b/children/c/.flow.json` → objectId="a/b/c"。
+ * objectId 派生规则：路径相对 `flows/<sid>/objects/` 的所有 segment **剥掉 `children/` 段**后用
+ * "/" 拼。例：`objects/a/children/b/children/c/.flow.json` → objectId="a/b/c"。
  *
  * 所有 ENOENT / EACCES 都吞为空集，保证 worker bootstrap 不被磁盘异常拖垮。
  */
@@ -60,10 +60,10 @@ async function scanThreadsByStatus(
   statuses: string | string[],
 ): Promise<Array<{ objectId: string; threadId: string }>> {
   const wanted = new Set(Array.isArray(statuses) ? statuses : [statuses]);
-  const objectsRoot = join(baseDir, "flows", sessionId);
+  const objectsRoot = join(baseDir, "flows", sessionId, "objects");
   const found: Array<{ objectId: string; threadId: string }> = [];
 
-  // 入口：扫 session dir 下每个 top-level 条目，每个都是 objectId 的第一 segment（无 children/ 包裹）。
+  // 入口：扫 flows/<sid>/objects/ 下每个 top-level 条目，每个都是 objectId 的第一 segment（无 children/ 包裹）。
   let topEntries: Dirent[];
   try {
     topEntries = await readdir(objectsRoot, { withFileTypes: true });

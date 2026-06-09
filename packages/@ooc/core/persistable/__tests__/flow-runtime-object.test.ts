@@ -35,9 +35,9 @@ describe("flow-runtime-object — ooc-6 P5'.1 flat runtime layout", () => {
     await rm(baseDir, { recursive: true, force: true });
   });
 
-  it("computes correct path: flows/<sid>/<oid>/state.json", () => {
+  it("computes correct path: flows/<sid>/objects/<oid>/state.json", () => {
     expect(runtimeObjectStateFile(ref)).toBe(
-      join(baseDir, "flows", "sess_rt", "todo_run_xyz", "state.json"),
+      join(baseDir, "flows", "sess_rt", "objects", "todo_run_xyz", "state.json"),
     );
   });
 

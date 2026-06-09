@@ -31,7 +31,7 @@ describe("runJob scheduler yield 自唤醒", () => {
 
     // 构造一个 status=running 的 thread fixture 落盘。
     // events 中放两条 llm_interaction.call_started，验证 rounds 计数。
-    const threadDir = join(baseDir, "flows", sessionId, ...nestedObjectPath(objectId), "threads", threadId);
+    const threadDir = join(baseDir, "flows", sessionId, "objects", ...nestedObjectPath(objectId), "threads", threadId);
     await mkdir(threadDir, { recursive: true });
     const fixture: ThreadContext = {
       id: threadId,
@@ -89,7 +89,7 @@ describe("runJob scheduler yield 自唤醒", () => {
     const objectId = "agent_b";
     const threadId = "root";
 
-    const threadDir = join(baseDir, "flows", sessionId, ...nestedObjectPath(objectId), "threads", threadId);
+    const threadDir = join(baseDir, "flows", sessionId, "objects", ...nestedObjectPath(objectId), "threads", threadId);
     await mkdir(threadDir, { recursive: true });
     const fixture: ThreadContext = {
       id: threadId,

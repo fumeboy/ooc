@@ -25,9 +25,9 @@ afterEach(async () => {
 });
 
 describe("flow-data: ProgramSelf.getData/setData 的载体", () => {
-  test("flowDataFile 计算 flows/<sid>/<id>/data.json", () => {
+  test("flowDataFile 计算 flows/<sid>/objects/<id>/data.json", () => {
     const ref: FlowObjectRef = { baseDir: "/abs", sessionId: "s1", objectId: "agent" };
-    expect(flowDataFile(ref)).toBe(join("/abs", "flows", "s1", "agent", "data.json"));
+    expect(flowDataFile(ref)).toBe(join("/abs", "flows", "s1", "objects", "agent", "data.json"));
   });
 
   test("readFlowData 文件不存在返回空对象 {}", async () => {

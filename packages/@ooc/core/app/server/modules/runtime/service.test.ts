@@ -54,7 +54,7 @@ describe("runtime service", () => {
       threadId: string,
       status: string,
     ) {
-      const objDir = join(tempRoot!, "flows", sessionId, objectId);
+      const objDir = join(tempRoot!, "flows", sessionId, "objects", objectId);
       const threadsDir = join(objDir, "threads", threadId);
       await mkdir(threadsDir, { recursive: true });
       await writeFile(join(objDir, ".flow.json"), JSON.stringify({ objectId }));
@@ -151,7 +151,7 @@ describe("runtime service", () => {
       objectId: "o",
       threadId: "t",
     };
-    const debugDir = join(tempRoot, "flows/s/o/threads/t/debug");
+    const debugDir = join(tempRoot, "flows/s/objects/o/threads/t/debug");
     await mkdir(debugDir, { recursive: true });
     await writeFile(join(debugDir, "llm.input.json"), "{not valid json");
     await writeFile(join(debugDir, "llm.output.json"), "{}");
@@ -199,7 +199,7 @@ describe("runtime service", () => {
       objectId: "o",
       threadId: "t",
     };
-    const debugDir = join(tempRoot, "flows/s/o/threads/t/debug");
+    const debugDir = join(tempRoot, "flows/s/objects/o/threads/t/debug");
     await mkdir(debugDir, { recursive: true });
     await writeFile(join(debugDir, "llm.input.json"), JSON.stringify({ threadId: "t", inputItems: [] }));
     await writeFile(join(debugDir, "llm.output.json"), JSON.stringify({

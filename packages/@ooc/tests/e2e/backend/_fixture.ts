@@ -504,11 +504,11 @@ export function fileExists(baseDir: string, relPath: string): boolean {
 
 /**
  * 列出 super session 下某 object 的所有 thread id
- * （flows/super/<self>/threads/<threadId>/）。
+ * （flows/super/objects/<self>/threads/<threadId>/）。
  * 用于实证 super flow 反思线程被创建。
  */
 export function listSuperThreadIds(baseDir: string, selfId: string): string[] {
-  const threadsDir = join(baseDir, "flows", "super", ...nestedObjectPath(selfId), "threads");
+  const threadsDir = join(baseDir, "flows", "super", "objects", ...nestedObjectPath(selfId), "threads");
   if (!existsSync(threadsDir)) return [];
   try {
     return readdirSync(threadsDir);

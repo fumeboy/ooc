@@ -63,8 +63,8 @@ async function main() {
 
   // 先找到 sb_demo 和 user 的 thread 路径
   const LIVE = "/Users/bytedance/x/ooc/ooc-2/.ooc-world-live";
-  const sbThreadsDir = join(LIVE, "flows", SESSION_ID, TARGET, "threads");
-  const userThreadsDir = join(LIVE, "flows", SESSION_ID, "user", "threads");
+  const sbThreadsDir = join(LIVE, "flows", SESSION_ID, "objects", TARGET, "threads");
+  const userThreadsDir = join(LIVE, "flows", SESSION_ID, "objects", "user", "threads");
 
   // 找到 sb_demo 下的 callee thread 和 user 的 root thread
   const { readdir, readFile } = await import("node:fs/promises");

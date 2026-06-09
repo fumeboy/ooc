@@ -55,6 +55,7 @@ function debugDirFor(baseDir: string): string {
     baseDir,
     "flows",
     SESSION_ID,
+    "objects",
     OBJECT_ID,
     "threads",
     THREAD_ID,

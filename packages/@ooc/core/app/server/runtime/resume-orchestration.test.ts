@@ -27,7 +27,7 @@ describe("resume-orchestration: 编排不预翻转 paused→running", () => {
     const objectId = "agent_p";
     const threadId = "root";
 
-    const objectDir = join(baseDir, "flows", sessionId, ...nestedObjectPath(objectId));
+    const objectDir = join(baseDir, "flows", sessionId, "objects", ...nestedObjectPath(objectId));
     const threadDir = join(objectDir, "threads", threadId);
     await mkdir(threadDir, { recursive: true });
     // .flow.json marker：scanPausedThreads 仅把「直接含 .flow.json」的目录当 flow object。
@@ -64,7 +64,7 @@ describe("resume-orchestration: 编排不预翻转 paused→running", () => {
     const objectId = "agent_r";
     const threadId = "root";
 
-    const objectDir = join(baseDir, "flows", sessionId, ...nestedObjectPath(objectId));
+    const objectDir = join(baseDir, "flows", sessionId, "objects", ...nestedObjectPath(objectId));
     const threadDir = join(objectDir, "threads", threadId);
     await mkdir(threadDir, { recursive: true });
     // .flow.json marker：scanPausedThreads 仅把「直接含 .flow.json」的目录当 flow object。

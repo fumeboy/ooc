@@ -51,16 +51,19 @@ async function migrateUnderObjectDir(parentObjectDir: string): Promise<number> {
 }
 
 async function migrateSession(sessionDir: string): Promise<number> {
+  // 方案 A 续（2026-06-09）：top-level flow object 落 `flows/<sid>/objects/<id>`，扫描入口
+  // 下沉一层到 objects/。
+  const objectsDir = join(sessionDir, "objects");
   let entries;
   try {
-    entries = await readdir(sessionDir, { withFileTypes: true });
+    entries = await readdir(objectsDir, { withFileTypes: true });
   } catch {
     return 0;
   }
   let moved = 0;
   for (const e of entries) {
     if (!e.isDirectory()) continue;
-    const root = join(sessionDir, e.name);
+    const root = join(objectsDir, e.name);
     if (!(await isFlowObjectDir(root))) continue;
     moved += await migrateUnderObjectDir(root);
   }

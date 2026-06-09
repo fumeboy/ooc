@@ -363,7 +363,7 @@ export function readThreadJson(
   objectId: string,
   threadId: string,
 ): unknown {
-  const p = join(baseDir, "flows", sessionId, ...nestedObjectPath(objectId), "threads", threadId, "thread.json");
+  const p = join(baseDir, "flows", sessionId, "objects", ...nestedObjectPath(objectId), "threads", threadId, "thread.json");
   return JSON.parse(readFileSync(p, "utf8"));
 }
 
@@ -375,7 +375,7 @@ export async function discoverCalleeThreadId(
   opts: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<string> {
   const { readdir } = await import("node:fs/promises");
-  const threadsDir = join(baseDir, "flows", sessionId, ...nestedObjectPath(objectId), "threads");
+  const threadsDir = join(baseDir, "flows", sessionId, "objects", ...nestedObjectPath(objectId), "threads");
   const deadline = Date.now() + (opts.timeoutMs ?? 30_000);
   while (Date.now() < deadline) {
     try {

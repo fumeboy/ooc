@@ -24,7 +24,7 @@ export async function runControlPlane(): Promise<StoryResult> {
 
     // TC-COLLAB-01: talk-delivery —— target 的 callee thread inbox 真实收到 user 的消息
     {
-      const inboxDir = join(baseDir, "flows", sid, target, "threads", tid ?? "", "inbox");
+      const inboxDir = join(baseDir, "flows", sid, "objects", target, "threads", tid ?? "", "inbox");
       let delivered = false;
       if (tid && existsSync(inboxDir)) {
         for (const f of readdirSync(inboxDir)) {

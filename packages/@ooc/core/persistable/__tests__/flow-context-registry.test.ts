@@ -33,7 +33,7 @@ describe("flow-context-registry — ooc-6 P5'.1 thread context.json", () => {
 
   it("computes registry path = <threadDir>/context.json", () => {
     expect(contextRegistryFile(tref)).toBe(
-      join(baseDir, "flows", "sess_reg", "agent_of_x", "threads", "t_001", "context.json"),
+      join(baseDir, "flows", "sess_reg", "objects", "agent_of_x", "threads", "t_001", "context.json"),
     );
   });
 

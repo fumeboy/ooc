@@ -49,7 +49,7 @@ async function setupSelfThread(baseDir: string, opts: { withSuperTalk?: TalkWind
     peerReadmeExists: false,
     selfLongTermPath: `pools/${SELF}/knowledge/relations/${PEER}.md`,
     selfLongTermExists: false,
-    selfSessionPath: `flows/${SID}/${SELF}/knowledge/relations/${PEER}.md`,
+    selfSessionPath: `flows/${SID}/objects/${SELF}/knowledge/relations/${PEER}.md`,
     selfSessionExists: false,
   };
   const thread: ThreadContext = {
@@ -112,7 +112,7 @@ describe("executeRelationEdit", () => {
       // super session metadata 已创建
       expect(existsSync(join(tempRoot, "flows", SUPER_SESSION_ID, ".session.json"))).toBe(true);
       // super flow 的 callee 目录已创建
-      const superSelfDir = join(tempRoot, "flows", SUPER_SESSION_ID, SELF, "threads");
+      const superSelfDir = join(tempRoot, "flows", SUPER_SESSION_ID, "objects", SELF, "threads");
       expect(existsSync(superSelfDir)).toBe(true);
     } finally {
       await rm(tempRoot, { recursive: true, force: true });

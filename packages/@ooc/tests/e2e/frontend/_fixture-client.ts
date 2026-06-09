@@ -154,7 +154,7 @@ export const test = base.extend<{ world: WorldFixture }>({
         writeFileSync(file, code, "utf8");
       },
       writeFlowClientPage({ sessionId, objectId, page, code }) {
-        const dir = join(baseDir, "flows", sessionId, ...nestedObjectPath(objectId), "client", "pages");
+        const dir = join(baseDir, "flows", sessionId, "objects", ...nestedObjectPath(objectId), "client", "pages");
         mkdirSync(dir, { recursive: true });
         writeFileSync(join(dir, `${page}.tsx`), code, "utf8");
       },

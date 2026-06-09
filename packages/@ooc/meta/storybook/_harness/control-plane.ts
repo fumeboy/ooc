@@ -105,9 +105,9 @@ export function stoneCommits(baseDir: string, relPathInMain: string): string[] {
   return new TextDecoder().decode(r.stdout).trim().split("\n").filter(Boolean);
 }
 
-/** 读 flows/<sid>/<objectId>/threads/<tid>/thread.json（不存在返回 undefined）。 */
+/** 读 flows/<sid>/objects/<objectId>/threads/<tid>/thread.json（不存在返回 undefined）。 */
 export function readThreadJson(baseDir: string, sid: string, objectId: string, threadId: string): any | undefined {
-  const p = join(baseDir, "flows", sid, objectId, "threads", threadId, "thread.json");
+  const p = join(baseDir, "flows", sid, "objects", objectId, "threads", threadId, "thread.json");
   if (!existsSync(p)) return undefined;
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return undefined; }
 }

@@ -42,14 +42,19 @@ const BOOTSTRAP_AUTHOR_EMAIL = "bootstrap@ooc.local";
 const BOOTSTRAP_COMMIT_MESSAGE = "chore(bootstrap): import existing stones/";
 
 /**
- * main 分支根的 .gitignore 内容（方案 A，2026-06-09）。
+ * main 分支根的 .gitignore 内容（方案 A 续，2026-06-09）。
  *
- * session worktree（`flows/<sid>`）从 main checkout 时继承它：白名单 `objects/`
- * （tracked stone 文件），排除其余顶层运行时产物（`flows/<sid>/<objectId>` 运行时目录、
- * `.session.json` / `.flow.json` / `threads/` …）。让 `git status` / evolve diff 只看见
- * `objects/` 改动，不被运行时数据污染。`.gitignore` 自身保留 tracked。
+ * session worktree（`flows/<sid>`）从 main checkout 时继承它。布局续案后 tracked stone
+ * 身份文件与运行时数据**同落 `objects/<id>/`**，故白名单 `objects/` 后再用黑名单排除
+ * 运行时特征文件：
+ *   - 顶层 `/*` 排除 session 级运行时（`.session.json` 等）；`!/objects/` `!/.gitignore` 放行。
+ *   - `objects/** /threads/`、`objects/** /.flow.json`、`objects/** /state.json` 排除对象级运行时。
+ * stone 身份文件（self.md / readable.md / executable/** / visible/** / knowledge/** / .stone.json）
+ * 不匹配黑名单 → tracked；运行时（.flow.json / threads/ / state.json）→ untracked。
+ * 让 `git status` / evolve diff 只看见身份改动，不被运行时数据污染。
  */
-const STONE_MAIN_GITIGNORE = "/*\n!/objects/\n!/.gitignore\n";
+const STONE_MAIN_GITIGNORE =
+  "/*\n!/objects/\n!/.gitignore\nobjects/**/threads/\nobjects/**/.flow.json\nobjects/**/state.json\n";
 
 /** 保留目录名，迁移时不会被搬到 main/ 下。 */
 const RESERVED_TOP_LEVEL = new Set([STONES_MAIN_BRANCH, STONES_BARE_REPO_DIR, ".git", ".gitignore"]);
@@ -217,15 +222,23 @@ async function createBareRepoWithMainWorktree(opts: {
 }
 
 /**
- * 幂等确保 main 分支根有 .gitignore（方案 A）。
+ * 幂等确保 main 分支根 .gitignore 内容与期望（STONE_MAIN_GITIGNORE）一致（方案 A 续 2026-06-09）。
  *
- * 已有 .gitignore → 不动（避免覆盖人工/演化改动）；缺失则写入白名单内容并 commit 到 main。
- * 服务于本次迁移前已 bootstrap 的旧 world（其初始 commit 没带 .gitignore）。
- * best-effort：写/commit 失败不抛（不阻塞启动），但 warn 让运维知情。
+ * 缺失或内容陈旧（旧白名单不含运行时黑名单）→ 覆盖更新并 commit 到 main，让已 bootstrap 的
+ * 旧 world 升级到新 gitignore；内容已一致 → no-op（不重复 commit）。
+ * best-effort：读/写/commit 失败不抛（不阻塞启动），但 warn 让运维知情。
  */
 async function ensureMainGitignore(mainDir: string): Promise<void> {
   const gitignorePath = join(mainDir, ".gitignore");
-  if (existsSync(gitignorePath)) return;
+  if (existsSync(gitignorePath)) {
+    try {
+      const current = await Bun.file(gitignorePath).text();
+      if (current === STONE_MAIN_GITIGNORE) return;
+    } catch (err) {
+      console.warn(`[bootstrap] ensureMainGitignore read failed: ${(err as Error).message}`);
+      // 读失败时仍尝试覆盖写（下面），把内容拉回期望态。
+    }
+  }
   try {
     await Bun.write(gitignorePath, STONE_MAIN_GITIGNORE);
     const add = Bun.spawnSync(["git", "add", ".gitignore"], { cwd: mainDir, stdout: "pipe", stderr: "pipe" });
@@ -233,6 +246,14 @@ async function ensureMainGitignore(mainDir: string): Promise<void> {
       console.warn(`[bootstrap] ensureMainGitignore git add failed: ${new TextDecoder().decode(add.stderr ?? new Uint8Array())}`);
       return;
     }
+    // 若暂存区无变化（内容已与 HEAD 一致，仅 read 失败误入此路径），跳过 commit 避免
+    // "nothing to commit" 误报 warn。
+    const diffCached = Bun.spawnSync(["git", "diff", "--cached", "--quiet", "--", ".gitignore"], {
+      cwd: mainDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (diffCached.exitCode === 0) return;
     const commit = Bun.spawnSync(
       [
         "git",
@@ -242,7 +263,7 @@ async function ensureMainGitignore(mainDir: string): Promise<void> {
         `user.email=${BOOTSTRAP_AUTHOR_EMAIL}`,
         "commit",
         "-m",
-        "chore(bootstrap): add main .gitignore (whitelist objects/)",
+        "chore(bootstrap): update main .gitignore (objects/ runtime blacklist)",
       ],
       { cwd: mainDir, stdout: "pipe", stderr: "pipe" },
     );

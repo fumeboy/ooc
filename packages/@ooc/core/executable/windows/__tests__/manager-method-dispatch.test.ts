@@ -52,7 +52,7 @@ async function setupThread(baseDir: string) {
     peerReadmeExists: false,
     selfLongTermPath: `pools/${SELF}/knowledge/relations/${PEER}.md`,
     selfLongTermExists: false,
-    selfSessionPath: `flows/${SID}/${SELF}/knowledge/relations/${PEER}.md`,
+    selfSessionPath: `flows/${SID}/objects/${SELF}/knowledge/relations/${PEER}.md`,
     selfSessionExists: false,
   };
   const talkWindow: TalkWindow = {
