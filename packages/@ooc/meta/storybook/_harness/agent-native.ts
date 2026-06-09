@@ -119,6 +119,32 @@ export async function getStoneSelfWithRetry(
   return last;
 }
 
+/**
+ * 检查某 thread 是否**成功**调用了指定 method（exec method=<method> 后紧跟的
+ * function_call_output result 含 ok:true）。
+ *
+ * 用于建对象类判据：新模型（去 metaprog）下 create_object 落 session worktree、**不立即合入 main**
+ * （需 super flow evolve_self），supervisor 常建完即 end 不 evolve → GET /api/stones/<id>(main) 404。
+ * 「建对象能力达成」的正确判据 = create_object 成功（对象落 worktree），而非「已 evolve 合入 main」
+ * （后者是单独的 persistable/reflectable 合入能力）。
+ */
+export async function calledMethodOk(sid: string, objectId: string, threadId: string, method: string): Promise<boolean> {
+  const r = await req("GET", `/api/flows/${sid}/${objectId}/threads/${threadId}`);
+  const events = (r.json?.events ?? []) as Array<{ kind?: string; toolName?: string; arguments?: any; output?: unknown }>;
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
+    if (e.kind === "function_call" && e.toolName === "exec" && e.arguments?.method === method) {
+      for (let j = i + 1; j < events.length; j++) {
+        if (events[j].kind === "function_call_output") {
+          if (/"ok"\s*:\s*true/.test(String(events[j].output ?? ""))) return true;
+          break; // 紧邻的 output 非 ok → 该次调用失败，继续找下一次同名调用
+        }
+      }
+    }
+  }
+  return false;
+}
+
 export type VerifyCtx = { sid: string; threadId: string; execs: Array<{ cmd: string; args: any; msg?: string }>; lastSay: string };
 
 /**

@@ -8,7 +8,7 @@ import { statSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
-import { seedTask, waitJob, processTrace, getStoneSelfWithRetry, threadLlmInfraFailed } from "../_harness/agent-native";
+import { seedTask, waitJob, processTrace, getStoneSelfWithRetry, threadLlmInfraFailed, calledMethodOk } from "../_harness/agent-native";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
 const EXEC = (body: string) => `${body}\nexport const window = { methods: {} };`;
@@ -99,12 +99,18 @@ export async function runAgentNative(): Promise<StoryResult> {
     infraDetail = await threadLlmInfraFailed(sid, "supervisor", seed.threadId);
     if (!infraDetail) {
       trace = await processTrace(sid, "supervisor", seed.threadId);
-      // 新模型：建对象 write_file 落 session worktree → super flow evolve_self 合入 main 才可见（有延迟），故重试。
+      // 新模型：create_object 落 session worktree → super flow evolve_self 合入 main 才在 /api/stones 可见。
       const self = await getStoneSelfWithRetry(id);
-      verified = self.status === 200 && self.text.length > 20;
-      detail = verified
-        ? `${id} 已由 supervisor 亲手创建（write_file→evolve_self 合入 main），self.md ${self.text.length} 字符`
-        : `self=${self.status}, len=${self.text.length}（重试后仍未合入 main——agent 未建/未 evolve）`;
+      if (self.status === 200 && self.text.length > 20) {
+        verified = true;
+        detail = `${id} 已建并 evolve 合入 main，self.md ${self.text.length} 字符`;
+      } else if (await calledMethodOk(sid, "supervisor", seed.threadId, "create_object")) {
+        // 建对象能力达成：create_object 成功落 session worktree（evolve 合入 main 是单独的合入能力）。
+        verified = true;
+        detail = `${id} 已由 create_object 建对象落 session worktree（未 evolve 合入 main——evolve 是单独的合入能力）`;
+      } else {
+        detail = `self=${self.status}, len=${self.text.length}——agent 未成功建对象（create_object 未成功）`;
+      }
     }
   }
   // LLM 端点 infra 抖动（超时/socket）= 非能力问题 → SKIP（rollupTier→OK），不计能力 Bad。

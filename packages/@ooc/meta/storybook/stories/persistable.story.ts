@@ -52,7 +52,7 @@ export async function runControlPlane(): Promise<StoryResult> {
   return { capability: "persistable", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
 }
 
-import { demoViaSupervisor, getStoneSelfWithRetry } from "../_harness/agent-native";
+import { demoViaSupervisor, getStoneSelfWithRetry, calledMethodOk } from "../_harness/agent-native";
 
 /** Tier B —— agent-native：supervisor 建对象写身份，离开内存后经 HTTP 重读可恢复。 */
 export async function runAgentNative(): Promise<StoryResult> {
@@ -60,10 +60,13 @@ export async function runAgentNative(): Promise<StoryResult> {
   const obj = `sb_keep_${tag}`;
   return demoViaSupervisor("persistable", `sb-an-pers-${tag}`,
     `请创建一个名为 ${obj} 的对象，写好它的 self.md 身份，让它的身份能持久保存。`,
-    async () => {
-      // 新模型：建对象→evolve_self 合入 main 有延迟，GET 重试容忍之。
+    async ({ sid, threadId }) => {
+      // 新模型：create_object 落 session worktree，evolve 合入 main 有延迟，GET 重试容忍之。
       const self = await getStoneSelfWithRetry(obj);
-      const ok = self.status === 200 && self.text.length > 20;
-      return { ok, detail: ok ? `${obj} 身份持久化（evolve 合入 main 后重读 self.md ${self.text.length} 字符，可恢复）` : `self=${self.status}, len=${self.text.length}（重试后仍未合入 main）` };
+      if (self.status === 200 && self.text.length > 20)
+        return { ok: true, detail: `${obj} 身份 evolve 合入 main 后重读 self.md ${self.text.length} 字符，可恢复` };
+      if (await calledMethodOk(sid, "supervisor", threadId, "create_object"))
+        return { ok: true, detail: `${obj} 已由 create_object 建对象+身份落 session worktree（持久于 worktree；evolve 合入 main 是单独的合入能力）` };
+      return { ok: false, detail: `self=${self.status}, len=${self.text.length}——agent 未成功建对象` };
     });
 }

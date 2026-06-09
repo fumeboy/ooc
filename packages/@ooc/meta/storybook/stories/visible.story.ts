@@ -110,7 +110,7 @@ export async function runControlPlane(): Promise<StoryResult> {
   return { capability: "visible", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
 }
 
-import { demoViaSupervisor, getStoneSelfWithRetry, req } from "../_harness/agent-native";
+import { demoViaSupervisor, getStoneSelfWithRetry, calledMethodOk, req } from "../_harness/agent-native";
 
 /**
  * Tier B —— agent-native：supervisor 为一个新对象搭好可见性的前提（创建对象）。
@@ -125,17 +125,18 @@ export async function runAgentNative(): Promise<StoryResult> {
   const obj = `sb_ui_${tag}`;
   return demoViaSupervisor("visible", `sb-an-vis-${tag}`,
     `请创建一个名为 ${obj} 的对象（它将拥有自己的 UI 页面）。如果你能顺手写个最简单的 visible/index.tsx 就更好。`,
-    async () => {
-      // 新模型：建对象→evolve_self 合入 main 有延迟，GET 重试容忍之。
+    async ({ sid, threadId }) => {
+      // 新模型：create_object 落 session worktree，evolve 合入 main 有延迟。建对象能力 = create_object 成功。
       const self = await getStoneSelfWithRetry(obj);
-      const created = self.status === 200;
+      const createdInMain = self.status === 200;
+      const created = createdInMain || (await calledMethodOk(sid, "supervisor", threadId, "create_object"));
       const url = await req("GET", `/api/objects/stone/${obj}/client-source-url`);
       const hasUi = url.status === 200;
       return {
         ok: created,
         detail: created
-          ? `${obj} 已建（evolve 合入 main，可见性前提就绪）；visible 页面${hasUi ? "已由 supervisor 顺手产出" : "待 visible 维度 agent 产出——supervisor 边界不直接编辑 UI，Tier A TC-VIS 已覆盖产物验证"}`
-          : `created=${self.status}（重试后仍未合入 main）`,
+          ? `${obj} 已建（${createdInMain ? "evolve 合入 main" : "create_object 落 session worktree"}，可见性前提就绪）；visible 页面${hasUi ? "已由 supervisor 顺手产出" : "待 visible 维度 agent 产出——supervisor 边界不直接编辑 UI，Tier A TC-VIS 已覆盖产物验证"}`
+          : `created 失败——agent 未成功建对象`,
       };
     });
 }
