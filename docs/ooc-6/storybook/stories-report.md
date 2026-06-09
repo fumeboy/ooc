@@ -1,7 +1,7 @@
 # Storybook Stories 执行报告（单元化 Tier A）
 
 > catalog-runner 产物（自动生成）。每条 story = 一个简单稳定预期；本报告记录其在控制面（零真 LLM）下的三态。
-> 生成：`bun run packages/@ooc/meta/storybook/catalog-runner.ts`。大纲：`stories-outline.md`。
+> 生成：`bun run packages/@ooc/storybook/catalog-runner.ts`。大纲：`stories-outline.md`。
 
 **汇总**：56 条 · 🟢 PASS 45 · 🔴 FAIL 0 · ⬜ SKIP 11
 

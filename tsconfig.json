@@ -12,13 +12,11 @@
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
-      "@meta": ["packages/@ooc/meta/index.doc.js"],
-      "@meta/*": ["packages/@ooc/meta/*"],
       "@src/*": ["packages/@ooc/core/*"],
       "@ooc/core/*": ["packages/@ooc/core/*"],
       "@ooc/builtins/*": ["packages/@ooc/builtins/*"],
       "@ooc/web/*": ["packages/@ooc/web/src/*"],
-      "@ooc/meta/*": ["packages/@ooc/meta/*"],
+      "@ooc/storybook/*": ["packages/@ooc/storybook/*"],
       "@ooc/tests/*": ["packages/@ooc/tests/*"]
     },
     "types": ["bun", "node"],
@@ -26,8 +24,7 @@
   },
   "include": [
     "packages/@ooc/core/**/*.ts",
-    "packages/@ooc/meta/**/*.js",
-    "packages/@ooc/meta/**/*.ts",
+    "packages/@ooc/storybook/**/*.ts",
     "packages/@ooc/tests/**/*.ts",
     "packages/*/**/*.ts",
     "packages/*/**/*.tsx"

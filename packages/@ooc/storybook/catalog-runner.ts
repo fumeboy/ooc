@@ -5,14 +5,14 @@
  * 三态 + 失败详情写进 `docs/ooc-6/storybook/stories-report.md`，供人裁决「设计 vs 预期」差异。
  * 它**不** exit 1（审计工具，不是 gate）——FAIL 是要给人看的信号，不是要挡住流水线。
  *
- * Run: bun run packages/@ooc/meta/storybook/catalog-runner.ts
+ * Run: bun run packages/@ooc/storybook/catalog-runner.ts
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { CATALOG } from "./stories/_catalog";
 import { runStoryCaptured, type StoryStatus } from "./_harness/story";
 
-const REPO_ROOT = join(import.meta.dir, "..", "..", "..", "..");
+const REPO_ROOT = join(import.meta.dir, "..", "..", "..");
 const DOCS_DIR = join(REPO_ROOT, "docs", "ooc-6", "storybook");
 const MARK: Record<StoryStatus, string> = { PASS: "🟢 PASS", FAIL: "🔴 FAIL", SKIP: "⬜ SKIP" };
 
@@ -32,7 +32,7 @@ async function main() {
     `# Storybook Stories 执行报告（单元化 Tier A）`,
     ``,
     `> catalog-runner 产物（自动生成）。每条 story = 一个简单稳定预期；本报告记录其在控制面（零真 LLM）下的三态。`,
-    `> 生成：\`bun run packages/@ooc/meta/storybook/catalog-runner.ts\`。大纲：\`stories-outline.md\`。`,
+    `> 生成：\`bun run packages/@ooc/storybook/catalog-runner.ts\`。大纲：\`stories-outline.md\`。`,
     ``,
     `**汇总**：${results.length} 条 · 🟢 PASS ${n("PASS")} · 🔴 FAIL ${n("FAIL")} · ⬜ SKIP ${n("SKIP")}`,
     ``,

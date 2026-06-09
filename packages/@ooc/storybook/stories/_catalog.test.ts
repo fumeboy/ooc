@@ -3,7 +3,7 @@
  *
  * 逐条 story 收为一个 `it`：起隔离 world → run（失败即 throw）→ 清理。
  * 与 `_control-plane.test.ts`（旧 9 能力大 story）并存；新预期一律加到 catalog。
- * 跑：`bun test packages/@ooc/meta/storybook/stories`。
+ * 跑：`bun test packages/@ooc/storybook/stories`。
  */
 import { describe, it } from "bun:test";
 import { runStory } from "../_harness/story";

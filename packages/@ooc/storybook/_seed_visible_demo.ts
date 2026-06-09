@@ -6,7 +6,7 @@
  * Clicking the file-link in the chat panel should open the rendered React component
  * (via ClientWithSourceToggle inside FileViewer) rather than raw tsx source.
  *
- * Run: bun run packages/@ooc/meta/storybook/_seed_visible_demo.ts
+ * Run: bun run packages/@ooc/storybook/_seed_visible_demo.ts
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, dirname } from "node:path";

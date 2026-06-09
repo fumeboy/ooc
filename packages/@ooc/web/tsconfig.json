@@ -19,8 +19,7 @@
     "paths": {
       "@src/*": ["../src/*"],
       "@ooc/builtins/*": ["../builtins/*"],
-      "@ooc/core/*": ["../core/*"],
-      "@ooc/meta/*": ["../meta/*"]
+      "@ooc/core/*": ["../core/*"]
     }
   },
   "include": ["src"]

@@ -2,7 +2,7 @@
 
 > 把 storybook 从「9 个能力大 story」细化为**很多条单元化 story**：每条对应**一个简单、稳定、确定性的预期**
 > （≤100 字），并标注它**锚定的 OOC 设计**。Tier A（控制面，零真 LLM，进 CI gate）。
-> 实现：`packages/@ooc/meta/storybook/stories/L<n>_<layer>.stories.ts`，由 `stories/_catalog.ts` 聚合、
+> 实现：`packages/@ooc/storybook/stories/L<n>_<layer>.stories.ts`，由 `stories/_catalog.ts` 聚合、
 > `stories/_catalog.test.ts`（bun:test）逐条收为一个 `it`。
 >
 > 事实来源：HTTP 端点全集（`app/server/modules/*/api.*.ts`）+ 运行时磁盘布局（`persistable/*`，方案 A

@@ -1,11 +1,11 @@
 /**
- * meta/storybook 测试用例验证脚本。
+ * packages/@ooc/storybook 测试用例验证脚本。
  *
  * 对当前运行的 OOC World（默认 http://localhost:3000 + http://localhost:5173）
  * 执行可编程/可反思/可见三个能力的测试，输出结构化结果。
  *
  * 运行：
- *   bun run packages/@ooc/meta/storybook/_verify.ts
+ *   bun run packages/@ooc/storybook/_verify.ts
  */
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { readFileSync, existsSync, writeFileSync } from "node:fs";

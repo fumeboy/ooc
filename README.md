@@ -33,7 +33,7 @@ src/
 ├── persistable/     # 持久化 (stones/、flows/、Issue 文件)
 └── app/server/      # HTTP 控制面 + worker
 web/                 # 前端控制面 (vite + React)
-meta/storybook/      # 能力测试框架（stories + 单元化 catalog）
+packages/@ooc/storybook/  # 能力测试框架（stories + 单元化 catalog）
 tests/e2e/           # 端到端测试场景
 .ooc-world-meta/     # OOC 自举 world：用 OOC 对象树管理 OOC 自身的定义/文档/测试（submodule → ooc-0）
 ```
@@ -52,7 +52,7 @@ tests/e2e/           # 端到端测试场景
 | 想加一个新对象 / 外部场景 case | supervisor `knowledge/{authoring-objects,example-cases}.md` |
 
 每个维度对象的断言锚定真实代码 `packages/@ooc/.../*.ts:行号`；与代码冲突时一律信代码。
-`meta/` 现仅剩 `storybook/`（能力测试框架，测试代码与 CI gate）。
+能力测试框架（测试代码与 CI gate）在 `packages/@ooc/storybook/`。
 
 ## 测试
 

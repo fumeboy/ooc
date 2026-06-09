@@ -9,8 +9,8 @@
  * 这是对「过程要可见」的回应：能力是 OOC agent 自己行使的，不是外部脚本跑完贴报告。
  *
  * Run（需要一个运行中的 OOC World）：
- *   bun run packages/@ooc/meta/storybook/_demo_session.ts
- *   OOC_BACKEND=http://localhost:3000 bun run packages/@ooc/meta/storybook/_demo_session.ts
+ *   bun run packages/@ooc/storybook/_demo_session.ts
+ *   OOC_BACKEND=http://localhost:3000 bun run packages/@ooc/storybook/_demo_session.ts
  */
 import { setTimeout as sleep } from "node:timers/promises";
 

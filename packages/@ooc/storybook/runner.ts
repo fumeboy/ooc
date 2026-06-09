@@ -5,8 +5,8 @@
  * Tier B（agent-native，真 LLM）：env `RUN_STORYBOOK_AGENT=1` + LLM 凭证齐备时才跑（见 Phase 2）。
  *
  * Run:
- *   bun run packages/@ooc/meta/storybook/runner.ts
- *   RUN_STORYBOOK_AGENT=1 bun run packages/@ooc/meta/storybook/runner.ts   # 含 Tier B
+ *   bun run packages/@ooc/storybook/runner.ts
+ *   RUN_STORYBOOK_AGENT=1 bun run packages/@ooc/storybook/runner.ts   # 含 Tier B
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -35,7 +35,7 @@ const AGENT_NATIVE: Partial<Record<CapabilityId, () => Promise<StoryResult>>> = 
   CAPABILITIES.map((c) => [c, MODULES[c].runAgentNative]),
 );
 
-const REPO_ROOT = join(import.meta.dir, "..", "..", "..", "..");
+const REPO_ROOT = join(import.meta.dir, "..", "..", "..");
 const DOCS_DIR = join(REPO_ROOT, "docs", "ooc-6", "storybook");
 
 function counts(r: StoryResult) {
@@ -78,7 +78,7 @@ async function main() {
     `# Storybook 覆盖矩阵 / dashboard`,
     ``,
     `> runner 产物（自动生成）。Tier A = 控制面确定性（可 CI）；Tier B = agent-native（真 LLM，env-gated）。`,
-    `> 生成方式：\`bun run packages/@ooc/meta/storybook/runner.ts\`。`,
+    `> 生成方式：\`bun run packages/@ooc/storybook/runner.ts\`。`,
     ``,
     `**Tier A 汇总**：${results.length} 特性，FAIL=${totalFail}。${totalFail === 0 ? "✅ 全绿（CI gate 通过）" : "🔴 有 FAIL"}`,
     ``,

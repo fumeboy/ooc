@@ -23,8 +23,8 @@ runner.ts / catalog-runner.ts                    # 聚合 → dashboard / storie
 | 命令 | 作用 |
 |---|---|
 | `bun run test:storybook` | Tier A 控制面确定性套件（零真 LLM）—— **CI gate** |
-| `bun run packages/@ooc/meta/storybook/runner.ts` | 聚合 9 特性 → 覆盖矩阵 dashboard |
-| `RUN_STORYBOOK_AGENT=1 bun run packages/@ooc/meta/storybook/runner.ts` | 含 Tier B agent-native（需 .env LLM 凭证 + 运行中的 world） |
+| `bun run packages/@ooc/storybook/runner.ts` | 聚合 9 特性 → 覆盖矩阵 dashboard |
+| `RUN_STORYBOOK_AGENT=1 bun run packages/@ooc/storybook/runner.ts` | 含 Tier B agent-native（需 .env LLM 凭证 + 运行中的 world） |
 
 ## 三层测试边界
 

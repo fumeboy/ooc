@@ -1,10 +1,10 @@
 {
-  "name": "@ooc/meta",
+  "name": "@ooc/storybook",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "ooc": {
     "kind": "source-package",
-    "role": "documentation"
+    "role": "capability-test-framework"
   }
 }
