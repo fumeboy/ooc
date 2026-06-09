@@ -47,11 +47,11 @@ describe("resolveLlmTimeoutMs (任务级覆盖, 根因 #1)", () => {
     }
   });
 
-  it("缺省 (undefined override) 回落全局默认 120s", () => {
+  it("缺省 (undefined override) 回落全局默认 240s", () => {
     const prev = process.env.OOC_LLM_TIMEOUT_MS;
     delete process.env.OOC_LLM_TIMEOUT_MS;
     try {
-      expect(resolveLlmTimeoutMs(undefined)).toBe(120_000);
+      expect(resolveLlmTimeoutMs(undefined)).toBe(240_000);
     } finally {
       if (prev === undefined) delete process.env.OOC_LLM_TIMEOUT_MS;
       else process.env.OOC_LLM_TIMEOUT_MS = prev;
@@ -62,9 +62,9 @@ describe("resolveLlmTimeoutMs (任务级覆盖, 根因 #1)", () => {
     const prev = process.env.OOC_LLM_TIMEOUT_MS;
     delete process.env.OOC_LLM_TIMEOUT_MS;
     try {
-      expect(resolveLlmTimeoutMs(0)).toBe(120_000);
-      expect(resolveLlmTimeoutMs(-5)).toBe(120_000);
-      expect(resolveLlmTimeoutMs(Number.NaN)).toBe(120_000);
+      expect(resolveLlmTimeoutMs(0)).toBe(240_000);
+      expect(resolveLlmTimeoutMs(-5)).toBe(240_000);
+      expect(resolveLlmTimeoutMs(Number.NaN)).toBe(240_000);
     } finally {
       if (prev === undefined) delete process.env.OOC_LLM_TIMEOUT_MS;
       else process.env.OOC_LLM_TIMEOUT_MS = prev;

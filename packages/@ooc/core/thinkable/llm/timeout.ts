@@ -10,7 +10,9 @@
  * 覆写。timeout 触发抛 LlmTimeoutError (Error 子类), 消息含已等待 ms。
  */
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+// 240s：opus 级模型 + 大 context + extended thinking 单轮常 >120s（自循环 dogfooding 实测：
+// 120s 默认会把正常的深思轮判为超时、硬杀整个 thread）。仍可由 OOC_LLM_TIMEOUT_MS 覆写。
+const DEFAULT_TIMEOUT_MS = 240_000;
 
 /** 解析 OOC_LLM_TIMEOUT_MS 环境变量, 缺省 / 非法时回到 DEFAULT_TIMEOUT_MS。 */
 export function readLlmTimeoutMs(): number {
