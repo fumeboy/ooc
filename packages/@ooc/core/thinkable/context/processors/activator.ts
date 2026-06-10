@@ -2,7 +2,6 @@
  * ActivatorProcessor — matches knowledge frontmatter triggers against thread intents.
  *
  * Produces KnowledgeWindow entries with source="activator".
- * Replaces synthesizer.collectExecutableKnowledgeEntries Phase 3.
  */
 import type { PipelinePhase, PipelineContext } from "../pipeline.js";
 import type { ThreadContext } from "../index.js";

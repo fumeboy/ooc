@@ -1,12 +1,12 @@
 /**
  * ObjectTypeRegistrar — startup-time registration of stone-backed object types.
  *
- * P1 (2026-06-03): bridges the gap between stoneRegistry (discovers stones) and
- * ObjectRegistry (holds type definitions). Scans all known stones, loads their
- * executable/readable definitions via ServerLoader, and registers them into the
- * per-world ObjectRegistry — so render-time lazy registration
- * (ensureSelfObjectTypeRegistered / derivePeerObjectWindows in synthesizer.ts)
- * becomes a fallback instead of the primary path.
+ * Bridges the gap between stoneRegistry (discovers stones) and ObjectRegistry
+ * (holds type definitions). Scans all known stones, loads their executable/readable
+ * definitions via ServerLoader, and registers them into the per-world ObjectRegistry
+ * — so render-time lazy registration (ensureSelfObjectTypeRegistered /
+ * derivePeerObjectWindows in thinkable/context/object-windows.ts) becomes a fallback
+ * instead of the primary path.
  *
  * Async design: start() kicks off the registration scan in the background and
  * returns a ready Promise. Callers who want to block can await it; callers who

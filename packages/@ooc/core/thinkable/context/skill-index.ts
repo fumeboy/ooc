@@ -1,5 +1,5 @@
 /**
- * Skill index synthesis — extracted from synthesizer.collectExecutableKnowledgeEntries Phase 1.6.
+ * Skill index synthesis.
  *
  * Scans stones/<branch>/skills + stones/<branch>/objects/<self>/skills + optional externalSkillsDir,
  * merges them (object > branch > external), and produces a SkillIndexWindow when non-empty.

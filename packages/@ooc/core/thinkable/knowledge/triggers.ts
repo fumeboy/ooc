@@ -18,8 +18,8 @@
  * 3. 多 trigger max 合并（消费方在 activator.computeActivations 实现）。
  *
  * 设计原则：
- * - **fail-loud**：未知 trigger 形态在 parse 时就 throw（loader/synthesizer 上层
- *   `catch` 决定是否吞错；activator 自身在解析失败时 console.warn 并跳过该篇）
+ * - **fail-loud**：未知 trigger 形态在 parse 时就 throw（loader 上层 `catch` 决定是否
+ *   吞错；activator 自身在解析失败时 console.warn 并跳过该篇）
  * - **纯函数**：parseTrigger / evaluateTrigger 不读文件、不带状态
  * - **向后兼容**：旧格式 `window::` 在 parse 时自动归一化为新的
  *   `object::` / `method::` AST，evaluateTrigger 只需要处理新的 kind 名

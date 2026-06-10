@@ -16,7 +16,3 @@ export {
   parseTrigger,
   type Trigger,
 } from "./triggers";
-export {
-  derivePeerObjectWindows,
-  ensureSelfObjectTypeRegistered,
-} from "./synthesizer";

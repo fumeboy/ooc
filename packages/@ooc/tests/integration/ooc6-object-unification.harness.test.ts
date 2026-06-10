@@ -37,7 +37,7 @@ import {
   parseTrigger,
   evaluateTrigger,
 } from "@ooc/core/thinkable/knowledge/triggers";
-import { derivePeerObjectWindows } from "@ooc/core/thinkable/knowledge/synthesizer";
+import { derivePeerObjectWindows } from "@ooc/core/thinkable/context/object-windows";
 import { WindowManager } from "@ooc/core/executable/windows/_shared/manager";
 import type {
   ContextWindow,

@@ -87,6 +87,21 @@
 - 测试：`protocol-knowledge.test.ts` 加 per-type 激活断言（命中对应 + 不串台）；thinkable 174 tests 0 fail。
 - 设计权威：`docs/2026-06-10-root-knowledge-as-object-knowledge-design.md` § per-type 协议知识。
 
+### synthesizer.ts 清理（名不副实 + 放错维度 + 自重复，第四轮）
+`knowledge/synthesizer.ts` 早已不合成知识（`collectExecutableKnowledgeEntries` 在 Phase F 拆进 pipeline
+processor 链），只剩两个**对象类型注册 / peer 窗口派生**函数——名字与维度都错。
+- **改名 + 移出 knowledge/** → `context/object-windows.ts`（消费方都是 context processor、产物是 context window）。
+- **抽掉自身重复**：`ensureSelfObjectTypeRegistered` 与 `derivePeerObjectWindows` 各有一份"从 windowDef 注册
+  stone 对象类型"逻辑 → 合为本地 helper `registerStoneObjectType`。
+- 剥施工代号注释（`Phase F` / `ooc-6 Phase 6` / `P1`）；同步修 `runtime/object-type-registrar.ts` 头部对
+  synthesizer 的交叉引用，及 `context/{skill-index,activator-windows,processors/activator}.ts` /
+  `knowledge/triggers.ts` 里指向已删 `synthesizer.collectExecutableKnowledgeEntries` 的腐烂注释。
+- importer 更新：`processors/{peer,system}.ts`、`knowledge/index.ts`（删 barrel re-export，无人经 barrel 消费）、
+  `peer-object-derive.test.ts`（随源码移到 `context/__tests__/`）、`ooc6-object-unification.harness.test.ts`。
+- **跨文件重复仅标注未动**：`ObjectTypeRegistrar.registerStone`（runtime，注册主路径）与本文件两个渲染期兜底
+  同源——统一抽取跨 runtime/thinkable，留 type-system 批协调。
+- thinkable 174 tests 0 fail；改动文件 tsc 干净。
+
 ### 受影响测试（已迁移并通过）
 - **新增** `context/__tests__/protocol-knowledge.test.ts`（验证各交互面命中对应切片、互不串台、source=protocol）。
 - **重写** `tests/e2e/backend/end-reflection-reminder.e2e.test.ts`（按 end form 在/不在门控，走完整 buildInputItems）。

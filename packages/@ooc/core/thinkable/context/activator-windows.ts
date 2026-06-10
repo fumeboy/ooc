@@ -1,5 +1,5 @@
 /**
- * Knowledge activator windows — extracted from synthesizer.collectExecutableKnowledgeEntries Phase 3.
+ * Knowledge activator windows.
  *
  * Matches active thread intents against knowledge index frontmatter triggers and produces
  * KnowledgeWindow entries with source="activator".

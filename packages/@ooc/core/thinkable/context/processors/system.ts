@@ -9,7 +9,7 @@ import type { ContextWindow } from "../../../executable/windows/_shared/types.js
 import { builtinRegistry } from "../../../executable/windows/index.js";
 import { buildProtocolKnowledgeWindows } from "../protocol.js";
 import { synthesizeSkillIndex } from "../skill-index.js";
-import { ensureSelfObjectTypeRegistered } from "../../knowledge/synthesizer.js";
+import { ensureSelfObjectTypeRegistered } from "../object-windows.js";
 
 export const SystemProcessor: PipelinePhase = {
   name: "SystemProcessor",

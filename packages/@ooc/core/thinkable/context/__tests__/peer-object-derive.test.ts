@@ -2,9 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  derivePeerObjectWindows,
-} from "../synthesizer.js";
+import { derivePeerObjectWindows } from "../object-windows.js";
 import { makeThread } from "../../../__tests__/make-thread";
 import {
   createStoneObject,
