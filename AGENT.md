@@ -61,8 +61,7 @@ packages/@ooc/
 │   ├── thinkable/       # 思考（LLM、context、knowledge、thread/scheduler/thinkloop；reflectable 在其下）
 │   ├── executable/      # 行动（tools、windows、object methods；collaborable/readable 注册在其下）
 │   ├── observable/      # 观测（LlmObservation、pause、debug）
-│   ├── persistable/     # 持久化（stone/pool/flow、thread.json、inbox、PR-Issue）
-│   ├── programmable/    # 自写方法 / versioning / evolve-self
+│   ├── persistable/     # 持久化（stone/pool/flow、thread.json、inbox、PR-Issue；stone-* git versioning + evolve-self 合入在其下，programmable 机制寄居于此）
 │   ├── extendable/      # 外接集成层（飞书等；非维度）
 │   ├── runtime/         # ObjectRegistry + 热更 loader
 │   ├── _shared/         # 跨维度类型
@@ -76,7 +75,7 @@ packages/@ooc/
 .ooc-world-meta          # OOC 自举 world（submodule → ooc-0）：维度/模块设计权威
 ```
 
-> 维度 ≠ 目录一一对应：部分维度物理寄居在别处（collaborable 在 `executable/windows`、reflectable 在 `thinkable/`、readable/visible 经注册分维）。「某维度怎么设计」一律以对象树为准。
+> 维度 ≠ 目录一一对应：部分维度物理寄居在别处（collaborable 在 `executable/windows`、reflectable 在 `thinkable/`、programmable 在 `persistable/stone-*`〔git versioning + evolve-self 合入机制〕、能力入口在 `builtins/root` 的 evolve_self method、readable/visible 经注册分维）。「某维度怎么设计」一律以对象树为准。
 
 ## 关键约束（违反会出问题）
 
