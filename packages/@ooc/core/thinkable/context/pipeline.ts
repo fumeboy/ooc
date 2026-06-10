@@ -1,25 +1,16 @@
 /**
- * ContextPipeline — staged construction of LLM context from ThreadContext.
+ * ContextPipeline — 从 ThreadContext 分阶段构造 LLM context。
  *
- * Phases (lazy cache-aware):
- * 1. IntentCacheReader — read cached intents for each form (no computation)
- * 2. BaseWindowLoader — load persistent context windows
- * 3. Processors[] — SystemProcessor, WindowEnrichmentProcessor, KnowledgeProcessor,
- *    ActivatorProcessor, PeerProcessor. Each processor reads from intentCache and
- *    produces derived ContextWindows.
- * 4. BudgetManager — relevance scoring + overflow
- * 5. Renderer selection
- *
- * buildInputItems becomes a thin wrapper around this pipeline.
+ * 起点是 thread.contextWindows（持久窗口），各 processor 依次派生新窗口追加进来，
+ * 最后 BudgetManager 按相关性打分 + 裁剪到预算，产出 ContextSnapshot。
+ * buildInputItems 是本 pipeline 的薄封装。
  */
 import type { ThreadContext } from "./index.js";
 import type { ContextWindow } from "../../executable/windows/_shared/types.js";
 import type { ContextSnapshot } from "./snapshot.js";
-import type { IntentCache } from "./intent.js";
 import { BudgetManager, loadBudgetThresholds } from "./budget.js";
 import { SystemProcessor } from "./processors/system.js";
 import { WindowEnrichmentProcessor } from "./processors/enrichment.js";
-import { KnowledgeProcessor } from "./processors/knowledge.js";
 import { ActivatorProcessor } from "./processors/activator.js";
 import { PeerProcessor } from "./processors/peer.js";
 
@@ -29,7 +20,6 @@ export interface PipelinePhase {
 }
 
 export interface PipelineContext {
-  intentCache: IntentCache;
   windows: ContextWindow[];  // accumulated so far
 }
 
@@ -41,13 +31,10 @@ export class ContextPipeline {
   }
 
   async run(thread: ThreadContext): Promise<ContextSnapshot> {
-    // Ensure thread.intentCache exists (lazy-init)
-    const intentCache: IntentCache = thread.intentCache ?? new Map();
-    if (!thread.intentCache) {
-      thread.intentCache = intentCache;
-    }
+    // intentCache 的 lazy-init —— evaluateTrigger 的 intent case 会读 thread.intentCache。
+    if (!thread.intentCache) thread.intentCache = new Map();
     // contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 PipelineContext.windows。
-    const ctx: PipelineContext = { intentCache, windows: [...(thread.contextWindows ?? [])] as ContextWindow[] };
+    const ctx: PipelineContext = { windows: [...(thread.contextWindows ?? [])] as ContextWindow[] };
 
     for (const phase of this.phases) {
       const result = await phase.run(thread, ctx);
@@ -71,24 +58,18 @@ export class ContextPipeline {
 }
 
 /**
- * Default pipeline with standard phase ordering.
+ * 默认 pipeline 的相位顺序：
+ * 1. SystemProcessor — root builtin protocol knowledge + creator-reply + skill_index + self 类型注册
+ * 2. WindowEnrichmentProcessor — 沿 parentClass 链解析各窗口的 effectiveVisibleType
+ * 3. ActivatorProcessor — frontmatter activates_on 触发的世界 stone/pool 知识激活
+ * 4. PeerProcessor — peer/children Object 窗口
  *
- * Ordering:
- * 1. SystemProcessor — protocol knowledge (basics, reflectable, type-level basics,
- *    creator-reply, end-reflection reminder) + skill_index + self-type registration
- * 2. WindowEnrichmentProcessor — resolve effectiveVisibleType on all windows
- *    (along the parentClass chain)
- * 3. KnowledgeProcessor — intent-triggered knowledge from intentCache
- * 4. ActivatorProcessor — traditional frontmatter trigger-based knowledge activation
- * 5. PeerProcessor — peer/children Object windows
- *
- * BudgetManager.allocate runs after all phases inside pipeline.run().
+ * BudgetManager.allocate 在所有相位之后于 pipeline.run() 内执行。
  */
 export function createDefaultPipeline(): ContextPipeline {
   const p = new ContextPipeline();
   p.addPhase(SystemProcessor);
   p.addPhase(WindowEnrichmentProcessor);
-  p.addPhase(KnowledgeProcessor);
   p.addPhase(ActivatorProcessor);
   p.addPhase(PeerProcessor);
   return p;

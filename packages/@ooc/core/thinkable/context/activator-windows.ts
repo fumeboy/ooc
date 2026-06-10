@@ -39,7 +39,6 @@ export async function buildActivatorKnowledgeWindows(
 
   const explicitPaths = new Set(
     (thread.contextWindows ?? [])
-      // batch C narrowing(N1): contextWindows 元素契约层是 base；type==="knowledge" 后 narrow 回 KnowledgeWindow 读 source。
       .filter((w): w is KnowledgeWindow => w.type === "knowledge" && (w as KnowledgeWindow).source === "explicit")
       .map((w) => w.path),
   );

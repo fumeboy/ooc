@@ -276,7 +276,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
  */
 const BUILTIN_WINDOW_TYPES: ReadonlySet<string> = new Set([
   "root", "method_exec", "do", "todo", "talk", "program", "file",
-  "knowledge", "search", "relation", "skill_index",
+  "knowledge", "search", "skill_index",
   "feishu_chat", "feishu_doc", "plan",
 ]);
 
@@ -362,7 +362,7 @@ export async function buildInputItems(
   const pipeline = createDefaultPipeline();
   const snapshot = await pipeline.run(thread);
 
-  // P0 peer-window reconcile: any peer-style window the pipeline derived
+  // peer-window reconcile: any peer-style window the pipeline derived
   // (id = type = objectId, type not a builtin window/Object type) that is
   // missing from thread.contextWindows gets persisted now. This guarantees
   // exec() → WindowManager.fromThread → requireParent succeeds for peer

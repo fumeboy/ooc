@@ -123,7 +123,7 @@ export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistr
 
 const BUILTIN_TYPES = new Set([
   "root", "method_exec", "do", "todo", "talk", "program",
-  "file", "knowledge", "search", "relation", "skill_index",
+  "file", "knowledge", "search", "skill_index",
   "feishu_chat", "feishu_doc", "plan",
 ]);
 
@@ -209,7 +209,6 @@ async function renderWindowNode(
   registry: ObjectRegistry,
 ): Promise<XmlNode> {
   const sharingState = window.sharing;
-  // batch C narrowing(N4): sharing.snapshot 契约层是 base ContextWindow；narrow 回 union（snapshot 即原 window 的 union 实例）。
   const renderedWindow: ContextWindow = sharingState ? (sharingState.snapshot as ContextWindow) : window;
 
   const titlePrefix = sharingState
@@ -309,9 +308,9 @@ async function renderContextWindowsNode(
  * 收集所有 window 在其 transcript 视图中已消费的 inbox/outbox 消息 id，用于去重
  * 顶层 inbox/outbox fallback。
  *
- * G4: 改由 registry 派发——每个 window type 通过 ObjectDefinition.consumedMessageIds
- * hook 自报已消费的消息（do/talk 复用各自的 filterMessagesFor*Window）。renderer 不再
- * 直接 import executable/windows/{do,talk}，消除 thinkable→executable 反向耦合。
+ * 由 registry 派发——每个 window type 通过 ObjectDefinition.consumedMessageIds hook 自报
+ * 已消费的消息（do/talk 复用各自的 filterMessagesFor*Window）。renderer 不直接 import
+ * executable/windows/{do,talk}，消除 thinkable→executable 反向耦合。
  */
 function collectWindowConsumedMessageIds(
   windows: ContextWindow[],

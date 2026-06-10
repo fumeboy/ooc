@@ -175,20 +175,6 @@ export class BudgetManager {
       tokens: estimate(w),
     }));
 
-    // Guidance windows bound to a form inherit the form's score
-    const formScores = new Map<string, number>();
-    for (const s of scored) {
-      if (s.window.type === "method_exec") {
-        formScores.set(s.window.id, s.score);
-      }
-    }
-    for (const s of scored) {
-      if (s.window.boundFormId && formScores.has(s.window.boundFormId) && s.window.parentWindowId === s.window.boundFormId) {
-        // Guidance inherits form's relevance (never lower than its own score)
-        s.score = Math.max(s.score, formScores.get(s.window.boundFormId)!);
-      }
-    }
-
     // Sort descending by relevance score
     scored.sort((a, b) => b.score - a.score);
 
