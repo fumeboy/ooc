@@ -156,3 +156,70 @@
 - 能力入口（method）：`packages/@ooc/builtins/root/executable/method.evolve-self.ts`
 - barrel 对外面：`packages/@ooc/core/persistable/index.ts`
 - HTTP 控制面适配：`packages/@ooc/core/app/server/modules/stones/versioning-helper.ts`
+
+---
+
+## ✅ 第二轮：persistable 全模块审视清理（2026-06-11，commit c21c490e）
+
+> 并入 programmable 后对整个 persistable（30 文件 / 5353 行）的审视。三组并行审计 agent
+> （stone-* / flow-* / pool+基础设施）→ Supervisor 交叉验证 → 分四批执行，每批守门。
+> 净删 110 行，行为零变化（一处隐藏 bug 修复）。
+
+### N. 死代码删除（grep 坐实零生产 caller）
+- **删 `flow-relation.ts` 整文件** —— 4 个导出零生产 caller，是「relation_window 功能未实装
+  就提前建的 IO 层」（YAGNI）。两组审计独立确认。连 barrel 4 段转发一起删。
+- **`stone-readme.readableTsFile`** —— 只在 barrel 转发，server-loader 内联了 `join`，无真实 caller。
+- **`flow-runtime-object.createRuntimeObject`** —— 与 `writeRuntimeObjectState` 等价的 stub，
+  测试只验证等价性。删函数 + 转发 + 该测试。
+
+### O. 去 metaprog 残渣 + 断链 doc（延续上轮）
+- metaprog 残留注释：`common.ts`（`STONE_OBJECTS_SUBDIR` 注释 + 路径优先级注释）、
+  `pr-issue.ts:43`（branch 举例 `metaprog/agent_of_x/abc123` → `session-<sid>`）。
+- **5 个文件断链引用已删除的 `meta/object.doc.ts`**（`stone-object` ×2 / `csv-pool` / `flow-data` /
+  `pool-object` ×2 / `debug-file`）——删 dead pointer，保留解释正文。
+
+### P. 重复样板 + 隐藏 bug 修复
+- `debug-file.ts` 5 个 write 函数（writeDebugInput/Output/LoopInput/LoopOutput/LoopMeta）逐字重复
+  `mkdir+writeFile` → 提取 `writeDebugFile(ref, file, record)` helper。
+- **`flow-data.mergeData` 修 bug**：原内联 read-parse 对**非 object 的损坏 data.json 静默吞**
+  （保持 `{}` 继续写），而 `readData` 会 fail-loud。改 `mergeData` 复用 `readData` → 损坏数据
+  现在 fail-loud（兼消重）。
+
+### Q. 命名失真
+- `stone-object.ts`「B-tree 协议」→「嵌套子对象协议」（MEMORY 明确标注 B-tree 是历史误称勿用）。
+- `stone-skills.ts` 删死参数 `_stonesBranch`（已 workspace 级，生产 caller `skill-index.ts` 早不传）；
+  更新 2 个测试 caller。**`branchSkillsDir`/`listBranchSkills` 的 branch→workspace 重命名推迟**——
+  它会动 `thinkable/context/skill-index.ts`，正是用户并行重构的区域，避让。
+
+### 验证状态（诚实交代）
+- 改动文件 **tsc 全干净**；可跑的 persistable 测试 **86 pass / 0 fail**。
+- 全量 `persistable/` 跑有 **10 个失败，根因是用户并行 thinkable 重构把 `thinkable/context/intent.js`
+  移走**（`executable/windows/manager.ts` 解析不到 → 凡 transitively import 它的测试整体加载失败，
+  含 flow-data / csv-pool）。**与本清理无关**——stash 验证过、tsc 证逻辑无误，待 thinkable 落定自然恢复。
+
+---
+
+## ⬜ 第二轮新增待决（明确范围，未擅自做）
+
+### R. 分层违规 persistable→executable（真架构问题，需设计）
+- `flow-object.ts:5` 把 `builtinRegistry`（executable singleton）作默认参数；
+  `thread-json.ts:6-8` import `executable/windows/_shared/init` 的 `initContextWindows` /
+  `injectPeerWindowsIfObjectThread`。persistable（IO 层）反向依赖 executable（运行层）。
+- 同 stone-worktree→programmable 那类违规，但修复要解决 `readThread` 用 registry hydrate
+  contextWindows 的依赖——**不是一次 sed，需设计**（依赖注入 / 把 hydrate 提到 caller 层）。
+
+### S. 半死导出（仅测试/e2e caller，需对照功能规划逐个判断）
+- `flow-data` 的 `writeData`(`writeFlowData`) / `flowDataFile`：生产仅用 `readData`/`mergeData`。
+- `pool-object` 的 `poolKnowledgeMemoryDir` / `poolKnowledgeRelationsDir` / `readPoolRelation`：仅测试。
+- `stone-client` 的 flow-pages 四函数：仅 `tests/e2e/`。
+- `csv-pool` 的 `parseCsv` / `stringifyCsvRow` re-export：canonical 在 `_shared/utils/csv.ts`，无 consumer。
+- `mention.ts`（5 行 re-export）：barrel 已直连 `_shared/utils/mention.js`（line 238），文件半死
+  ——**用户并行已删 mention.ts**（本轮 working tree 可见），无需重复处理。
+
+### T. stone-skills branch→workspace 重命名（避让中）
+- `branchSkillsDir` / `listBranchSkills` 名字仍暗示 branch（实际 workspace 级）。本轮只删死参数；
+  重命名待用户 thinkable/skill-index 重构落定后再做（避免碰撞）。
+
+### U. 考古注释噪音（churn 大收益低，配合后续 cleanup 顺手做）
+- flow-* 的 `P5'` / `P6.§` Phase 标签、`index.ts` 日期戳、`thread-json.ts:23` 的 `Step 3` 墓碑注释、
+  `debug-file` `Round 10 F2`、`world-config` 等散落日期戳。**不单独成批**。
