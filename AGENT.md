@@ -45,7 +45,7 @@ ooc-philosophy / ooc-glossary / engineering-harness / testing-strategy / authori
   - 你关注的是哲学边界、维度分工、横切协作模型，而不是单条 command、单个 API 或单个 UI 细节本身。
   - 非必要不要亲自下沉到具体维度实现；应优先拆解任务、明确约束、通过 sub agent 指派给对应 AgentOfX。只有在需要裁决设计根问题时，才直接更新 `meta/*.doc.ts`。
 - **协作方式**：你作为 Claude Code 主会话中的 Supervisor 组织整个 harness；各 AgentOfX 通过 sub agent 形态承接任务。
-- **体验官使用方式**：需要真实体验、发现问题、沉淀 Issue / e2e 场景时，应派 AgentOfExperience 去跑真实任务；体验官默认不直接改 `src/` 修功能，而是把问题回流给对应维度 AgentOfX。
+- **体验官使用方式**：需要真实体验、发现问题、沉淀 Issue / e2e 场景时，应派 AgentOfExperience 去跑真实任务；体验官默认不直接改 `packages/@ooc/` 实现源码修功能，而是把问题回流给对应维度 AgentOfX（体验官角色与边界的权威定义见 supervisor `knowledge/engineering-harness.md`）。
 - **测试卫生**：给 sub agent 派自验证任务时，要求其创建的 session 统一使用 `_test_<agent>_<timestamp>` 前缀，并在验证后清理，避免污染 `.ooc-world/flows/`。
 - **输出要求**：输出应体现 Supervisor 价值——给出清晰的 design 指引、任务拆解、派单约束、反馈汇总，以及仍需拍板的风险点；不要只停留在泛泛分析，也不要把执行细节黑箱化。
 
@@ -69,7 +69,7 @@ tests/e2e/           # 端到端测试场景
 1. **app server 启动必须显式 `--world ./.ooc-world则 `config.ts` 回退到 `process.cwd()` 把仓库源码目录当 world——这会污染源码树。
 2. **改 `meta/*.doc.ts` 后立刻 `bun tsc --noEmit meta/<file>.doc.ts` 验证**，不要批量改完再验证。`DocTreeNode.sources` 是 `[[any, string]]`——只允许 1 个 source entry，多个要折叠成一个。
 3. **文档断言要锚定真实代码**：叶节点写"代码里有 X"时用 `src/path/file.ts:行号` 形式锚定。源代码与文档分歧时优先信任源代码。
-4. **不要直接修源代码绕开 review**：体验官（AgentOfExperience）发现的问题转 Issue + e2e 场景；具体维度的 AgentOfX 才动 `src/`。当前由 Claude Code 主会话承担 Supervisor 角色，sub agent 承担各 AgentOfX 角色（详见 supervisor `knowledge/engineering-harness.md` 的 interim runtime）。
+4. **不要直接修源代码绕开 review**：体验官（AgentOfExperience）发现的问题转 Issue + e2e 场景；具体维度的 AgentOfX 才动 `packages/@ooc/` 源码。当前由 Claude Code 主会话承担 Supervisor 角色，sub agent 承担各 AgentOfX 角色（角色/边界与 interim runtime 的权威定义见 supervisor `knowledge/engineering-harness.md`）。
 
 ## 当前状态
 
