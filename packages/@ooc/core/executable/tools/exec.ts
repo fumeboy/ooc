@@ -20,7 +20,6 @@ import type { ThreadContext, ProcessEvent } from "../../thinkable/context.js";
 import type { ContextWindow } from "../windows/_shared/types.js";
 import { builtinRegistry, getOpenableMethods, ROOT_WINDOW_ID, WindowManager } from "../windows/index.js";
 import type { ObjectRegistry } from "../windows/_shared/registry.js";
-import { enrichFormMethodKnowledge } from "../../thinkable/knowledge/index.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 export const EXEC_TOOL: LlmTool = {
@@ -111,7 +110,7 @@ export async function handleExecTool(
     (thread.contextWindows ?? []).map((w) => w?.id).filter(Boolean) as string[],
   );
 
-  let opened: { formId: string; autoSubmitted: boolean; submitResult?: string };
+  let opened: { formId?: string; autoSubmitted: boolean; submitResult?: string; directResult?: string };
   try {
     opened = await mgr.openMethodExec({
       thread,
@@ -125,15 +124,18 @@ export async function handleExecTool(
     return errorOutput(`exec 失败：${(err as Error).message}`);
   }
 
-  // program method 额外补 method 签名 knowledge（沿用旧 enrichProgramForm 行为）
-  const targetForm = mgr.get(opened.formId);
-  if (targetForm && targetForm.type === "method_exec" && targetForm.method === "program") {
-    await enrichFormMethodKnowledge(targetForm, thread);
-  }
-
   thread.contextWindows = mgr.toData();
 
   if (opened.autoSubmitted) {
+    const result = opened.directResult ?? opened.submitResult;
+    if (!opened.formId) {
+      // Direct exec (no form): return the result plainly.
+      return successOutput(result ?? `Method ${method} 已执行。`, {
+        method,
+        executed: true,
+        result,
+      });
+    }
     const createdWindowId = (thread.contextWindows ?? [])
       .map((w) => w?.id)
       .filter(
@@ -142,7 +144,7 @@ export async function handleExecTool(
     return successOutput(`Form ${opened.formId} 已基于完整参数立即执行；执行结果见下一轮 context。`, {
       form_id: opened.formId,
       executed: true,
-      result: opened.submitResult,
+      result,
       ...(createdWindowId ? { window_id: createdWindowId } : {}),
     });
   }

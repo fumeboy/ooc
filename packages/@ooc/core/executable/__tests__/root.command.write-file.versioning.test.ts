@@ -91,10 +91,10 @@ describe("write_file stone-versioning routing", () => {
     const out = await executeWriteFileMethod(ctx);
     // 成功 outcome（constructor object outcome；P6.§4-§5）
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true && "object" in out) {
-      expect(out.object.type).toBe("file");
+    if (typeof out === "object" && out && out.ok === true && "window" in out && out.window) {
+      expect(out.window.type).toBe("file");
       // window 指向 worktree 物理落点（方案 A：flows/s/objects/...）
-      expect((out.object as unknown as { path: string }).path).toContain(
+      expect((out.window as unknown as { path: string }).path).toContain(
         join("flows", "s", "objects", "agent_of_x", "self.md"),
       );
     } else {
@@ -174,8 +174,8 @@ describe("write_file stone-versioning routing", () => {
 
     const out = await executeWriteFileMethod(ctx);
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true && "object" in out) {
-      expect(out.object.type).toBe("file");
+    if (typeof out === "object" && out && out.ok === true && "window" in out && out.window) {
+      expect(out.window.type).toBe("file");
     } else {
       throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
     }
@@ -194,8 +194,8 @@ describe("write_file stone-versioning routing", () => {
     const out = await executeWriteFileMethod(ctx);
     // non-stone 新建：constructor outcome { ok: true, object } (P6.§4-§5)
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true && "object" in out) {
-      expect(out.object.type).toBe("file");
+    if (typeof out === "object" && out && out.ok === true && "window" in out && out.window) {
+      expect(out.window.type).toBe("file");
     } else {
       throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
     }
@@ -284,8 +284,8 @@ describe("write_file stone-versioning routing", () => {
     });
     const out = await executeWriteFileMethod(ctx);
     expect(typeof out).toBe("object");
-    if (typeof out === "object" && out && out.ok === true && "object" in out) {
-      expect(out.object.type).toBe("file");
+    if (typeof out === "object" && out && out.ok === true && "window" in out && out.window) {
+      expect(out.window.type).toBe("file");
     } else {
       throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
     }

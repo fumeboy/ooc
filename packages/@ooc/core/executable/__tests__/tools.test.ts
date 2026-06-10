@@ -102,28 +102,12 @@ describe("executable tools (ContextWindow model)", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", method: "do", description: "fork" },
+      arguments: { title: "派生", method: "do", description: "fork", args: { msg: "处理日志" } },
     });
-    const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec")?.id ?? "";
-    await dispatchToolCall(thread, {
-      id: "call_2",
-      name: "exec",
-      arguments: {
-        title: "补 msg",
-        window_id: formId,
-        method: "refine",
-        args: { msg: "处理日志" },
-      },
-    });
-    const output = await dispatchToolCall(thread, {
-      id: "call_3",
-      name: "exec",
-      arguments: { title: "执行 fork", window_id: formId, method: "submit" },
-    });
-
-    const parsed = JSON.parse(output);
-    expect(parsed.ok).toBe(true);
-    expect((thread.contextWindows as ContextWindow[]).find((w) => w.id === formId)).toBeUndefined();
+    // With quick_exec_submit, do auto-submits when msg is provided.
+    // The form should be removed after successful execution.
+    const formAfter = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "method_exec");
+    expect(formAfter).toBeUndefined();
   });
 
   it("MethodExecWindow.submit 失败时 form 保留 status=failed, 可 refine 复活 (Round 13)", async () => {

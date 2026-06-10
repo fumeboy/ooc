@@ -6,17 +6,16 @@
  * 职责：
  * - 持有 thread.contextWindows，封装所有增删改查
  * - 提供与 LLM 5 原语对齐的方法：
- *   - openMethodExec：在 parent window 下创建 method_exec sub-window；当 args 完整且不引入
- *     新协议知识时，会立刻提交 form（具体行为由各 method 自己控制）
+ *   - openMethodExec：在 parent window 下创建 method_exec sub-window；当 onFormChange 返回
+ *     quick_exec_submit 时会立刻提交 form；若方法未声明 onFormChange 则直接 exec 不创建 form
  *   - openTypedWindow：创建非 form 的 window（do_window / todo_window 等）
- *   - refine：累积 method_exec 的 args 并重算 intentPaths
+ *   - refine：累积 method_exec 的 args，调用 onFormChange 重算 tip/intents，可自动 submit
  *   - submit：执行 method；成功自动移除 form；失败保留 result
  *   - close：触发 type 的 onClose，级联关闭子 window
  * - 维护 knowledge path 引用计数（knowledgeRefCount），保证多 window 共享 path 时不被提前释放
  *
  * 不负责：
  * - method 自身的 exec 实现（由各 root/X.ts 与 windows/X.ts 中的 entry.exec 提供）
- * - knowledge entries 的具体内容（由 collectExecutableKnowledgeEntries 派生）
  * - 持久化（由 src/persistable/thread-json.ts 处理）
  *
  * 使用模式：
@@ -31,13 +30,11 @@ import type { ObjectRegistry } from "./registry.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
-  isVolatileDerivedWindow,
   isNonPersistedWindow,
   type MethodExecWindow,
   type ContextWindow,
-  type ObjectType,
 } from "./types.js";
-import type { ObjectMethod } from "./method-types.js";
+import type { ObjectMethod, MethodExecutionContext } from "./method-types.js";
 import {
   writeRuntimeObjectState,
   deleteRuntimeObject,
@@ -51,72 +48,6 @@ import {
   createFlowObject,
 } from "../../../persistable/index.js";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common.js";
-
-/**
- * 用 entry.intent() 计算 intentPaths；空 args 时退化为 [method]。
- *
- * intent() 返回的是 sub-intents（不含方法名自身）；我们把方法名作为首元素再追加
- * sub-intent name，构成完整 intentPaths 列表。
- */
-function computeIntentPaths(
-  entry: ObjectMethod,
-  command: string,
-  args: Record<string, unknown>,
-): string[] {
-  let derived: string[];
-  try {
-    const subIntents = entry.intent(args);
-    derived = [command, ...subIntents.map((i) => i.name)];
-  } catch {
-    derived = [command];
-  }
-  return derived.length > 0 ? derived : [command];
-}
-
-/**
- * 从 entry.onFormChange() 派生"knowledge path keys"。
- *
- * 旧设计：entry.knowledge(args, status) 返回 Record<string, string>，Object.keys() 即
- *   knowledge path 集合（用于 auto-submit guard 和 methodKnowledgePaths 引用计数）。
- * 新设计：entry.onFormChange() 返回 GuidanceWindow[]，其 title 即原 knowledge key。
- */
-function deriveKnowledgeKeys(
-  entry: ObjectMethod,
-  form: MethodExecWindow,
-  args: Record<string, unknown>,
-): string[] {
-  if (!entry.onFormChange) return [];
-  const change: FormChangeEvent = {
-    kind: "args_refined",
-    added: Object.keys(args),
-    removed: [],
-    changed: [],
-    args,
-  };
-  const defaultIntent: Intent = { name: form.method };
-  const intents = [defaultIntent, ...entry.intent(args)];
-  try {
-    const windows = entry.onFormChange(change, { form, intents }) ?? [];
-    return windows.map((w) => w.title);
-  } catch {
-    return [];
-  }
-}
-
-/** 比较两个 string[] 集合是否相等（顺序无关）。 */
-function setEqual(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-  const setB = new Set(b);
-  for (const v of a) if (!setB.has(v)) return false;
-  return true;
-}
-
-/** 判断 a 是否是 b 的子集（用于 openMethodExec 中的 auto-submit knowledge keys 判定）。 */
-function setSubset(a: string[], b: string[]): boolean {
-  const setB = new Set(b);
-  for (const v of a) if (!setB.has(v)) return false;
-  return true;
-}
 
 /**
  * 从 parent 上查找它注册到的 ObjectMethod。
@@ -153,8 +84,6 @@ export class WindowManager {
   static fromThread(thread: ThreadContext, registry: ObjectRegistry): WindowManager {
     const mgr = new WindowManager(registry);
     mgr.threadRef = thread;
-    // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以填充 windows map
-    // / recordKnowledgeRefs（runtime 即 union 实例）。
     for (const window of (thread.contextWindows ?? []) as ContextWindow[]) {
       mgr.windows.set(window.id, window);
       mgr.recordKnowledgeRefs(window);
@@ -253,7 +182,6 @@ export class WindowManager {
   }
 
   private validateArgValue(spec: MethodArgSpec, value: unknown): string | undefined {
-    // Basic type check (loose — don't be too strict since accumulatedArgs comes from LLM JSON)
     if (spec.enum && !spec.enum.includes(value as any)) {
       return spec.validation?.customMessage ?? `值必须是: ${spec.enum.join(", ")}`;
     }
@@ -272,7 +200,6 @@ export class WindowManager {
     if (spec.type === "object" && (typeof value !== "object" || value === null || Array.isArray(value))) {
       return spec.validation?.customMessage ?? "需要对象类型";
     }
-    // Validation rules
     const v = spec.validation;
     if (v && typeof value === "string") {
       if (v.minLength !== undefined && value.length < v.minLength) {
@@ -302,59 +229,71 @@ export class WindowManager {
     return undefined;
   }
 
-  // ── P5: status change dispatch helper ──
+  // ── onFormChange dispatch helper ──
 
   /**
-   * Fire onFormChange({ kind: "status_changed" }) and update intentCache status.
-   * Called by submit() at each lifecycle transition.
+   * Call onFormChange on the method entry and apply the returned MethodExecuteForm
+   * to the given MethodExecWindow: sets form.tip, updates intents in cache, returns
+   * the intents and quick_exec_submit flag.
+   *
+   * Safe to call even if entry has no onFormChange (returns defaults).
    */
-  private fireStatusChanged(
-    fromForm: MethodExecWindow,
-    toForm: MethodExecWindow,
+  private applyFormChange(
+    entry: ObjectMethod,
+    change: FormChangeEvent,
+    form: MethodExecWindow,
     thread: ThreadContext,
-    parent: ContextWindow,
-    methodEntry: ObjectMethod,
-  ): void {
+  ): { intents: Intent[]; quickExecSubmit: boolean } {
+    const defaultIntent: Intent = { name: form.method };
+    // Start with previous intents (if any) so status_changed/intent_changed events
+    // carry the current intents to onFormChange.
     const cache: IntentCache | undefined = (thread as any).intentCache;
-    let intents: Intent[] = [{ name: toForm.method }];
-    if (cache) {
-      const existing = cache.get(toForm.id);
-      if (existing?.intents) intents = existing.intents;
-      cache.set(toForm.id, {
-        argsHash: existing?.argsHash ?? hashArgs(toForm.accumulatedArgs),
-        status: toForm.status,
+    const prevIntents = cache?.get(form.id)?.intents ?? [defaultIntent];
+
+    if (!entry.onFormChange) {
+      const intents = [defaultIntent];
+      cache?.set(form.id, {
+        argsHash: hashArgs(form.accumulatedArgs),
+        status: form.status,
         intents,
       });
+      return { intents, quickExecSubmit: false };
     }
-    if (methodEntry.onFormChange) {
-      // batch C narrowing(N4): onFormChange 契约返回 base ContextObject[]；narrow 回 union[]
-      // 以推入 thread.contextWindows / windows map（runtime guidance 即 union 实例）。
-      const guidance = methodEntry.onFormChange(
-        { kind: "status_changed", from: fromForm.status, to: toForm.status },
-        { form: toForm, intents },
-      ) as ContextWindow[];
-      if (guidance && guidance.length > 0 && thread.contextWindows) {
-        thread.contextWindows.push(...guidance);
-        for (const gw of guidance) {
-          this.windows.set(gw.id, gw);
-        }
-      }
+
+    let result: ReturnType<NonNullable<ObjectMethod["onFormChange"]>> | undefined;
+    try {
+      result = entry.onFormChange(change, { form, intents: prevIntents });
+    } catch {
+      result = { intents: [defaultIntent] };
     }
+    const resolved = result ?? { intents: [defaultIntent] };
+    const intents: Intent[] = resolved.intents.length > 0 ? resolved.intents : [defaultIntent];
+    // Ensure method name is first
+    if (!intents.some((i) => i.name === form.method)) {
+      intents.unshift(defaultIntent);
+    }
+    form.tip = resolved.tip;
+    form.intentPaths = intents.map((i) => i.name);
+    cache?.set(form.id, {
+      argsHash: hashArgs(form.accumulatedArgs),
+      status: form.status,
+      intents,
+    });
+    return { intents, quickExecSubmit: !!resolved.quick_exec_submit };
   }
 
-  // ── End P5 helpers ──
-
-  // ── End P4 helpers ──
+  // ── End helpers ──
 
   /**
    * 在 parent_window_id 下打开一个 method_exec sub-window。
    *
    * - parent_window_id 缺省 = ROOT_WINDOW_ID
-   * - 如 args 非空，立刻 apply 一次 refine（累积到 form 上）
-   * - 当 args 非空、intentPaths / knowledge keys 都未引入新内容时，open 立刻提交 form
-   *   （即"args 给齐 + 不引入新协议知识"⇒一步执行；具体由各 method 的 match/knowledge 控制）
+   * - 若方法未声明 onFormChange：跳过 form 创建，直接 exec 并返回结果（无 formId）
+   * - 若方法声明了 onFormChange：创建 form，触发初始 status_changed(open)，
+   *   若返回 quick_exec_submit=true 则自动 submit
    *
-   * 返回 { formId, autoSubmitted, submitResult }
+   * 返回 { formId?, autoSubmitted, directResult? }
+   * - 无 onFormChange 时 formId 为空，directResult 是 exec 返回值
    * - autoSubmitted=true 表示 open 已经直接提交 form；submitResult 是 method.exec 的返回值
    *
    * 注意：本方法不直接 mutate thread；调用方负责 thread.contextWindows = mgr.toData()
@@ -366,13 +305,11 @@ export class WindowManager {
     title: string;
     description?: string;
     args?: Record<string, unknown>;
-  }): Promise<{ formId: string; autoSubmitted: boolean; submitResult?: string }> {
+  }): Promise<{ formId?: string; autoSubmitted: boolean; submitResult?: string; directResult?: string }> {
     const parentId = opts.parentWindowId ?? ROOT_WINDOW_ID;
     const parent = this.requireParent(parentId);
 
     // sharing 守门（plan §do_window.move）：
-    // - ref：只允许 close（释放本地 ref 引用）
-    // - lent_out：所有命令拒绝（含 close），等归还后才能操作
     if (parent.sharing) {
       const isCloseOnRef = parent.sharing.kind === "ref" && opts.method === "close";
       if (!isCloseOnRef) {
@@ -384,9 +321,6 @@ export class WindowManager {
       }
     }
 
-    // object method 优先；其次 window method（控制展示，归 readable）。两者都用于
-    // 构造 form（computeIntentPaths / deriveKnowledgeKeys 只读 .intent / .onFormChange，
-    // WindowMethod 同样具备）。真正的 dispatch 分流在 submit()。
     const objectEntry = this.lookupMethodEntry(parent, opts.method);
     const windowEntry = objectEntry
       ? undefined
@@ -398,26 +332,16 @@ export class WindowManager {
     }
     const entry = (objectEntry ?? windowEntry) as ObjectMethod;
 
-    const formId = generateWindowId("method_exec");
-    const baselineArgs: Record<string, unknown> = {};
-    const baselinePaths = computeIntentPaths(entry, opts.method, baselineArgs);
-
     const args = opts.args ?? {};
-    const intentPaths = computeIntentPaths(entry, opts.method, args);
 
-    // Stub form for deriveKnowledgeKeys (only needs id/method/accumulatedArgs)
-    const stubForm = {
-      id: formId,
-      method: opts.method,
-      accumulatedArgs: args,
-      status: "open",
-    } as MethodExecWindow;
-    const baselineStubForm = {
-      ...stubForm,
-      accumulatedArgs: baselineArgs,
-    } as MethodExecWindow;
+    // Fast path: method has no onFormChange → no form, exec directly.
+    if (!entry.onFormChange) {
+      const result = await this.execDirect(entry, parent, opts.thread, args);
+      return { autoSubmitted: true, directResult: result };
+    }
 
-    const baselineKnowledgeKeys = deriveKnowledgeKeys(entry, baselineStubForm, baselineArgs);
+    // Form path: create a MethodExecWindow, run initial onFormChange, maybe auto-submit.
+    const formId = generateWindowId("method_exec");
 
     const form: MethodExecWindow = {
       id: formId,
@@ -427,68 +351,103 @@ export class WindowManager {
       status: "open",
       createdAt: Date.now(),
       method: opts.method,
-      description: opts.description ?? opts.title,
+      description: opts.description ?? entry.description ?? opts.title,
       accumulatedArgs: { ...args },
-      intentPaths: intentPaths,
+      intentPaths: [opts.method],
       loadedKnowledgePaths: [],
-      methodKnowledgePaths: deriveKnowledgeKeys(entry, stubForm, args),
+      methodKnowledgePaths: [],
     };
     this.windows.set(formId, form);
     this.recordKnowledgeRefs(form);
-    // 2026-05-28 ooc-6 Phase 5: 双写到 context/ 目录
     this.writeContextObjectForWindow(opts.thread, form).catch(() => {});
 
-    // ── P4 schema/fill + P5 intentCache write ──
+    // schema/fill
     const methodResolved = this.registry.lookupMethodEntry(parent, opts.method);
     if (methodResolved?.entry.schema) {
       form.schema = methodResolved.entry.schema;
       form.fill = this.buildFillState(form.schema, form.accumulatedArgs);
     }
-    // Write initial intent cache entry
-    {
-      const cache: IntentCache = ((opts.thread as any).intentCache ??= new Map());
-      const defaultIntent: Intent = { name: opts.method };
-      const extraIntents = methodResolved?.entry.intent(form.accumulatedArgs) ?? [];
-      const intents = [defaultIntent, ...extraIntents];
-      cache.set(formId, {
-        argsHash: hashArgs(form.accumulatedArgs),
-        status: form.status,
-        intents,
-      });
-    }
-    // ── End P4/P5 write ──
 
-    // auto-submit 判定：
-    // - args 非空（无 args 等价于 LLM 想观察 form 状态再决定，不应直接提交）—— 但
-    //   parent 是 method_exec 时除外（refine/submit 是 atomic 命令，无需观察）
-    // - next intentPaths ⊇ baseline（新 path 由 LLM 显式给出，不算"surprise"）
-    // - next knowledge keys ⊆ baseline（method 自己不引入新协议知识，LLM 已知所有规则）
-    const isMetaForm = parent.type === "method_exec";
-    if (Object.keys(args).length > 0 || isMetaForm) {
-      const nextKnowledgeKeys = deriveKnowledgeKeys(entry, form as any, args);
-      if (
-        setSubset(baselinePaths, intentPaths) &&
-        setSubset(nextKnowledgeKeys, baselineKnowledgeKeys)
-      ) {
-        const submitResult = await this.submit(formId, opts.thread);
-        return { formId, autoSubmitted: true, submitResult };
-      }
+    // Initial onFormChange: status_changed to "open"
+    const { quickExecSubmit } = this.applyFormChange(
+      entry,
+      { kind: "status_changed", from: "open", to: "open" },
+      form,
+      opts.thread,
+    );
+
+    if (quickExecSubmit) {
+      const submitResult = await this.submit(formId, opts.thread);
+      return { formId, autoSubmitted: true, submitResult };
     }
 
     return { formId, autoSubmitted: false };
   }
 
   /**
+   * Direct exec path for methods without onFormChange. Builds the exec context and
+   * invokes entry.exec, handling MethodOutcome / string / undefined returns.
+   * Does NOT create a form window.
+   */
+  private async execDirect(
+    entry: ObjectMethod,
+    parent: ContextWindow,
+    thread: ThreadContext,
+    args: Record<string, unknown>,
+  ): Promise<string | undefined> {
+    const ownerFlowObjectRef = this.registry.isBuiltinFeatureType(parent.type)
+      ? undefined
+      : this.runtimeObjectRefForWindow(thread, parent);
+    const ownerThreadRef = this.threadPersistRefFromThread(thread);
+    const ctx: MethodExecutionContext = {
+      thread,
+      self: parent,
+      manager: this,
+      args,
+      ownerFlowObjectRef,
+      ownerThreadRef,
+      reportStateEdit: ownerFlowObjectRef
+        ? () => this.reportStateEdit(ownerFlowObjectRef)
+        : () => Promise.resolve(),
+      reportContextEdit: ownerThreadRef
+        ? () => this.reportContextEdit(thread)
+        : () => Promise.resolve(),
+    };
+    let result: string | undefined;
+    let isError = false;
+    try {
+      const raw = await entry.exec(ctx);
+      if (raw && typeof raw === "object" && "ok" in raw) {
+        if (raw.ok) {
+          if ("window" in raw && raw.window) {
+            const win = raw.window as ContextWindow;
+            this.insertTypedWindow(win, thread);
+            result = `Constructed ${win.type} window ${win.id}`;
+          } else {
+            result = (raw as { ok: true; result?: string }).result;
+          }
+        } else {
+          result = (raw as { ok: false; error: string }).error;
+          isError = true;
+        }
+      } else {
+        result = raw as string | undefined;
+        if (typeof result === "string" && isLegacyErrorResult(result)) {
+          isError = true;
+        }
+      }
+    } catch (err) {
+      result = `[method-error] ${(err as Error).message}`;
+      isError = true;
+    }
+    if (isError) {
+      throw new Error(result ?? "method failed");
+    }
+    return result;
+  }
+
+  /**
    * 创建非 form 的 typed window（do_window / todo_window 等）。
-   *
-   * 用于 method.exec 的副作用：
-   * - root.do submit → insertTypedWindow(doWindow, thread) 产出 do_window
-   * - root.todo submit → insertTypedWindow(todoWindow, thread)
-   * - 也用于 thread init 注入 creator do_window（parentWindowId 仍为 root）
-   *
-   * thread 参数可选：提供时会异步写入 context/ 目录（2026-05-28 ooc-6 Phase 5）。
-   *
-   * 返回新 window 的 id；调用方按需在 init 里追加 type 特有字段。
    */
   insertTypedWindow(window: ContextWindow, thread?: ThreadContext): string {
     if (this.windows.has(window.id)) {
@@ -496,7 +455,6 @@ export class WindowManager {
     }
     this.windows.set(window.id, window);
     this.recordKnowledgeRefs(window);
-    // 2026-05-28 ooc-6 Phase 5: 双写到 context/ 目录
     if (thread) {
       this.writeContextObjectForWindow(thread, window).catch(() => {});
     }
@@ -504,16 +462,10 @@ export class WindowManager {
   }
 
   /**
-   * 累积 method_exec form 的 args 并重算 intentPaths。
+   * 累积 method_exec form 的 args 并重算 tip/intents。
    *
    * Round 13: 允许 status="open" 或 status="failed" 上调 refine。
-   * - open: 累积 args, 状态保持 open（原行为）
-   * - failed: 累积 args + 清旧 result + 状态切回 open（"复活"路径，新增）
-   *
-   * executing / success / 其它状态返回 false（success 已被自动移除, 理论不会触发）。
-   *
-   * P4/P5: also recomputes fill_state, updates intentCache, dispatches onFormChange,
-   * and unloads stale derived windows bound to this form.
+   * If onFormChange returns quick_exec_submit after the refine, auto-submits.
    */
   refine(formId: string, args: Record<string, unknown>): boolean {
     const form = this.windows.get(formId);
@@ -522,8 +474,8 @@ export class WindowManager {
     const parent = this.requireParent(form.parentWindowId);
     const entry = this.lookupMethodEntry(parent, form.method);
     if (!entry) return false;
+    if (!entry.onFormChange) return false;
 
-    // Diff args first — no actual change means no cache invalidation
     const prevArgs = { ...form.accumulatedArgs };
     const nextArgs = { ...form.accumulatedArgs, ...args };
     const { added, removed, changed } = diffArgs(prevArgs, nextArgs);
@@ -531,18 +483,13 @@ export class WindowManager {
       return true;
     }
 
-    const nextPaths = computeIntentPaths(entry, form.method, nextArgs);
-    // failed → open 复活: 清 result, 把 status 切回 "open"。
-    // open → open: 仅累积 args / 重算 paths。
     const next: MethodExecWindow = {
       ...form,
       status: "open",
       result: undefined,
       accumulatedArgs: nextArgs,
-      intentPaths: nextPaths,
     };
 
-    // ── P4: recompute fill_state ──
     if (form.schema) {
       next.fill = this.buildFillState(form.schema, nextArgs, form.fill);
       next.schema = form.schema;
@@ -550,40 +497,18 @@ export class WindowManager {
 
     this.windows.set(formId, next);
 
-    // ── P5: intentCache update + onFormChange dispatch ──
     const threadRef = this.getThread();
-    const methodResolved = this.registry.lookupMethodEntry(parent, form.method);
-    if (methodResolved && threadRef) {
-      const cache: IntentCache = ((threadRef as any).intentCache ??= new Map());
-      const oldEntry = cache.get(form.id);
-      const newArgsHash = hashArgs(nextArgs);
-      const defaultIntent: Intent = { name: form.method };
-      const newIntents = [defaultIntent, ...methodResolved.entry.intent(nextArgs)];
-      const intentsChanged =
-        JSON.stringify(oldEntry?.intents ?? []) !== JSON.stringify(newIntents);
+    if (threadRef) {
+      const { quickExecSubmit } = this.applyFormChange(
+        entry,
+        { kind: "args_refined", added, removed, changed, args: nextArgs },
+        next,
+        threadRef,
+      );
 
-      // Fire onFormChange
-      const guidanceWindows: ContextWindow[] = [];
-      if (methodResolved.entry.onFormChange) {
-        // batch C narrowing(N4): onFormChange 契约返回 base ContextObject[]；narrow 回 union[] 推入 guidanceWindows。
-        guidanceWindows.push(
-          ...((methodResolved.entry.onFormChange(
-            { kind: "args_refined", added, removed, changed, args: nextArgs },
-            { form: next, intents: newIntents },
-          ) ?? []) as ContextWindow[]),
-        );
-        if (intentsChanged) {
-          guidanceWindows.push(
-            ...((methodResolved.entry.onFormChange(
-              { kind: "intent_changed", from: oldEntry?.intents ?? [], to: newIntents },
-              { form: next, intents: newIntents },
-            ) ?? []) as ContextWindow[]),
-          );
-        }
-      }
-
-      // Unload stale derived windows bound to this form
-      const oldIntentNames = new Set((oldEntry?.intents ?? []).map((i) => i.name));
+      // Unload stale derived windows bound to this form (e.g., knowledge windows from triggers)
+      const cache: IntentCache | undefined = (threadRef as any).intentCache;
+      const newIntents = cache?.get(form.id)?.intents ?? [];
       const newIntentNames = new Set(newIntents.map((i) => i.name));
       if (threadRef.contextWindows) {
         threadRef.contextWindows = threadRef.contextWindows.filter((w) => {
@@ -593,28 +518,18 @@ export class WindowManager {
           if (!sourceIntent) return true;
           return newIntentNames.has(sourceIntent);
         });
-        // Sync manager windows from thread
         for (const [id, w] of this.windows) {
           if (w.boundFormId === form.id && !threadRef.contextWindows.find((tw) => tw.id === id)) {
             this.windows.delete(id);
           }
         }
-        // Add new guidance windows
-        if (guidanceWindows.length > 0) {
-          threadRef.contextWindows.push(...guidanceWindows);
-          for (const gw of guidanceWindows) {
-            this.windows.set(gw.id, gw);
-          }
-        }
       }
 
-      cache.set(form.id, {
-        argsHash: newArgsHash,
-        status: next.status,
-        intents: newIntents,
-      });
+      if (quickExecSubmit) {
+        // Auto-submit: fire and forget (async), caller reads back result from form.
+        this.submit(formId, threadRef).catch(() => {});
+      }
     }
-    // ── End P5 ──
 
     return true;
   }
@@ -622,14 +537,9 @@ export class WindowManager {
   /**
    * 提交 method_exec form：跑 method.exec → 写 result。
    *
-   * 状态过渡：open → executing → success | failed (Round 13 升级；旧 "executed" 已废弃)
-   * 成功 (success) 时：自动从 contextWindows 移除（spec § submit 段）
-   * 失败 (failed) 时：保留 result 含错误；LLM 可 refine 修正后重 submit（首选）, 或 close 放弃。
-   *
-   * 失败判定：method.exec 抛异常 → 失败；result 字符串以 "[method-error]" / "[error]" /
-   *           "缺少" / "失败" 开头时也视为失败（与旧 form-status 协议保持一致）。
-   *
-   * 返回 result 字符串（可能 undefined，例如 plan/end 等无 result 的 method）。
+   * 状态过渡：open → executing → success | failed
+   * 成功 (success) 时：自动从 contextWindows 移除
+   * 失败 (failed) 时：保留 result 含错误；LLM 可 refine 修正后重 submit
    */
   async submit(formId: string, thread: ThreadContext): Promise<string | undefined> {
     const form = this.windows.get(formId);
@@ -642,7 +552,6 @@ export class WindowManager {
 
     const parent = this.requireParent(form.parentWindowId);
     const resolved = this.registry.lookupMethodEntry(parent, form.method);
-    // window method 分流（控制展示，归 readable）：object method 缺席时查 window method 表。
     const windowEntry = resolved
       ? undefined
       : this.registry.lookupWindowMethod(parent, form.method);
@@ -651,31 +560,27 @@ export class WindowManager {
         `submit: method "${form.method}" not registered on parent window type "${parent.type}"`,
       );
     }
-    // P6.§3 + §7 (2026-06-02): 校验由 lookupMethodEntry 完成——它沿 parentClass 链
-    // 向上找方法；找到则 declaringType 是命中类（可能是 parent.type 自己或祖先）。
-    // 找不到（resolved === undefined）就在上面已经 fail-loud 抛错。这里不再做
-    // declaringType !== parent.type 的严格相等校验，否则会反过来阻断 §7 设计的
-    // 继承调用（如 supervisor 借 root 拿 talk/do/...）。
-    // window method 路径下 entry 用作 fireStatusChanged 的 onFormChange 载体（两类签名同）。
     const entry = (resolved?.entry ?? windowEntry) as ObjectMethod;
 
     const executing: MethodExecWindow = { ...form, status: "executing" };
     this.windows.set(formId, executing);
 
-    // P5: fire status_changed (open → executing) + update intentCache
-    this.fireStatusChanged(form, executing, thread, parent, entry);
+    // Fire status_changed (open → executing)
+    this.applyFormChange(
+      entry,
+      { kind: "status_changed", from: form.status, to: "executing" },
+      executing,
+      thread,
+    );
 
     let result: string | undefined;
     let isError = false;
     try {
-      // P6.§8 (2026-06-02): compute helper refs so method bodies can fire-and-forget flush.
-      // ownerFlowObjectRef is undefined for builtin features (no own state.json);
-      // ownerThreadRef tracks the thread + object pair for thread-context.json writes.
       const ownerFlowObjectRef = this.registry.isBuiltinFeatureType(parent.type)
         ? undefined
         : this.runtimeObjectRefForWindow(thread, parent);
       const ownerThreadRef = this.threadPersistRefFromThread(thread);
-      const ctx: import("./method-types.js").MethodExecutionContext = {
+      const ctx: MethodExecutionContext = {
         thread,
         form: executing,
         self: parent,
@@ -691,9 +596,6 @@ export class WindowManager {
           : () => Promise.resolve(),
       };
       if (windowEntry) {
-        // ── window method 分流（控制展示，归 readable）──
-        // 注入 window 展示状态快照，exec 返回新 state（immutable），写回 parent.state。
-        // 不碰 parent 业务数据。result/isError 之后与 object method 路径共用收尾。
         const windowState =
           (parent as { state?: import("../../../_shared/types/window-state.js").WindowDisplayState })
             .state ?? {};
@@ -708,48 +610,41 @@ export class WindowManager {
           isError = true;
         }
       } else {
-      const raw = await entry.exec(ctx);
-      // 四种返回形态：MethodOutcome (constructor / regular / failed) / string / undefined
-      // - outcome.ok=true && "object" in: P6 (ooc-6) constructor —— mount 新 ContextObject，
-      //   走与 insertTypedWindow 相同的 in-memory + persistence 路径
-      // - outcome.ok=true && "result" in: regular method 成功 + 可选 result 文本
-      // - outcome.ok=false: 失败
-      // - undefined：成功无 result
-      // - string：兼容旧约定——以 [<name>]/[method-error]/[error] 为前缀视为错误
-      if (raw && typeof raw === "object" && "ok" in raw) {
-        if (raw.ok) {
-          if ("object" in raw) {
-            // Constructor outcome：把构造出的 ContextObject 挂到 manager 与 thread 上。
-            // 走 insertTypedWindow 相同路径以保证 in-memory map + thread.contextWindows
-            // + 持久化（writeContextObjectForWindow）三处一致。
-            // batch C narrowing(N4): raw.object 契约层是 base ContextObject；narrow 回 union 以匹配 insertTypedWindow。
-            this.insertTypedWindow(raw.object as ContextWindow, thread);
-            result = `Constructed ${raw.object.type} window ${raw.object.id}`;
+        const raw = await entry.exec(ctx);
+        if (raw && typeof raw === "object" && "ok" in raw) {
+          if (raw.ok) {
+            if ("window" in raw && raw.window) {
+              // Constructor outcome: mount the returned window.
+              const win = raw.window as ContextWindow;
+              this.insertTypedWindow(win, thread);
+              result = `Constructed ${win.type} window ${win.id}`;
+            } else {
+              result = (raw as { ok: true; result?: string }).result;
+            }
           } else {
-            result = raw.result;
+            result = (raw as { ok: false; error: string }).error;
+            isError = true;
           }
         } else {
-          result = raw.error;
-          isError = true;
-        }
-      } else {
-        result = raw;
-        if (typeof result === "string" && isLegacyErrorResult(result)) {
-          isError = true;
+          result = raw as string | undefined;
+          if (typeof result === "string" && isLegacyErrorResult(result)) {
+            isError = true;
+          }
         }
       }
-      } // end object-method branch
     } catch (err) {
       result = `[method-error] ${(err as Error).message}`;
       isError = true;
     }
 
     if (!isError) {
-      // 成功：自动从 contextWindows 移除（spec § submit）
-      // P5: fire status_changed (executing → success) + update intentCache
       const successForm: MethodExecWindow = { ...executing, status: "success" };
-      this.fireStatusChanged(executing, successForm, thread, parent, entry);
-      // Also remove the intentCache entry since form is gone
+      this.applyFormChange(
+        entry,
+        { kind: "status_changed", from: "executing", to: "success" },
+        successForm,
+        thread,
+      );
       const cache: IntentCache | undefined = (thread as any).intentCache;
       cache?.delete(formId);
 
@@ -757,22 +652,19 @@ export class WindowManager {
       return result;
     }
 
-    // 失败：保留 failed + result；LLM 可 refine 修正后重 submit（首选）, 或 close 放弃
     const failed: MethodExecWindow = { ...executing, status: "failed", result };
-    // P5: fire status_changed (executing → failed) + update intentCache
-    this.fireStatusChanged(executing, failed, thread, parent, entry);
+    this.applyFormChange(
+      entry,
+      { kind: "status_changed", from: "executing", to: "failed" },
+      failed,
+      thread,
+    );
     this.windows.set(formId, failed);
     return result;
   }
 
   /**
    * 关闭任意 window：触发 type 的 onClose hook，级联关闭所有 sub-window。
-   *
-   * 流程：
-   * 1. lookup window；不存在返回 false
-   * 2. 调用 type.onClose；返回 false 表示拒绝（如 creator do_window）→ 不删
-   * 3. 递归关闭所有 parentWindowId === window.id 的子 window
-   * 4. 从 windows 表移除并释放 knowledge 引用
    */
   close(windowId: string, thread: ThreadContext): boolean {
     const window = this.windows.get(windowId);
@@ -784,7 +676,6 @@ export class WindowManager {
       if (allowed === false) return false;
     }
 
-    // 级联关闭子 window（先快照避免迭代时修改）
     const children = this.childrenOf(windowId);
     for (const child of children) {
       this.close(child.id, thread);
@@ -794,7 +685,7 @@ export class WindowManager {
     return true;
   }
 
-  /** 仅供 method 实现使用：把 form 的 result 字段写入并保留 failed 状态（成功时不调用——会自动移除）。 */
+  /** 仅供 method 实现使用：把 form 的 result 字段写入并保留 failed 状态。 */
   setResultFailed(formId: string, result: string): void {
     const form = this.windows.get(formId);
     if (!form || form.type !== "method_exec") return;
@@ -813,63 +704,35 @@ export class WindowManager {
   }
 
   private async writeContextObjectForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
-    // P6.§6 (2026-06-02): persistObjectAfterChange 是新的统一入口，按 isBuiltinFeature 分两条路径写盘。
-    // writeContextObjectForWindow 保留为薄 wrapper：兼容外部 caller，下个 release 删。
     return this.persistObjectAfterChange(thread, window);
   }
 
-  /**
-   * P6.§6 (2026-06-02) — 统一持久化入口：根据 window.type 是否「Object 内置特性」分两路落盘。
-   *
-   * 内置特性 (isBuiltinFeature=true) — talk / do / todo / method_exec：
-   *   - 不写 `flows/<sid>/<id>/` 目录、不写 .flow.json、不写 state.json
-   *   - 完整 inline 写到所属 thread 的 `<oid>/threads/<tid>/context.json`
-   *
-   * 独立 flow object (isBuiltinFeature=false) — plan / program / file / ... / 各 stone runtime：
-   *   - 写 `<wid>/.flow.json` + `<wid>/state.json`（state.json 已剥离 contextWindows）
-   *   - 在所属 thread 的 `<oid>/threads/<tid>/context.json` 里以 ref 形态出现：
-   *     `{ id, type, _ref: true, refObjectId }`
-   *   - 同时维护旧的 contextRegistry（向后兼容；§6 暂保留双写路径）
-   *
-   * 不变量：state（object 维度）和 context（thread 维度）严格分文件。
-   * state.json 只装 object 自身字段；contextWindows 一律落 context.json。
-   */
   private async persistObjectAfterChange(thread: ThreadContext, window: ContextWindow): Promise<void> {
     if (window.id === ROOT_WINDOW_ID) return;
-    // 不持久化窗（volatile derived guidance + self 门面窗）从不落盘：它们既非 inline builtin
-    // 也非独立 flow object（无 state.json），走路径 B 只会抛 ClassNotFoundError 且写出指向缺失
-    // 对象的死 _ref。每轮 enrichment/init 确定性重建，不需要落盘。
     if (isNonPersistedWindow(window)) return;
     const tref = this.threadPersistRefFromThread(thread);
     if (!tref) return;
 
     if (this.registry.isBuiltinFeatureType(window.type)) {
-      // 路径 A：内置特性 —— 仅刷 thread context.json（含本 window 的 inline 状态）。
       await this.writeThreadContextSnapshot(thread).catch((e) => {
         console.warn(`[WindowManager] writeThreadContext failed for ${window.id}: ${(e as Error).message}`);
       });
       return;
     }
 
-    // 路径 B：独立 flow object —— 写自己 dir 的 .flow.json + state.json，并把 ref 入 thread context.json。
     const ref = this.runtimeObjectRefForWindow(thread, window);
     if (!ref) return;
     try {
-      // .flow.json：标记目录是 flow object 实例。
-      // P6.§7 (2026-06-02): 写入 `class: window.type`，绑定方法继承链的载体；class 必须是已注册
-      // ObjectType（registerObjectType 入口都已注册），未注册时 createFlowObject 会抛 ClassNotFoundError。
       await createFlowObject(ref, { class: window.type });
     } catch (e) {
       console.warn(`[WindowManager] createFlowObject failed for ${window.id}: ${(e as Error).message}`);
     }
     try {
-      // state.json：object 自身字段（writeRuntimeObjectState 内部已 strip contextWindows）。
       await writeRuntimeObjectState(ref, window);
     } catch (e) {
       console.warn(`[WindowManager] writeRuntimeObjectState failed for ${window.id}: ${(e as Error).message}`);
       return;
     }
-    // 旧 contextRegistry 双写（向后兼容；§6 暂留，后续可移除）。
     try {
       const reg = await readContextRegistry(tref);
       const params = pickContextParams(window);
@@ -896,31 +759,14 @@ export class WindowManager {
       console.warn(`[WindowManager] update registry failed for ${window.id}: ${(e as Error).message}`);
     }
 
-    // thread context.json：增量后整段重写（含本 window 的 ref 项 + 其他 window 的 inline / ref）。
     await this.writeThreadContextSnapshot(thread).catch((e) => {
       console.warn(`[WindowManager] writeThreadContext failed for ${window.id}: ${(e as Error).message}`);
     });
   }
 
-  /**
-   * P6.§6: 把 manager 内存里属于该 thread 的 contextWindows 状态，序列化成
-   * ThreadContextEntry[] 写到 `<oid>/threads/<tid>/context.json`。
-   *
-   * 序列化规则：
-   *  - root window 跳过（不属于任何 thread 的可见 contextWindows）
-   *  - isBuiltinFeature=true → 完整 inline（state 即 context）
-   *  - isBuiltinFeature=false → ref 项 `{ id, type, _ref: true, refObjectId: window.id }`
-   *
-   * 注：当前 manager 的 windows 表是 thread-local 的（每个 manager 由
-   * `WindowManager.fromThread(thread)` 构造），因此 `this.windows` 全量即为该 thread
-   * 的 contextWindows 集合，无需额外按 thread 过滤。
-   */
   private async writeThreadContextSnapshot(thread: ThreadContext): Promise<void> {
     const tref = this.threadPersistRefFromThread(thread);
     if (!tref) return;
-    // §10 单一来源：用与 writeThread 同一份 buildThreadContextEntries 生成规则
-    //   （跳过 root + isNonPersistedWindow；builtin inline / flow object ref），
-    //   保证 manager snapshot 与 writeThread 单点刷不产生不一致写。
     const entries = buildThreadContextEntries(this.windows.values(), this.registry);
     await writeThreadContext(tref, entries);
   }
@@ -929,7 +775,6 @@ export class WindowManager {
     const ref = this.persistRefFromThread(thread);
     if (!ref) return;
     if (window.id === ROOT_WINDOW_ID) return;
-    // P6.§6: 内置特性没有独立 dir，删除时只需刷 thread context.json（已剥离该 entry）。
     if (this.registry.isBuiltinFeatureType(window.type)) {
       await this.writeThreadContextSnapshot(thread).catch((e) => {
         console.warn(
@@ -938,7 +783,6 @@ export class WindowManager {
       });
       return;
     }
-    // 独立 flow object：从 registry 摘除 + rm -rf 扁平目录 + 刷 thread context.json（不再含本 ref）。
     await this.removeFromRuntimeAndRegistryForWindow(thread, window);
     await this.writeThreadContextSnapshot(thread).catch((e) => {
       console.warn(
@@ -947,12 +791,6 @@ export class WindowManager {
     });
   }
 
-  /**
-   * threadPersistRefFromThread — 从 thread.persistence 派生 ThreadPersistenceRef。
-   *
-   * thread.persistence 已经是 ThreadPersistenceRef 形态（含 threadId），但此处显式
-   * 复制确保引用稳定（避免外部 mutate）。
-   */
   private threadPersistRefFromThread(thread: ThreadContext): ThreadPersistenceRef | undefined {
     if (!thread.persistence) return undefined;
     return {
@@ -963,12 +801,6 @@ export class WindowManager {
     };
   }
 
-  /**
-   * 计算 runtime object 的 FlowObjectRef —— window.id 直接做 objectId（扁平布局）。
-   *
-   * 与 thread.persistence.objectId 不同：那是 thread 所属的 object（parent owner），
-   * 这里返回的是 window 自身作为独立 runtime object 的 ref。
-   */
   private runtimeObjectRefForWindow(thread: ThreadContext, window: ContextWindow): FlowObjectRef | undefined {
     if (!thread.persistence) return undefined;
     return {
@@ -978,13 +810,6 @@ export class WindowManager {
     };
   }
 
-  /**
-   * P5'.1 删：从 thread registry 摘除成员；
-   * 若该 object 不再被本 session 内任意 thread 引用，则 rm -rf 扁平 object 目录。
-   *
-   * **当前简化**：跨 thread 引用计数尚未实装；本函数无条件 rm -rf 扁平 object 目录。
-   * 一个 object 同时被多个 thread context 引用的场景出现后再补上 ref-count 扫描。
-   */
   private async removeFromRuntimeAndRegistryForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
     const tref = this.threadPersistRefFromThread(thread);
     if (!tref) return;
@@ -999,7 +824,6 @@ export class WindowManager {
     } catch (e) {
       console.warn(`[WindowManager] remove from registry failed for ${window.id}: ${(e as Error).message}`);
     }
-    // 扁平目录的物理删除（P5'.3 起：嵌套 context/ 路径已下线，扁平目录是唯一持久化路径）。
     const ref = this.runtimeObjectRefForWindow(thread, window);
     if (!ref) return;
     try {
@@ -1011,7 +835,6 @@ export class WindowManager {
 
   private requireParent(parentId: string): ContextWindow {
     if (parentId === ROOT_WINDOW_ID) {
-      // root window 可能未显式 insert（root 是隐含 window）；提供一个虚拟 root view
       const rootInTable = this.windows.get(ROOT_WINDOW_ID);
       if (rootInTable) return rootInTable;
       return {
@@ -1056,18 +879,11 @@ export class WindowManager {
     if (!window) return;
     this.releaseKnowledgeRefs(window);
     this.windows.delete(windowId);
-    // 2026-05-28 ooc-6 Phase 5: 从 context/ 目录删除
     if (thread) {
       this.deleteContextObjectForWindow(thread, window).catch(() => {});
     }
   }
 
-  /**
-   * 公开版 removeWindow —— 不触发 onClose hook，仅释放 mgr 持有的状态。
-   *
-   * 适用于 do_window.move 等场景：method 自己已处理副作用，需要 mgr 同步移除 window。
-   * 与 close() 的区别：close() 走 onClose hook + 级联子 window；本方法仅 raw remove。
-   */
   removeWindowSilent(windowId: string): boolean {
     if (!this.windows.has(windowId)) return false;
     this.removeWindow(windowId);
@@ -1078,26 +894,11 @@ export class WindowManager {
   upsertWindow(window: ContextWindow, thread?: ThreadContext): void {
     this.windows.set(window.id, window);
     this.recordKnowledgeRefs(window);
-    // 2026-05-28 ooc-6 Phase 5: 双写到 context/ 目录
     if (thread) {
       this.writeContextObjectForWindow(thread, window).catch(() => {});
     }
   }
 
-  /**
-   * P6.§8 (2026-06-02): Reports that the **object's self-fields** changed; flushes state.json.
-   *
-   * Used by method bodies that mutate an independent flow object's own fields and want to
-   * persist the change without waiting for the next submit/upsert cycle. State is the
-   * **object dimension** (cross-thread shared) — no thread parameter needed.
-   *
-   * No-op for builtin features (talk / do / todo / method_exec): they live entirely in the
-   * thread's `thread-context.json` and have no own `state.json`. Callers operating on a
-   * builtin feature should use `reportContextEdit` instead.
-   *
-   * Concurrency: writes go through the same per-(session, objectId) serial queue as
-   * `writeRuntimeObjectState`, so concurrent reports for the same object are serialized.
-   */
   public reportStateEdit(ref: FlowObjectRef): Promise<void> {
     const window = this.windows.get(ref.objectId);
     if (!window) return Promise.resolve();
@@ -1105,34 +906,11 @@ export class WindowManager {
     return writeRuntimeObjectState(ref, window);
   }
 
-  /**
-   * P6.§8 (2026-06-02): Reports that the **thread's contextWindows** changed (builtin
-   * feature inline state OR independent object refs); flushes thread-context.json.
-   *
-   * Used by method bodies that mutate the thread's view of contextWindows — e.g.
-   * `method_exec.refine` accumulating args, `talk_window.say` appending a transcript entry,
-   * or any inserted/removed independent flow object ref. Context is the **thread dimension**
-   * (per-thread, contains inline builtin features + refs to independent objects).
-   *
-   * Takes the full ThreadContext rather than just a ref so we can reuse the in-memory
-   * `this.windows` snapshot (same source of truth used by `writeThreadContextSnapshot`).
-   */
   public reportContextEdit(thread: ThreadContext): Promise<void> {
     return this.writeThreadContextSnapshot(thread);
   }
 }
 
-/**
- * 兼容判定：旧 method exec 用 string 返回失败信息，统一约定以 \`[<name>]\` 前缀开头。
- *
- * 凡 trim 后以 \`[\w_.]+\]\` 开头的字符串都视为失败：
- * - \`[method-error] ...\`            — manager catch 转抛异常时拼出的固定前缀
- * - \`[error] ...\`                    — 旧实现有几个地方手写了
- * - \`[<method 名>] ...\`             — root method / window-level method 失败约定
- * - \`[<window>.<method>] ...\`        — 比如 [do_window.continue] / [talk_window.say]
- *
- * 新代码应改用 MethodOutcome（显式 ok 标志），避免依赖此启发式。
- */
 function isLegacyErrorResult(result: string): boolean {
   return /^\[[\w_.-]+\]/.test(result.trimStart());
 }
@@ -1149,14 +927,6 @@ function collectKnowledgePathsOf(window: ContextWindow): string[] {
   return window.windowKnowledgePaths ?? [];
 }
 
-/**
- * 从 ContextWindow 抽 thread-level 视角参数（compressLevel / decayMeta / parentObjectId）。
- *
- * 这些字段在 P5'.4 之后会从 ContextWindow 物理迁出（仅留在 registry.params）；
- * 当前 P5'.1 dual-write 期，源仍然在 window 上，本函数只做单向投影。
- *
- * order 不在这里设置 —— 由 caller 决定（新增成员=members.length；已存在=保留旧值）。
- */
 function pickContextParams(window: ContextWindow): ContextParams {
   const w = window as ContextWindow & {
     compressLevel?: number;
@@ -1170,7 +940,6 @@ function pickContextParams(window: ContextWindow): ContextParams {
   return params;
 }
 
-/** 合并 caller 给的新 params 到 cur 上（同字段覆盖；保留 cur.order）。 */
 function mergeContextParams(cur: ContextParams, next: ContextParams): ContextParams {
   return {
     compressLevel: next.compressLevel ?? cur.compressLevel,
@@ -1180,7 +949,6 @@ function mergeContextParams(cur: ContextParams, next: ContextParams): ContextPar
   };
 }
 
-/** 浅比较两个 ContextParams（短路 IO）。 */
 function paramsEqual(a: ContextParams, b: ContextParams): boolean {
   if ((a.compressLevel ?? null) !== (b.compressLevel ?? null)) return false;
   if ((a.order ?? null) !== (b.order ?? null)) return false;

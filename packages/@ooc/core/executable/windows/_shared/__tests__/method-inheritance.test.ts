@@ -15,8 +15,8 @@ import { builtinRegistry } from "../registry";
 import type { ObjectMethod } from "../method-types";
 
 const fakeMethod: ObjectMethod = {
-  paths: ["dummy"],
-  intent: () => [],
+  description: "dummy test method",
+  intents: ["dummy"],
   permission: () => "allow",
   exec: async () => ({ ok: true, result: "dummy" }),
 };
@@ -31,7 +31,7 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
     builtinRegistry.registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
     const found = builtinRegistry.resolveMethod(t, "talk");
     expect(found).toBeDefined();
-    expect(found?.paths).toContain("talk");
+    expect(found?.description).toBeTruthy();
   });
 
   test("explicit parentClass: null → no inheritance → not found", () => {
@@ -46,7 +46,7 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
     builtinRegistry.registerNewObjectType(t as never, { methods: {}, parentClass: "root", readable: stubReadable });
     const found = builtinRegistry.resolveMethod(t, "talk");
     expect(found).toBeDefined();
-    expect(found?.paths).toContain("talk");
+    expect(found?.description).toBeTruthy();
   });
 
   test("nonexistent method on chain → undefined", () => {
@@ -76,7 +76,7 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
     expect(local).toBe(fakeMethod);
     const inherited = builtinRegistry.resolveMethod(t, "talk");
     expect(inherited).toBeDefined();
-    expect(inherited?.paths).toContain("talk");
+    expect(inherited?.description).toBeTruthy();
   });
 
   test("lookupMethod (parent.type API) walks chain identically", () => {
@@ -84,7 +84,7 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
     builtinRegistry.registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
     const found = builtinRegistry.lookupMethod({ type: t as never }, "talk");
     expect(found).toBeDefined();
-    expect(found?.paths).toContain("talk");
+    expect(found?.description).toBeTruthy();
   });
 
   test("root itself: parentClass null prevents infinite loop", () => {

@@ -156,7 +156,7 @@ async function main() {
     const id = "cmd_demo";
     await postJson("/api/stones", { objectId: id });
     await writeStoneFile(id, "executable/index.ts", [
-      `export const window = { methods: { greet: { paths: ["greet"], intent: () => [], exec: async (_ctx: any) => ({ reply: "hi" }) } } };`,
+      `export const window = { methods: { greet: { description: "greet", intents: ["greet"], exec: async (_ctx: any) => ({ reply: "hi" }) } } };`,
       `export const ui_methods = {};`,
     ].join("\n"));
     await sleep(250);
@@ -164,12 +164,12 @@ async function main() {
     const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
     const win = await loadObjectWindow({ baseDir: worldDir, objectId: id });
     const hasGreet = !!win?.methods?.greet;
-    const pathsOk = JSON.stringify(win?.methods?.greet?.paths) === JSON.stringify(["greet"]);
+    const intentsOk = JSON.stringify(win?.methods?.greet?.intents) === JSON.stringify(["greet"]);
     record({
       id: "TC-PROG-03",
       name: "window.methods（LLM 路径自定义命令）可通过 loader 加载",
-      status: hasGreet && pathsOk ? "PASS" : "FAIL",
-      detail: hasGreet && pathsOk ? undefined : `hasGreet=${hasGreet}, paths=${JSON.stringify(win?.methods?.greet?.paths)}`,
+      status: hasGreet && intentsOk ? "PASS" : "FAIL",
+      detail: hasGreet && intentsOk ? undefined : `hasGreet=${hasGreet}, intents=${JSON.stringify(win?.methods?.greet?.intents)}`,
     });
   }
 

@@ -126,14 +126,14 @@ beforeAll(() => {
   builtinRegistry.registerExecutable("root", {
     methods: {
       _test_q0b_danger: {
-        paths: ["_test_q0b_danger"],
-        intent: () => [],
+        description: "test deny method",
+        intents: ["_test_q0b_danger"],
         permission: () => "deny",
         exec: () => ({ ok: true, result: "should-never-execute" }),
       },
       _test_q0b_safe: {
-        paths: ["_test_q0b_safe"],
-        intent: () => [],
+        description: "test allow method",
+        intents: ["_test_q0b_safe"],
         // 缺省 permission → 默认 allow
         exec: () => ({ ok: true, result: "executed-safe" }),
       },

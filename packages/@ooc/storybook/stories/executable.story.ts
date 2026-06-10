@@ -30,11 +30,11 @@ export async function runControlPlane(): Promise<StoryResult> {
       const id = "cmd_obj";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { run: { paths: ["run"], intent: () => [], exec: async () => ({ ok: true }) } } };\nexport const ui_methods = {};`);
+        `export const window = { methods: { run: { description: "run", intents: ["run"], exec: async () => ({ ok: true }) } } };\nexport const ui_methods = {};`);
       const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
       const win = await loadObjectWindow({ baseDir, objectId: id });
       rec.ok("TC-EXEC-02", "window.commands（LLM 路径命令）经 loader 可加载",
-        !!win?.methods?.run && JSON.stringify(win.methods.run.paths) === JSON.stringify(["run"]),
+        !!win?.methods?.run && JSON.stringify(win.methods.run.intents) === JSON.stringify(["run"]),
         `methods=${JSON.stringify(Object.keys(win?.methods ?? {}))}`);
     }
   } finally {

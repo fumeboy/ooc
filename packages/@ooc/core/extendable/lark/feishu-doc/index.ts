@@ -22,247 +22,152 @@ import type { FeishuDocWindow } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
 import { larkExec } from "../cli.js";
 import { readWorldConfig, DEFAULT_LARK_TENANT_HOST } from "../../../persistable/index.js";
-import type { Intent } from "../../../thinkable/context/intent.js";
-import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
-import type { BaseContextWindow } from "@ooc/core/_shared";
-
-const READ_BASIC = "internal/windows/feishu_doc/read/basic";
-const SEARCH_BASIC = "internal/windows/feishu_doc/search_in_doc/basic";
-const APPEND_BASIC = "internal/windows/feishu_doc/append/basic";
-const APPEND_DRY_RUN = "internal/windows/feishu_doc/append/dry_run_required";
-const PATCH_BASIC = "internal/windows/feishu_doc/patch_block/basic";
-const PATCH_DRY_RUN = "internal/windows/feishu_doc/patch_block/dry_run_required";
-const SHARE_BASIC = "internal/windows/feishu_doc/share_link/basic";
-const ATTACH_BASIC = "internal/windows/feishu_doc/attach_to_chat/basic";
-const ATTACH_DRY_RUN = "internal/windows/feishu_doc/attach_to_chat/dry_run_required";
-const CLOSE_BASIC = "internal/windows/feishu_doc/close/basic";
 
 const MAX_RENDER_BYTES = 12288;
 
-const PROTOCOL_KNOWLEDGE = `
-feishu_doc_window 是 OOC 与飞书文档之间的 ContextWindow。
+const PROTOCOL_KNOWLEDGE = `feishu_doc window — 飞书文档。
 
-每个 docToken 对应一个 window 实例。docKind 区分 doc / docx / sheet / base / wiki / drive_md，
-不同类型在 read / patch 行为上有差异（详见各 method 知识）。
-
-可用 method：
-- read：拉全文到 window.content（mode=read）
-- search_in_doc：文档内查找（无副作用）
-- append：末尾追加（**有副作用，强制 dry-run gate**）
-- patch_block：修改 / 插入特定 block（**有副作用，强制 dry-run gate + version 检查**）
-- share_link：拿可分享 URL（无副作用）
-- attach_to_chat：把文档链接发到群（**有副作用，dry-run gate**）
-- close：释放 window
-
-身份约定：默认 \`--as user\`（飞书文档读写通常依赖个人 scope）；attach_to_chat 默认 bot。
-
-注意：飞书文档的 patch 撤销成本高，所有写类命令必须经过 dry-run 预览 + 二次 confirm。
+方法：
+- read: 拉文档内容到 window.content
+- search_in_doc: 文档内查找
+- append: 在文档末尾追加（需 confirm=true）
+- patch_block: 修改/插入特定 block（需 confirm=true）
+- share_link: 返回可分享 URL
+- attach_to_chat: 把 doc 链接发到 chat（需 confirm=true）
+- close: 关闭窗口
 `.trim();
 
-const READ_KNOWLEDGE = `
-feishu_doc.read 把飞书文档内容拉到 window.content（覆盖式）。
+const READ_TIP = `feishu_doc.read 拉取文档内容到 window.content。
+参数：format（可选 "markdown"|"blocks"，默认 markdown）。`;
 
-参数：
-- format: 可选，"markdown" | "blocks"，缺省 "markdown"
-  - markdown：把文档转 markdown 文本（lark-cli markdown +fetch；适合 docx / drive_md / wiki 中的 docx 子节点）
-  - blocks：拉块结构（lark-cli docs +read --include-blocks）；适合 patch_block 前确认 block_id
+const SEARCH_TIP = `feishu_doc.search_in_doc 在已 read 的 content 内查找关键字。
+参数：query（必填）、limit（可选，默认 10）。`;
 
-调用：open(parent_window_id="<feishu_doc_window_id>", method="read", args={ format: "markdown" })
+const APPEND_TIP = `feishu_doc.append 在文档末尾追加（dry-run gate）。
+参数：text（必填）、confirm（true 才真追加；首次 submit dry-run）。`;
 
-副作用：仅本地 window 字段更新；不修改飞书一侧。
-`.trim();
+const PATCH_TIP = `feishu_doc.patch_block 修改/插入 block（dry-run + version 检查）。
+参数：block_id（必填）、op（replace_text|insert_after|delete）、text、confirm、expected_version。`;
 
-const SEARCH_IN_DOC_KNOWLEDGE = `
-feishu_doc.search_in_doc 在已 read 的 window.content 内查找关键字（纯本地，不调远端）。
+const SHARE_TIP = `feishu_doc.share_link 返回文档可分享 URL（无参数）。`;
 
-参数：
-- query: 必填
-- limit: 可选，最多返回行数，缺省 10
-
-返回：命中行列表（line + 周边 80 字符）。
-`.trim();
-
-const APPEND_KNOWLEDGE = `
-feishu_doc.append 在文档末尾追加内容。**强制 dry-run gate**。
-
-参数：
-- text: 必填，待追加的 markdown 文本
-- confirm: 必须 true 才真追加；首次 submit 触发 dry-run
-`.trim();
-
-const APPEND_DRY_RUN_KNOWLEDGE = `
-当前 append form 还未走过 dry-run 预览或 args.confirm !== true。
-若已确认，refine(form_id, args={ confirm: true }) 后再 submit。
-`.trim();
-
-const PATCH_KNOWLEDGE = `
-feishu_doc.patch_block 修改 / 插入特定 block。**最高风险命令**——强制 dry-run gate + version 检查。
-
-参数：
-- block_id: 必填，目标块 id（先 read --format=blocks 拿到）
-- op: "replace_text" | "insert_after" | "delete"
-- text: replace_text / insert_after 时必填
-- confirm: 必须 true；首次 submit 触发 dry-run
-- expected_version: 强烈建议传入 dry-run 时记录的 versionId；不一致时 submit 失败（防止文档被他人改动后误覆盖）
-
-调用流程：
-1. read(format=blocks) 看清楚要改的 block_id 与当前 versionId
-2. open patch_block + dry-run 看 lark-cli 预览
-3. refine confirm=true + expected_version=<刚才记录的> → submit
-`.trim();
-
-const PATCH_DRY_RUN_KNOWLEDGE = `
-patch_block 必须先 dry-run。当前 args.confirm !== true 或缺少 expected_version。
-`.trim();
-
-const SHARE_KNOWLEDGE = `
-feishu_doc.share_link 返回当前文档的可分享 URL。
-
-参数：无（基于 window.docToken / docKind 派生）。
-`.trim();
-
-const ATTACH_KNOWLEDGE = `
-feishu_doc.attach_to_chat 把当前文档链接发到指定群。**强制 dry-run gate**。
-
-参数：
-- chat_id: 必填
-- comment: 可选，附加文本
-- confirm: 必须 true 才真发；首次 submit 触发 dry-run
-- as: 可选，"bot" | "user"，缺省 bot
-`.trim();
-
-const ATTACH_DRY_RUN_KNOWLEDGE = `
-attach_to_chat 当前 args.confirm !== true，仅走 dry-run 预览。
-`.trim();
-
-const CLOSE_KNOWLEDGE = `
-feishu_doc.close 释放 window；不影响飞书一侧的文档。
-`.trim();
+const ATTACH_TIP = `feishu_doc.attach_to_chat 把文档链接发到群（dry-run gate）。
+参数：chat_id（必填）、comment（可选）、confirm、as。`;
 
 // ─────────────────────────── method 实现 ────────────────────────────
 
-function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): onFormChange 的 form 契约层是 base ContextWindow；本 helper 只读
-  // base `id` + 具体 form 的 method（作 provenance 标签），在此唯一处 narrow 回 MethodExecWindow。
-  const sourceId = (form as MethodExecWindow).method;
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
-
 const readMethod: ObjectMethod = {
-  paths: ["read"],
-  intent: (): Intent[] => [],
-  onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    const entries: Record<string, string> = { [READ_BASIC]: READ_KNOWLEDGE };
-    return guidanceWindows(form, entries);
+  description: "Read the Feishu doc content into window.content.",
+  intents: ["read"],
+  schema: {
+    args: {
+      format: { type: "string", enum: ["markdown", "blocks"], description: "输出格式，默认 markdown" },
+    },
+  },
+  onFormChange() {
+    return { tip: READ_TIP, intents: [{ name: "read" }], quick_exec_submit: true };
   },
   exec: (ctx) => executeRead(ctx),
 };
 
 const searchInDocMethod: ObjectMethod = {
-  paths: ["search_in_doc"],
-  intent: (): Intent[] => [],
-  onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    const entries: Record<string, string> = { [SEARCH_BASIC]: SEARCH_IN_DOC_KNOWLEDGE };
-    return guidanceWindows(form, entries);
+  description: "Search within the already-read document content.",
+  intents: ["search_in_doc"],
+  schema: {
+    args: {
+      query: { type: "string", required: true, description: "搜索关键字" },
+      limit: { type: "number", description: "最多返回行数" },
+    },
+  },
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasQuery = typeof args.query === "string" && args.query.length > 0;
+    return {
+      tip: hasQuery ? `Searching for ${args.query}...` : SEARCH_TIP,
+      intents: [{ name: "search_in_doc" }],
+      quick_exec_submit: hasQuery,
+    };
   },
   exec: (ctx) => executeSearchInDoc(ctx),
 };
 
 const appendMethod: ObjectMethod = {
-  paths: ["append"],
-  intent: (args) => (args.confirm === true ? [{ name: "append.confirmed" }] : []),
-  onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = { [APPEND_BASIC]: APPEND_KNOWLEDGE };
-    if (formStatus === "open" && args.confirm !== true) {
-      entries[APPEND_DRY_RUN] = APPEND_DRY_RUN_KNOWLEDGE;
-    }
-    return guidanceWindows(form, entries);
+  description: "Append content to the end of the doc (dry-run first; confirm=true to apply).",
+  intents: ["append.confirmed"],
+  schema: {
+    args: {
+      text: { type: "string", required: true, description: "待追加 markdown" },
+      confirm: { type: "boolean", description: "true 才真追加" },
+    },
+  },
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const intents = args.confirm === true ? [{ name: "append.confirmed" }] : [{ name: "append" }];
+    const hasText = typeof args.text === "string" && args.text.length > 0;
+    let tip = APPEND_TIP;
+    if (hasText && args.confirm !== true) tip = "已提供 text；submit 将 dry-run。refine({confirm:true}) 后再 submit 才真追加。";
+    return { tip, intents, quick_exec_submit: hasText };
   },
   exec: (ctx) => executeAppend(ctx),
 };
 
 const patchBlockMethod: ObjectMethod = {
-  paths: ["patch_block"],
-  intent: (args) => (args.confirm === true ? [{ name: "patch_block.confirmed" }] : []),
-  onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = { [PATCH_BASIC]: PATCH_KNOWLEDGE };
-    if (formStatus === "open" && args.confirm !== true) {
-      entries[PATCH_DRY_RUN] = PATCH_DRY_RUN_KNOWLEDGE;
-    }
-    return guidanceWindows(form, entries);
+  description: "Patch a specific block in the doc (dry-run + version check; confirm=true to apply).",
+  intents: ["patch_block.confirmed"],
+  schema: {
+    args: {
+      block_id: { type: "string", required: true, description: "目标 block id" },
+      op: { type: "string", required: true, enum: ["replace_text", "insert_after", "delete"] },
+      text: { type: "string", description: "replace_text/insert_after 时必填" },
+      confirm: { type: "boolean" },
+      expected_version: { type: "string", description: "dry-run 返回的 versionId" },
+    },
+  },
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const intents = args.confirm === true ? [{ name: "patch_block.confirmed" }] : [{ name: "patch_block" }];
+    const hasBlock = typeof args.block_id === "string" && args.block_id.length > 0;
+    let tip = PATCH_TIP;
+    if (hasBlock && args.confirm !== true) tip = "submit 将 dry-run；refine({confirm:true, expected_version}) 后再 submit 才真改。";
+    return { tip, intents, quick_exec_submit: hasBlock };
   },
   exec: (ctx) => executePatchBlock(ctx),
 };
 
 const shareLinkMethod: ObjectMethod = {
-  paths: ["share_link"],
-  intent: (): Intent[] => [],
-  onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    const entries: Record<string, string> = { [SHARE_BASIC]: SHARE_KNOWLEDGE };
-    return guidanceWindows(form, entries);
+  description: "Get a shareable URL for this doc.",
+  intents: ["share_link"],
+  onFormChange() {
+    return { tip: SHARE_TIP, intents: [{ name: "share_link" }], quick_exec_submit: true };
   },
   exec: (ctx) => executeShareLink(ctx),
 };
 
 const attachToChatMethod: ObjectMethod = {
-  paths: ["attach_to_chat"],
-  intent: (args) => (args.confirm === true ? [{ name: "attach_to_chat.confirmed" }] : []),
-  onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = { [ATTACH_BASIC]: ATTACH_KNOWLEDGE };
-    if (formStatus === "open" && args.confirm !== true) {
-      entries[ATTACH_DRY_RUN] = ATTACH_DRY_RUN_KNOWLEDGE;
-    }
-    return guidanceWindows(form, entries);
+  description: "Send this doc as a link to a Feishu chat (dry-run first; confirm=true to send).",
+  intents: ["attach_to_chat.confirmed"],
+  schema: {
+    args: {
+      chat_id: { type: "string", required: true, description: "目标 chat_id" },
+      comment: { type: "string", description: "附加文本" },
+      confirm: { type: "boolean" },
+      as: { type: "string", enum: ["bot", "user"] },
+    },
+  },
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const intents = args.confirm === true ? [{ name: "attach_to_chat.confirmed" }] : [{ name: "attach_to_chat" }];
+    const hasChat = typeof args.chat_id === "string" && args.chat_id.length > 0;
+    let tip = ATTACH_TIP;
+    if (hasChat && args.confirm !== true) tip = "submit 将 dry-run；refine({confirm:true}) 后再 submit 才真发。";
+    return { tip, intents, quick_exec_submit: hasChat };
   },
   exec: (ctx) => executeAttachToChat(ctx),
 };
 
 const closeMethod: ObjectMethod = {
-  paths: ["close"],
-  intent: (): Intent[] => [],
-  onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    const entries: Record<string, string> = { [CLOSE_BASIC]: CLOSE_KNOWLEDGE };
-    return guidanceWindows(form, entries);
-  },
+  description: "Close this Feishu doc window.",
   exec: () => undefined,
 };
 

@@ -18,8 +18,6 @@ export {
 } from "./triggers";
 export { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "./basic-knowledge";
 export {
-  computeFormKnowledgeEntries,
-  enrichFormMethodKnowledge,
   derivePeerObjectWindows,
   ensureSelfObjectTypeRegistered,
 } from "./synthesizer";

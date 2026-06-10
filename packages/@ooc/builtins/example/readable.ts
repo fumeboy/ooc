@@ -18,7 +18,6 @@ import {
   type Viewport,
 } from "@ooc/core/extendable/_shared/viewport.js";
 import type { WindowMethod } from "@ooc/core/_shared/types/window-method.js";
-import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 import {
   xmlElement,
   xmlText,
@@ -43,7 +42,8 @@ export function readable(ctx: RenderContext): XmlNode[] {
 /** window method：调整展示视口（写 state.viewport）。复用通用 windowSetViewport 执行体。 */
 const setViewportMethod: WindowMethod = {
   kind: "window",
-  paths: ["set_viewport"],
+  description: "Adjust the viewport (line/column range) rendered for this example window.",
+  intents: ["set_viewport"],
   schema: {
     args: {
       line_start: { type: "number", description: "起始行（含；从0开始）" },
@@ -52,7 +52,6 @@ const setViewportMethod: WindowMethod = {
       column_end: { type: "number", description: "结束字符列（不含）" },
     },
   },
-  intent: emptyIntent,
   exec: (ctx) => windowSetViewport(ctx, "example"),
 };
 

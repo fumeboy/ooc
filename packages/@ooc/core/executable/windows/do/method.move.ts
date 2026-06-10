@@ -17,97 +17,15 @@ import type {
   MethodExecutionContext,
   ObjectMethod,
 } from "../_shared/method-types.js";
-import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { MethodCallSchema } from "../../../thinkable/context/intent.js";
 import type { ContextWindow, DoWindow, SharingState } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
-import type { BaseContextWindow } from "@ooc/core/_shared";
 import type { WindowManager } from "../_shared/manager.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import { findChild } from "./helpers.js";
 
-const MOVE_BASIC_PATH = "internal/windows/do/move/basic";
-const MOVE_REF_PATH = "internal/windows/do/move/ref";
-const MOVE_MOVE_PATH = "internal/windows/do/move/move";
-const MOVE_RETURN_PATH = "internal/windows/do/move/return";
-
-const MOVE_BASIC_KNOWLEDGE = `
-do_window.move 用于通过本 do_window 把 ContextWindow 分享 / 移交给对端 thread。
-
-参数：
-- window_id: 必填，要分享的 window id（必须在自己的 contextWindows 里且当前是 owner，没有 sharing 字段）
-- mode: "ref" | "move"
-
-模式：
-- ref：对端获得只读 snapshot；自己保留 owner，继续 live 操作
-- move：所有权移交对端；自己变 lent_out 占位（看 snapshot），临时只读
-
-归还（自动识别）：
-- 当 borrower 在 creator do_window 上用 mode="move" 把 window 还回时，
-  按 id 检测到对端有同 id 的 lent_out → 视为归还：
-  对端恢复 owner（用 borrower 的 latest 内容），自己上的 owner 副本被移除。
-`.trim();
-
-const MOVE_REF_KNOWLEDGE = `
-do_window.move (ref)：把 window 的只读副本送给对端。
-对端会看到分享时刻的 snapshot 内容；之后你（owner）的改动不会同步给对端。
-对端 close 该 ref 时只是释放本地引用，不影响你的 owner。
-`.trim();
-
-const MOVE_MOVE_KNOWLEDGE = `
-do_window.move (move)：把 owner 移交给对端。
-执行后：
-- 你自己的 window 变成 lent_out 占位，临时只读，看分享时刻的 snapshot
-- 对端获得完整 owner 副本，可以正常 exec / refine / submit
-- 对端线程 archive 时所有权自动归还给你（同 id lent_out 配对）
-- 对端也可以显式用 mode="move" 在 creator do_window 上发起归还
-`.trim();
-
-const MOVE_RETURN_KNOWLEDGE = `
-do_window.move (return)：归还路径。
-你已通过某条 creator do_window 持有从对端 move 来的 owner；现在用 mode="move" 把它送回。
-系统按 id 自动识别 lent_out 配对：原 owner 恢复 live，吸收你的 latest 内容；你的副本被移除。
-`.trim();
-
-const MOVE_COMBINED_KNOWLEDGE = [
-  MOVE_BASIC_KNOWLEDGE,
-  "",
-  "## ref 模式",
-  MOVE_REF_KNOWLEDGE,
-  "",
-  "## move 模式",
-  MOVE_MOVE_KNOWLEDGE,
-  "",
-  "## 归还（return）模式",
-  MOVE_RETURN_KNOWLEDGE,
-].join("\n");
-
-function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
-  const sourceId = (form as MethodExecWindow).method;
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
+const MOVE_TIP = `do_window.move 跨 thread 分享/移交 window。
+参数：window_id（必填，要分享的 window id）、mode（"ref" 只读 snapshot 或 "move" 所有权移交）。`;
 
 interface MoveArgs {
   window_id: string;
@@ -261,27 +179,29 @@ async function executeMove(ctx: MethodExecutionContext): Promise<string | undefi
 }
 
 export const moveMethod: ObjectMethod = {
-  paths: ["move", "move.ref", "move.move"],
+  description: "Share (ref) or transfer ownership (move) of a window to the peer thread.",
+  intents: ["move.ref", "move.move"],
   schema: {
     args: {
-      window_id: { type: "string", required: true, description: "要分享的 window id（必须在自己的 contextWindows 里且当前是 owner）" },
-      mode: { type: "string", required: true, enum: ["ref", "move"], description: '"ref" 只读 snapshot 分享；"move" 所有权移交' },
+      window_id: { type: "string", required: true, description: "要分享的 window id" },
+      mode: { type: "string", required: true, enum: ["ref", "move"], description: '"ref" 只读 snapshot；"move" 所有权移交' },
     },
   } as MethodCallSchema,
-  intent: (args): Intent[] => {
-    const hit: Intent[] = [];
-    if (args.mode === "ref") hit.push({ name: "move.ref" });
-    if (args.mode === "move") hit.push({ name: "move.move" });
-    return hit;
-  },
   onFormChange(change, { form }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // 单 key 返回；把 ref / move / return 三个分支说明合并到 basic body 里，
-    // 避免 args.mode 变化引入新 knowledge key 阻断 manager 的 auto-execute 子集判定
-    const entries: Record<string, string> = {
-      [MOVE_BASIC_PATH]: MOVE_COMBINED_KNOWLEDGE,
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const mode = args.mode as string | undefined;
+    const intents = [];
+    if (mode === "ref") intents.push({ name: "move.ref" });
+    else if (mode === "move") intents.push({ name: "move.move" });
+    else intents.push({ name: "move" });
+    const hasWid = typeof args.window_id === "string" && args.window_id.length > 0;
+    const hasMode = mode === "ref" || mode === "move";
+    const ready = hasWid && hasMode;
+    return {
+      tip: ready ? `Sharing window ${args.window_id} (${mode})...` : MOVE_TIP,
+      intents,
+      quick_exec_submit: ready,
     };
-    return guidanceWindows(form, entries);
   },
   exec: (ctx) => executeMove(ctx),
 };

@@ -75,8 +75,8 @@ function worktreeObjDir(baseDir: string, sessionId: string, objectId: string): s
 }
 
 function asFileWindow(out: unknown): FileWindow {
-  if (typeof out === "object" && out && (out as { ok?: boolean }).ok === true && "object" in (out as object)) {
-    return (out as { object: FileWindow }).object;
+  if (typeof out === "object" && out && (out as { ok?: boolean }).ok === true && "window" in (out as object)) {
+    return (out as { window: FileWindow }).window;
   }
   throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
 }

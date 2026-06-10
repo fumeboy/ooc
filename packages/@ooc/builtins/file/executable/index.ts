@@ -10,8 +10,6 @@
  *   - edit：基于"oldString → newString"做精确唯一替换；支持 array 形式做 atomic 多点修改
  *   - close：释放 window
  * - 渲染：viewport 控制行/列切片 + overflow marker；32KB 兜底截断
- *
- * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -40,106 +38,36 @@ import {
 import { stoneDir } from "@ooc/core/persistable/common.js";
 
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
-import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
-import { isString, basenameOfPath, emptyIntent, asTuple } from "@ooc/builtins/_shared/executable/utils.js";
+import { isString, basenameOfPath, asTuple } from "@ooc/builtins/_shared/executable/utils.js";
 
 
 const MAX_FILE_WINDOW_BYTES = 32768;
 
-const FILE_WINDOW_RELOAD_BASIC = "internal/windows/file/reload/basic";
-const FILE_WINDOW_CLOSE_BASIC = "internal/windows/file/close/basic";
-const FILE_WINDOW_EDIT_BASIC = "internal/windows/file/edit/basic";
-const FILE_WINDOW_EDIT_INPUT = "internal/windows/file/edit/input";
-
-const RELOAD_KNOWLEDGE = `
-file_window.reload 强制下一轮重新读文件。当前 render 每轮都重读一次，本命令主要是语义提示。
-`.trim();
-
-const CLOSE_KNOWLEDGE = `
-file_window.close 释放 window；不影响磁盘上的文件本身。
-`.trim();
-
-const EDIT_KNOWLEDGE = `
-file_window.edit 在 file_window 对应的文件上做"精确唯一字符串替换"。这是 OOC 修改已有文件
-的**首选方式**——比 program(shell) + sed/awk 更安全（不需要担心转义）、更可见（修改在
-file_window 上下次 render 自然出现）、并且支持原子多点修改。
-
-它也是**大文件增量补全的搭档**：当 write_file 先写出骨架（结构 + 各 section 空壳/占位）后，
-用 edit 把每个空壳逐段替换成真实内容——分段填充，每轮输出短，避免单轮超长生成超时。
+const EDIT_TIP = `file_window.edit 在 file_window 上做"精确唯一字符串替换"（首选改文件方式）。
 
 ## 调用形式
-
-### 单次替换
-
-\`\`\`
-open(parent_window_id="<file_window_id>", method="edit",
-     title="rename helper",
-     args={ old: "function helperA(", new: "function helperB(" })
-\`\`\`
-
-### 一次提交多点替换（MultiEdit 风格，atomic-or-fail）
-
-\`\`\`
-open(parent_window_id="<file_window_id>", method="edit",
-     title="batch rename",
-     args={ edits: [
-       { old: "function helperA(", new: "function helperB(" },
-       { old: "/* old comment */",  new: "/* new comment */" }
-     ]})
-\`\`\`
-
-数组形式按顺序应用：edit[i] 的 \`old\` 必须在 **应用完前 i-1 项之后** 的当前缓冲区里
-**正好出现一次**。任意一项失败则整组不写盘。
+- 单次替换：args={ old: "...", new: "..." }
+- 一次多点：args={ edits: [{old, new}, ...] }（atomic-or-fail）
 
 ## 规则
-
-- \`old\` 必须在文件中**正好出现一次**（精确唯一）；如果出现 0 次或多次，整次 edit
-  失败，文件不变，错误信息会标明：哪个文件、哪条 edit（数组下标）、原因（not found / matches N times）
-- \`new\` 可以是空字符串（即"删除 old"）；也可以与 old 完全相同（no-op，但仍判定为成功）
-- 修改立即写入磁盘；不存在"草稿/save"两阶段
-- 想"扩大上下文以避免歧义"时，把 \`old\` 写得更长（含前后多行）即可
-
-## edit 失败后的正确反应（**不要退化**）
-
-收到 \`matches N times\` 错误 → 直接的应对是**把 \`old\` 写得更长**，包含前后几行
-让它在全文中唯一，再 edit 一次。例：原 \`old: "count = 0"\` 全文 3 处 → 改成
-\`old: "// 第一处计数初始化\\nconst count = 0"\` 只剩 1 处。
-
-收到 \`not found\` 错误 → 用 file_window.reload 或重新读 file_window 当前可见内容
-确认实际字符串（注意空白、引号、行尾），再 edit。
-
-**不要**因为 edit 失败就改用 write_file 整文件覆盖——那等于放弃了精确性，重发整文件
-你也可能漏字符、改错位；本来一个"扩大 old 上下文"就能解决。
-
-## 与 shell / write_file 改文件的对比
-
-- 不要再用 \`program(language="shell", code="sed -i ...")\` 改文件——容易踩转义陷阱、丢失
-  file_window 的可见性、并且无法表达 atomic 多点修改
-- 不要用 \`write_file\` 做"修改局部"——write_file 是整文件覆盖语义，详见 root.write_file 的 KNOWLEDGE
-`.trim();
+- old 必须在文件中正好出现一次；否则失败（not found / matches N times）
+- new 可为空串（删除 old）
+- 修改立即写盘
+- 失败时把 old 写得更长（含前后几行）让它唯一，再 edit 一次；不要退化成 write_file 整文件覆盖
+- 不要再用 program(shell)+sed 改文件`;
 
 const reloadMethod: ObjectMethod = {
-  paths: ["reload"],
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return buildGuidanceWindows(form, { [FILE_WINDOW_RELOAD_BASIC]: RELOAD_KNOWLEDGE });
-  },
-  exec: () => undefined, // render 层每轮都会重读
+  description: "Reload file content from disk (render re-reads each turn; this is a semantic hint).",
+  exec: () => undefined,
 };
 
 const closeMethod: ObjectMethod = {
-  paths: ["close"],
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return buildGuidanceWindows(form, { [FILE_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
-  },
+  description: "Close this file window (does not delete the file on disk).",
   exec: () => undefined,
 };
 
 const editMethod: ObjectMethod = {
-  paths: ["edit"],
+  description: "Precise unique-string replacement on the file; supports atomic multi-edit.",
   schema: {
     args: {
       old: { type: "string", description: "要替换的旧字符串（必须在文件中正好出现一次）" },
@@ -147,21 +75,18 @@ const editMethod: ObjectMethod = {
       edits: { type: "array", description: "批量替换 [{old, new}, ...]，与 old/new 二选一" },
     },
   },
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = { [FILE_WINDOW_EDIT_BASIC]: EDIT_KNOWLEDGE };
-    if (formStatus !== "open") return buildGuidanceWindows(form, entries);
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
     const single = isString(args.old) && isString(args.new);
     const batch = Array.isArray(args.edits) && args.edits.length > 0;
+    let tip = EDIT_TIP;
+    let quick_exec_submit = false;
     if (!single && !batch) {
-      entries[FILE_WINDOW_EDIT_INPUT] =
-        "file_window.edit 需要 args={ old, new } 或 args={ edits: [{old, new}, ...] }；二者择一。";
+      tip = EDIT_TIP + "\n\n需要 args={ old, new } 或 args={ edits: [{old, new}, ...] }；二者择一。";
+    } else {
+      quick_exec_submit = true;
     }
-    return buildGuidanceWindows(form, entries);
+    return { tip, intents: [{ name: "edit" }], quick_exec_submit };
   },
   exec: (ctx) => executeFileWindowEdit(ctx),
 };
@@ -171,12 +96,6 @@ interface EditPair {
   new: string;
 }
 
-/**
- * 解析 edit args 为 EditPair[]。
- * - { old, new } → [{old, new}]
- * - { edits: [{old, new}, ...] } → 原样
- * - 其它 → undefined
- */
 function parseEdits(args: Record<string, unknown>): EditPair[] | undefined {
   if (isString(args.old) && isString(args.new)) {
     return [{ old: args.old, new: args.new }];
@@ -193,17 +112,6 @@ function parseEdits(args: Record<string, unknown>): EditPair[] | undefined {
   return undefined;
 }
 
-/**
- * 把所有 edit 应用到 buffer。
- * 任何一条失败立即返回错误，不修改磁盘。
- *
- * 失败原因：
- * - "not found" — old 在当前 buffer 里完全不存在
- * - "matches N times" — old 在当前 buffer 里出现 N 次（>1）
- *
- * 注意：检查"正好出现一次"基于**当前 buffer**（已应用前面的 edit），而不是原始文件。
- * 这是 Claude Code MultiEdit 的语义。
- */
 function applyEdits(
   initial: string,
   edits: EditPair[],
@@ -211,7 +119,6 @@ function applyEdits(
   let buffer = initial;
   for (let i = 0; i < edits.length; i += 1) {
     const e = edits[i]!;
-    // 计数 old 出现次数
     let count = 0;
     let pos = 0;
     while (true) {
@@ -219,13 +126,12 @@ function applyEdits(
       if (idx === -1) break;
       count += 1;
       pos = idx + Math.max(e.old.length, 1);
-      if (count > 1) break; // 早退；reportable
+      if (count > 1) break;
     }
     if (count === 0) {
       return { ok: false, error: `edit #${i}: oldString not found` };
     }
     if (count > 1) {
-      // 走完整 count 用于错误信息
       let total = 0;
       let p2 = 0;
       while (true) {
@@ -236,35 +142,11 @@ function applyEdits(
       }
       return { ok: false, error: `edit #${i}: oldString matches ${total} times (must match exactly once)` };
     }
-    // count === 1
     buffer = buffer.replace(e.old, e.new);
   }
   return { ok: true, result: buffer };
 }
 
-/**
- * file_window.edit：精确唯一替换。
- *
- * 行为：
- * - 必须挂在 file_window 上
- * - args 必须是 { old, new } 或 { edits: [{old, new}, ...] }
- * - 应用规则见 EDIT_KNOWLEDGE / applyEdits
- * - 成功：把新内容写回 window.path；返回 undefined
- * - 失败：不写盘；返回错误字符串（前缀 [file_window.edit]，便于 LLM 解析）
- */
-/**
- * worktree 重定向决策（worktree 统一模型，单一落点）：当 file_window 指向**任何** stone
- * 自治区（自己 own 或别人 cross）的 main canonical 路径、且当前是普通业务 session 时，
- * identity 文件的读/写都应落到该 session 的 worktree
- * （`stones/session-<sid>/objects/<target>/...`，main HEAD 完整副本，含所有 objects/）。
- * 路径以**目标对象 id**（stoneClass.ownerObjectId）维度计算，而非 caller 自己的 objectId。
- *
- * @returns
- *  - undefined：不重定向 → 直读直写 window.path。命中以下任一即不重定向：
- *    非 stone 自治区路径 / 非业务 session / 已指向 worktree（worktree 路径 classify 为 non-package）/
- *    worktree 不可建（read 模式回退 main canonical；write 模式 caller 须 fail-loud，不裸写 main）。
- *  - string：worktree 内的目标绝对路径（读写同一路径——worktree 是完整副本，文件必在）。
- */
 async function resolveStoneWorktreeTarget(
   ctx: MethodExecutionContext,
   absPath: string,
@@ -279,29 +161,23 @@ async function resolveStoneWorktreeTarget(
   const targetObjectId = stoneClass.ownerObjectId;
   const rel = relWithinObjectFromPackages(targetObjectId, stoneClass.relInPackages);
   if (!rel) return undefined;
-  // mode=read（open_file）：worktree 已建才重定向，不为一次读主动建 worktree（惰性）。
-  // mode=write（edit）：lazy 建 worktree，写必落 worktree（保 versioning 边界，不裸写 main）。
   const wtRef = await resolveStoneIdentityRef(
     { baseDir, sessionId, objectId: targetObjectId },
     mode,
   );
-  if (!wtRef._stonesBranch) return undefined; // 未建/建失败回退 main → 不重定向
+  if (!wtRef._stonesBranch) return undefined;
   return join(stoneDir(wtRef), ...rel.split("/").filter(Boolean));
 }
 
 export async function executeFileWindowEdit(
   ctx: MethodExecutionContext,
 ): Promise<string | undefined> {
-  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "file"，method 体不再 re-check。
   const window = ctx.self as FileWindow;
   const edits = parseEdits(ctx.args);
   if (!edits) {
     return "[file_window.edit] 缺少 args={ old, new } 或 args={ edits: [{old, new}, ...] }。";
   }
 
-  // worktree 重定向：若 window 指向 caller 自己 stone 的 main canonical identity 文件且在
-  // 业务 session，读写都落该 session 的 worktree（完整副本，含本 session 已改值），main 不动。
-  // worktree 是 main HEAD 的完整 checkout，文件必在——读写同一路径，无 shadow/fallback。
   const wtTarget = await resolveStoneWorktreeTarget(ctx, window.path, "write");
   let readPath = window.path;
   let writePath = window.path;
@@ -311,8 +187,6 @@ export async function executeFileWindowEdit(
     writePath = wtTarget;
     toWorktree = true;
   } else {
-    // 未重定向但 window 指向 stone 自治区 + 业务 session = worktree 建失败 → fail-loud，
-    // 绝不裸写 main 绕过版本化（resolveStoneWorktreeTarget undefined 的唯一危险分支）。
     const baseDir = ctx.thread?.persistence?.baseDir;
     const sessionId = ctx.thread?.persistence?.sessionId;
     if (baseDir && sessionUsesWorktree(sessionId)) {
@@ -358,39 +232,15 @@ export async function executeFileWindowEdit(
   return undefined;
 }
 
-// file_window 的 compressView hook（readable 维度）已迁出到 ../readable.ts。
-
 // ─────────────────────────── constructor (P6.§4) ────────────────────────────
 
-/**
- * P6.§4 (2026-06-02): Constructor for the `file` Object type.
- *
- * Encapsulates the construction of a `file_window` ContextWindow. The root
- * methods `open_file` and `write_file` (in `@ooc/builtins/root`) become thin
- * delegators that call this constructor via `lookupConstructor("file")`.
- *
- * Two `paths` are exposed because two root methods construct file windows:
- *  - `open_file` — read-only window pointing at an existing file (path / lines / columns)
- *  - `write_file` — write content to disk (with optional stone versioning) then spawn a window
- *
- * Dispatch on `ctx.form?.method`:
- *  - method === "write_file": validate path + content, perform write (versioned for stones,
- *    direct for non-stone), then construct a FileWindow.
- *  - method === "open_file" (or anything else): validate path exists, then construct.
- *
- * Validation rules (per root method):
- *  - open_file: `path` is a non-empty string; resolved against session baseDir; must exist.
- *  - write_file: `path` is a non-empty string; `content` is a string (may be empty);
- *    if path falls inside a stone-object subtree (own or cross), write lands in the
- *    session worktree (super flow evolve_self merges to main);
- *    workspace-level packages/ paths are forbidden.
- *
- * Returns: `{ ok: true, object: FileWindow }` on success — manager.submit's §2 branch
- * inserts the window. Failure → `{ ok: false, error }` (form stays in failed state).
- */
+const FILE_CONSTRUCTOR_TIP_OPEN = `open_file: 提供 path（相对 session baseDir），可选 lines/columns 指定视口。`;
+const FILE_CONSTRUCTOR_TIP_WRITE = `write_file: 提供 path（相对 session baseDir）和 content（字符串，可为空）。`;
+
 const fileConstructor: ObjectMethod = {
   kind: "constructor",
-  paths: ["open_file", "write_file"],
+  description: "Open an existing file (read-only window) or write new content to a file.",
+  intents: ["open_file", "write_file"],
   schema: {
     args: {
       path: { type: "string", required: true, description: "文件路径（相对 session baseDir）" },
@@ -399,15 +249,22 @@ const fileConstructor: ObjectMethod = {
       columns: { type: "array", description: "可选 [start, end]，open_file 时指定可见列范围" },
     },
   },
-  intent: (args) => {
-    if (typeof args.content === "string") return [{ name: "write_file" }];
-    return [{ name: "open_file" }];
-  },
   permission: () => "allow",
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const isWrite = typeof args.content === "string";
+    const intents = [{ name: isWrite ? "write_file" : "open_file" }];
+    let tip = isWrite ? FILE_CONSTRUCTOR_TIP_WRITE : FILE_CONSTRUCTOR_TIP_OPEN;
+    let quick_exec_submit = false;
+    if (isString(args.path)) {
+      tip = isWrite ? `Writing file ${args.path}...` : `Opening file ${args.path}...`;
+      quick_exec_submit = true;
+    }
+    return { tip, intents, quick_exec_submit };
+  },
   exec: async (ctx) => {
     const thread = ctx.thread;
     if (!thread) return { ok: false, error: "[file] 缺少 thread context。" };
-    // batch C narrowing(N1): ctx.form 契约层是 base ContextWindow，narrow 回 MethodExecWindow 读 command。
     const command = (ctx.form as MethodExecWindow | undefined)?.method ?? "open_file";
 
     if (command === "write_file") {
@@ -421,9 +278,6 @@ const fileConstructor: ObjectMethod = {
       const baseDir = thread.persistence?.baseDir;
       const stoneClass = classifyPackagesPath(path, baseDir);
 
-      // 历史 write_file 的 preExisted hint：覆盖已有文件时给一条提示，把"修改局部用 edit"
-      // 的规则推到 LLM 眼前。constructor outcome 不能返回 result 字符串（已被 manager 改成
-      // "Constructed file window <id>"），所以改写为 thread 事件 inject。
       let preExisted = false;
       if (stoneClass.kind !== "package-object" && stoneClass.kind !== "packages-world") {
         try {
@@ -445,13 +299,6 @@ const fileConstructor: ObjectMethod = {
           };
         }
 
-        // worktree 写重定向（worktree 统一模型，单一落点）：业务 session 内对**任何** stone
-        // 自治区的写（改自己 own + 改别人/建别人 cross）都落该 session 的 worktree
-        // （`stones/session-<sid>/objects/<target>/...`，plain write，不 commit main）。
-        // 路径以**目标对象 id**（stoneClass.ownerObjectId，可能 ≠ authorObjectId）维度计算：
-        // worktree 是 main 完整副本含所有 objects/，stoneDir(wtRef) 拼到 objects/<target>/；
-        // relWithinObject 也用 target 前缀剥。本 session 内即时生效（读写同一目录），main 不变，
-        // 经 super flow evolve_self 合入才永久（self-scope ff-merge / cross-scope PR-Issue）。
         const sessionId = thread.persistence?.sessionId;
         const targetObjectId = stoneClass.ownerObjectId;
         const relWithinObject = relWithinObjectFromPackages(
@@ -515,7 +362,7 @@ const fileConstructor: ObjectMethod = {
           createdAt: Date.now(),
           path: wtTarget,
         };
-        return { ok: true, object: wtWindow };
+        return { ok: true, window: wtWindow };
       } else if (stoneClass.kind === "packages-world") {
         return {
           ok: false,
@@ -553,16 +400,13 @@ const fileConstructor: ObjectMethod = {
           });
         }
       }
-      return { ok: true, object: fileWindow };
+      return { ok: true, window: fileWindow };
     }
 
     // open_file path
     const rawPath = isString(ctx.args.path) ? ctx.args.path : "";
     if (!rawPath) return { ok: false, error: "[open_file] 缺少 path。" };
     let path = resolveSessionPath(thread, rawPath);
-    // worktree 重定向（worktree 统一模型）：在业务 session 打开自己 stone 的 identity 文件时，
-    // 若该 session 已建 worktree（改过 identity），window 指向 worktree 文件（读到本 session 最新
-    // 内容）；未建则保持 main canonical（read 模式不为一次读主动建 worktree）。
     const openWtTarget = await resolveStoneWorktreeTarget(ctx, path, "read");
     if (openWtTarget) path = openWtTarget;
     try {
@@ -587,7 +431,7 @@ const fileConstructor: ObjectMethod = {
         columns: asTuple(ctx.args.columns),
       },
     };
-    return { ok: true, object: fileWindow };
+    return { ok: true, window: fileWindow };
   },
 };
 

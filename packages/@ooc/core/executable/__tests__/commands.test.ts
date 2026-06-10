@@ -2,25 +2,18 @@ import { describe, it, expect } from "bun:test";
 import { ROOT_METHODS, getOpenableMethods, deriveRootIntentPaths } from "../windows";
 import { programMethod } from "@ooc/builtins/root/executable/method.program";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
 
 /**
- * Simulate the old `knowledge(args, status)` API using the new `onFormChange` interface.
- * Returns the same Record<path, content> shape for test backward compatibility.
+ * Simulate onFormChange for a method and return the MethodExecuteForm.
  */
-function callKnowledge(
-  cmd: { onFormChange?: unknown; intent?: (args: Record<string, unknown>) => Intent[] },
+function callFormChange(
+  cmd: { onFormChange?: (change: any, ctx: any) => MethodExecuteForm },
   args: Record<string, unknown>,
   status: "open" | "executing" | "success" | "failed",
-): Record<string, string> {
-  const fn = cmd.onFormChange as
-    | ((
-        change: any,
-        ctx: { form: MethodExecWindow; intents: Intent[] },
-      ) => ContextWindow[])
-    | undefined;
-  if (!fn) return {};
+): MethodExecuteForm {
+  if (!cmd.onFormChange) return { intents: [] };
   const form: MethodExecWindow = {
     id: "test_form",
     type: "method_exec",
@@ -34,17 +27,11 @@ function callKnowledge(
     status,
     createdAt: 0,
   };
-  const intents = cmd.intent?.(args) ?? [];
   const change =
     status !== "open"
       ? { kind: "status_changed" as const, to: status, from: "open" as const }
       : { kind: "args_refined" as const, args, added: [] as string[], removed: [] as string[], changed: [] as string[] };
-  const windows = fn(change, { form, intents });
-  const out: Record<string, string> = {};
-  for (const w of windows) {
-    out[w.title] = (w as any).content ?? "";
-  }
-  return out;
+  return cmd.onFormChange(change, { form, intents: [] });
 }
 
 describe("executable methods", () => {
@@ -94,48 +81,28 @@ describe("executable methods", () => {
     ]);
   });
 
-  it("should expose non-empty knowledge entries for every method", () => {
+  it("every root method has a description", () => {
     for (const [method, entry] of Object.entries(ROOT_METHODS)) {
-      const knowledge = callKnowledge(entry, {}, "open");
-      const basic = knowledge[`internal/executable/${method}/basic`];
-      expect(typeof basic).toBe("string");
-      expect(basic?.trim().length).toBeGreaterThan(20);
+      expect(typeof entry.description).toBe("string");
+      expect(entry.description.length).toBeGreaterThan(5);
     }
   });
 
-  it("root.talk paths in new model: only [talk] (say/wait/close moved to talk_window)", () => {
-    expect(deriveRootIntentPaths("talk", { wait: true })).toEqual(["talk"]);
-    expect(deriveRootIntentPaths("talk", { target: "user", title: "x" })).toEqual(["talk"]);
+  it("root.talk static intents: includes talk", () => {
+    const paths = deriveRootIntentPaths("talk", {});
+    expect(paths).toContain("talk");
   });
 
-  it("removed legacy talk paths (talk_window has its own method paths)", () => {
-    // 旧 talk.fork / talk.continue / talk.thread_creator / talk.relation_update / talk.question_form
-    // 在 Step 2 后已下线；talk_window 上的 say/say.wait/wait/close 走 windows registry
-    const paths = deriveRootIntentPaths("talk", {
-      context: "continue",
-      target: "creator",
-      type: "relation_update",
-    });
-    expect(paths).toEqual(["talk"]);
+  it("root.do static intents: [do, do.wait]", () => {
+    expect(deriveRootIntentPaths("do", {})).toEqual(expect.arrayContaining(["do", "do.wait"]));
   });
 
-  it("root.do paths in new model: only do and do.wait (continue moved to do_window)", () => {
-    expect(deriveRootIntentPaths("do", { msg: "x" })).toEqual(["do"]);
-    expect(deriveRootIntentPaths("do", { msg: "x", wait: true })).toEqual([
-      "do",
-      "do.wait",
-    ]);
-  });
-
-  it("should keep program paths consistent with method docs", () => {
-    expect(deriveRootIntentPaths("program", { language: "ts" })).toEqual([
-      "program",
-      "program.typescript"
-    ]);
-    expect(deriveRootIntentPaths("program", { language: "js" })).toEqual([
-      "program",
-      "program.javascript"
-    ]);
+  it("program static intents include program.shell/typescript/javascript", () => {
+    const paths = deriveRootIntentPaths("program", {});
+    expect(paths).toContain("program");
+    expect(paths).toContain("program.shell");
+    expect(paths).toContain("program.typescript");
+    expect(paths).toContain("program.javascript");
   });
 
   it("should return empty array for unknown method", () => {
@@ -143,32 +110,21 @@ describe("executable methods", () => {
     expect(paths).toEqual([]);
   });
 
-  it("should derive todo reminder paths from args", () => {
-    expect(deriveRootIntentPaths("todo", { content: "补测试" })).toEqual(["todo"]);
-    expect(deriveRootIntentPaths("todo", { content: "补测试", activates_on: ["program"] })).toEqual([
-      "todo",
-      "todo.activates_on"
-    ]);
+  it("todo static intents include todo.activates_on", () => {
+    const paths = deriveRootIntentPaths("todo", {});
+    expect(paths).toContain("todo");
+    expect(paths).toContain("todo.activates_on");
   });
 
-  it("should expose dynamic program knowledge entries", () => {
-    expect(callKnowledge(programMethod, {}, "open")).toEqual(
-      expect.objectContaining({
-        "internal/executable/program/basic": expect.any(String),
-        "internal/executable/program/input": expect.any(String),
-      })
-    );
-    expect(
-      callKnowledge(programMethod, { language: "shell", code: "ls" }, "executing")["internal/executable/program/form-status"]
-    ).toContain("executing 状态的 form");
+  it("program onFormChange returns a tip string", () => {
+    const form = callFormChange(programMethod, {}, "open");
+    expect(typeof form.tip).toBe("string");
+    expect(form.tip!.length).toBeGreaterThan(5);
+    expect(Array.isArray(form.intents)).toBe(true);
   });
 
-  it("should describe program executing and failed knowledge without relying on inline form wording (Round 13)", () => {
-    expect(
-      callKnowledge(programMethod, { language: "shell", code: "ls" }, "executing")["internal/executable/program/form-status"]
-    ).toContain("对于 method program 的 executing 状态的 form");
-    expect(
-      callKnowledge(programMethod, { function: "readFile", args: { path: "a" } }, "failed")["internal/executable/program/form-status"]
-    ).toContain("对于 method program 的 failed 状态的 form");
+  it("program onFormChange returns quick_exec_submit when args are sufficient", () => {
+    const form = callFormChange(programMethod, { language: "shell", code: "ls" }, "open");
+    expect(form.quick_exec_submit).toBe(true);
   });
 });

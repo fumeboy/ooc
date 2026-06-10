@@ -101,7 +101,8 @@ describe("WindowManager.submit — P6.§3 self-type guard", () => {
         // 不带 args, 避免 auto-submit
       });
       expect(opened.autoSubmitted).toBe(false);
-      const formId = opened.formId;
+      const formId = opened.formId!;
+      expect(formId).toBeDefined();
 
       // 把 form re-target 到 talk_window：talk_window 没有 "edit" 方法
       const form = mgr.get(formId);
@@ -146,7 +147,7 @@ describe("WindowManager.submit — P6.§3 self-type guard", () => {
         const r = opened.submitResult;
         expect(r === undefined || !r.startsWith("[method-error]")).toBe(true);
       } else {
-        const r = await mgr.submit(opened.formId, thread);
+        const r = await mgr.submit(opened.formId!, thread);
         expect(r === undefined || !r.startsWith("[method-error]")).toBe(true);
       }
     } finally {

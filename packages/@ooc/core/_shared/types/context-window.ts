@@ -5,9 +5,9 @@
  * 设计依据：docs/superpowers/specs/2026-05-14-context-window-unification-design.md
  *
  * **分层说明（batch C 关键决策）：**
- * 完整的 `ContextObject` discriminated union（`RootWindow | MethodExecWindow | …`）
+ * 完整的 `ContextWindow` discriminated union（`RootWindow | MethodExecWindow | …`）
  * 依赖 builtins 各包的具体 window 类型，**无法**放进零依赖的 `_shared`。因此：
- * - 本文件只导出 base：`ContextObject = BaseContextWindow & { [k]: unknown }`，
+ * - 本文件只导出 base：`ContextWindow = BaseContextWindow & { [k]: unknown }`，
  *   够"只读 base 字段"的调用方（thread / registry / method ctx）使用。
  * - 完整 union 的 canonical 源仍是 `executable/windows/_shared/types.ts`——它 import
  *   本文件的 base 类型再拼装具体 window union（覆盖 base 版同名 export）。
@@ -59,7 +59,7 @@ export type WindowStatus =
   | "closed";
 
 /**
- * Why a ContextObject is present in context. Set by the mechanism that created the object.
+ * Why a ContextWindow is present in context. Set by the mechanism that created the window.
  * unset = legacy / unknown (treated as "explicit" for safety — won't be auto-unloaded).
  */
 export interface ContextWindowProvenance {
@@ -80,7 +80,7 @@ export interface ContextWindowProvenance {
 }
 
 /**
- * Semantic importance of a ContextObject, used by BudgetManager for overflow decisions.
+ * Semantic importance of a ContextWindow, used by BudgetManager for overflow decisions.
  * unset = computed at render time from defaults.
  */
 export interface ContextWindowRelevance {
@@ -90,12 +90,12 @@ export interface ContextWindowRelevance {
 }
 
 /**
- * 所有 ContextObject 共享的字段。
+ * 所有 ContextWindow 共享的字段。
  *
  * - id：全局唯一稳定 ID（root 固定为 "root"，其它类型用 generateWindowId）
  * - parentWindowId：method_exec 必有 parent；其它类型不显式挂 parent 时默认在 root 下
  * - title：所有 window 强制必填
- * - windowKnowledgePaths：本 object 自身关联的 knowledge path（用于 close 时释放引用计数）
+ * - windowKnowledgePaths：本 window 自身关联的 knowledge path（用于 close 时释放引用计数）
  * - sharing：跨 thread 共享状态；缺省 = 该 thread 独占持有（owner，可正常操作）
  */
 export interface BaseContextWindow {
@@ -117,7 +117,7 @@ export interface BaseContextWindow {
    */
   compressLevel?: 0 | 1 | 2;
   /**
-   * P6.§7 (2026-06-02): 该 object 的"有效可见渲染类型"——沿 parentClass 继承链回退后
+   * P6.§7 (2026-06-02): 该 window 的"有效可见渲染类型"——沿 parentClass 继承链回退后
    * 首个能被前端 ContextSnapshotViewer 渲染的 type。
    *
    * undefined = 未计算或回退到原始 type。
@@ -139,10 +139,15 @@ export interface BaseContextWindow {
    * 与 isVolatileDerivedWindow 同类「不持久化」语义，但 self 门面非 derived，单列标记。
    */
   isSelfWindow?: boolean;
+  /**
+   * Plain-string tip set by onFormChange. Only present on method_exec windows.
+   * Rendered directly on the form; replaces the old guidance-window machinery.
+   */
+  tip?: string;
 }
 
 /**
- * 跨 thread 共享 ContextObject 的状态。
+ * 跨 thread 共享 ContextWindow 的状态。
  *
  * - kind="ref"：我（当前 thread）持有的是只读 ref；snapshot 是分享时刻的 freeze。
  * - kind="lent_out"：我曾是 owner，已把 owner 移交给 borrowerThreadId。
@@ -153,14 +158,14 @@ export type SharingState =
       ownerThreadId: string;
       lentByWindowId: string;
       sharedAt: number;
-      snapshot: ContextObject;
+      snapshot: ContextWindow;
     }
   | {
       kind: "lent_out";
       borrowerThreadId: string;
       lentToWindowId: string;
       sharedAt: number;
-      snapshot: ContextObject;
+      snapshot: ContextWindow;
     };
 
 /**
@@ -170,6 +175,9 @@ export type SharingState =
  * plain text `content` payload (the guidance text) and is always bound to a
  * specific form via `boundFormId`. Rendered as <guidance> children inside the
  * owning form's window block.
+ *
+ * @deprecated 2026-06-10: replaced by MethodExecWindow.tip (plain string on the form).
+ * Kept for backward compat while callers migrate.
  */
 export interface GuidanceWindow extends BaseContextWindow {
   type: "guidance";
@@ -182,15 +190,18 @@ export interface GuidanceWindow extends BaseContextWindow {
 }
 
 /**
- * ContextObject —— **base 版**（batch C6 分层决策）。
+ * ContextWindow —— **base 版**（batch C6 分层决策，2026-06-10 正名为 ContextWindow）。
  *
  * 零依赖层只能表达"所有 window 至少有 BaseContextWindow 字段 + 任意扩展字段"。
  * 完整 discriminated union 在 `executable/windows/_shared/types.ts` 覆盖此 export。
  */
-export type ContextObject = BaseContextWindow;
+export type ContextWindow = BaseContextWindow;
 
-/** ContextWindow — 历史别名（pre-rename 名称），= ContextObject。 */
-export type ContextWindow = ContextObject;
+/**
+ * ContextObject — 旧名（pre-rename 别名），= ContextWindow。
+ * @deprecated Use ContextWindow.
+ */
+export type ContextObject = ContextWindow;
 
 /** Root object 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";

@@ -10,7 +10,7 @@
 
 import { builtinRegistry, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
 import type { ObjectMethod } from "../_shared/method-types.js";
-import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { MethodCallSchema } from "../../../thinkable/context/intent.js";
 import {
   ROOT_WINDOW_ID,
   creatorWindowIdOf,
@@ -19,7 +19,6 @@ import {
   type SharingState,
 } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
-import type { BaseContextWindow } from "@ooc/core/_shared";
 import type { ThreadPersistenceRef } from "../../../persistable/common.js";
 import { continueMethod } from "./method.continue.js";
 import { waitMethod } from "./method.wait.js";
@@ -181,61 +180,8 @@ function onCloseDoWindow(ctx: OnCloseContext): boolean | void {
 
 // ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
 
-const DO_CONSTRUCTOR_BASIC = "internal/objects/do/constructor/basic";
-const DO_CONSTRUCTOR_INPUT = "internal/objects/do/constructor/input";
-
-const DO_CONSTRUCTOR_KNOWLEDGE = `
-do 用于在当前对象内部派生子线程，并在父线程下产生一个 do_window 用于后续与子线程交互。
-
-参数：
-- msg: 必填，写入子线程 inbox 的初始消息
-- wait: 可选，true 时父线程立刻进入 waiting，等子线程回写消息再唤醒
-- share_windows: 可选，要在子线程创建时一并分享的 windows 列表，每条形如
-  { window_id: "<id>", mode: "ref" | "move" }；ref = 只读 snapshot；move = 移交所有权
-  内部展开为多次 do_window.move 命令；之后还可以随时通过 do_window.move 继续分享/归还
-
-示例：
-exec(method="do", title="处理告警", args={ msg: "请检查 ERROR 日志", wait: true })
-exec(method="do", title="一起读 file_x", args={
-  msg: "看 file_x 第 100-200 行",
-  share_windows: [{ window_id: "w_file_abc", mode: "ref" }]
-})
-
-submit 后：
-- 子线程创建并 running；初始消息进 child inbox
-- 父线程下挂 do_window（type=do, targetThreadId=<childId>）
-- 后续追加消息：exec(window_id="<do_window_id>", method="continue", args={ msg: "..." })
-- 后续分享 window：exec(window_id="<do_window_id>", method="move", args={ window_id, mode })
-- 关闭对话：close(window_id="<do_window_id>")（子线程会被标记 archived；borrowed owner 自动归还）
-`.trim();
-
-function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
-  const sourceId = (form as MethodExecWindow).method;
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
+const DO_CONSTRUCTOR_TIP = `do 在当前对象内派生子线程，父线程下挂 do_window。
+参数：msg（必填，子线程初始消息）、wait（可选，true 时父线程等待子线程回写）、share_windows（可选，初始分享的 windows）。`;
 
 function generateThreadId(): string {
   return `t_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -391,7 +337,8 @@ function applyInitialShare(
  */
 const doConstructor: ObjectMethod = {
   kind: "constructor",
-  paths: ["do", "do.wait"],
+  description: "Fork a child thread with an initial message; produces a do_window for interaction.",
+  intents: ["do.wait"],
   permission: () => "allow",
   schema: {
     args: {
@@ -400,26 +347,15 @@ const doConstructor: ObjectMethod = {
       share_windows: { type: "array", required: false, description: '要在子线程创建时一并分享的 windows 列表，每条形如 { window_id: "<id>", mode: "ref" | "move" }' },
     },
   } as MethodCallSchema,
-  intent: (args): Intent[] => {
-    const hit: Intent[] = [];
-    if (args.wait === true) hit.push({ name: "do.wait" });
-    return hit;
-  },
   onFormChange(change, { form }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = {
-      [DO_CONSTRUCTOR_BASIC]: DO_CONSTRUCTOR_KNOWLEDGE,
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const intents = args.wait === true ? [{ name: "do.wait" }] : [{ name: "do" }];
+    const hasMsg = typeof args.msg === "string" && args.msg.trim().length > 0;
+    return {
+      tip: hasMsg ? "Forking child thread..." : DO_CONSTRUCTOR_TIP,
+      intents,
+      quick_exec_submit: hasMsg,
     };
-    if (formStatus === "open" && (typeof args.msg !== "string" || args.msg.trim().length === 0)) {
-      entries[DO_CONSTRUCTOR_INPUT] =
-        "do 还缺以下参数: msg。\n" +
-        "请用 refine(form_id, args={ msg: \"<给子线程的初始消息>\", wait: true|false }) 补齐后 submit(form_id)。\n" +
-        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
-    }
-    return guidanceWindows(form, entries);
   },
   exec: async (ctx) => {
     const parent = ctx.thread;
@@ -510,7 +446,7 @@ const doConstructor: ObjectMethod = {
       }
     }
 
-    return { ok: true, object: doWindow };
+    return { ok: true, window: doWindow };
   },
 };
 

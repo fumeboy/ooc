@@ -19,7 +19,7 @@ import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { objectDir, toJson, type FlowObjectRef } from "./common";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
-import type { ContextObject } from "../executable/windows/_shared/types.js";
+import type { ContextWindow } from "../executable/windows/_shared/types.js";
 
 /** runtime object 状态文件路径 = `{objectDir(ref)}/state.json`。 */
 export function runtimeObjectStateFile(ref: FlowObjectRef): string {
@@ -40,7 +40,7 @@ export function runtimeObjectStateFile(ref: FlowObjectRef): string {
  */
 export async function writeRuntimeObjectState(
   ref: FlowObjectRef,
-  state: ContextObject,
+  state: ContextWindow,
 ): Promise<void> {
   const file = runtimeObjectStateFile(ref);
   // P6.§6: strip contextWindows — 写 state.json 只保留 object 自身字段。
@@ -60,12 +60,12 @@ export async function writeRuntimeObjectState(
  * 结果 state（object 维度）和 context（thread 维度）混在一起。新布局下
  * contextWindows 改写到 `<oid>/threads/<tid>/context.json`；这里负责守门。
  */
-function stripContextWindowsField(state: ContextObject): ContextObject {
+function stripContextWindowsField(state: ContextWindow): ContextWindow {
   if (!("contextWindows" in (state as object))) return state;
-  const { contextWindows: _drop, ...rest } = state as ContextObject & {
+  const { contextWindows: _drop, ...rest } = state as ContextWindow & {
     contextWindows?: unknown;
   };
-  return rest as ContextObject;
+  return rest as ContextWindow;
 }
 
 /**
@@ -75,7 +75,7 @@ function stripContextWindowsField(state: ContextObject): ContextObject {
  */
 export async function readRuntimeObjectState(
   ref: FlowObjectRef,
-): Promise<ContextObject | undefined> {
+): Promise<ContextWindow | undefined> {
   const file = runtimeObjectStateFile(ref);
   let raw: string;
   try {
@@ -84,7 +84,7 @@ export async function readRuntimeObjectState(
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
-  return JSON.parse(raw) as ContextObject;
+  return JSON.parse(raw) as ContextWindow;
 }
 
 /**
@@ -111,7 +111,7 @@ export async function deleteRuntimeObject(ref: FlowObjectRef): Promise<void> {
  */
 export async function createRuntimeObject(
   ref: FlowObjectRef,
-  state: ContextObject,
+  state: ContextWindow,
 ): Promise<void> {
   await writeRuntimeObjectState(ref, state);
 }

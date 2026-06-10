@@ -1,72 +1,36 @@
 /**
  * root.open_knowledge method — 委托到 knowledge_window constructor。
- *
- * 2026-06-02 P6.§4-§5: 历史 root.open_knowledge 的构造逻辑（path 校验 + KnowledgeWindow build）
- * 已迁到 packages/@ooc/builtins/knowledge/executable/index.ts 的 kind="constructor" knowledge method。
- * 这里保留 root method 表项（knowledge / paths）；exec 走 lookupConstructor("knowledge") 委托。
  */
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
-import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
-import { emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
 
-// 2026-06-02 P6.§4-§5: side-effect import 触发 knowledge_window constructor 注册
 import "@ooc/builtins/knowledge";
 
-const OPEN_KNOWLEDGE_BASIC_PATH = "internal/executable/open_knowledge/basic";
-const OPEN_KNOWLEDGE_INPUT_PATH = "internal/executable/open_knowledge/input";
-
-const KNOWLEDGE = `
-open_knowledge 用于显式打开一个 knowledge doc，作为 knowledge_window 持续可见。
-
-参数：
-- path: 必填，knowledge 索引中的路径（不带 .md，例如 "build-tools/file-ops"）
-
-打开后该 knowledge 会强制以 full 形式渲染（绕过 activator 的 method-path 命中规则），
-直到显式 close。等价于旧 pinnedKnowledge。
-
-后续：
-- 关闭：close(window_id="<knowledge_window_id>")
-
-调用示例：
-open(method="open_knowledge", title="pin file-ops", args={ path: "build-tools/file-ops" })
-`.trim();
-
+const OPEN_KNOWLEDGE_TIP = `open_knowledge 显式打开一个 knowledge doc，作为 knowledge_window 持续可见（等价于 pinnedKnowledge）。
+参数：path（必填，knowledge 索引中的路径，不带 .md）。`;
 
 export const openKnowledgeMethod: ObjectMethod = {
-  paths: ["open_knowledge"],
+  description: "Pin a knowledge doc by path so it stays visible in context.",
+  intents: ["open_knowledge"],
   schema: {
     args: {
       path: { type: "string", required: true, description: "knowledge 索引中的路径（不带 .md）" },
     },
-  } as MethodCallSchema,
-  intent: emptyIntent,
-  onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 在契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs（runtime 保证此 form 即 method_exec form）。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = { [OPEN_KNOWLEDGE_BASIC_PATH]: KNOWLEDGE };
-    if (formStatus !== "open") return buildGuidanceWindows(form, entries);
-    const path = typeof args.path === "string" ? args.path : "";
-    if (!path) {
-      entries[OPEN_KNOWLEDGE_INPUT_PATH] =
-        "open_knowledge 还缺以下参数: path。\n" +
-        "请用 refine(form_id, args={ path: \"<knowledge-doc-path-不带.md>\" }) 补齐后 submit(form_id)。\n" +
-        "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
-    }
-    return buildGuidanceWindows(form, entries);
+  },
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasPath = typeof args.path === "string" && args.path.length > 0;
+    return {
+      tip: hasPath ? `Opening knowledge ${args.path}...` : OPEN_KNOWLEDGE_TIP,
+      intents: [{ name: "open_knowledge" }],
+      quick_exec_submit: hasPath,
+    };
   },
   exec: (ctx) => executeOpenKnowledgeMethod(ctx),
 };
 
-/**
- * P6.§4-§5 thin delegator —— 委托到 knowledge_window constructor。
- */
 export const executeOpenKnowledgeMethod = makeRootDelegator({
   method: "open_knowledge",
   constructorKind: "knowledge",

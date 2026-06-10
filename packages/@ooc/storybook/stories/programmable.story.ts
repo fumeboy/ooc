@@ -49,12 +49,12 @@ export async function runControlPlane(): Promise<StoryResult> {
       const id = "cmd_demo";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { greet: { paths: ["greet"], intent: () => [], exec: async () => ({ reply: "hi" }) } } };\nexport const ui_methods = {};`);
+        `export const window = { methods: { greet: { description: "greet", intents: ["greet"], exec: async () => ({ reply: "hi" }) } } };\nexport const ui_methods = {};`);
       const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
       const win = await loadObjectWindow({ baseDir, objectId: id });
-      const ok = !!win?.methods?.greet && JSON.stringify(win?.methods?.greet?.paths) === JSON.stringify(["greet"]);
+      const ok = !!win?.methods?.greet && JSON.stringify(win?.methods?.greet?.intents) === JSON.stringify(["greet"]);
       rec.ok("TC-PROG-03", "window.commands（LLM 路径自定义命令）经 loader 加载", ok,
-        `hasGreet=${!!win?.methods?.greet}, paths=${JSON.stringify(win?.methods?.greet?.paths)}`);
+        `hasGreet=${!!win?.methods?.greet}, intents=${JSON.stringify(win?.methods?.greet?.intents)}`);
     }
 
     // TC-PROG-04: 热更新 —— 改 executable 后已有方法变更 + 新增方法立即生效

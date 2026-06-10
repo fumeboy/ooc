@@ -7,8 +7,8 @@
  *
  * 设计来源：docs/2026-06-08-window-visible-render-and-readable-window-method-design.md Part 2。
  */
-import type { MethodExecutionContext } from "./method.js";
-import type { ContextObject } from "./context-window.js";
+import type { MethodExecutionContext, MethodExecuteForm } from "./method.js";
+import type { ContextWindow } from "./context-window.js";
 import type { Intent, FormChangeEvent, MethodCallSchema } from "./intent.js";
 import type { WindowDisplayState } from "./window-state.js";
 
@@ -29,17 +29,25 @@ export type WindowMethodOutcome =
 /**
  * Window method 定义 —— 控制 window 展示（viewport 等），归 readable 维度。
  * 与 ObjectMethod（控制 object 业务数据，归 executable）物理分离、函数签名不同。
+ *
+ * 2026-06-10: 同步 ObjectMethod API 重构 —— 新增 description、paths→intents、
+ * intent() 合并到 onFormChange 返回 MethodExecuteForm。
  */
 export interface WindowMethod {
   kind?: "window";
-  /** 该 method 可能产出的所有 path 集合（用于反向索引建表 + 文档目录）。 */
-  paths: string[];
+  /** LLM-facing short description. Required. */
+  description: string;
+  /** Static catalog of sub-intent names; optional. */
+  intents?: string[];
   permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
-  intent(args: Record<string, unknown>): Intent[];
+  /**
+   * Called on form lifecycle / args changes. Returns MethodExecuteForm (tip + intents + quick_exec_submit).
+   * If omitted, no form is created and exec fires directly.
+   */
   onFormChange?(
     change: FormChangeEvent,
-    ctx: { form: ContextObject; intents: Intent[] },
-  ): ContextObject[];
+    ctx: { form: ContextWindow; intents: Intent[] },
+  ): MethodExecuteForm;
   schema?: MethodCallSchema;
   /** 不同于 ObjectMethod.exec：额外接收 ctx.windowState，返回新 state。 */
   exec: (

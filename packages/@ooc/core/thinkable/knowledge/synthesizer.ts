@@ -27,12 +27,6 @@ import { SUPER_ALIAS_TARGET } from "../../executable/windows/_shared/super-const
 import { loadObjectWindow } from "../../runtime/server-loader.js";
 import type { StoneObjectDeclaration } from "../../executable/object/object-types.js";
 
-// ── Re-exports moved to window-enrichment.ts (kept for importer stability) ──
-export {
-  computeFormKnowledgeEntries,
-  enrichFormMethodKnowledge,
-} from "../context/window-enrichment.js";
-
 /**
  * 确保 `_builtin/<id>` 框架 class 已注册进 registry（供 instance 的 parentClass 链解析）。
  *

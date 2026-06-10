@@ -161,12 +161,12 @@ describe("executeProgramMethod creates a program_window with first exec", () => 
       thread,
       args: { language: "shell", code: "echo hello" },
     });
-    // P6.§4-§5: root.program 是 constructor 委托——返回 {ok:true, object: programWindow}
+    // P6.§4-§5: root.program 是 constructor 委托——返回 {ok:true, window: programWindow}
     expect(result).toBeDefined();
     expect(typeof result).toBe("object");
-    const outcome = result as { ok: true; object: ProgramWindow };
+    const outcome = result as { ok: true; window: ProgramWindow };
     expect(outcome.ok).toBe(true);
-    const win = outcome.object;
+    const win = outcome.window;
     expect(win.type).toBe("program");
     expect(win.history).toHaveLength(1);
     expect(win.history[0]?.output).toContain("hello");

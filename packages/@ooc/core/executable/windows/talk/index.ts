@@ -11,7 +11,7 @@
 
 import { builtinRegistry, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
 import type { ObjectMethod } from "../_shared/method-types.js";
-import type { Intent, MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { MethodCallSchema } from "../../../thinkable/context/intent.js";
 import { stat } from "node:fs/promises";
 import { stoneDir } from "../../../persistable/index.js";
 import { SUPER_ALIAS_TARGET } from "../_shared/super-constants.js";
@@ -21,7 +21,6 @@ import {
   type ContextWindow,
 } from "../_shared/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
-import type { BaseContextWindow } from "@ooc/core/_shared";
 import { sayMethod } from "./method.say.js";
 import { waitMethod } from "./method.wait.js";
 import { closeMethod } from "./method.close.js";
@@ -216,59 +215,8 @@ function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
 
 // ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
 
-const TALK_CONSTRUCTOR_BASIC = "internal/objects/talk/constructor/basic";
-const TALK_CONSTRUCTOR_INPUT = "internal/objects/talk/constructor/input";
-
-const TALK_CONSTRUCTOR_KNOWLEDGE = `
-talk 用于开启一个对外的会话窗口（talk_window），与另一个 flow object 持续会话。
-
-参数：
-- target: 必填，目标 flow object 的 objectId（"user" 也是一个 flow object）
-- title: 必填，本会话的简短主题（同一 caller 多窗口区分用）
-
-submit 后副作用：
-- 在 thread.contextWindows 下挂一个 type=talk 的 window（初始 targetThreadId 为空）
-- 首次发消息：open(parent_window_id="<talk_window_id>", method="say", args={ msg: "...", wait: true|false })
-  - 若 callee thread 尚未存在，系统会在 flows/{sid}/objects/{target}/threads/ 下创建一条
-  - 同时把消息追加到 callee.inbox + caller.outbox，callee 自动进入 running 等待 worker 调度
-- 等待回复：open(parent_window_id="<talk_window_id>", method="wait", args={})
-- 关闭窗口：close(window_id="<talk_window_id>", reason="...")
-
-**重要：talk_window 是持续会话窗口，应该复用。**
-- 同一个 target 在同一个 thread 内只需要一个 talk_window；后续消息全部从同一个 talk_window 的 say 走
-- 不要每发一条消息就 close，再下一轮 open 一个新的——这会丢失 conversation 关联，并产生大量噪声 window
-- 仅当与该对象的对话真正结束、明确不再需要回复时才 close
-
-允许同时打开多个 talk_window 来并行维护**不同 target / 不同主题**（不是为了重复同一对话）。
-`.trim();
-
-function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
-  const sourceId = (form as MethodExecWindow).method;
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
+const TALK_CONSTRUCTOR_TIP = `talk 开启一个对外的持续会话 talk_window（同一 target 复用同一 talk_window）。
+参数：target（必填，目标 objectId，"user" 也是）、title（必填，会话主题）。`;
 
 function deriveTalkTitle(raw: string, max = 60): string {
   const trimmed = raw.trim();
@@ -288,37 +236,25 @@ function deriveTalkTitle(raw: string, max = 60): string {
  */
 const talkConstructor: ObjectMethod = {
   kind: "constructor",
-  paths: ["talk"],
+  description: "Open a persistent talk_window to another flow object (or user).",
+  intents: ["talk"],
   permission: () => "allow",
   schema: {
     args: {
       target: { type: "string", required: true, description: '目标 flow object 的 objectId（"user" 也是一个 flow object）' },
-      title: { type: "string", required: true, description: "本会话的简短主题（同一 caller 多窗口区分用）" },
+      title: { type: "string", required: true, description: "本会话的简短主题" },
     },
   } as MethodCallSchema,
-  intent: (): Intent[] => [],
   onFormChange(change, { form }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = {
-      [TALK_CONSTRUCTOR_BASIC]: TALK_CONSTRUCTOR_KNOWLEDGE,
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const target = typeof args.target === "string" ? args.target.trim() : "";
+    const title = typeof args.title === "string" ? args.title.trim() : "";
+    const ready = Boolean(target && title);
+    return {
+      tip: ready ? `Opening talk to ${target}...` : TALK_CONSTRUCTOR_TIP,
+      intents: [{ name: "talk" }],
+      quick_exec_submit: ready,
     };
-    if (formStatus === "open") {
-      const target = typeof args.target === "string" ? args.target.trim() : "";
-      const title = typeof args.title === "string" ? args.title.trim() : "";
-      if (!target || !title) {
-        const missing: string[] = [];
-        if (!target) missing.push("target");
-        if (!title) missing.push("title");
-        entries[TALK_CONSTRUCTOR_INPUT] =
-          `talk 还缺以下参数: ${missing.join(", ")}。\n` +
-          "请用 refine(form_id, args={ target: \"<objectId>\", title: \"<会话主题>\" }) 补齐后 submit(form_id)。\n" +
-          "不要 close 重 open——form 当前在 open 状态, refine 是正确路径。";
-      }
-    }
-    return guidanceWindows(form, entries);
   },
   exec: async (ctx) => {
     const thread = ctx.thread;
@@ -357,7 +293,7 @@ const talkConstructor: ObjectMethod = {
       conversationId: id,
       state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
     };
-    return { ok: true, object: talkWindow };
+    return { ok: true, window: talkWindow };
   },
 };
 

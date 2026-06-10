@@ -3,8 +3,7 @@ import type { WindowMethod, WindowMethodOutcome } from "../_shared/types/window-
 
 test("WindowMethod exec receives windowState and returns new state", async () => {
   const m: WindowMethod = {
-    paths: ["set_viewport"],
-    intent: () => [],
+    description: "test method", intents: ["set_viewport"],
     exec: (ctx) => ({
       ok: true,
       state: {
@@ -23,8 +22,7 @@ test("WindowMethod exec receives windowState and returns new state", async () =>
 
 test("WindowMethod failure outcome carries error string", async () => {
   const m: WindowMethod = {
-    paths: ["set_viewport"],
-    intent: () => [],
+    description: "test method", intents: ["set_viewport"],
     exec: () => ({ ok: false, error: "bad input" }),
   };
   const out = await m.exec({ args: {}, windowState: {} });

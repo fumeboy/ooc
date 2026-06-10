@@ -5,8 +5,7 @@ import type { WindowMethod } from "../_shared/types/window-method.js";
 import { makeThread } from "./make-thread.js";
 
 const setViewport: WindowMethod = {
-  paths: ["set_viewport"],
-  intent: () => [],
+  description: "test method", intents: ["set_viewport"],
   exec: (ctx) => ({
     ok: true,
     state: {
@@ -23,8 +22,7 @@ const setViewport: WindowMethod = {
 };
 
 const failViewport: WindowMethod = {
-  paths: ["set_bad"],
-  intent: () => [],
+  description: "test method", intents: ["set_bad"],
   exec: () => ({ ok: false, error: "[file_window.set_bad] line_start > line_end" }),
 };
 

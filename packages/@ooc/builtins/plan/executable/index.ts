@@ -1,15 +1,5 @@
 /**
  * plan_window — 行动计划窗口 module。
- *
- * 见 docs/2026-05-26-remove-issue-add-subplan-design.md §3 /
- * meta/object.doc.ts:executable.children.context_window.children.plan_window
- *
- * 职责（与 file/talk/do 同协议）：
- * - types: PlanWindow / PlanWindowStep（已在 types.ts）
- * - commands: update_plan / add_step / update_step / expand_step / collapse_subplan / mark_done / close
- * - renderXml: live 完整渲染（title / description / steps 列表）
- * - compressView: level 1 / level 2 折叠态
- * - onClose: cascade close 所有 sub plan_window
  */
 
 import type {
@@ -20,98 +10,12 @@ import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
-  type ContextWindow,
 } from "@ooc/core/extendable/_shared/types.js";
 import type { PlanWindow, PlanWindowStep } from "../types.js";
-// readable 维度由 barrel index.ts 的 import "./readable.js" 加载（executable 不 import readable）。
 
-import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
-import { buildGuidanceWindows } from "@ooc/builtins/_shared/executable/guidance.js";
-import { isString, emptyIntent } from "@ooc/builtins/_shared/executable/utils.js";
-
-
-// ─────────────────────────── knowledge paths ──────────────────────────────────
-
-const PLAN_WINDOW_UPDATE_PLAN_BASIC = "internal/windows/plan/update_plan/basic";
-const PLAN_WINDOW_ADD_STEP_BASIC = "internal/windows/plan/add_step/basic";
-const PLAN_WINDOW_UPDATE_STEP_BASIC = "internal/windows/plan/update_step/basic";
-const PLAN_WINDOW_EXPAND_STEP_BASIC = "internal/windows/plan/expand_step/basic";
-const PLAN_WINDOW_COLLAPSE_SUBPLAN_BASIC = "internal/windows/plan/collapse_subplan/basic";
-const PLAN_WINDOW_MARK_DONE_BASIC = "internal/windows/plan/mark_done/basic";
-const PLAN_WINDOW_CLOSE_BASIC = "internal/windows/plan/close/basic";
-
-const UPDATE_PLAN_KNOWLEDGE = `
-plan_window.update_plan 修改 plan 的 title / description。
-
-参数（至少给一个）：
-- title: 可选，新 plan 标题
-- description: 可选，新 plan 说明
-
-示例：refine(form, args={ title: "重构 thinkable", description: "为 v2 做准备" })
-`.trim();
-
-const ADD_STEP_KNOWLEDGE = `
-plan_window.add_step 在 steps 末尾追加一个新 step。
-
-参数：
-- text: 必填，步骤描述
-- status: 可选，初始状态（默认 "pending"）；取值: pending / in-progress / done / blocked
-
-返回值会包含新 step 的 id，便于后续 update_step / expand_step 引用。
-`.trim();
-
-const UPDATE_STEP_KNOWLEDGE = `
-plan_window.update_step 修改某 step 的 text / status。
-
-参数：
-- step_id: 必填，目标 step id（add_step 创建时返回；或 renderXml 中可见）
-- text: 可选，新文本
-- status: 可选，新状态（pending / in-progress / done / blocked）
-
-至少给一个修改字段；step_id 不存在会返回错误。
-`.trim();
-
-const EXPAND_STEP_KNOWLEDGE = `
-plan_window.expand_step 把某 step 展开为 sub plan_window。
-
-参数：
-- step_id: 必填
-- title: 可选，sub plan 的 title；缺省 = 父 step 的 text
-- description: 可选，sub plan 的描述
-
-行为：
-- 创建一个新的 child plan_window，parentPlanWindowId = 当前 plan_window.id, parentStepId = step_id
-- 父 step.subPlanWindowId 写回为 child 的 id
-- 返回 child plan_window.id；LLM 可后续 exec(<child_id>, ...) 操作
-
-如果该 step 已经 expanded（subPlanWindowId 非空），返回错误，请先 collapse_subplan。
-`.trim();
-
-const COLLAPSE_SUBPLAN_KNOWLEDGE = `
-plan_window.collapse_subplan 反向操作：archive 某 step 关联的 sub plan_window，并清掉 step.subPlanWindowId。
-
-参数：
-- step_id: 必填
-
-执行后：
-- sub plan_window.status → "archived"
-- step.subPlanWindowId 清空
-- 不会 cascade 关闭 sub plan 的子树 plan（如有，留给后续手工 close）
-`.trim();
-
-const MARK_DONE_KNOWLEDGE = `
-plan_window.mark_done 把 plan_window.status 切到 "done"。
-
-不影响 steps 自身的 status；只是标记 plan 层"已完成"。完成后 plan_window 仍然存在于 context，
-直到 LLM 显式 close。
-`.trim();
-
-const CLOSE_KNOWLEDGE = `
-plan_window.close 关闭 plan_window；级联 close 所有 sub plan_window（onClose hook）。
-关闭后 window 从 context 移除，不影响其它 thread（如已通过 share 借出，参见 sharing 规则）。
-`.trim();
+import { isString } from "@ooc/builtins/_shared/executable/utils.js";
 
 // ─────────────────────────── helpers ──────────────────────────────────────────
 
@@ -126,19 +30,14 @@ function asStepStatus(v: unknown): PlanWindowStep["status"] | undefined {
   return (VALID_STEP_STATUS as Set<string>).has(v) ? (v as PlanWindowStep["status"]) : undefined;
 }
 
-/** 把 ctx.self 校验成 PlanWindow。
- *  P6.§3: manager 在 dispatch 阶段已保证 self.type === "plan"，本 helper 仅做类型 cast。 */
 function requirePlanWindow(ctx: MethodExecutionContext): PlanWindow {
   return ctx.self as PlanWindow;
 }
 
-/** 通过 manager 持久化更新（避免被 toData() 复原）；fallback 直接 mutate。 */
 function updatePlanWindow(ctx: MethodExecutionContext, next: PlanWindow): void {
   if (ctx.manager) {
-    // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager 取 upsertWindow。
     (ctx.manager as WindowManager).upsertWindow(next, ctx.thread);
   } else {
-    // fallback 路径：直接修改原 window 的字段（in-place）
     Object.assign(ctx.self as PlanWindow, next);
   }
 }
@@ -146,17 +45,21 @@ function updatePlanWindow(ctx: MethodExecutionContext, next: PlanWindow): void {
 // ─────────────────────────── commands ─────────────────────────────────────────
 
 const updatePlanMethod: ObjectMethod = {
-  paths: ["update_plan"],
+  description: "Update this plan's title or description.",
   schema: {
     args: {
       title: { type: "string", description: "新 plan 标题" },
       description: { type: "string", description: "新 plan 说明" },
     },
   },
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return buildGuidanceWindows(form, { [PLAN_WINDOW_UPDATE_PLAN_BASIC]: UPDATE_PLAN_KNOWLEDGE });
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasAny = isString(args.title) || isString(args.description);
+    return {
+      tip: hasAny ? "Updating plan..." : "update_plan: 至少提供 title 或 description 之一。",
+      intents: [{ name: "update_plan" }],
+      quick_exec_submit: hasAny,
+    };
   },
   exec: (ctx) => executeUpdatePlan(ctx),
 };
@@ -178,7 +81,7 @@ async function executeUpdatePlan(ctx: MethodExecutionContext): Promise<string | 
 }
 
 const addStepMethod: ObjectMethod = {
-  paths: ["add_step"],
+  description: "Append a new step to this plan.",
   schema: {
     args: {
       text: { type: "string", required: true, description: "步骤描述" },
@@ -189,10 +92,14 @@ const addStepMethod: ObjectMethod = {
       },
     },
   },
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return buildGuidanceWindows(form, { [PLAN_WINDOW_ADD_STEP_BASIC]: ADD_STEP_KNOWLEDGE });
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasText = isString(args.text) && args.text.trim().length > 0;
+    return {
+      tip: hasText ? "Adding step..." : "add_step: 需要 args.text（步骤描述）。",
+      intents: [{ name: "add_step" }],
+      quick_exec_submit: hasText,
+    };
   },
   exec: (ctx) => executeAddStep(ctx),
 };
@@ -213,7 +120,7 @@ async function executeAddStep(ctx: MethodExecutionContext): Promise<string | und
 }
 
 const updateStepMethod: ObjectMethod = {
-  paths: ["update_step"],
+  description: "Update a step's text or status.",
   schema: {
     args: {
       step_id: { type: "string", required: true, description: "目标 step id" },
@@ -225,10 +132,15 @@ const updateStepMethod: ObjectMethod = {
       },
     },
   },
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return buildGuidanceWindows(form, { [PLAN_WINDOW_UPDATE_STEP_BASIC]: UPDATE_STEP_KNOWLEDGE });
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasStepId = isString(args.step_id);
+    const hasField = isString(args.text) || args.status !== undefined;
+    return {
+      tip: hasStepId && hasField ? "Updating step..." : "update_step: 需要 step_id 以及 text 或 status。",
+      intents: [{ name: "update_step" }],
+      quick_exec_submit: hasStepId && hasField,
+    };
   },
   exec: (ctx) => executeUpdateStep(ctx),
 };
@@ -258,7 +170,7 @@ async function executeUpdateStep(ctx: MethodExecutionContext): Promise<string | 
 }
 
 const expandStepMethod: ObjectMethod = {
-  paths: ["expand_step"],
+  description: "Expand a step into its own sub plan_window.",
   schema: {
     args: {
       step_id: { type: "string", required: true, description: "目标 step id" },
@@ -266,10 +178,14 @@ const expandStepMethod: ObjectMethod = {
       description: { type: "string", description: "sub plan 的描述" },
     },
   },
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return buildGuidanceWindows(form, { [PLAN_WINDOW_EXPAND_STEP_BASIC]: EXPAND_STEP_KNOWLEDGE });
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasStepId = isString(args.step_id);
+    return {
+      tip: hasStepId ? "Expanding step..." : "expand_step: 需要 args.step_id。",
+      intents: [{ name: "expand_step" }],
+      quick_exec_submit: hasStepId,
+    };
   },
   exec: (ctx) => executeExpandStep(ctx),
 };
@@ -302,15 +218,12 @@ async function executeExpandStep(ctx: MethodExecutionContext): Promise<string | 
     parentStepId: stepId,
   };
 
-  // 父 step 写回 subPlanWindowId
   const nextSteps = w.steps.slice();
   nextSteps[idx] = { ...cur, subPlanWindowId: childId };
   const nextParent: PlanWindow = { ...w, steps: nextSteps };
 
-  // 落地：父更新 + 子插入
   updatePlanWindow(ctx, nextParent);
   if (ctx.manager) {
-    // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager 取 insertTypedWindow。
     (ctx.manager as WindowManager).insertTypedWindow(child, ctx.thread);
   } else {
     ctx.thread.contextWindows = [...(ctx.thread.contextWindows ?? []), child];
@@ -319,18 +232,19 @@ async function executeExpandStep(ctx: MethodExecutionContext): Promise<string | 
 }
 
 const collapseSubplanMethod: ObjectMethod = {
-  paths: ["collapse_subplan"],
+  description: "Collapse a step's expanded sub plan back into the step.",
   schema: {
     args: {
       step_id: { type: "string", required: true, description: "目标 step id" },
     },
   },
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return buildGuidanceWindows(form, {
-      [PLAN_WINDOW_COLLAPSE_SUBPLAN_BASIC]: COLLAPSE_SUBPLAN_KNOWLEDGE,
-    });
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    return {
+      tip: isString(args.step_id) ? "Collapsing subplan..." : "collapse_subplan: 需要 args.step_id。",
+      intents: [{ name: "collapse_subplan" }],
+      quick_exec_submit: isString(args.step_id),
+    };
   },
   exec: (ctx) => executeCollapseSubplan(ctx),
 };
@@ -348,23 +262,18 @@ async function executeCollapseSubplan(ctx: MethodExecutionContext): Promise<stri
   }
   const childId = cur.subPlanWindowId;
 
-  // 清 step.subPlanWindowId
   const nextSteps = w.steps.slice();
   nextSteps[idx] = { ...cur, subPlanWindowId: undefined };
   const nextParent: PlanWindow = { ...w, steps: nextSteps };
   updatePlanWindow(ctx, nextParent);
 
-  // sub plan 切到 archived（不删，保留历史可见）
   const all = ctx.thread.contextWindows ?? [];
   const childIdx = all.findIndex((c) => c.id === childId);
   if (childIdx >= 0) {
-    // batch C narrowing(N1): contextWindows 元素契约层是 base；type==="plan" 守卫后
-    // narrow 回 PlanWindow 以 spread 出含 steps 的完整 PlanWindow。
     const child = all[childIdx]!;
     if (child.type === "plan") {
       const archivedChild: PlanWindow = { ...(child as PlanWindow), status: "archived" };
       if (ctx.manager) {
-        // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager。
         (ctx.manager as WindowManager).upsertWindow(archivedChild, ctx.thread);
       } else {
         const nextAll = all.slice();
@@ -377,12 +286,7 @@ async function executeCollapseSubplan(ctx: MethodExecutionContext): Promise<stri
 }
 
 const markDoneMethod: ObjectMethod = {
-  paths: ["mark_done"],
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return buildGuidanceWindows(form, { [PLAN_WINDOW_MARK_DONE_BASIC]: MARK_DONE_KNOWLEDGE });
-  },
+  description: "Mark this plan as done.",
   exec: (ctx) => executeMarkDone(ctx),
 };
 
@@ -394,37 +298,14 @@ async function executeMarkDone(ctx: MethodExecutionContext): Promise<string | un
 }
 
 const closeMethod: ObjectMethod = {
-  paths: ["close"],
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return buildGuidanceWindows(form, { [PLAN_WINDOW_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
-  },
-  exec: () => undefined, // cascade 关闭由 onClose hook + WindowManager.close 自带级联完成
+  description: "Close this plan window (cascades to sub plans).",
+  exec: () => undefined,
 };
-
-// ─────────────────────────── render ──────────────────────────────────────────
-// plan_window 的 readable 维度（readable + compressView + onClose + basicKnowledge）已迁出到 ../readable.ts。
 
 // ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
 
-const PLAN_CONSTRUCTOR_BASIC = "internal/objects/plan/constructor/basic";
-const PLAN_CONSTRUCTOR_INPUT = "internal/objects/plan/constructor/input";
-
-const PLAN_CONSTRUCTOR_KNOWLEDGE = `
-plan 用于把当前任务拆成可执行步骤，并以 plan_window 形式持久挂在 context。
-
-调用形态:
-- 简单文本: open(method="plan", title="制定计划", args={ plan: "<计划描述>" })
-  → 创建一个 root plan_window（无 parentPlanWindowId），title 默认 "Plan"，description=<text>，steps=[]
-- 完整指定: open(method="plan", args={ title: "...", description?: "...", steps?: [{ id?, text, status? }, ...] })
-  → 完整创建 root plan_window
-
-创建之后:
-- 后续可通过 exec(<plan_window_id>, "add_step", args={ text: "..." }) 追加 step
-- 也可通过 exec(<plan_window_id>, "expand_step", args={ step_id }) 把 step 展开为 sub plan
-- 跨 thread 共享: do(task=..., share_windows=[<plan_window_id>]) 把 plan 借给子 thread
-`.trim();
+const PLAN_TIP = `plan 把当前任务拆成可执行步骤，以 plan_window 挂在 context。
+参数（任一即可）：plan（简单文本）、title/description、steps（数组）。`;
 
 function constructorHasAnyInput(args: Record<string, unknown>): boolean {
   return (
@@ -450,24 +331,10 @@ function normalizeStepsInput(input: unknown): PlanWindowStep[] | undefined {
   return out;
 }
 
-/**
- * P6.§4-§5 constructor —— 创建 root plan_window。
- *
- * 职责:
- *  - 校验 args (plan / title / description / steps 至少一项)
- *  - generateWindowId("plan")，build PlanWindow literal (无 parentPlanWindowId == root plan)
- *  - 返回 { ok: true, object } —— manager.submit's §2 分支调用 insertTypedWindow 挂载
- *
- * args 接受:
- *  - { plan: "<text>" } —— 简单文本，落入 description
- *  - { title?, description?, steps?: PlanWindowStep[] } —— 完整指定
- *
- * 注意: 与旧 root.plan 不同,不再 idempotent 更新已存在 root plan_window;
- * 每次调用都创建一个新的 plan_window。LLM 想改既有 plan 用 update_plan。
- */
 const planConstructor: ObjectMethod = {
   kind: "constructor",
-  paths: ["plan"],
+  description: "Create a plan window breaking a task into actionable steps.",
+  intents: ["plan"],
   schema: {
     args: {
       plan: { type: "string", description: "简单文本（落入 description）；与 title/description/steps 二选一" },
@@ -476,21 +343,14 @@ const planConstructor: ObjectMethod = {
       steps: { type: "array", description: "steps 数组 [{id?, text, status?}, ...]" },
     },
   },
-  intent: emptyIntent,
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = {
-      [PLAN_CONSTRUCTOR_BASIC]: PLAN_CONSTRUCTOR_KNOWLEDGE,
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasInput = constructorHasAnyInput(args);
+    return {
+      tip: hasInput ? "Creating plan..." : PLAN_TIP,
+      intents: [{ name: "plan" }],
+      quick_exec_submit: hasInput,
     };
-    if (formStatus === "open" && !constructorHasAnyInput(args)) {
-      entries[PLAN_CONSTRUCTOR_INPUT] =
-        "plan 还缺以下参数: plan 文本 (或 title / description / steps 任一)。\n" +
-        "请用 refine(form_id, args={ plan: \"<计划文本>\" }) 或 refine(form_id, args={ title: \"...\", description: \"...\", steps: [...] }) 补齐后 submit(form_id)。";
-    }
-    return buildGuidanceWindows(form, entries);
   },
   permission: () => "allow",
   exec: async (ctx) => {
@@ -517,11 +377,9 @@ const planConstructor: ObjectMethod = {
       description: inputDescription,
       steps: inputSteps ?? [],
     };
-    return { ok: true, object: plan };
+    return { ok: true, window: plan };
   },
 };
-
-// ─────────────────────────── register ────────────────────────────────────────
 
 builtinRegistry.registerExecutable("plan", {
   methods: {
@@ -535,4 +393,3 @@ builtinRegistry.registerExecutable("plan", {
     plan: planConstructor,
   },
 });
-// readable 维度（registerReadable）在 ../readable.ts 自注册（顶部 side-effect import 触发）。

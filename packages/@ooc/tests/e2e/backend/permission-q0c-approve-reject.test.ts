@@ -131,8 +131,8 @@ beforeAll(() => {
   builtinRegistry.registerExecutable("root", {
     methods: {
       _test_q0c_safe: {
-        paths: ["_test_q0c_safe"],
-        intent: () => [],
+        description: "test q0c safe method",
+        intents: ["_test_q0c_safe"],
         exec: () => ({ ok: true, result: "executed-q0c-safe" }),
       },
     },

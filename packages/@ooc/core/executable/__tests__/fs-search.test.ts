@@ -30,19 +30,17 @@ import { makeThread } from "../../__tests__/make-thread";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
 
 /**
- * Simulate the old `knowledge(args, status)` API using the new `onFormChange` interface.
+ * Call onFormChange and return the MethodExecuteForm.
  */
-function callKnowledge(
-  cmd: { onFormChange?: unknown; intent?: (args: Record<string, unknown>) => Intent[] },
+function callFormChange(
+  cmd: { onFormChange?: (change: any, ctx: any) => MethodExecuteForm },
   args: Record<string, unknown>,
   status: "open" | "executing" | "success" | "failed",
-): Record<string, string> {
-  const fn = cmd.onFormChange as
-    | ((change: any, ctx: { form: MethodExecWindow; intents: Intent[] }) => ContextWindow[])
-    | undefined;
-  if (!fn) return {};
+): MethodExecuteForm {
+  if (!cmd.onFormChange) return { intents: [] };
   const form: MethodExecWindow = {
     id: "test_form",
     type: "method_exec",
@@ -56,17 +54,11 @@ function callKnowledge(
     status,
     createdAt: 0,
   };
-  const intents = cmd.intent?.(args) ?? [];
   const change =
     status !== "open"
       ? { kind: "status_changed" as const, to: status, from: "open" as const }
       : { kind: "args_refined" as const, args, added: [] as string[], removed: [] as string[], changed: [] as string[] };
-  const windows = fn(change, { form, intents });
-  const out: Record<string, string> = {};
-  for (const w of windows) {
-    out[w.title] = (w as any).content ?? "";
-  }
-  return out;
+  return cmd.onFormChange(change, { form, intents: [] });
 }
 
 // ---------- U1 ----------
@@ -472,21 +464,21 @@ describe("U3: root.write_file", () => {
     expect(await readFile(path, "utf8")).toBe("deep");
   });
 
-  it("edge: missing path → submit yields '缺少 path' error; no file_window spawned", async () => {
+  it("edge: missing path → form stays open (not auto-submitted)", async () => {
     const thread = makeThread({ id: "t_wf_no_path" });
     const out = JSON.parse(await dispatchWriteFile(thread, { content: "x" }));
-    expect(out.ok).toBe(true); // tool call accepted; failure expressed in result
-    expect(out.executed).toBe(true);
-    expect(out.result).toContain("缺少 path");
+    expect(out.ok).toBe(true);
+    expect(out.executed).toBe(false);
+    expect(out.form_id).toBeDefined();
     expect(thread.contextWindows.filter((w) => w.type === "file").length).toBe(0);
   });
 
-  it("edge: missing content → submit yields '缺少 content' error; no file_window spawned", async () => {
+  it("edge: missing content → form stays open (not auto-submitted)", async () => {
     const thread = makeThread({ id: "t_wf_no_content" });
     const out = JSON.parse(await dispatchWriteFile(thread, { path: join(TEMP, "x.txt") }));
     expect(out.ok).toBe(true);
-    expect(out.executed).toBe(true);
-    expect(out.result).toContain("缺少 content");
+    expect(out.executed).toBe(false);
+    expect(out.form_id).toBeDefined();
     expect(thread.contextWindows.filter((w) => w.type === "file").length).toBe(0);
   });
 
@@ -601,10 +593,8 @@ describe("U4: root.glob + search_window.open_match", () => {
   it("edge: missing pattern → submit returns '缺少 pattern' error", async () => {
     const thread = makeThread({ id: "t_glob_no_pattern" });
     const out = JSON.parse(await dispatchGlob(thread, { cwd: TEMP }));
-    expect(out.executed).toBe(true);
-    // P6.§4-§5: constructor 失败错误串只含核心提示，close/open 引导通过 form-input
-    // knowledge（formStatus="open"）暴露，不再嵌在 result 里。
-    expect(out.result).toContain("缺少 pattern");
+    expect(out.executed).toBe(false);
+    expect(out.form_id).toBeDefined();
     expect(thread.contextWindows.find((w) => w.type === "search")).toBeUndefined();
   });
 
@@ -646,7 +636,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     expect(out.executed).toBe(false);
   });
 
-  it("open_match exec edge: missing index error message includes refine recovery hint", async () => {
+  it("open_match exec edge: missing index error message", async () => {
     const { executeSearchOpenMatch } = await import("@ooc/builtins/search");
     const dir = await makeGlobFixtureDir("glob-no-idx-exec", ["a.ts"]);
     const thread = makeThread({ id: "t_open_match_exec_no_idx" });
@@ -659,8 +649,6 @@ describe("U4: root.glob + search_window.open_match", () => {
     });
     expect(typeof result).toBe("string");
     expect(result as string).toContain("缺少 index");
-    expect(result as string).toContain("close");
-    expect(result as string).toContain("open");
   });
 
   it("integration: glob → open_match → file_window in place; search_window unchanged", async () => {
@@ -780,12 +768,11 @@ describe("U5: root.grep", () => {
     expect(sw.matches.length).toBe(2);
   });
 
-  it("edge: missing pattern → submit returns '缺少 pattern' error", async () => {
+  it("edge: missing pattern → form stays open (not auto-submitted)", async () => {
     const thread = makeThread({ id: "t_grep_no_pattern" });
     const out = JSON.parse(await dispatchGrep(thread, { path: TEMP }));
-    expect(out.executed).toBe(true);
-    // P6.§4-§5: 同 glob 的 missing-pattern——result 只含核心错误，close/open 通过 form knowledge 暴露。
-    expect(out.result).toContain("缺少 pattern");
+    expect(out.executed).toBe(false);
+    expect(out.form_id).toBeDefined();
   });
 
   it("integration: grep → open_match spawns file_window with line context slice", async () => {
@@ -828,15 +815,11 @@ describe("U5: root.grep", () => {
 
 import { programMethod } from "@ooc/builtins/root/executable/method.program";
 
-describe("U6: program knowledge mentions file_window.edit", () => {
-  it("program method knowledge text steers LLM toward file_window.edit + write_file", () => {
-    // 用代表性 args 调 knowledge()——只需要 basic path 包含建议段落
-    const k = callKnowledge(programMethod, { language: "shell", code: "ls" }, "open");
-    const text = Object.values(k).join("\n");
-    expect(text).toContain("file_window.edit");
-    expect(text).toContain("write_file");
-    // 反模式提示在场
-    expect(text).toContain("不要用 shell sed");
+describe("U6: program onFormChange returns tip", () => {
+  it("program method tip guides LLM", () => {
+    const form = callFormChange(programMethod, { language: "shell", code: "ls" }, "open");
+    expect(typeof form.tip).toBe("string");
+    expect(form.quick_exec_submit).toBe(true);
   });
 });
 

@@ -3,8 +3,7 @@ import { ObjectRegistry } from "../runtime/object-registry.js";
 import type { WindowMethod } from "../_shared/types/window-method.js";
 
 const wm: WindowMethod = {
-  paths: ["set_viewport"],
-  intent: () => [],
+  description: "test method", intents: ["set_viewport"],
   exec: (ctx) => ({ ok: true, state: ctx.windowState }),
 };
 
@@ -42,8 +41,8 @@ test("seedFrom key-merges windowMethods to per-world registry", () => {
 
 test("collision between object method and window method is rejected (split-call)", () => {
   const r = new ObjectRegistry();
-  const om = { paths: ["set_viewport"], intent: () => [], exec: () => undefined } as any;
   // executable 维度先注册 set_viewport 为 object method；readable 维度再注册同名 window method → fail-loud。
+  const om = { description: "test", intents: ["set_viewport"], exec: () => undefined } as any;
   r.registerExecutable("file", { methods: { set_viewport: om } });
   expect(() =>
     r.registerReadable("file", { windowMethods: { set_viewport: wm } }),
@@ -53,7 +52,6 @@ test("collision between object method and window method is rejected (split-call)
 test("registerExecutable does not clobber readable dimension and vice versa", () => {
   const r = new ObjectRegistry();
   r.registerReadable("file", { windowMethods: { set_viewport: wm } });
-  r.registerExecutable("file", { methods: { reload: { paths: ["reload"], intent: () => [], exec: () => undefined } as any } });
   const def = r.getObjectDefinition("file");
   // 两个维度分注册，互不覆盖。
   expect(def?.windowMethods?.set_viewport).toBeDefined();

@@ -98,7 +98,7 @@ export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistr
     const desc = entry ? extractBasicDescription(entry) : undefined;
     const brief = desc
       ? conciseDescription(desc, COMMAND_DESC_MAX)
-      : (entry?.paths ?? [name]).join(", ").slice(0, COMMAND_BRIEF_MAX);
+      : (entry?.description ?? (entry?.intents ?? [name]).join(", ")).slice(0, COMMAND_BRIEF_MAX);
     return xmlElement("method", { name }, [xmlText(brief)]);
   });
 

@@ -24,223 +24,139 @@ import { builtinRegistry, type RenderContext } from "../../../executable/windows
 import type { FeishuChatWindow, FeishuChatMessage } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
 import { larkExec } from "../cli.js";
-import type { Intent } from "../../../thinkable/context/intent.js";
-import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
-import type { BaseContextWindow } from "@ooc/core/_shared";
-
-const FEISHU_CHAT_PROTOCOL_PATH = "internal/windows/feishu_chat/basic";
-const FEISHU_CHAT_REFRESH_BASIC = "internal/windows/feishu_chat/refresh/basic";
-const FEISHU_CHAT_SEARCH_BASIC = "internal/windows/feishu_chat/search/basic";
-const FEISHU_CHAT_SEND_BASIC = "internal/windows/feishu_chat/send/basic";
-const FEISHU_CHAT_SEND_DRY_RUN = "internal/windows/feishu_chat/send/dry_run_required";
-const FEISHU_CHAT_REPLY_BASIC = "internal/windows/feishu_chat/reply/basic";
-const FEISHU_CHAT_SUBSCRIBE_BASIC = "internal/windows/feishu_chat/subscribe/basic";
-const FEISHU_CHAT_CLOSE_BASIC = "internal/windows/feishu_chat/close/basic";
 
 const MAX_RENDER_BYTES = 8192;
 const DEFAULT_TAIL = 30;
-// lark-cli +chat-messages-list 的 --page-size 上限 50（见 lark-cli im +chat-messages-list --help）；
-// 走分页才能拉更多，本期不做。
+
+const PROTOCOL_KNOWLEDGE = `feishu_chat window — 飞书群聊/单聊。
+
+方法：
+- refresh: 拉最近 N 条消息
+- search: 本群关键字搜索
+- send: 发新消息（需 confirm=true 才真发，否则 dry-run）
+- reply: 引用某条消息回复（需 confirm=true）
+- subscribe: 登记周期刷新
+- close: 关闭窗口
+`.trim();
 const MAX_TAIL = 50;
 
-const PROTOCOL_KNOWLEDGE = `
-feishu_chat_window 是 OOC 与飞书群聊 / 单聊之间的 ContextWindow。
+const REFRESH_TIP = `feishu_chat.refresh 拉取本群最近消息到 window.buffer。
+参数：count（可选 1..50，默认 30）、since_message_id（可选，增量拉）。`;
 
-每个 chat_id 对应一个 window 实例。窗口持有最近 buffer（messages 切片），
-LLM 通过下列 method 操作；窗口本身不直接显示历史消息全文，过长会截断。
+const SEARCH_TIP = `feishu_chat.search 在本群按关键字搜索消息，切 mode=search。
+参数：query（必填）、limit（可选）。refresh 切回最近消息。`;
 
-可用 method：
-- refresh：拉最新 N 条（无副作用；改 mode=tail）
-- search：本群关键字搜索（无副作用；切 mode=search）
-- send：发新消息（**有副作用，强制 dry-run gate**）
-- reply：引用回复某条消息（**有副作用，强制 dry-run gate**）
-- subscribe：登记周期 refresh 意愿（仅写字段；poller 集成 TBD）
-- close：释放本 window
+const SEND_TIP = `feishu_chat.send 发新消息（dry-run gate）。
+首次 submit 只 --dry-run 预览；refine({confirm: true}) 后 submit 才真发。
+参数：text（必填）、as（可选 "bot"|"user"，默认 bot）、confirm（true 才真发）。`;
 
-身份约定（supervisor 决策）：
-- send / reply 默认 \`--as bot\`，需要显式 args.as="user" 才切回个人身份。
-- refresh / search / subscribe 默认 \`--as user\`（飞书搜索通常需要 user scope）。
+const REPLY_TIP = `feishu_chat.reply 引用回复（dry-run gate 同 send）。
+参数：reply_to（必填 message_id）、text（必填）、as、confirm。`;
 
-数据返回：buffer 里每条消息含 message_id / sender / text / replyTo。
-富类型（card / image / file）目前折叠为 [card] / [image] / [file] 占位。
-`.trim();
-
-const REFRESH_KNOWLEDGE = `
-feishu_chat.refresh 拉取本群最近的消息到 window.buffer。
-
-参数：
-- count: 可选，期望条数，1..${MAX_TAIL}，缺省 ${DEFAULT_TAIL}
-- since_message_id: 可选，从该 id **之后**增量拉（用于轮询订阅）
-
-调用：open(parent_window_id="<feishu_chat_window_id>", method="refresh", args={ count: 50 })
-
-副作用：仅本地 window 字段更新；不发飞书消息。
-`.trim();
-
-const SEARCH_KNOWLEDGE = `
-feishu_chat.search 在本群范围内按关键字搜索消息，临时把 window 切到 mode=search。
-
-参数：
-- query: 必填，搜索关键字（飞书算子如 from: / has:link / time:YYYY-MM-DD 可用）
-- limit: 可选，最多返回条数，1..${MAX_TAIL}，缺省 30
-
-调用：open(parent_window_id="<feishu_chat_window_id>", method="search", args={ query: "OOC 灰度", limit: 20 })
-
-切回最近消息：refresh（任意参数）。
-`.trim();
-
-const SEND_KNOWLEDGE = `
-feishu_chat.send 在本群发一条新消息。**强制 dry-run gate**（supervisor 决策）：
-
-第一次 submit（默认 args.confirm 不设或为 false）：
-- 只走 lark-cli --dry-run 预览，**不真的发**
-- 把预览结果作为 result 写回 form
-
-第二次 submit（必须 args.confirm=true）：
-- 真正下发。
-- 默认 \`--as bot\`；如需个人身份，显式 args.as="user"（注意权限风险）。
-
-参数：
-- text: 必填，纯文本（飞书 markdown 子集；@ 用 <at user_id="..."> ... </at>，详见 feishu_message_grammar 知识）
-- as: 可选，"bot" | "user"，缺省 bot
-- confirm: 必须 true 才真发；首次 submit 通常省略以触发 dry-run 预览
-- msg_type: 可选，缺省 "text"；如需富文本卡片走 raw API，本 method 暂不直接支持
-
-调用流程：
-1. open(parent_window_id="<feishu_chat_window_id>", method="send", args={ text: "..." })
-2. submit(form_id) → 看 dry_run 预览
-3. refine(form_id, { confirm: true }) → submit(form_id) → 真发
-`.trim();
-
-const SEND_DRY_RUN_KNOWLEDGE = `
-当前 send form 还未走过 dry-run 预览，或 args.confirm !== true。
-若已经看过 dry-run 预览且确认要发，请 refine(form_id, args={ confirm: true }) 后再 submit。
-`.trim();
-
-const REPLY_KNOWLEDGE = `
-feishu_chat.reply 引用某条消息回复。dry-run gate 同 send。
-
-参数：
-- reply_to: 必填，被回复的 message_id（om_xxx，可从 buffer 拷贝）
-- text: 必填，回复正文
-- as: 可选，缺省 bot
-- confirm: 必须 true 才真发；首次 submit 触发 dry-run 预览
-`.trim();
-
-const SUBSCRIBE_KNOWLEDGE = `
-feishu_chat.subscribe 把本 window 标记为"希望被 poller 周期 refresh"。
-
-参数：
-- interval_ms: 期望 refresh 间隔，>=10000；0 表示取消订阅
-
-当前阶段：仅写字段（window.subscribePollIntervalMs），poller 集成尚未接通；
-该窗口只有在 LLM 显式 refresh 时才会拉新消息。订阅意愿仍然写盘以备 future poller 拉起。
-`.trim();
-
-const CLOSE_KNOWLEDGE = `
-feishu_chat.close 释放 window；不影响飞书一侧的消息或会话。
-`.trim();
-
-// ─────────────────────────── guidance helper ────────────────────────────
-
-function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
-  const sourceId = (form as MethodExecWindow).method;
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
-
-// ─────────────────────────── method 实现 ────────────────────────────
+const SUBSCRIBE_TIP = `feishu_chat.subscribe 标记周期 refresh 意愿。
+参数：interval_ms（>=10000；0 取消订阅）。`;
 
 const refreshMethod: ObjectMethod = {
-  paths: ["refresh"],
-  intent: (): Intent[] => [],
-  onFormChange(change, { form }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [FEISHU_CHAT_REFRESH_BASIC]: REFRESH_KNOWLEDGE });
+  description: "Refresh this chat window by fetching recent messages.",
+  intents: ["refresh"],
+  onFormChange() {
+    return { tip: REFRESH_TIP, intents: [{ name: "refresh" }], quick_exec_submit: true };
   },
   exec: (ctx) => executeRefresh(ctx),
 };
 
 const searchMethod: ObjectMethod = {
-  paths: ["search"],
-  intent: (): Intent[] => [],
+  description: "Search messages in this chat by keyword.",
+  intents: ["search"],
+  schema: {
+    args: {
+      query: { type: "string", required: true, description: "搜索关键字" },
+      limit: { type: "number", description: "最多返回条数" },
+    },
+  },
   onFormChange(change, { form }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [FEISHU_CHAT_SEARCH_BASIC]: SEARCH_KNOWLEDGE });
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasQuery = typeof args.query === "string" && args.query.length > 0;
+    return {
+      tip: hasQuery ? `Searching for ${args.query}...` : SEARCH_TIP,
+      intents: [{ name: "search" }],
+      quick_exec_submit: hasQuery,
+    };
   },
   exec: (ctx) => executeSearch(ctx),
 };
 
 const sendMethod: ObjectMethod = {
-  paths: ["send"],
-  intent: (args) => (args.confirm === true ? [{ name: "send.confirmed" }] : []),
+  description: "Send a new message to this chat (dry-run first; confirm=true to actually send).",
+  intents: ["send.confirmed"],
+  schema: {
+    args: {
+      text: { type: "string", required: true, description: "消息正文" },
+      as: { type: "string", enum: ["bot", "user"], description: "发送身份，默认 bot" },
+      confirm: { type: "boolean", description: "true 才真发；首次 submit 走 dry-run" },
+    },
+  },
   onFormChange(change, { form }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : (form as any).accumulatedArgs ?? {};
-    const entries: Record<string, string> = { [FEISHU_CHAT_SEND_BASIC]: SEND_KNOWLEDGE };
-    if (form.status === "open" && args.confirm !== true) {
-      entries[FEISHU_CHAT_SEND_DRY_RUN] = SEND_DRY_RUN_KNOWLEDGE;
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const intents = args.confirm === true ? [{ name: "send.confirmed" }] : [{ name: "send" }];
+    const hasText = typeof args.text === "string" && args.text.length > 0;
+    let tip = SEND_TIP;
+    if (hasText && args.confirm !== true) {
+      tip = "已提供 text；submit 将 dry-run 预览。确认后 refine({confirm: true}) 再 submit 才真发。";
     }
-    return guidanceWindows(form, entries);
+    return { tip, intents, quick_exec_submit: hasText };
   },
   exec: (ctx) => executeSend(ctx),
 };
 
 const replyMethod: ObjectMethod = {
-  paths: ["reply"],
-  intent: (args) => (args.confirm === true ? [{ name: "reply.confirmed" }] : []),
+  description: "Reply to a specific message in this chat (dry-run first; confirm=true to actually send).",
+  intents: ["reply.confirmed"],
+  schema: {
+    args: {
+      reply_to: { type: "string", required: true, description: "被回复的 message_id" },
+      text: { type: "string", required: true, description: "回复正文" },
+      as: { type: "string", enum: ["bot", "user"] },
+      confirm: { type: "boolean" },
+    },
+  },
   onFormChange(change, { form }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    const args = change.kind === "args_refined" ? change.args : (form as any).accumulatedArgs ?? {};
-    const entries: Record<string, string> = { [FEISHU_CHAT_REPLY_BASIC]: REPLY_KNOWLEDGE };
-    if (form.status === "open" && args.confirm !== true) {
-      entries[FEISHU_CHAT_SEND_DRY_RUN] = SEND_DRY_RUN_KNOWLEDGE;
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const intents = args.confirm === true ? [{ name: "reply.confirmed" }] : [{ name: "reply" }];
+    const hasText = typeof args.text === "string" && args.text.length > 0;
+    const hasReplyTo = typeof args.reply_to === "string" && args.reply_to.length > 0;
+    let tip = REPLY_TIP;
+    if (hasText && hasReplyTo && args.confirm !== true) {
+      tip = "已提供 reply_to+text；submit 将 dry-run 预览。refine({confirm: true}) 后再 submit 才真发。";
     }
-    return guidanceWindows(form, entries);
+    return { tip, intents, quick_exec_submit: hasText && hasReplyTo };
   },
   exec: (ctx) => executeReply(ctx),
 };
 
 const subscribeMethod: ObjectMethod = {
-  paths: ["subscribe"],
-  intent: (): Intent[] => [],
+  description: "Subscribe this window to periodic refresh (poller TBD).",
+  intents: ["subscribe"],
+  schema: {
+    args: {
+      interval_ms: { type: "number", required: true, description: "refresh 间隔毫秒；0 取消订阅" },
+    },
+  },
   onFormChange(change, { form }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [FEISHU_CHAT_SUBSCRIBE_BASIC]: SUBSCRIBE_KNOWLEDGE });
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasInterval = typeof args.interval_ms === "number";
+    return {
+      tip: hasInterval ? `Subscribing with interval ${args.interval_ms}ms...` : SUBSCRIBE_TIP,
+      intents: [{ name: "subscribe" }],
+      quick_exec_submit: hasInterval,
+    };
   },
   exec: (ctx) => executeSubscribe(ctx),
 };
 
 const closeMethod: ObjectMethod = {
-  paths: ["close"],
-  intent: (): Intent[] => [],
-  onFormChange(change, { form }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    return guidanceWindows(form, { [FEISHU_CHAT_CLOSE_BASIC]: CLOSE_KNOWLEDGE });
-  },
+  description: "Close this feishu chat window.",
   exec: () => undefined,
 };
 

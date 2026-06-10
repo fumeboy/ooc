@@ -1,8 +1,5 @@
 /**
- * root.open_feishu_doc — 创建一个 feishu_doc_window，把飞书文档作为 ContextWindow。
- *
- * - args: doc_token（必填）, doc_kind?（"doc"|"docx"|"sheet"|"base"|"wiki"|"drive_md"，缺省 "docx"）, doc_title?
- * - 给齐 doc_token 直建 window；不立即 read，让 LLM 显式 read 以验证鉴权 / scope。
+ * root.open_feishu_doc — 创建 feishu_doc_window。
  */
 
 import type {
@@ -14,76 +11,34 @@ import {
   generateWindowId,
   type FeishuDocWindow,
 } from "../../../executable/windows/_shared/types.js";
-import type { Intent } from "../../../thinkable/context/intent.js";
-import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
-import type { BaseContextWindow } from "@ooc/core/_shared";
 import type { WindowManager } from "../../../executable/windows/_shared/manager.js";
 
-const OPEN_FEISHU_DOC_BASIC = "internal/executable/open_feishu_doc/basic";
-const OPEN_FEISHU_DOC_INPUT = "internal/executable/open_feishu_doc/input";
+const OPEN_TIP = `open_feishu_doc 创建飞书文档 window。
+参数：doc_token（必填）、doc_kind（可选 doc/docx/sheet/base/wiki/drive_md，默认 docx）、doc_title（可选）。
+创建后建议立即 read 验证拉取。`;
 
 const VALID_KINDS = ["doc", "docx", "sheet", "base", "wiki", "drive_md"] as const;
 type DocKind = (typeof VALID_KINDS)[number];
 
-const KNOWLEDGE = `
-open_feishu_doc 用于创建一个 feishu_doc_window（飞书文档作为 ContextWindow）。
-
-参数：
-- doc_token: 必填，飞书文档 token（doccnXXXXX / docxXXXXX / wikXXXXX 等）
-- doc_kind: 可选，"doc" | "docx" | "sheet" | "base" | "wiki" | "drive_md"；缺省 "docx"
-- doc_title: 可选，文档标题；缺省由 doc_token 派生（read 后覆盖为飞书一侧的真实标题）
-
-副作用：仅本地创建 window；不立即拉取内容。
-建议第一步：open(parent_window_id="<新 window id>", method="read", args={ format: "markdown" })。
-
-调用示例：
-open(method="open_feishu_doc", title="OOC 设计稿", args={ doc_token: "doccn5xxxxxx", doc_kind: "docx" })
-`.trim();
-
-function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
-  const sourceId = (form as MethodExecWindow).method;
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
-
 export const openFeishuDocMethod: ObjectMethod = {
-  paths: ["open_feishu_doc"],
-  intent: (): Intent[] => [],
-  onFormChange(change, { form, intents }) {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const formStatus = form.status;
-    const entries: Record<string, string> = { [OPEN_FEISHU_DOC_BASIC]: KNOWLEDGE };
-    if (formStatus !== "open") return guidanceWindows(form, entries);
-    if (typeof args.doc_token !== "string" || !args.doc_token) {
-      entries[OPEN_FEISHU_DOC_INPUT] =
-        "open_feishu_doc 缺少 doc_token；用 refine(args={ doc_token: \"doccnXXX\", doc_kind?: \"docx\", doc_title?: \"...\" })。";
-    }
-    return guidanceWindows(form, entries);
+  description: "Open a Feishu (Lark) doc as a window in context.",
+  intents: ["open_feishu_doc"],
+  schema: {
+    args: {
+      doc_token: { type: "string", required: true, description: "飞书文档 token" },
+      doc_kind: { type: "string", enum: ["doc", "docx", "sheet", "base", "wiki", "drive_md"], description: "文档类型" },
+      doc_title: { type: "string", description: "文档标题" },
+    },
+  },
+  onFormChange(change, { form }) {
+    const args = (form as MethodExecWindow).accumulatedArgs;
+    const hasToken = typeof args.doc_token === "string" && args.doc_token.length > 0;
+    return {
+      tip: hasToken ? `Opening doc ${args.doc_token}...` : OPEN_TIP,
+      intents: [{ name: "open_feishu_doc" }],
+      quick_exec_submit: hasToken,
+    };
   },
   exec: (ctx) => executeOpenFeishuDoc(ctx),
 };
@@ -106,8 +61,6 @@ export async function executeOpenFeishuDoc(
     id: generateWindowId("feishu_doc"),
     type: "feishu_doc",
     parentWindowId: ROOT_WINDOW_ID,
-    // window.title 直接用 docTitle；window type 徽章 (FSDOC) 已标明是飞书文档，
-    // 不再加 "[飞书文档]" 前缀冗余。
     title: docTitle,
     status: "open",
     createdAt: Date.now(),
@@ -119,7 +72,6 @@ export async function executeOpenFeishuDoc(
   };
 
   if (ctx.manager) {
-    // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager 取 insertTypedWindow。
     (ctx.manager as WindowManager).insertTypedWindow(window, ctx.thread);
   } else {
     thread.contextWindows = [...(thread.contextWindows ?? []), window];

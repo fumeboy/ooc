@@ -27,13 +27,7 @@ import { generateWindowId, type TalkWindow } from "../_shared/types.js";
 import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 import type { RelationWindow } from "./types.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
-import type { BaseContextWindow } from "@ooc/core/_shared";
-
-const RELATION_EDIT_BASIC = "internal/windows/relation/edit/basic";
-const RELATION_EDIT_INPUT = "internal/windows/relation/edit/input";
-const RELATION_EDIT_LONGTERM = "internal/windows/relation/edit/long_term_detail";
 
 /** relation_window 的 type-level basicKnowledge。 */
 const RELATION_WINDOW_BASIC_KNOWLEDGE = `
@@ -58,88 +52,35 @@ root 上,要通过 exec(window_id="<rel_window_id>", method="edit", args={...}) 
 - 想看当前 relation 内容,看伴随的 knowledge_window(同 peerId,source=relation,body 含 long_term 与 session 两段)。
 `.trim();
 
-const EDIT_KNOWLEDGE = `
-relation_window.edit 用于更新本 relation_window 对应 peer 的 relation 文件。
-
-参数:
-- content: 必填,relation 文件完整正文(整文件替换语义,非 patch/append)
-- scope:   必填,'session' | 'long_term'
-  - session:   写 flows/<sid>/<self>/knowledge/relations/<peer>.md(仅本 session 生效)
-  - long_term: 派一条 talk message 给 super flow,由 super 写 pools/<self>/knowledge/relations/<peer>.md(跨 session 长期生效)
-
-典型用法(一步到位,args 齐时 open 立即提交):
-
-  // 本 session 临时记下"该 peer 偏好简短回复"
-  open(parent_window_id="<rel_window_id>", method="edit",
-       args={ content: "## 偏好\\n- 简短回复\\n- 不要 emoji", scope: "session" })
-
-  // 把本次形成的稳定合作模式固化到长期 relation
-  open(parent_window_id="<rel_window_id>", method="edit",
-       args={ content: "...完整正文...", scope: "long_term" })
-`.trim();
-
-const EDIT_LONGTERM_DETAIL = `
-scope="long_term" 的路径详解:
-
-1. 本调用不直接写 relation 文件——它会派一条 talk message 到 super flow(self-reflection 分身);
-2. super flow 会作为另一个 thread 收到这条消息,自行决定如何处理(典型:用 write_file 写 pools/<self>/knowledge/relations/<peer>.md);
-3. 因此 long_term edit 是**异步**的:本 method 返回成功只代表消息已派送,文件落盘要等 super flow 跑完那一轮。
-`.trim();
-
-function guidanceWindows(form: BaseContextWindow, entries: Record<string, string>): ContextWindow[] {
-  // batch C narrowing(N3): form 契约层是 base ContextWindow；只读 base id + 具体 form 的 method，narrow 一次。
-  const sourceId = (form as MethodExecWindow).method;
-  const out: ContextWindow[] = [];
-  for (const [path, text] of Object.entries(entries)) {
-    const safe = path.replace(/[^a-zA-Z0-9_]/g, "_");
-    out.push({
-      id: "guidance_" + form.id + "_" + safe,
-      type: "guidance",
-      parentWindowId: form.id,
-      boundFormId: form.id,
-      title: path,
-      status: "open",
-      createdAt: 0,
-      relevance: { score: 0.8, signalCount: 1 },
-      provenance: {
-        kind: "derived",
-        reason: { mechanism: "form_bound", sourceId },
-        createdAt: 0,
-        lastTouchedAt: 0,
-      },
-      content: text,
-      summary: text.length > 200 ? text.slice(0, 200) + "..." : text,
-    } as ContextWindow);
-  }
-  return out;
-}
-
 const editMethod: ObjectMethod = {
-  paths: ["edit", "edit.session", "edit.long_term"],
-  intent: (args): Intent[] => {
-    const scope = args.scope;
-    if (scope === "session") return [{ name: "edit.session" }];
-    if (scope === "long_term") return [{ name: "edit.long_term" }];
-    return [];
+  description: "Edit the relation file for a peer (session or long_term scope; whole-file replace).",
+  intents: ["edit", "edit.session", "edit.long_term"],
+  schema: {
+    args: {
+      content: { type: "string", required: true, description: "Full relation file body (whole-file replace)" },
+      scope: { type: "string", required: true, enum: ["session", "long_term"], description: "session: this session only; long_term: persisted across sessions via super flow" },
+    },
   },
-  onFormChange: (change, { form }) => {
-    if (change.kind === "status_changed" && change.to !== "open") return [];
-    // batch C narrowing(N1): onFormChange 的 form 契约层是 base，narrow 回 MethodExecWindow 取 accumulatedArgs。
+  onFormChange(change, { form }) {
     const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
-    const entries: Record<string, string> = { [RELATION_EDIT_BASIC]: EDIT_KNOWLEDGE };
-    if (args.scope === "long_term") {
-      entries[RELATION_EDIT_LONGTERM] = EDIT_LONGTERM_DETAIL;
+    const scope = args.scope;
+    const intents: Intent[] = [];
+    if (scope === "session") intents.push({ name: "edit.session" });
+    else if (scope === "long_term") intents.push({ name: "edit.long_term" });
+    else intents.push({ name: "edit" });
+    let tip = "edit 需要 content（整文件正文）+ scope（session | long_term）。";
+    let quick_exec_submit = false;
+    const hasContent = typeof args.content === "string" && args.content.length > 0;
+    const hasScope = scope === "session" || scope === "long_term";
+    if (hasContent && hasScope) {
+      quick_exec_submit = true;
+      tip = scope === "long_term"
+        ? "long_term: 将派 talk 给 super flow 异步写入 pools/.../relations/。"
+        : "session: 将写入 flows/<sid>/<self>/knowledge/relations/。";
+    } else if (hasScope && !hasContent) {
+      tip = "scope 已选；还需 content（整文件正文）。";
     }
-    if (form.status === "open") {
-      const missing: string[] = [];
-      if (typeof args.content !== "string" || args.content.length === 0) missing.push("content");
-      if (args.scope !== "session" && args.scope !== "long_term") missing.push("scope");
-      if (missing.length > 0) {
-        entries[RELATION_EDIT_INPUT] =
-          `relation_window.edit 需要 ${missing.join(" + ")};用 refine(args={ content: "...", scope: "session" | "long_term" })。`;
-      }
-    }
-    return guidanceWindows(form, entries);
+    return { tip, intents, quick_exec_submit };
   },
   exec: (ctx) => executeRelationEdit(ctx),
 };

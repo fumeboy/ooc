@@ -343,7 +343,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     // 1. Registry-level chain walk finds talk on root (this is what method-inheritance.test.ts also covers).
     const resolved = builtinRegistry.resolveMethod(stubType, "talk");
     expect(resolved).toBeDefined();
-    expect(resolved!.paths).toContain("talk");
+    expect(resolved!.description).toContain("talk");
 
     // 2. Manager-level dispatch lookup finds the same entry — declaringType is the ancestor (root)
     //    where the method is declared. This is the wiring that submit() consults.
@@ -389,8 +389,8 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     builtinRegistry.registerNewObjectType(stubType as never, {
       methods: {
         stub_only: {
-          paths: ["stub_only"],
-          intent: () => [],
+          description: "stub-only test method",
+          intents: ["stub_only"],
           permission: () => "allow",
           exec: async () => ({ ok: true, result: "should not get here" }),
         },
