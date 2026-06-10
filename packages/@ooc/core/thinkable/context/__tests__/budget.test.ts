@@ -195,7 +195,7 @@ describe("BudgetManager.allocate", () => {
     expect(result.overflow[0].reason).toBe("window_too_large_for_budget");
   });
 
-  it("guidance window bound to a form inherits the form's relevance score", () => {
+  it("form-bound window (boundFormId) inherits the form's relevance score", () => {
     const form = mkWindow({
       id: "form_1",
       type: "method_exec",
@@ -210,24 +210,22 @@ describe("BudgetManager.allocate", () => {
       provenance: mkProv({ kind: "explicit" }),
       relevance: mkRel({ score: 1.0, priorityHint: "critical" }),
     });
-    // Guidance with low own relevance but bound to form
-    const guidance = mkWindow({
-      id: "guidance_1",
-      type: "guidance",
-      title: "guidance",
+    // form-bound knowledge window：自身分低但 boundFormId 指向 form（如 intent 触发的知识窗）
+    const bound = mkWindow({
+      id: "kn_1",
+      type: "knowledge",
+      title: "form-bound knowledge",
       parentWindowId: "form_1",
       status: "open",
       boundFormId: "form_1",
-      content: "fill the form",
-      summary: "fill the form",
       provenance: mkProv({
         kind: "related",
         reason: { mechanism: "form_bound" },
       }) as ContextWindowProvenance & { reason: { mechanism: "form_bound" } },
       relevance: mkRel({ score: 0.1, signalCount: 0 }),
     });
-    const result = bm.allocate([guidance, form], 2, () => 1);
-    // Both should rank near the top because guidance inherits form score
-    expect(result.visible.map(w => w.id)).toEqual(expect.arrayContaining(["form_1", "guidance_1"]));
+    const result = bm.allocate([bound, form], 2, () => 1);
+    // Both should rank near the top because the bound window inherits the form score
+    expect(result.visible.map(w => w.id)).toEqual(expect.arrayContaining(["form_1", "kn_1"]));
   });
 });

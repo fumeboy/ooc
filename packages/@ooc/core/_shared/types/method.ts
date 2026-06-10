@@ -26,7 +26,7 @@ export type MethodKnowledgeEntries = Record<string, string>;
 /**
  * Structured return value of onFormChange.
  *
- * - tip: plain string shown directly on the form (replaces the old buildGuidanceWindows machinery)
+ * - tip: plain string shown directly on the form (replaces the retired form-bound guidance windows)
  * - intents: dynamic intent list for the current args (replaces the old intent(args) function)
  * - quick_exec_submit: when true, the runtime auto-submits the form after this refine (args sufficient)
  */

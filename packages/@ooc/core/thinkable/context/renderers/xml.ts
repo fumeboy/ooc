@@ -124,7 +124,7 @@ export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistr
 const BUILTIN_TYPES = new Set([
   "root", "method_exec", "do", "todo", "talk", "program",
   "file", "knowledge", "search", "relation", "skill_index",
-  "feishu_chat", "feishu_doc", "plan", "guidance",
+  "feishu_chat", "feishu_doc", "plan",
 ]);
 
 async function resolveReadableForType(
@@ -315,15 +315,10 @@ async function renderContextWindowsNode(
   thread: ThreadContext,
   registry: ObjectRegistry,
 ): Promise<XmlNode | null> {
-  // guidance windows 是已退役机制（2026-06-10 起 form 指引为 plain-string tip 直渲于 form），
-  // 但历史持久化的 thread-context 里可能仍残留 type="guidance" 条目——它们没有 renderXml/readable
-  // hook，一旦进入 renderWindowNode 会在 getObjectDefinition("guidance") 处抛错（非注册 object type），
-  // 把整轮 think loop 标 failed。此过滤是 legacy 数据兼容护栏，从渲染输入剔除。
-  const renderable = windows.filter((w) => w.type !== "guidance");
-  if (renderable.length === 0) return null;
+  if (windows.length === 0) return null;
 
-  const topLevel = renderable.filter((w) => !w.parentWindowId || w.parentWindowId === ROOT_WINDOW_ID);
-  const children = await Promise.all(topLevel.map((w) => renderWindowNode(w, thread, renderable, registry)));
+  const topLevel = windows.filter((w) => !w.parentWindowId || w.parentWindowId === ROOT_WINDOW_ID);
+  const children = await Promise.all(topLevel.map((w) => renderWindowNode(w, thread, windows, registry)));
   return xmlElement("context_windows", {}, children);
 }
 

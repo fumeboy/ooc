@@ -67,7 +67,6 @@ import { WindowVisible } from "./visible/resolveWindowVisible";
 const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {
   root: PanelTop,
   method_exec: FileCheck,
-  form_guidance: FileCheck,
   do: Inbox,
   todo: ListChecks,
   talk: MessageSquare,

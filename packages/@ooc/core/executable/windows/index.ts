@@ -32,7 +32,6 @@ export type {
   RelationWindow,
   PlanWindow,
   PlanWindowStep,
-  GuidanceWindow,
   ObjectType,
 } from "./_shared/types.js";
 

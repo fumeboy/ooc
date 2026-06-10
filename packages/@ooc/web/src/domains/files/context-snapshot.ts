@@ -255,35 +255,6 @@ type _ContextWindowUnion =
       parentPlanWindowId?: string;
       parentStepId?: string;
       createdAt?: number;
-    }
-  | {
-      /**
-       * Form guidance window (P6 Context+Knowledge redesign, 2026-06-03):
-       * Derived from onFormChange, rendered as a child of a method_exec form.
-       * Carries provenance/relevance for budget management and auto-unload.
-       */
-      id: string;
-      type: "form_guidance";
-      parentWindowId?: string;
-      title: string;
-      status?: string;
-      boundFormId?: string;
-      provenance?: {
-        kind: "explicit" | "derived" | "system" | "related";
-        reason: {
-          mechanism: string;
-          sourceId?: string;
-          detail?: Record<string, unknown>;
-        };
-        createdAt: number;
-        lastTouchedAt: number;
-      };
-      relevance?: {
-        score: number;
-        priorityHint?: "critical" | "high" | "normal" | "low";
-        signalCount: number;
-      };
-      createdAt?: number;
     };
 
 /**

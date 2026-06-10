@@ -12,7 +12,7 @@
  *
  * **batch C6 分层（2026-06-05 ooc-6）**：
  * - base 部分（BaseContextWindow / ObjectType / WindowStatus / provenance / relevance /
- *   SharingState / GuidanceWindow / 常量 / id 工具函数）的 canonical 源已迁入零依赖层
+ *   SharingState / 常量 / id 工具函数）的 canonical 源已迁入零依赖层
  *   `@ooc/core/_shared/types/context-window.ts`；本文件 re-export 它们保持旧 import 路径可用。
  * - 完整 `ContextWindow` discriminated union 依赖 builtins 各包具体 window 类型，**无法**
  *   下沉到 `_shared`——其 canonical 源仍是本文件：import base，拼装具体 union，
@@ -31,7 +31,6 @@ export type {
   ContextWindowRelevance,
   BaseContextWindow,
   SharingState,
-  GuidanceWindow,
 } from "../../../_shared/types/context-window.js";
 export {
   ROOT_WINDOW_ID,
@@ -39,12 +38,8 @@ export {
   SESSION_CREATOR_THREAD_ID,
   generateWindowId,
   creatorWindowIdOf,
-  isVolatileDerivedWindow,
   isNonPersistedWindow,
 } from "../../../_shared/types/context-window.js";
-
-// base ContextWindow 仅供本文件 SharingState snapshot 兜底语义；具体 union 在下方覆盖 export
-import type { GuidanceWindow } from "../../../_shared/types/context-window.js";
 
 // ─────────────────────────── per-type interface re-exports ────────────────────
 
@@ -104,8 +99,7 @@ export type ContextWindow =
   | SkillIndexWindow
   | FeishuChatWindow
   | FeishuDocWindow
-  | PlanWindow
-  | GuidanceWindow;
+  | PlanWindow;
 
 /**
  * ContextObject — 旧名（pre-rename 别名），= ContextWindow。

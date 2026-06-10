@@ -17,7 +17,6 @@ test("registry covers all renderable builtin types", () => {
     "feishu_doc",
     "do",
     "talk",
-    "form_guidance",
   ]) {
     expect(BUILTIN_VISIBLE[t]).toBeDefined();
   }

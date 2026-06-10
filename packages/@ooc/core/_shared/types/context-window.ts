@@ -35,7 +35,6 @@ export type ObjectType =
   | "feishu_doc"
   | "plan"
   | "example"
-  | "guidance"
   | (string & {});
 
 /**
@@ -136,7 +135,7 @@ export interface BaseContextWindow {
    * Object 自我门面窗（id=type=objectId，由 initContextWindows 每次 thread 加载幂等重注入）。
    * 它从对象身份确定性重建、无独立 state.json，**不应持久化**——否则 thread-context.json 落成
    * 指向缺失 state.json 的死 _ref，reload 刷屏 `references missing object <id>`。
-   * 与 isVolatileDerivedWindow 同类「不持久化」语义，但 self 门面非 derived，单列标记。
+   * 写盘端经 isNonPersistedWindow 统一剔除。
    */
   isSelfWindow?: boolean;
   /**
@@ -167,28 +166,6 @@ export type SharingState =
       sharedAt: number;
       snapshot: ContextWindow;
     };
-
-/**
- * GuidanceWindow — form-bound contextual guidance, produced by onFormChange().
- *
- * Semantically a lightweight, transient sibling of KnowledgeWindow: it carries a
- * plain text `content` payload (the guidance text) and is always bound to a
- * specific form via `boundFormId`. Rendered as <guidance> children inside the
- * owning form's window block.
- *
- * @deprecated 2026-06-10: replaced by MethodExecWindow.tip (plain string on the form).
- * 生产方（buildGuidanceWindows）已删除；类型仅保留用于历史持久化数据的读端兼容
- * （isVolatileDerivedWindow 剔除 + 渲染端过滤）。
- */
-export interface GuidanceWindow extends BaseContextWindow {
-  type: "guidance";
-  parentWindowId: string;
-  boundFormId: string;
-  provenance: ContextWindowProvenance & { reason: { mechanism: "form_bound" } };
-  relevance: ContextWindowRelevance;
-  content: string;
-  summary: string;
-}
 
 /**
  * ContextWindow —— **base 版**（batch C6 分层决策，2026-06-10 正名为 ContextWindow）。
@@ -241,25 +218,10 @@ export function creatorWindowIdOf(threadId: string): string {
 }
 
 /**
- * volatile derived window —— 旧机制每轮派生、从不需要持久化的窗。
- *
- * 唯一成员是 form-bound guidance（type="guidance" + provenance.kind="derived"）。
- * 2026-06-10 起该机制已退役（form 指引为 plain-string tip），不再有新的生产方；
- * 本谓词保留用于剔除历史持久化数据中的残留——落盘的 guidance 是指向缺失对象的死
- * _ref，reload 时会刷屏 `references missing object ... skipping`。写盘端剔除，
- * 读端跳过历史污染。
- *
- * 双锚 type+provenance：防误伤未来可能出现的非 derived guidance / 其它 window。
- */
-export function isVolatileDerivedWindow(window: BaseContextWindow): boolean {
-  return window.type === "guidance" && window.provenance?.kind === "derived";
-}
-
-/**
- * 不应持久化进 thread-context.json 的窗：volatile derived（form-bound guidance）+ self 门面窗。
- * 二者都由 enrichment / init 每轮确定性重建，落盘只会变成死 _ref 刷屏（见各自标记）。
+ * 不应持久化进 thread-context.json 的窗：self 门面窗。
+ * 由 init 每轮确定性重建，落盘只会变成死 _ref 刷屏（见 isSelfWindow 标记）。
  * 写盘端用本谓词统一剔除。
  */
 export function isNonPersistedWindow(window: BaseContextWindow): boolean {
-  return isVolatileDerivedWindow(window) || window.isSelfWindow === true;
+  return window.isSelfWindow === true;
 }

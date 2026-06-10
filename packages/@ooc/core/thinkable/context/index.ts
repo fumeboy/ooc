@@ -278,7 +278,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
 const BUILTIN_WINDOW_TYPES: ReadonlySet<string> = new Set([
   "root", "method_exec", "do", "todo", "talk", "program", "file",
   "knowledge", "search", "relation", "skill_index",
-  "feishu_chat", "feishu_doc", "plan", "guidance",
+  "feishu_chat", "feishu_doc", "plan",
 ]);
 
 /**
