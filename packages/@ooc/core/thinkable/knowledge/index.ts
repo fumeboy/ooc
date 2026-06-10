@@ -15,4 +15,4 @@ export {
   parseActivatesOn,
   parseTrigger,
   type Trigger,
-} from "./triggers";
+} from "./activator.expr";

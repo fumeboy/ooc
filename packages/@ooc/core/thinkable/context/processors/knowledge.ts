@@ -13,7 +13,7 @@ import type { PipelinePhase, PipelineContext } from "../pipeline.js";
 import type { ThreadContext } from "../index.js";
 import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
 import type { Intent, IntentCache, IntentCacheEntry } from "../intent.js";
-import { parseTrigger, matchesIntentName } from "../../knowledge/triggers.js";
+import { parseTrigger, matchesIntentName } from "../../knowledge/activator.expr.js";
 import type { KnowledgeIndex } from "../../knowledge/types.js";
 import { loadKnowledgeIndex } from "../../knowledge/loader.js";
 import { deriveStoneFromThread, derivePoolFromThread } from "../../../persistable/index.js";

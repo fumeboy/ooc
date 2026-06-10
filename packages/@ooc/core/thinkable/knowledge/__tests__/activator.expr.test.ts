@@ -4,7 +4,7 @@ import {
   maxLevel,
   parseActivatesOn,
   parseTrigger,
-} from "../triggers";
+} from "../activator.expr";
 import type { ThreadContext } from "../../context";
 import {
   MethodExecWindow,

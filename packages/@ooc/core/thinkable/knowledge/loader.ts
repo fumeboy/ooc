@@ -24,9 +24,9 @@ export interface KnowledgeLoadRefs {
 const cache = new Map<string, { index: KnowledgeIndex; signature: string }>();
 
 /**
- * 双源加载 Object 的 knowledge 索引（2026-05-24 起：stone seed + pool sediment 合并）。
+ * 双源加载 Object 的 knowledge 索引（stone seed + pool sediment 合并）。
  *
- * 四侧扫描 + 继承（P6.§7 2026-06-02 增加 parentClass 继承链）：
+ * 四侧扫描 + 继承：
  * - **目录祖先 seed**：`stones/<branch>/objects/<ancestor>/knowledge/` 下 frontmatter `inheritable: true`
  *   的文件，从 root 向 immediate parent 顺序加载；后加载者覆盖前者（更近的祖先 override 更远的）
  * - **父类链 seed**：parentClass 继承链上各 class 的 `stones/<branch>/objects/<parentClass>/knowledge/`
@@ -66,7 +66,7 @@ export async function loadKnowledgeIndex(
     stoneKnowledgeDir({ ...refs.stone, objectId: id }),
   );
 
-  // P6.§7: parentClass 继承链 seed 目录列表（closest → farthest）。
+  // parentClass 继承链 seed 目录列表（closest → farthest）。
   // 自定义 stone 对象可能尚未注册 → resolveParentClassChain 返回 []，安全降级。
   const parentClassChain = registry.resolveParentClassChain(refs.stone.objectId as any);
   const parentClassRoots = parentClassChain.map((id) =>
@@ -128,7 +128,7 @@ export async function loadKnowledgeIndex(
 
   // Step 1b: parentClass 继承链 seed —— **无条件继承**（不门控 inheritable）。
   // class 存在的意义就是被 object 继承，其 seed knowledge 应整体流向 instance；这与
-  // Step 1 的 B-tree 域祖先继承（child Agent opt-in，需 inheritable:true）是不同的轴。
+  // Step 1 的目录域祖先继承（child Agent opt-in，需 inheritable:true）是不同的轴。
   // 顺序：closest parent → farthest parent，更近的父类后 set override 更远的。
   for (const { root, files } of parentClassFilesByRoot) {
     for (const f of files) {

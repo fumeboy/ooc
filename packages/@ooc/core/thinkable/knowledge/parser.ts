@@ -1,5 +1,5 @@
 import yaml from "js-yaml";
-import { parseActivatesOn } from "./triggers";
+import { parseActivatesOn } from "./activator.expr";
 import type { KnowledgeFrontmatter } from "./types";
 
 /**
@@ -11,7 +11,7 @@ import type { KnowledgeFrontmatter } from "./types";
  * - yaml 语法错 → frontmatter = {}，body 仍正常返回
  *
  * activates_on 校验：
- * - 由 `parseActivatesOn`（来自 triggers.ts）做语义校验
+ * - 由 `parseActivatesOn`（来自 activator.expr.ts）做语义校验
  * - 旧 schema（`show_description_when` / `show_content_when`）或未知 trigger → throw
  *   （上层 loader 决定是否 catch；不静默忽略 = silent-swallow ban）
  */

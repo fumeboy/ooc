@@ -36,7 +36,7 @@ import { makeThread } from "@ooc/core/__tests__/make-thread";
 import {
   parseTrigger,
   evaluateTrigger,
-} from "@ooc/core/thinkable/knowledge/triggers";
+} from "@ooc/core/thinkable/knowledge/activator.expr";
 import { derivePeerObjectWindows } from "@ooc/core/thinkable/context/object-windows";
 import { WindowManager } from "@ooc/core/executable/windows/_shared/manager";
 import type {

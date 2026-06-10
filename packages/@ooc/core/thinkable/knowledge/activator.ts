@@ -4,7 +4,7 @@ import {
   maxLevel,
   parseTrigger,
   type Trigger,
-} from "./triggers";
+} from "./activator.expr";
 import type { ActivationLevel, ActivationResult, KnowledgeIndex } from "./types";
 import type { KnowledgeWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
@@ -14,7 +14,7 @@ const MAX_RESULTS = 20;
 /**
  * 给定线程上下文与 knowledge 索引，计算本轮应渲染的激活集合。
  *
- * 2026-05-28：trigger map 协议——每篇 knowledge 的 frontmatter.activates_on 是
+ * trigger map 协议：每篇 knowledge 的 frontmatter.activates_on 是
  * `Record<triggerExpr, "show_description" | "show_content">`。本函数对每篇
  * knowledge 逐条 evaluate 其 triggers，把命中级别取 max 作为该篇最终级别。
  *
@@ -31,7 +31,6 @@ export function computeActivations(
   const forced = new Set<string>();
   for (const window of thread.contextWindows ?? []) {
     if (window.type === "knowledge") {
-      // batch C narrowing(N1): window 契约层是 base；type==="knowledge" 后 narrow 回 KnowledgeWindow 读 path。
       forced.add((window as KnowledgeWindow).path);
     }
   }

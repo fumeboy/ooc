@@ -2,8 +2,8 @@
  * Knowledge frontmatter 与索引类型 —— canonical 源（batch C4 从
  * `thinkable/knowledge/types.ts` 迁入）。零依赖纯类型。
  *
- * 2026-05-28: activates_on 由"path list 双桶"切换为 **trigger map**。
- * 详见 `thinkable/knowledge/triggers.ts` 与 meta/object.doc.ts thinkable.knowledge。
+ * activates_on 是 **trigger map**（trigger 表达式 → 激活级别）。
+ * 详见 `thinkable/knowledge/activator.expr.ts`。
  */
 
 /** 激活级别——值越靠右越激进。 */
@@ -12,7 +12,7 @@ export type ActivationLevel = "show_description" | "show_content";
 /**
  * 激活规则：key 是 trigger 表达式，value 是该 trigger 命中后的最低激活级别。
  *
- * 支持三类 trigger 语法（详见 `triggers.ts`）：
+ * 支持三类 trigger 语法（详见 `activator.expr.ts`）：
  * - `window::<type>` —— 任意 open 的 window 满足该 type 时命中
  * - `method::<window_type>::<method>` —— 存在挂在该 window 类型上的同名 method_exec form
  * - `super` —— 当前 thread 跑在 super session 中
