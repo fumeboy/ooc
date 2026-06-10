@@ -1,11 +1,11 @@
 /**
- * windows/ 模块 barrel — 对外暴露 ContextObject 抽象的所有公共入口。
+ * windows/ 模块 barrel — 对外暴露 ContextWindow 抽象的所有公共入口。
  *
  * 见 spec docs/superpowers/specs/2026-05-14-context-window-unification-design.md
  *
  * 2026-06-03 ooc-6 cleanup Phase A：已删除所有 deprecated alias re-export
  * （ObjectType / ContextObject / ObjectTypeDefinition / ObjectMethod /
- *  MethodExecutionContext / MethodKnowledgeEntries / MethodOutcome）。
+ *  MethodExecutionContext / MethodOutcome）。
  *
  * 2026-06-04 ooc-6 cleanup Phase E：已删除 registry thin wrapper 函数的 re-export
  * （registerObjectType / getObjectDefinition / listRegisteredObjectTypes /
@@ -15,7 +15,6 @@
  */
 
 export type {
-  ContextObject,
   ContextWindow,
   WindowStatus,
   BaseContextWindow,
@@ -61,7 +60,6 @@ export type {
 export type {
   ObjectMethod,
   MethodExecutionContext,
-  MethodKnowledgeEntries,
   MethodOutcome,
 } from "./_shared/method-types.js";
 

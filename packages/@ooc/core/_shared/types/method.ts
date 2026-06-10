@@ -4,7 +4,6 @@
  *
  * - ObjectMethod：单个 method 的完整定义（description / intents / schema / exec + 可见性标记）
  * - MethodExecutionContext：method 的 exec 函数运行时入参
- * - MethodKnowledgeEntries：method.knowledge() 的返回 shape
  * - MethodOutcome：method.exec 的显式返回结果
  * - MethodExecuteForm：onFormChange 返回的结构化 form 状态（tip + intents + quick_exec_submit）
  *
@@ -19,9 +18,6 @@
 import type { ContextWindow } from "./context-window.js";
 import type { ThreadContext, FlowObjectRef, ThreadPersistenceRef } from "./thread.js";
 import type { Intent, FormChangeEvent, MethodCallSchema } from "./intent.js";
-
-/** Method knowledge entries（扁平结构，无嵌套子节点）。 */
-export type MethodKnowledgeEntries = Record<string, string>;
 
 /**
  * Structured return value of onFormChange.

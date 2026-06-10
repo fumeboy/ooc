@@ -1,5 +1,5 @@
 /**
- * Story: executable —— LLM 经稳定 tool 原语在 ContextObject 上调 Method 改变世界。
+ * Story: executable —— LLM 经稳定 tool 原语在 ContextWindow 上调 Method 改变世界。
  *
  * 控制面（无 LLM）只验**结构**：① Object 自定义 for_ui_access 方法经 HTTP call_method 执行；
  * ② Object 定义的 window.methods（LLM 路径命令）经 loader 可加载。深度（4 原语 exec/close/wait/compress

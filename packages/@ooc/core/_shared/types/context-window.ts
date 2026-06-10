@@ -175,12 +175,6 @@ export type SharingState =
  */
 export type ContextWindow = BaseContextWindow;
 
-/**
- * ContextObject — 旧名（pre-rename 别名），= ContextWindow。
- * @deprecated Use ContextWindow.
- */
-export type ContextObject = ContextWindow;
-
 /** Root object 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";
 
@@ -206,7 +200,6 @@ export function generateWindowId(type: Exclude<ObjectType, "root">): string {
     feishu_chat: "w_fschat",
     feishu_doc: "w_fsdoc",
     plan: "w_plan",
-    guidance: "w_guide",
   };
   const prefix = prefixMap[type] ?? "w_obj";
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;

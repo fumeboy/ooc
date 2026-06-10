@@ -11,7 +11,6 @@
  * 这样 `ObjectMethod.exec` 的签名在所有层保持一致，避免函数逆变导致的类型分裂。
  */
 export type {
-  MethodKnowledgeEntries,
   MethodOutcome,
   ObjectMethod,
   MethodExecutionContext,

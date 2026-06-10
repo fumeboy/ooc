@@ -356,7 +356,7 @@ export class WindowManager {
     };
     this.windows.set(formId, form);
     this.recordKnowledgeRefs(form);
-    this.writeContextObjectForWindow(opts.thread, form).catch(() => {});
+    this.persistWindow(opts.thread, form).catch((e) => console.warn(`[WindowManager] persist form failed: ${(e as Error).message}`));
 
     // schema/fill
     const methodResolved = this.registry.lookupMethodEntry(parent, opts.method);
@@ -468,7 +468,7 @@ export class WindowManager {
     this.windows.set(window.id, window);
     this.recordKnowledgeRefs(window);
     if (thread) {
-      this.writeContextObjectForWindow(thread, window).catch(() => {});
+      this.persistWindow(thread, window).catch((e) => console.warn(`[WindowManager] persist window failed: ${(e as Error).message}`));
     }
     return window.id;
   }
@@ -709,20 +709,7 @@ export class WindowManager {
 
   // ---- 内部 helper ----
 
-  private persistRefFromThread(thread: ThreadContext): import("../../../persistable/common.js").FlowObjectRef | undefined {
-    if (!thread.persistence) return undefined;
-    return {
-      baseDir: thread.persistence.baseDir,
-      sessionId: thread.persistence.sessionId,
-      objectId: thread.persistence.objectId,
-    };
-  }
-
-  private async writeContextObjectForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
-    return this.persistObjectAfterChange(thread, window);
-  }
-
-  private async persistObjectAfterChange(thread: ThreadContext, window: ContextWindow): Promise<void> {
+  private async persistWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
     if (window.id === ROOT_WINDOW_ID) return;
     if (isNonPersistedWindow(window)) return;
     const tref = this.threadPersistRefFromThread(thread);
@@ -786,9 +773,8 @@ export class WindowManager {
     await writeThreadContext(tref, entries);
   }
 
-  private async deleteContextObjectForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
-    const ref = this.persistRefFromThread(thread);
-    if (!ref) return;
+  private async unpersistWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
+    if (!thread.persistence) return;
     if (window.id === ROOT_WINDOW_ID) return;
     if (this.registry.isBuiltinFeatureType(window.type)) {
       await this.writeThreadContextSnapshot(thread).catch((e) => {
@@ -895,7 +881,7 @@ export class WindowManager {
     this.releaseKnowledgeRefs(window);
     this.windows.delete(windowId);
     if (thread) {
-      this.deleteContextObjectForWindow(thread, window).catch(() => {});
+      this.unpersistWindow(thread, window).catch((e) => console.warn(`[WindowManager] delete-persist failed: ${(e as Error).message}`));
     }
   }
 
@@ -910,7 +896,7 @@ export class WindowManager {
     this.windows.set(window.id, window);
     this.recordKnowledgeRefs(window);
     if (thread) {
-      this.writeContextObjectForWindow(thread, window).catch(() => {});
+      this.persistWindow(thread, window).catch((e) => console.warn(`[WindowManager] persist window failed: ${(e as Error).message}`));
     }
   }
 

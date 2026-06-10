@@ -9,7 +9,7 @@
  * **迁入本文件**：所有 hook/定义类型 + `filterMethodsByVisibility`（纯函数，无可变状态）。
  */
 
-import type { ContextObject, ObjectType } from "./context-window.js";
+import type { ContextWindow, ObjectType } from "./context-window.js";
 import type { ThreadContext } from "./thread.js";
 import type { XmlNode } from "./xml.js";
 import type { ObjectMethod } from "./method.js";
@@ -17,13 +17,13 @@ import type { WindowMethod } from "./window-method.js";
 
 export interface OnCloseContext {
   thread: ThreadContext;
-  window: ContextObject;
+  window: ContextWindow;
 }
 export type OnCloseHook = (ctx: OnCloseContext) => boolean | void;
 
 export interface RenderContext {
   thread: ThreadContext;
-  window: ContextObject;
+  window: ContextWindow;
 }
 
 export type ReadableFn = (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]>;

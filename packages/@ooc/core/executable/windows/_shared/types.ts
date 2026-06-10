@@ -19,8 +19,8 @@
  *   **覆盖** base 版同名 `ContextWindow` export。
  * - 需要 discriminant narrowing 的调用方从本文件引；只读 base 字段的调用方可从 `_shared` 引。
  *
- * 2026-06-10: ContextObject 正名为 ContextWindow（"context window"=展示单元，"Object"=OOP 实体）。
- * ContextObject 保留为 deprecated 别名。
+ * 2026-06-10: ContextObject 正名为 ContextWindow（"context window"=展示单元，"Object"=OOP 实体）；
+ * 2026-06-11 删除 deprecated 别名，全仓统一 ContextWindow。
  */
 
 // base 类型 / 常量 / 工具函数：从 _shared re-export（ContextWindow 除外——下方覆盖）
@@ -100,9 +100,3 @@ export type ContextWindow =
   | FeishuChatWindow
   | FeishuDocWindow
   | PlanWindow;
-
-/**
- * ContextObject — 旧名（pre-rename 别名），= ContextWindow。
- * @deprecated Use ContextWindow.
- */
-export type ContextObject = ContextWindow;

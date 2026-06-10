@@ -6,7 +6,7 @@
  *
  * objectId == window.id（设计上扁平：不嵌套到 parent）。
  *
- * state.json 的内容使用 ContextObject 类型（含 type + 全部 type-specific 字段，object 维度）；
+ * state.json 的内容使用 ContextWindow 类型（含 type + 全部 type-specific 字段，object 维度）；
  * context-lifecycle 字段（status / parentWindowId / createdAt 等）属于 thread-context.json，
  * 不进 state.json（由 writeRuntimeObjectState 的 stripContextWindowsField + manager 的
  * isBuiltinFeature 分流保证）。
