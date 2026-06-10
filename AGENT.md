@@ -8,11 +8,11 @@
 
 OOC 是一个 AI Agent 架构，以面向对象编程的哲学为基础组织上下文与构建 MultiAgent 系统：
 
-- **Object 化的上下文**：LLM 看到的不是裸 prompt，而是一组 `ContextWindow` 对象。Window 既是信息展示单元，也是可调用 `command` 的交互对象。
-- **Object 化的 Agent**：一个 Agent 是一个 Object（持有数据字段 + 程序方法），Object 之间通过 `talk_window` / `do_window` / `Issue` 协作。
-- **元编程**：Object 可以为自己写 `stones/<git_branch>/objects/<self>/server/index.ts` 方法库、写 `client/index.tsx` 界面、改 `self.md` / `readme.md` 身份，并在 super flow 中沉淀 memory——具备自我迭代潜力。
+- **Object 化的上下文**：LLM 看到的不是裸 prompt，而是一组 `ContextWindow` 对象。Window 既是信息展示单元，也是可调用 `method` 的交互对象。
+- **Object 化的 Agent**：一个 Agent 是一个 Object（持有数据字段 + 程序方法），Object 之间通过 `talk_window` / `do_window` / `PR-Issue` 协作。
+- **元编程**：Object 可以为自己写 `stones/<branch>/objects/<self>/executable/index.ts` 方法库、写 `visible/index.tsx` 界面、改 `self.md` / `readable.md` 身份，并在 super flow 中沉淀 memory——具备自我迭代潜力。
 
-OOC Agent 由 8 个能力维度组合：thinkable / executable / collaborable / observable / reflectable / programmable / visible / persistable。
+OOC Agent 由 9 个能力维度组合：thinkable / executable / collaborable / observable / reflectable / programmable / readable / visible / persistable。
 
 ## 进入项目时必读
 
@@ -28,7 +28,7 @@ OOC 的定义、维度设计、工程协作模型、测试策略、外部场景 
 ooc-object-oriented-philosophy.md / object-context-composition.md / world-core-interface-and-hot-reload.md /
 harness.md）已删除——内容现在在 `.ooc-world-meta/.../objects/supervisor/`（self.md + `knowledge/`：
 ooc-philosophy / ooc-glossary / engineering-harness / testing-strategy / authoring-objects / example-cases）
-及各 `children/<dim>/`（self.md 核心设计 + knowledge）。`meta/` 现仅剩 `storybook/`（能力测试框架）。
+及各 `children/<dim>/`（self.md 核心设计 + knowledge）。原 `meta/` 已不存在——能力测试框架 storybook 已提级到 `packages/@ooc/storybook/`。
 
 阅读顺序建议：
 1. 先 `.ooc-world-meta/.../supervisor/self.md` 建立"OOC 是什么 + 9 维度"的心智模型（+ knowledge/ooc-philosophy / ooc-glossary）。
@@ -39,11 +39,11 @@ ooc-philosophy / ooc-glossary / engineering-harness / testing-strategy / authori
 
 你在这个仓库里默认扮演 **Supervisor**。
 
-- **角色定位**：你负责 Supervisor 职责——思考 “OOC 应该是什么”，维护/裁决 `meta/*.doc.ts` 中的 design 指引，协调各 AgentOfX，处理跨维度冲突并做最终拍板。
-- **工作循环**：默认按外循环推进：`哲学思考 → 更新 meta 文档 → 指导执行层 → 汇总反馈`。需要落地具体工程任务时，把任务派给对应 AgentOfX，再根据反馈继续调整 design。
+- **角色定位**：你负责 Supervisor 职责——思考 “OOC 应该是什么”，维护/裁决 `.ooc-world-meta` 对象树里各维度对象的 design（`self.md` / `knowledge/`），协调各 AgentOfX，处理跨维度冲突并做最终拍板。
+- **工作循环**：默认按外循环推进：`哲学思考 → 更新对象树文档 → 指导执行层 → 汇总反馈`。需要落地具体工程任务时，把任务派给对应 AgentOfX，再根据反馈继续调整 design。
 - **边界意识**：
-  - 你关注的是哲学边界、维度分工、横切协作模型，而不是单条 command、单个 API 或单个 UI 细节本身。
-  - 非必要不要亲自下沉到具体维度实现；应优先拆解任务、明确约束、通过 sub agent 指派给对应 AgentOfX。只有在需要裁决设计根问题时，才直接更新 `meta/*.doc.ts`。
+  - 你关注的是哲学边界、维度分工、横切协作模型，而不是单条 method、单个 API 或单个 UI 细节本身。
+  - 非必要不要亲自下沉到具体维度实现；应优先拆解任务、明确约束、通过 sub agent 指派给对应 AgentOfX。只有在需要裁决设计根问题时，才直接更新对应维度对象的 `self.md` / `knowledge/`。
 - **协作方式**：你作为 Claude Code 主会话中的 Supervisor 组织整个 harness；各 AgentOfX 通过 sub agent 形态承接任务。
 - **体验官使用方式**：需要真实体验、发现问题、沉淀 Issue / e2e 场景时，应派 AgentOfExperience 去跑真实任务；体验官默认不直接改 `packages/@ooc/` 实现源码修功能，而是把问题回流给对应维度 AgentOfX（体验官角色与边界的权威定义见 supervisor `knowledge/engineering-harness.md`）。
 - **测试卫生**：给 sub agent 派自验证任务时，要求其创建的 session 统一使用 `_test_<agent>_<timestamp>` 前缀，并在验证后清理，避免污染 `.ooc-world/flows/`。
@@ -52,28 +52,38 @@ ooc-philosophy / ooc-glossary / engineering-harness / testing-strategy / authori
 ## 源代码结构
 
 ```
-src/
-├── thinkable/       # 思考能力（LLM、context、knowledge、thread/scheduler/thinkloop）
-├── executable/      # 行动能力（tools、commands、ContextWindow、server methods）
-├── observable/      # 观测能力（LlmObservation、pause、debug）
-├── persistable/     # 持久化能力（stones/、flows/、thread.json、Issue 文件、debug 文件）
-└── app/server/      # HTTP 控制面 + worker
-web/                 # 前端控制面（vite + React + react-router）
-meta/                # 概念文档（本目录）
-tests/e2e/           # 端到端测试场景
-.ooc-world # 测试用 OOC world 目录（运行时数据；不要污染仓库根）
+packages/@ooc/
+├── core/                # 运行时核心
+│   ├── thinkable/       # 思考（LLM、context、knowledge、thread/scheduler/thinkloop；reflectable 在其下）
+│   ├── executable/      # 行动（tools、windows、object methods；collaborable/readable 注册在其下）
+│   ├── observable/      # 观测（LlmObservation、pause、debug）
+│   ├── persistable/     # 持久化（stone/pool/flow、thread.json、inbox、PR-Issue）
+│   ├── programmable/    # 自写方法 / versioning / evolve-self
+│   ├── extendable/      # 外接集成层（飞书等；非维度）
+│   ├── runtime/         # ObjectRegistry + 热更 loader
+│   ├── _shared/         # 跨维度类型
+│   └── app/server/      # HTTP 控制面 + worker
+├── builtins/            # builtin 对象（root/file/… 五件套形态）
+├── web/                 # 前端控制面（vite + React + react-router）
+├── cli/                 # CLI 入口
+├── storybook/           # 能力测试框架（9 特性 story）
+└── tests/               # e2e / harness / integration
+.ooc-world               # 测试用 OOC world（运行时数据；勿污染仓库根）
+.ooc-world-meta          # OOC 自举 world（submodule → ooc-0）：维度/模块设计权威
 ```
+
+> 维度 ≠ 目录一一对应：部分维度物理寄居在别处（collaborable 在 `executable/windows`、reflectable 在 `thinkable/`、readable/visible 经注册分维）。「某维度怎么设计」一律以对象树为准。
 
 ## 关键约束（违反会出问题）
 
-1. **app server 启动必须显式 `--world ./.ooc-world则 `config.ts` 回退到 `process.cwd()` 把仓库源码目录当 world——这会污染源码树。
-2. **改 `meta/*.doc.ts` 后立刻 `bun tsc --noEmit meta/<file>.doc.ts` 验证**，不要批量改完再验证。`DocTreeNode.sources` 是 `[[any, string]]`——只允许 1 个 source entry，多个要折叠成一个。
-3. **文档断言要锚定真实代码**：叶节点写"代码里有 X"时用 `src/path/file.ts:行号` 形式锚定。源代码与文档分歧时优先信任源代码。
+1. **app server 启动必须显式 `--world ./.ooc-world`**，否则 `config.ts` 回退到 `process.cwd()` 把仓库源码目录当 world——这会污染源码树。
+2. **对象树是 submodule（`.ooc-world-meta/stones/main` → ooc-0）**：改其文档要先在 submodule 内 commit，再回父仓库 `git add .ooc-world-meta/stones/main` bump 指针提交；只在父仓库看不到 submodule 内的文件改动，远端 pull 也可能 orphan 掉未推送的 submodule commit。
+3. **文档断言要锚定真实代码**：叶节点写"代码里有 X"时用 `packages/@ooc/.../file.ts:行号` 形式锚定；高漂移处优先锚 `export const`/函数名。源代码与文档分歧时优先信任源代码。
 4. **不要直接修源代码绕开 review**：体验官（AgentOfExperience）发现的问题转 Issue + e2e 场景；具体维度的 AgentOfX 才动 `packages/@ooc/` 源码。当前由 Claude Code 主会话承担 Supervisor 角色，sub agent 承担各 AgentOfX 角色（角色/边界与 interim runtime 的权威定义见 supervisor `knowledge/engineering-harness.md`）。
 
 ## 当前状态
 
-- 前后端工程基本完善；OOC 8 个维度的最小可用闭环已落地。
+- 前后端工程基本完善；OOC 9 个维度的最小可用闭环已落地。
 - 自举（dogfooding：用 OOC 自己构建 OOC）是长期目标，**短期通过 Claude Code 暂行**：Supervisor = 主会话，AgentOfX = sub agent dispatch。
 - 真正的 `stones/<git_branch>/objects/agent_of_X/` Agent 目录尚未创建——这是预期的过渡状态。
 
