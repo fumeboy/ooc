@@ -155,28 +155,6 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(types).toContain("relation");
   });
 
-  // ── Point 3: Web UI migration - /api/objects/_shared/types works ───────
-  it("3: /api/objects/_shared/types alias works identically to /api/windows/_shared/types", async () => {
-    const config = await readServerConfig({
-      argv: ["--world", baseDir, "--port", "3001"],
-      env: { OOC_WORKER_ENABLED: "0" },
-    });
-    const app = buildServer(config);
-
-    const [objectsRes, windowsRes] = await Promise.all([
-      app.handle(new Request("http://localhost/api/objects/_shared/types")),
-      app.handle(new Request("http://localhost/api/windows/_shared/types")),
-    ]);
-    expect(objectsRes.status).toBe(200);
-    expect(windowsRes.status).toBe(200);
-    const objectsBody = (await objectsRes.json()) as any;
-    const windowsBody = (await windowsRes.json()) as any;
-    expect(objectsBody.items.length).toBe(windowsBody.items.length);
-    const objTypes = objectsBody.items.map((i: any) => i.type).sort();
-    const winTypes = windowsBody.items.map((i: any) => i.type).sort();
-    expect(objTypes).toEqual(winTypes);
-  });
-
   // ── Point 4: Readable concept ───────────────────────────────────────────
   it("4: readable concept - objects render their readable content in XML", async () => {
     // Create stone objects with readable (writeReadable = dual-write to readable.md + readme.md)

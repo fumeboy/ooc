@@ -224,7 +224,7 @@ export {
   httpDirectMainWrite,
   pruneStaleWorktrees,
   SUPERVISOR_OBJECT_ID,
-  type MetaprogWorktreeRef,
+  type SessionWorktreeRef,
   type ScopeClass,
   type PrIssueDecision,
   type RollbackInput,

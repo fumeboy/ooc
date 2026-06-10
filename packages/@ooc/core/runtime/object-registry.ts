@@ -17,7 +17,6 @@ import type {
   OnCloseHook,
   ReadableFn,
   RenderContext,
-  RenderHook,
 } from "../_shared/types/registry.js";
 import { filterMethodsByVisibility } from "../_shared/types/registry.js";
 import type { ObjectMethod } from "../_shared/types/method.js";
@@ -32,7 +31,6 @@ export type {
   OnCloseContext,
   OnCloseHook,
   RenderContext,
-  RenderHook,
   ReadableFn,
   CompressViewHook,
   MethodVisibilityContext,
@@ -72,24 +70,24 @@ function resolveEffectiveParentClass(
   return fallback?.parentClass;
 }
 
-/** Base types seeded into every new ObjectRegistry. */
+/** Base types seeded into every new ObjectRegistry. Map key 即 type。 */
 const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
-  ["root", { type: "root", methods: {}, parentClass: null } as ObjectDefinition],
-  ["method_exec", { type: "method_exec", methods: {}, parentClass: null } as ObjectDefinition],
-  ["do", { type: "do", methods: {} } as ObjectDefinition],
-  ["todo", { type: "todo", methods: {} } as ObjectDefinition],
-  ["talk", { type: "talk", methods: {} } as ObjectDefinition],
-  ["program", { type: "program", methods: {} } as ObjectDefinition],
-  ["file", { type: "file", methods: {} } as ObjectDefinition],
-  ["knowledge", { type: "knowledge", methods: {} } as ObjectDefinition],
-  ["search", { type: "search", methods: {} } as ObjectDefinition],
-  ["relation", { type: "relation", methods: {} } as ObjectDefinition],
-  ["skill_index", { type: "skill_index", methods: {} } as ObjectDefinition],
-  ["feishu_chat", { type: "feishu_chat", methods: {} } as ObjectDefinition],
-  ["feishu_doc", { type: "feishu_doc", methods: {} } as ObjectDefinition],
-  ["plan", { type: "plan", methods: {} } as ObjectDefinition],
+  ["root", { methods: {}, parentClass: null }],
+  ["method_exec", { methods: {}, parentClass: null }],
+  ["do", { methods: {} }],
+  ["todo", { methods: {} }],
+  ["talk", { methods: {} }],
+  ["program", { methods: {} }],
+  ["file", { methods: {} }],
+  ["knowledge", { methods: {} }],
+  ["search", { methods: {} }],
+  ["relation", { methods: {} }],
+  ["skill_index", { methods: {} }],
+  ["feishu_chat", { methods: {} }],
+  ["feishu_doc", { methods: {} }],
+  ["plan", { methods: {} }],
   // example —— 标准对象定义样板（executable/index.ts + readable.ts 两维度分注册示范）。
-  ["example", { type: "example", methods: {} } as ObjectDefinition],
+  ["example", { methods: {} }],
 ];
 
 export class ObjectRegistry {
@@ -106,8 +104,8 @@ export class ObjectRegistry {
    * （`parentClass` 继承声明 / `isBuiltinFeature` 标记）。
    *
    * 与 {@link registerReadable} 按维度分工——本方法**只**接受 executable 字段，
-   * readable 维度（readable / renderXml / windowMethods / compressView / onClose /
-   * basicKnowledge / consumedMessageIds）走 registerReadable。类型层即拒绝越界字段，
+   * readable 维度（readable / windowMethods / compressView / onClose /
+   * consumedMessageIds）走 registerReadable。类型层即拒绝越界字段，
    * 避免两个维度的注册再挤进同一次调用（符号/职责膨胀）。
    *
    * 只更新**已 seed 的 type**（BASE_TYPE_DEFINITIONS）；新 type 走 registerNewObjectType。
@@ -120,10 +118,9 @@ export class ObjectRegistry {
   }
 
   /**
-   * 注册 **readable 维度**：`readable` / `renderXml`（二选一的展示构造 hook）、
+   * 注册 **readable 维度**：`readable`（展示构造 hook）、
    * `windowMethods`（控制展示的 window method 表）、`compressView`（压缩态渲染）、
-   * `onClose`（关闭副作用）、`basicKnowledge`（窗口在场时注入的协议知识）、
-   * `consumedMessageIds`（transcript 去重 hook）。
+   * `onClose`（关闭副作用）、`consumedMessageIds`（transcript 去重 hook）。
    *
    * 与 {@link registerExecutable} 配对：同一 type 的两个维度分别注册、互不覆盖
    * （未传字段保留 existing）。标准对象定义里 readable 维度由 `readable.ts` 自注册。
@@ -132,7 +129,7 @@ export class ObjectRegistry {
     type: ObjectType,
     patch: Pick<
       Partial<ObjectDefinition>,
-      "readable" | "renderXml" | "windowMethods" | "compressView" | "onClose" | "basicKnowledge" | "consumedMessageIds"
+      "readable" | "windowMethods" | "compressView" | "onClose" | "consumedMessageIds"
     >,
   ): void {
     this.mergeExistingDefinition(type, patch, "registerReadable");
@@ -160,9 +157,7 @@ export class ObjectRegistry {
       methods: nextMethods,
       windowMethods: nextWindowMethods,
       onClose: partial.onClose ?? existing.onClose,
-      renderXml: partial.renderXml ?? existing.renderXml,
       compressView: partial.compressView ?? existing.compressView,
-      basicKnowledge: partial.basicKnowledge ?? existing.basicKnowledge,
       readable: partial.readable ?? existing.readable,
       consumedMessageIds: partial.consumedMessageIds ?? existing.consumedMessageIds,
       isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
@@ -178,16 +173,13 @@ export class ObjectRegistry {
     assertNoMethodNameCollision(type, entries, definition.windowMethods);
     const effectiveParentClass = resolveEffectiveParentClass(definition, undefined);
     this.store.set(type, {
-      type,
       onClose: undefined,
-      renderXml: undefined,
       compressView: undefined,
-      basicKnowledge: undefined,
       readable: undefined,
       ...definition,
       methods: entries,
       parentClass: effectiveParentClass,
-    } as ObjectDefinition);
+    });
   }
 
   getObjectDefinition(type: ObjectType): ObjectDefinition {
@@ -298,11 +290,11 @@ export class ObjectRegistry {
     const missing: ObjectType[] = [];
     for (const [type, def] of this.store) {
       if (type === "relation") continue;
-      if (!def.renderXml && !def.readable) missing.push(type);
+      if (!def.readable) missing.push(type);
     }
     if (missing.length > 0) {
       throw new Error(
-        `ObjectRegistry: 以下 object type 缺少 renderXml 或 readable hook: ${missing.join(", ")}`,
+        `ObjectRegistry: 以下 object type 缺少 readable hook: ${missing.join(", ")}`,
       );
     }
   }
@@ -342,9 +334,7 @@ export class ObjectRegistry {
               ? { ...existing.windowMethods, ...def.windowMethods }
               : undefined,
           onClose: def.onClose ?? existing.onClose,
-          renderXml: def.renderXml ?? existing.renderXml,
           compressView: def.compressView ?? existing.compressView,
-          basicKnowledge: def.basicKnowledge ?? existing.basicKnowledge,
           readable: def.readable ?? existing.readable,
           consumedMessageIds: def.consumedMessageIds ?? existing.consumedMessageIds,
           isBuiltinFeature: def.isBuiltinFeature ?? existing.isBuiltinFeature,

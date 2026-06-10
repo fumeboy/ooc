@@ -63,10 +63,10 @@ export const endpoints = {
    */
   runtimeDecidePermission: (sessionId: string, objectId: string, threadId: string) =>
     `/api/runtime/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/permission`,
-  /** Stone 级 server ui_methods 调用入口。 */
+  /** Stone 级 for_ui_access 方法调用入口（call_method）。 */
   stoneCallMethod: (objectId: string) =>
     `/api/stones/${encodeURIComponent(objectId)}/call_method`,
-  /** Flow object 级 server ui_methods 调用入口。 */
+  /** Flow object 级 for_ui_access 方法调用入口（call_method）。 */
   flowCallMethod: (sessionId: string, objectId: string) =>
     `/api/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/call_method`,
   /** World 级配置（站名 / 是否配置外部 skills 目录），来自 \`<baseDir>/.world.json\`。 */

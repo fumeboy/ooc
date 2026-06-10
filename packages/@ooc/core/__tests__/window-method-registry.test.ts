@@ -15,14 +15,14 @@ test("registerReadable keeps windowMethods on base type", () => {
 
 test("registerNewObjectType carries windowMethods", () => {
   const r = new ObjectRegistry();
-  r.registerNewObjectType("my_doc", { type: "my_doc", methods: {}, windowMethods: { set_viewport: wm } });
+  r.registerNewObjectType("my_doc", { methods: {}, windowMethods: { set_viewport: wm } });
   expect(r.getObjectDefinition("my_doc")?.windowMethods?.set_viewport).toBeDefined();
 });
 
 test("lookupWindowMethod resolves via parentClass chain", () => {
   const r = new ObjectRegistry();
-  r.registerNewObjectType("base_doc", { type: "base_doc", methods: {}, windowMethods: { set_viewport: wm } });
-  r.registerNewObjectType("my_doc", { type: "my_doc", methods: {}, parentClass: "base_doc" });
+  r.registerNewObjectType("base_doc", { methods: {}, windowMethods: { set_viewport: wm } });
+  r.registerNewObjectType("my_doc", { methods: {}, parentClass: "base_doc" });
   expect(r.lookupWindowMethod({ type: "my_doc" }, "set_viewport")).toBeDefined();
 });
 

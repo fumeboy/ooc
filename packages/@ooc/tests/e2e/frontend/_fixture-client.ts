@@ -107,7 +107,7 @@ export interface WorldFixture {
     page: string;
     code: string;
   }): void;
-  /** 给 stone 写 server/index.ts；ui_methods 通过 callMethod 调到。 */
+  /** 给 stone 写 executable/index.ts；window.methods 里 for_ui_access 方法通过 callMethod 调到。 */
   writeStoneServer(objectId: string, code: string): void;
   /** 在 stones 目录下创建一个空 stone（.stone.json + 必要骨架）。 */
   createStone(objectId: string): void;

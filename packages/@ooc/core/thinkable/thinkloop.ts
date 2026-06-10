@@ -3,56 +3,8 @@ import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
 import { writeThread } from "../persistable";
 import { buildInputItems, type ProcessEvent, type ThreadContext } from "./context";
-import {
-  BudgetManager,
-  loadBudgetThresholds,
-  type BudgetThresholds,
-} from "./context/budget";
-import type { LlmClient, LlmGenerateResult, LlmInputItem, LlmToolCall } from "./llm/types";
+import type { LlmClient, LlmGenerateResult, LlmToolCall } from "./llm/types";
 import { LlmTimeoutError } from "./llm/timeout";
-
-/** Default per-window budget for BudgetManager.allocate (soft threshold from config). */
-const BUDGET_MANAGER = new BudgetManager();
-
-/**
- * Construct a budget warning LlmInputItem for the current token estimate.
- *
- * Uses the same XML format <context_budget_warning current soft hard/> that the legacy
- * emergency guard used, so LLM behavior stays consistent.
- */
-function buildBudgetWarningItem(
-  currentTokens: number,
-  thresholds: BudgetThresholds,
-): LlmInputItem {
-  return {
-    type: "message",
-    role: "system",
-    content:
-      `<context_budget_warning current="${currentTokens}" soft="${thresholds.soft}" hard="${thresholds.hard}"/>\n` +
-      `当前估算 token 接近预算上限 (current=${currentTokens}, soft=${thresholds.soft}, hard=${thresholds.hard})。` +
-      `系统已通过 BudgetManager 将低相关性窗口排除在 context 之外。你可主动 compress(scope=windows, target_ids=[...]) ` +
-      `进一步精简，或继续推进任务。`,
-  };
-}
-
-/**
- * Estimate total tokens for a set of context windows using the same heuristic
- * (JSON.stringify.length / 4) that BudgetManager uses internally.
- * Returns the sum across all windows.
- */
-function estimateWindowsTokens(
-  windows: import("../executable/windows/_shared/types").ContextWindow[],
-): number {
-  let total = 0;
-  for (const w of windows) {
-    try {
-      total += Math.ceil(JSON.stringify(w).length / 4);
-    } catch {
-      total += 100;
-    }
-  }
-  return total;
-}
 
 /**
  * 把 LlmToolCall 解析成 PermissionDecider 可消费的 PendingToolCall 载荷。
@@ -60,7 +12,7 @@ function estimateWindowsTokens(
  * - exec: 提取 args.method 作为实际 method 路径; args.window_id 作为目标 window
  * - close / wait / compress: method = toolName 自身; windowId/args 视情况
  *
- * Q0b: 当前 exec 的 args 形态为 `{ method, window_id, args, ... }` (见 tools/exec.ts);
+ * exec 的 args 形态为 `{ method, window_id, args, ... }` (见 tools/exec.ts);
  * 解析失败 / 字段缺失时退化为 method=toolName, 由后续 decidePermission 走 ObjectMethod
  * fallback 链。
  */
@@ -83,7 +35,7 @@ function buildPendingToolCall(toolCall: LlmToolCall): PendingToolCall {
   };
 }
 
-/** 截断长字符串到 200 字符 (Q0b: permission_ask / permission_denied 的 argsSummary)。 */
+/** 截断长字符串到 200 字符 (permission_ask / permission_denied 的 argsSummary)。 */
 function summarizeArgs(args: unknown): string | undefined {
   if (args === undefined || args === null) return undefined;
   let text: string;
@@ -98,7 +50,7 @@ function summarizeArgs(args: unknown): string | undefined {
 }
 
 /**
- * Q0c: 派发单个已 approved 的 pending tool call (从 permission_ask.pendingCall 重建 LlmToolCall)。
+ * 派发单个已 approved 的 pending tool call (从 permission_ask.pendingCall 重建 LlmToolCall)。
  *
  * 把"原本被 paused 的 tool call"按 approve 决定真正跑一遍, 写一条 function_call_output。
  * 失败路径与 think 主循环里 allow 分支保持一致 (写 ok:false + 上抛中止本轮)。
@@ -141,7 +93,7 @@ async function dispatchApprovedToolCall(
 }
 
 /**
- * Q0c: 处理本轮 thinkloop 入口前的"已决议 ask event"。
+ * 处理本轮 thinkloop 入口前的"已决议 ask event"。
  *
  * 扫 thread.events 中最近一条 kind=permission_ask 且有 decided 字段的事件:
  * - approve → 用 pendingCall 重建 LlmToolCall 并 dispatch
@@ -235,7 +187,7 @@ async function processDecidedPermissionAsks(thread: ThreadContext): Promise<bool
 }
 
 /**
- * Q0c: 扫 thread.events 中所有 approved 的 ask event, 返回 toolCallId 集合。
+ * 扫 thread.events 中所有 approved 的 ask event, 返回 toolCallId 集合。
  *
  * thinkloop 在 dispatch 前用这个集合短路 decidePermission — approved 过的 call 直接 allow,
  * 避免 "approve 后再调 decidePermission 又返回 ask, 无限循环"。
@@ -269,14 +221,14 @@ function latestAssistantText(thread: ThreadContext): string | undefined {
 }
 
 /**
- * G2: permission / tool dispatch 循环（从 think 主流程逐行提取，行为零变化）。
+ * permission / tool dispatch 循环。
  *
  * 对本轮每个 pending tool call 依次做 permission 决策并派发：
  *   - allow → dispatchToolCall（含 ok 字段解析 + 错误处理）
  *   - ask   → 写 permission_ask event（含 pendingCall 序列化）+ paused + 中止本轮
  *   - deny  → 写 permission_denied event + 合成 function_call_output + 跳过本 tool call
  *
- * Q0c 短路：历史已 approved 的 toolCallId 跳过 decidePermission 直接 allow，
+ * 短路：历史已 approved 的 toolCallId 跳过 decidePermission 直接 allow，
  * 避免"approve 后又被打回 ask"无限循环。
  *
  * 依赖（thread / result / loopHandle）显式传入，不靠闭包隐式捕获。
@@ -326,7 +278,7 @@ async function runToolDispatchLoop(
     }
 
     if (decision.decision === "ask") {
-      // Q0c: pendingCall 序列化整条 tool call, 让 approve 后的 resume 路径
+      // pendingCall 序列化整条 tool call, 让 approve 后的 resume 路径
       // (processDecidedPermissionAsks) 能直接重放, 不依赖 LLM 再次发起。
       const askEvent: ProcessEvent = {
         category: "permission",
@@ -417,70 +369,26 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     | Awaited<ReturnType<typeof beginLlmLoop>>
     | undefined;
   try {
-    // Q0c: 在做任何 LLM 调用前, 先看看是否有"上一轮 ask + 本轮被 HITL 批准/拒绝"的待处理 event。
+    // 在做任何 LLM 调用前, 先看看是否有"上一轮 ask + 本轮被 HITL 批准/拒绝"的待处理 event。
     // 走 HTTP /api/.../permission 路径后, endpoint 写入 decided 字段并把 status 翻回 running。
     // 这里检测并消费一次, 然后继续走常规 thinkloop (LLM 在下一轮看到 approved/rejected
     // 渲染 + function_call_output, 决定下一步)。
     await processDecidedPermissionAsks(thread);
 
-    // P6 BudgetManager: rank windows by relevance and trim to budget.
-    // Replaces legacy applyNaturalDecay (compressLevel advancement by rounds)
-    // and applyEmergencyGuard (three-wave hard thresholding).
-    // compressLevel is now exclusively controlled by explicit LLM compress/expand commands.
-    const thresholds = loadBudgetThresholds(thread);
-    // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以传入 BUDGET_MANAGER.allocate。
-    const allocation = BUDGET_MANAGER.allocate(
-      (thread.contextWindows ?? []) as import("../executable/windows/_shared/types").ContextWindow[],
-      thresholds.hard,
-    );
-
-    // Replace thread.contextWindows with only the in-budget windows for this round.
-    // This is a transient effect — buildInputItems reads from thread.contextWindows,
-    // and the persistable layer will write the trimmed set back to thread.json.
-    // Overflow windows are tracked via a context_compressed visibility event so the
-    // LLM knows some windows were excluded (silent-swallow ban).
-    if (allocation.overflow.length > 0) {
-      thread.contextWindows = allocation.visible;
-      const overflowSummary = allocation.overflow
-        .map((o) => `${o.id}(relevance=${o.relevance.toFixed(2)})`)
-        .join(",");
-      thread.events.push({
-        category: "context_change",
-        kind: "context_compressed",
-        windowIds: allocation.overflow.map((o) => o.id),
-        levelChange: "budget_excluded",
-        reason: "budget_manager_allocation",
-        scope: "auto",
-      });
-    }
-
-    // P6 budget warning: if the in-budget windows still exceed soft threshold,
-    // inject a transient warning system message (not persisted to events,
-    // only affects this round's LLM input).
-    const currentTokens = estimateWindowsTokens(allocation.visible);
-    const budgetWarning = currentTokens > thresholds.soft
-      ? buildBudgetWarningItem(currentTokens, thresholds)
-      : undefined;
-
-    // Context 模块先直接返回 LLM messages，避免中间层抽象。
+    // Context 模块直接返回本轮 LLM input。预算分配（按相关性排序、超 budget 的窗口归入
+    // overflow）由 buildInputItems → pipeline.run 唯一负责：overflow 经 renderer 的
+    // <context_overflow> 呈现，soft 档警告由 buildInputItems 注入。thinkloop 不再自行
+    // 裁剪 thread.contextWindows——窗口是持久实体，仅由显式 close/compress 移除。
     const llmInput = await buildInputItems(thread);
     const tools = getAvailableTools(thread);
 
-    // P6 budget warning: if budget soft threshold exceeded, inject a transient
-    // <context_budget_warning .../> system message. Only affects this round's
-    // LLM input — not persisted to thread.events.
-    if (budgetWarning) {
-      // 插在第一条 (XML context system message) 之后,使 LLM 看到 context 后立即看到警告
-      llmInput.input = [llmInput.input[0], budgetWarning, ...llmInput.input.slice(1)];
-    }
-
-    // 输入输出记录点先挂到 observable 占位模块上。
+    // 输入输出记录点挂到 observable。
     loopHandle = await beginLlmLoop(thread, llmInput.input, tools);
 
     // 中断恢复锚点: beginLlmLoop 已写 llm.input.json, 现在把 call_started 事件落进 thread.json,
     // 让磁盘上的 thread.json 与 debug llm.input.json atomic 对应。任何"call_started 之后无
     // 任何 llm_interaction 后续"的 thread.json 即被 detectInterruptedThread 判定为中断。
-    // 见 src/thinkable/recovery.ts。
+    // 见 ./recovery.ts。
     thread.events.push({
       category: "llm_interaction",
       kind: "call_started",
@@ -492,7 +400,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       input: llmInput.input,
       instructions: llmInput.instructions,
       tools,
-      // 根因 #1: 任务级超时覆盖透传到 client；缺省回落全局默认。
+      // 任务级超时覆盖透传到 client；缺省回落全局默认。
       timeoutMs: thread.llmTimeoutMs,
     });
 
@@ -514,7 +422,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       });
     }
 
-    // tool call 先记录，再由 executable 占位模块顺序执行。
+    // tool call 先记录，再由 executable 顺序执行。
     for (const toolCall of result.toolCalls) {
       thread.events.push({
         category: "llm_interaction",
@@ -532,17 +440,16 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       return;
     }
 
-    // Q0b/Q0c: 在 dispatch 前对每个 pending tool call 做 permission 检查 + 派发。
-    // 三档语义 (design: docs/2026-05-25-permission-model-design.md):
+    // 在 dispatch 前对每个 pending tool call 做 permission 检查 + 派发（三档语义）：
     //   allow → 继续 dispatchToolCall
     //   ask   → 写 permission_ask event (含 pendingCall 序列化) + thread.status="paused" + return
-    //           Q0c: 控制面 /api/.../permission 写入 decided 字段后, 下一轮 thinkloop
-    //                由 processDecidedPermissionAsks 重放或拒绝
+    //           控制面 /api/.../permission 写入 decided 字段后, 下一轮 thinkloop
+    //           由 processDecidedPermissionAsks 重放或拒绝
     //   deny  → 写 permission_denied event + 合成 function_call_output(让 LLM 看见,
     //           silent-swallow ban + Deny 信息流不变量) + 跳过本 tool call 的 dispatch
     //
-    // G2: 整段循环提取为 runToolDispatchLoop（行为零变化）；paused/error 分支已在内部
-    //     finishLlmLoop + 置 thread.status，这里据 outcome 决定是否提前返回。
+    // paused/error 分支已在 runToolDispatchLoop 内部 finishLlmLoop + 置 thread.status，
+    // 这里据 outcome 决定是否提前返回。
     const outcome = await runToolDispatchLoop(thread, result, loopHandle);
     if (outcome !== "completed") return;
     await finishLlmLoop(thread, loopHandle, { result, status: "ok" });
@@ -563,7 +470,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       stack: (error as Error).stack
     });
     thread.status = "failed";
-    // 根因 #4: 给 failed 终态补结构化失败原因，让 worker 对账 + 控制面直接读，
+    // 给 failed 终态补结构化失败原因，让 worker 对账 + 控制面直接读，
     // 不必去 events 里扒文本。LlmTimeoutError → "llm_timeout"；其他 → "think_error"。
     thread.statusReason = error instanceof LlmTimeoutError ? "llm_timeout" : "think_error";
     thread.lastError = message;

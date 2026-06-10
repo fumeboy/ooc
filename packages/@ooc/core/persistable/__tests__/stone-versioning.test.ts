@@ -10,7 +10,7 @@ import {
   rollback,
   tryMergeSelf,
   pruneStaleWorktrees,
-  type MetaprogWorktreeRef,
+  type SessionWorktreeRef,
   __testing,
 } from "@ooc/core/programmable/versioning";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
@@ -86,15 +86,15 @@ async function initMainRepo(baseDir: string): Promise<void> {
  * 测试用 worktree 落点（去 metaprog 后，openMetaprogWorktree 已删）。
  *
  * 直接 `git worktree add` 从 main HEAD 派生一个分支 worktree（完整副本），返回
- * `MetaprogWorktreeRef`——与 evolve-self.ts 构造 session worktree ref 同形（branch/path/
- * baseDir/objectId）。retained 的 commitWorktree/classifyWorktreeBranch/tryMergeSelf/
+ * `SessionWorktreeRef`——与 evolve-self.ts 构造 session worktree ref 同形（baseDir/branch/
+ * path）。retained 的 commitWorktree/classifyWorktreeBranch/tryMergeSelf/
  * requestPrIssueReview/resolvePrIssue 全部 branch-name 无关，照样覆盖。
  */
 async function mkWorktree(
   baseDir: string,
-  objectId: string,
+  _objectId: string,
   token: string,
-): Promise<MetaprogWorktreeRef> {
+): Promise<SessionWorktreeRef> {
   const repo = __testing.repoDir(baseDir);
   const branch = `session-test-${token}`;
   const path = __testing.worktreePath(baseDir, branch);
@@ -106,8 +106,7 @@ async function mkWorktree(
   if (add.exitCode !== 0) {
     throw new Error(`git worktree add failed: ${add.stderr.toString()}`);
   }
-  const head = gitHead(repo);
-  return { baseDir, objectId, branch, path, baseCommit: head.ok ? head.value : "" };
+  return { baseDir, branch, path };
 }
 
 describe("mkWorktree (test helper: session worktree 落点)", () => {

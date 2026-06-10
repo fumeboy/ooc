@@ -76,7 +76,7 @@ describe("stone file IO", () => {
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "dave" });
 
     expect(await readExecutableSource(ref)).toBeUndefined();
-    const code = "export const window = { methods: { foo: { paths: ['foo'], intent: () => [], exec: async () => ({ ok: true }) } } }; export const ui_methods = {};";
+    const code = "export const window = { methods: { foo: { description: 'foo', exec: async () => ({ ok: true }) } } };";
     await writeExecutableSource(ref, code);
     expect(await readExecutableSource(ref)).toBe(code);
     expect(executableIndexFile(ref)).toBe(join(stoneDir(ref), "executable", "index.ts"));

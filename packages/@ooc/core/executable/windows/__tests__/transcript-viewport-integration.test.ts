@@ -87,7 +87,7 @@ describe("talk_window: transcript viewport render", () => {
       outboxMsgs: outbox,
     });
     const def = builtinRegistry.getObjectDefinition("talk");
-    const nodes = await def.renderXml!({ thread, window: talkWindow });
+    const nodes = await def.readable!({ thread, window: talkWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain("<transcript_viewport");
     expect(xml).toContain('total="5"');
@@ -121,7 +121,7 @@ describe("talk_window: transcript viewport render", () => {
       outboxMsgs: outbox,
     });
     const def = builtinRegistry.getObjectDefinition("talk");
-    const nodes = await def.renderXml!({ thread, window: talkWindow });
+    const nodes = await def.readable!({ thread, window: talkWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="30"');
     expect(xml).toContain('tail="20"');
@@ -158,7 +158,7 @@ describe("talk_window: transcript viewport render", () => {
       outboxMsgs: outbox,
     });
     const def = builtinRegistry.getObjectDefinition("talk");
-    const nodes = await def.renderXml!({ thread, window: talkWindow });
+    const nodes = await def.readable!({ thread, window: talkWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('tail="20"');
     expect(xml).toContain('earlier_omitted="5"');
@@ -186,7 +186,7 @@ describe("talk_window: transcript viewport render", () => {
       outboxMsgs: outbox,
     });
     const def = builtinRegistry.getObjectDefinition("talk");
-    const nodes = await def.renderXml!({ thread, window: talkWindow });
+    const nodes = await def.readable!({ thread, window: talkWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('range_start="2"');
     expect(xml).toContain('range_end="5"');
@@ -227,7 +227,7 @@ describe("do_window: transcript viewport render", () => {
       outboxMsgs: outbox,
     });
     const def = builtinRegistry.getObjectDefinition("do");
-    const nodes = await def.renderXml!({ thread, window: doWindow });
+    const nodes = await def.readable!({ thread, window: doWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="25"');
     expect(xml).toContain('tail="20"');

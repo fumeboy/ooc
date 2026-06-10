@@ -27,12 +27,12 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-REFL-01: 经 executable 读自己的 self.md（自观察）
     await postJson(app, "/api/stones", { objectId: id, self: selfContent });
     await putJson(app, `/api/stones/${id}/server-source`, {
-      code: `import { readFileSync } from "node:fs";\nimport { join } from "node:path";\nexport const ui_methods = { readSelf: { fn: (ctx) => readFileSync(join(ctx.self.dir, "self.md"), "utf8") } };\nexport const window = { methods: {} };`,
+      code: `import { readFileSync } from "node:fs";\nimport { join } from "node:path";\nexport const window = { methods: { readSelf: { description: "readSelf", for_ui_access: true, exec: (ctx) => ({ ok: true, data: readFileSync(join(ctx.self.dir, "self.md"), "utf8") }) } } };`,
     }, CONFIRM);
     await sleep(HOT);
     {
       const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "readSelf" });
-      rec.eq("TC-REFL-01", "Object 经 ctx.self.dir 读自己的 self.md（自观察）", r.json?.returnValue, selfContent);
+      rec.eq("TC-REFL-01", "Object 经 ctx.self.dir 读自己的 self.md（自观察）", r.json?.data, selfContent);
     }
 
     // TC-REFL-02: 经 HTTP 改 self.md（自修改身份）
@@ -59,13 +59,13 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-REFL-04: 经 HTTP 改 executable 代码（自修改行为）
     {
       const w = await putJson(app, `/api/stones/${id}/server-source`, {
-        code: `export const ui_methods = { evolve: { fn: () => "I changed myself!" } }; export const window = { methods: {} };`,
+        code: `export const window = { methods: { evolve: { description: "evolve", for_ui_access: true, exec: () => ({ ok: true, data: "I changed myself!" }) } } };`,
       }, CONFIRM);
       await sleep(HOT);
       const c = await postJson(app, `/api/stones/${id}/call_method`, { method: "evolve" });
       rec.ok("TC-REFL-04", "经 HTTP 改 executable 代码（自修改行为）",
-        w.status === 200 && c.json?.returnValue === "I changed myself!",
-        `writeOk=${w.status === 200}, returnValue=${JSON.stringify(c.json?.returnValue)}`);
+        w.status === 200 && c.json?.data === "I changed myself!",
+        `writeOk=${w.status === 200}, data=${JSON.stringify(c.json?.data)}`);
     }
 
     // TC-REFL-05: knowledge 双写 —— seed（reflectable 自写 stone/knowledge）+ sediment（HTTP 写 pool）
@@ -83,19 +83,19 @@ export async function runControlPlane(): Promise<StoryResult> {
       const id2 = "morph";
       await postJson(app, "/api/stones", { objectId: id2 });
       await putJson(app, `/api/stones/${id2}/server-source`, {
-        code: `export const ui_methods = { version: { fn: () => "v1" } }; export const window = { methods: {} };`,
+        code: `export const window = { methods: { version: { description: "version", for_ui_access: true, exec: () => ({ ok: true, data: "v1" }) } } };`,
       }, CONFIRM);
       await sleep(HOT);
       const r1 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "version" });
       await putJson(app, `/api/stones/${id2}/server-source`, {
-        code: `export const ui_methods = { version: { fn: () => "v2" }, hello: { fn: () => "world" } }; export const window = { methods: {} };`,
+        code: `export const window = { methods: { version: { description: "version", for_ui_access: true, exec: () => ({ ok: true, data: "v2" }) }, hello: { description: "hello", for_ui_access: true, exec: () => ({ ok: true, data: "world" }) } } };`,
       }, CONFIRM);
       await sleep(HOT);
       const r2 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "version" });
       const r3 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "hello" });
       rec.ok("TC-REFL-06", "reflectable × programmable 闭环：改 executable 新方法热更生效",
-        r1.json?.returnValue === "v1" && r2.json?.returnValue === "v2" && r3.json?.returnValue === "world",
-        `v1=${r1.json?.returnValue}, v2=${r2.json?.returnValue}, hello=${r3.json?.returnValue}`);
+        r1.json?.data === "v1" && r2.json?.data === "v2" && r3.json?.data === "world",
+        `v1=${r1.json?.data}, v2=${r2.json?.data}, hello=${r3.json?.data}`);
     }
   } finally {
     await srv.cleanup();

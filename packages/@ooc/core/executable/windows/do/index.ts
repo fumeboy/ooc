@@ -55,7 +55,7 @@ export function filterMessagesForDoWindow(window: DoWindow, thread: ThreadContex
   return filtered;
 }
 
-/** do_window 的 renderXml hook：target_thread + creator 标记 + transcript。 */
+/** do_window 的 readable hook：target_thread + creator 标记 + transcript。 */
 function renderDoWindow(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as DoWindow;
   const children: XmlNode[] = [
@@ -464,7 +464,7 @@ builtinRegistry.registerReadable("do", {
     set_transcript_window: setTranscriptWindowCommandForDo,
   },
   onClose: onCloseDoWindow,
-  renderXml: renderDoWindow,
+  readable: renderDoWindow,
   compressView: compressDoWindow,
   // G4: registry 派发的去重 hook —— 复用 filterMessagesForDoWindow，让 renderer
   // 无需直接 import 本模块即可拿到 do_window transcript 消费的消息 id。

@@ -142,10 +142,9 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
     const marker = await readSystemMessage(superAliceThreadDir);
 
     const hasSelf = marker.includes('<self object_id="alice">');
-    // U3 注入的 protocol knowledge_window 用 path="internal/executable/reflectable/basic"；
-    // 仅在 thread.persistence.sessionId === "super" 时才出现。这条路径串不会
-    // 出现在用户 prompt 或其它 knowledge entry 中——是精确锚点。
-    const hasReflectable = marker.includes("internal/executable/reflectable/basic");
+    // super flow 的 protocol knowledge_window 用 path="super-flow"（builtins/root/knowledge/super-flow.md，
+    // activates_on super）；仅在 thread.persistence.sessionId === "super" 时出现——精确锚点。
+    const hasReflectable = marker.includes("<path>super-flow</path>");
 
     if (hasSelf && hasReflectable) {
       console.log("[super-flow-channel] tier=Good (<self> + reflectable both present)");

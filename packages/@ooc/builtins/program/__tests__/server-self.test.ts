@@ -32,13 +32,11 @@ describe("createProgramSelf", () => {
         title: "alice",
         methods: {
           whoAmI: {
-            paths: ["whoAmI"],
-            intent: () => [],
+            description: "whoAmI",
             exec: async (ctx) => ({ ok: true, result: ctx.programSelf.dir + "::" + ctx.thread.id }),
           },
         },
-      };
-      export const ui_methods = {};`,
+      };`,
     );
 
     const thread: ThreadContext = makeThread({ id: "t1" });
@@ -49,10 +47,8 @@ describe("createProgramSelf", () => {
     if (!builtinRegistry.listRegisteredObjectTypes().includes(objectId as any) && objWin) {
       builtinRegistry.registerNewObjectType(objectId as any, {
         methods: objWin.methods ?? {},
-        renderXml: objWin.renderXml,
         readable: objWin.readable,
         onClose: objWin.onClose,
-        basicKnowledge: typeof objWin.basicKnowledge === "string" ? objWin.basicKnowledge : undefined,
         parentClass: objWin?.parentClass,
       });
     }
@@ -83,7 +79,7 @@ describe("createProgramSelf", () => {
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
     await writeExecutableSource(
       ref,
-      `export const window = { methods: {} }; export const ui_methods = {};`,
+      `export const window = { methods: {} };`,
     );
     const thread: ThreadContext = makeThread({ id: "t1" });
     // ooc-6 new design: window id = object id, window type = object id
@@ -93,10 +89,8 @@ describe("createProgramSelf", () => {
     if (!builtinRegistry.listRegisteredObjectTypes().includes(objectId as any) && objWin) {
       builtinRegistry.registerNewObjectType(objectId as any, {
         methods: objWin.methods ?? {},
-        renderXml: objWin.renderXml,
         readable: objWin.readable,
         onClose: objWin.onClose,
-        basicKnowledge: typeof objWin.basicKnowledge === "string" ? objWin.basicKnowledge : undefined,
         parentClass: objWin?.parentClass,
       });
     }

@@ -13,7 +13,7 @@ import { buildServer } from "../../../index";
  * `GET /api/objects/stone/:id/client-source-url` 只解析 canonical `visible/index.tsx`
  * 或 legacy `client/index.tsx`。Agent 若把组件写成 stone 根具名文件（如 `Card.tsx`），
  * 控制面取不到源 → 404，页面渲染不出。本测试钉住该契约，并验证 agent-facing knowledge
- * 已被改写指向 canonical `visible/index.tsx`（见 thinkable/knowledge/basic-knowledge.ts）。
+ * 已被改写指向 canonical `visible/index.tsx`（见 builtins/root/knowledge/self-evolution.md）。
  */
 async function makeApp() {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-client-source-url-"));

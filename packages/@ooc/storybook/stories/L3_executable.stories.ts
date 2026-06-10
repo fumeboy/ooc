@@ -100,16 +100,16 @@ export const L3_STORIES: Story[] = [
   story({
     id: "L3-UI-METHOD-CALL",
     layer: "executable",
-    expectation: "Object 的 ui_methods 经 HTTP /call_method 执行并返回结果",
-    design: "executable：ui_methods 是 Object 暴露给 UI 的方法（经 HTTP）。modules/stones/api.call-method.ts",
+    expectation: "Object 的 for_ui_access 方法经 HTTP /call_method 执行并 data 通道返回结果",
+    design: "executable：for_ui_access 方法是 Object 暴露给 UI 的方法（经 HTTP）。modules/stones/api.call-method.ts",
     run: async ({ app, baseDir }) => {
       const id = "calc_obj";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const ui_methods = { add: { fn: (_c, a) => ({ sum: a.x + a.y }) } };\nexport const window = { methods: {} };`);
+        `export const window = { methods: { add: { description: "add", for_ui_access: true, exec: ({ args }) => ({ ok: true, data: { sum: args.x + args.y } }) } } };`);
       await sleep(350);
       const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "add", args: { x: 2, y: 3 } });
-      check(JSON.stringify(r.json?.returnValue) === JSON.stringify({ sum: 5 }), `returnValue=${JSON.stringify(r.json?.returnValue)}`);
+      check(JSON.stringify(r.json?.data) === JSON.stringify({ sum: 5 }), `data=${JSON.stringify(r.json?.data)}`);
     },
   }),
 
@@ -122,7 +122,7 @@ export const L3_STORIES: Story[] = [
       const id = "cmd_obj";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { run: { paths: ["run"], intent: () => [], exec: async () => ({ ok: true }) } } };\nexport const ui_methods = {};`);
+        `export const window = { methods: { run: { description: "run", intents: ["run"], exec: async () => ({ ok: true }) } } };`);
       const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
       const win = await loadObjectWindow({ baseDir, objectId: id });
       check(!!win?.methods?.run, `window.methods.run 未加载：${JSON.stringify(Object.keys(win?.methods ?? {}))}`);

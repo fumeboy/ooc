@@ -124,7 +124,7 @@ describe("app server routes", () => {
 
   test("POST /api/stones/:id/call_method returns 404 for missing method", async () => {
     const app = await makeApp();
-    // 先创建一个 stone（不写任何 ui_methods）
+    // 先创建一个 stone（不写任何 for_ui_access 方法）
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",
@@ -431,36 +431,5 @@ describe("app server routes", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error.code).toBe("INVALID_INPUT");
-  });
-
-  // ooc-6 Phase 7: window → object terminology migration. Both routes return identical content.
-  test("GET /api/windows/_shared/types and /api/objects/_shared/types return identical catalog", async () => {
-    const { app } = await makeAppWithBaseDir();
-
-    const [windowsRes, objectsRes] = await Promise.all([
-      app.handle(new Request("http://localhost/api/windows/_shared/types")),
-      app.handle(new Request("http://localhost/api/objects/_shared/types")),
-    ]);
-
-    expect(windowsRes.status).toBe(200);
-    expect(objectsRes.status).toBe(200);
-
-    const windowsBody = await windowsRes.json() as { items: Array<{ type: string }> };
-    const objectsBody = await objectsRes.json() as { items: Array<{ type: string }> };
-
-    expect(objectsBody.items.length).toBe(windowsBody.items.length);
-    const windowsTypes = windowsBody.items.map((i) => i.type).sort();
-    const objectsTypes = objectsBody.items.map((i) => i.type).sort();
-    expect(objectsTypes).toEqual(windowsTypes);
-    // Should include key builtin types
-    expect(objectsTypes).toContain("root");
-    expect(objectsTypes).toContain("method_exec");
-    expect(objectsTypes).toContain("todo");
-    expect(objectsTypes).toContain("file");
-    expect(objectsTypes).toContain("knowledge");
-    expect(objectsTypes).toContain("search");
-    expect(objectsTypes).toContain("skill_index");
-    expect(objectsTypes).toContain("plan");
-    expect(objectsTypes).toContain("program");
   });
 });

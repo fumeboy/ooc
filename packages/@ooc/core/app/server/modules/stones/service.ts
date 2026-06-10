@@ -10,7 +10,8 @@ import {
   writeReadable,
   writeSelf,
 } from "@ooc/core/persistable";
-import { loadUiServerMethods } from "@ooc/core/runtime/server-loader";
+import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
+import { normalizeMethodOutcome } from "@ooc/core/_shared/types/method.js";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { parseKnowledgeFile, parseActivatesOn } from "@ooc/core/thinkable/knowledge";
 import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
@@ -88,18 +89,6 @@ function knowledgeActivationWarning(content: string): string | undefined {
     );
   }
   return undefined;
-}
-
-function createHttpMethodContext(dir: string) {
-  return {
-    self: { dir },
-    thread: {
-      id: "http",
-      inject() {
-        // HTTP 调用没有线程上下文，这里保留最小空实现。
-      },
-    },
-  } as never;
 }
 
 export function createStonesService({
@@ -386,32 +375,35 @@ export function createStonesService({
     },
     async callMethod({ objectId, method, args = {} }: { objectId: string; method: string; args?: Record<string, unknown> }) {
       await ensureStoneExists(objectId);
-      let methods;
+      let window;
       try {
-        methods = await loadUiServerMethods(ref(objectId));
+        window = await loadObjectWindow(ref(objectId));
       } catch (error) {
         throw new AppServerError(
           "METHOD_LOAD_FAILED",
-          `failed to load ui_methods for stone ${objectId}: ${(error as Error).message}`,
+          `failed to load object window for stone ${objectId}: ${(error as Error).message}`,
           { objectId, method }
         );
       }
+      // HTTP call_method 只暴露 window.methods 里标了 for_ui_access 的方法（人类/client 侧专路）。
+      const methods = window?.methods ?? {};
       const entry = methods[method];
-      if (!entry) {
+      if (!entry || entry.for_ui_access !== true) {
         throw new AppServerError(
           "METHOD_NOT_FOUND",
-          `ui method '${method}' not found on stone '${objectId}'`,
-          { objectId, method, available: Object.keys(methods) }
+          `method '${method}' not found or not for_ui_access on stone '${objectId}'`,
+          { objectId, method, available: Object.keys(methods).filter((m) => methods[m].for_ui_access === true) }
         );
       }
       try {
-        return {
-          returnValue: await entry.fn(createHttpMethodContext(dir(objectId)), args),
-        };
+        // HTTP 入口无 thread/manager；注入 self.dir（stone 身份目录）让 for_ui_access 方法
+        // 能读写自己 stone 文件（reflectable）。响应即规范化 MethodOutcome——前端从 data
+        // 取结构化数据、result 取消息文本。
+        return normalizeMethodOutcome(await entry.exec({ args, self: { dir: dir(objectId) } } as never));
       } catch (error) {
         throw new AppServerError(
           "INTERNAL_ERROR",
-          `ui method '${method}' threw: ${(error as Error).message}`,
+          `method '${method}' threw: ${(error as Error).message}`,
           { objectId, method }
         );
       }

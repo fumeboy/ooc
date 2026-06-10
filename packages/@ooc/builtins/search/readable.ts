@@ -15,20 +15,6 @@ import type { WindowMethod } from "@ooc/core/_shared/types/window-method.js";
 const SEARCH_PREVIEW_COUNT = 3;
 const SEARCH_SNIPPET_TRUNCATE = 200;
 
-export const SEARCH_WINDOW_BASIC_KNOWLEDGE = `search_window 是一次 glob/grep 搜索结果的持久窗。
-
-方法：
-- close: 关闭 search_window（不影响已 open 的 file_window）
-- open_match(index=N): 在 matches[N].path 上 spawn file_window（即使 N 不在当前 visible 区间，只要 index 合法即可）
-- set_results_window: 调整 matches 渲染视口（matches_tail 或 matches_start+matches_end）
-
-字段：
-- kind: "glob" | "grep"
-- query: 搜索 pattern
-- matches: 匹配列表（index/path/line/snippet）；超过 200 条时 truncated=true，只保留前 200 条
-- results_viewport: 当前渲染视口（默认 tail=50）
-`.trim();
-
 export function readable(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as SearchWindow;
   const children: XmlNode[] = [
@@ -152,5 +138,4 @@ builtinRegistry.registerReadable("search", {
   },
   readable,
   compressView: compressSearchWindow,
-  basicKnowledge: SEARCH_WINDOW_BASIC_KNOWLEDGE,
 });

@@ -27,7 +27,6 @@ export async function renderContextXml(input: {
     // batch C narrowing(N4): snapshot.windows 是 union 实例；契约层 contextWindows 是 base[]。
     windows: contextWindows as ContextWindow[],
     overflow: [],
-    trace: { intents: {}, perWindow: {} },
   };
   const renderer = new XmlRenderer();
   return renderer.render(snapshot, thread);

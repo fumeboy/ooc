@@ -52,7 +52,7 @@ describe.skipIf(!hasLlmEnv)("integration: meta-programming", () => {
         "        },",
         "      },",
         "    };",
-        "    export const ui_methods = {};",
+        "    export const window = { methods: {} };",
         "",
         `具体 shell 代码可以用 cat > ${sDir}/server/index.ts <<'EOF' ... EOF 这种 heredoc 形式。`,
         "",

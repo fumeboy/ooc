@@ -11,7 +11,7 @@ import {
   listExternalSkills,
   readWorldConfig,
 } from "../../persistable/index.js";
-import type { ContextWindow, SkillIndexWindow } from "../../executable/windows/_shared/types.js";
+import type { SkillIndexWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import type { ThreadContext } from "./index.js";
 
@@ -53,30 +53,13 @@ export async function synthesizeSkillIndex(thread: ThreadContext): Promise<Skill
       skills: merged,
     };
     return [skillIndex];
-  } catch {
+  } catch (err) {
+    // 知情跳过（silent-swallow ban）：缺 skills 目录是常态、由各 list* 内部按空处理；
+    // 走到这里是真异常（config 读失败 / 非 ENOENT IO 错），log 出来而不是静默吞掉。
+    console.warn(
+      `[skill-index] synthesize skipped object=${thread.persistence?.objectId} msg=${(err as Error).message}`,
+    );
     return [];
   }
 }
 
-/**
- * Merge skill index windows into a context window list, replacing any existing
- * skill_index window by id.
- */
-export function mergeSkillIndex(existing: ContextWindow[], skillIndex: SkillIndexWindow[]): ContextWindow[] {
-  if (skillIndex.length === 0) return existing;
-  const idx = existing.findIndex((w) => w.id === SKILL_INDEX_WINDOW_ID);
-  if (idx >= 0) {
-    const copy = [...existing];
-    copy[idx] = skillIndex[0];
-    return copy;
-  }
-  return [...existing, ...skillIndex];
-}
-
-/**
- * Get type-level basicKnowledge path+value for skill_index.
- * Used when protocol knowledge needs the skill_index basics.
- */
-export function getSkillIndexBasicPath(): string {
-  return "internal/windows/skill_index/basic";
-}

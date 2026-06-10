@@ -29,28 +29,6 @@ import type { RelationWindow } from "./types.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
 
 /** relation_window 的 type-level basicKnowledge。 */
-const RELATION_WINDOW_BASIC_KNOWLEDGE = `
-relation_window 是 self 对某 peer object 的关系窗口,自动按 thread 中存在的
-talk_window(target=peerId) 派生一条,id 稳定为 \`w_rel_<peerId>\`。它注册的 method 不在
-root 上,要通过 exec(window_id="<rel_window_id>", method="edit", args={...}) 调用:
-
-| method | 作用 | 典型用法 |
-|--------|------|----------|
-| edit    | 整文件替换 relation 文件;scope 决定写 session 层还是 long_term 层 | exec(window_id="<rel_window_id>", method="edit", args={ content: "...", scope: "session" }) |
-
-**两个 scope**:
-- **session**:写 \`flows/<sid>/<self>/knowledge/relations/<peer>.md\`——只在
-  本 session 生效,不污染长期认知。适合"本次 talk 暴露出来、对该 peer 的临时偏好/约定"。
-- **long_term**:派一条 talk message 给 super flow,由 super 写
-  \`pools/<self>/knowledge/relations/<peer>.md\`——跨 session 长期生效。适合"形成了
-  对该 peer 稳定的合作模式/偏好/认知,值得固化"。
-
-**重要**:
-- edit 是**整文件替换语义**(与 write_file 一致),不支持 patch / append。content 写完整文件正文。
-- 同一 relation_window 可以重复 edit;每次 edit 后下一轮 derive 时 KnowledgeWindow body 会反映新内容。
-- 想看当前 relation 内容,看伴随的 knowledge_window(同 peerId,source=relation,body 含 long_term 与 session 两段)。
-`.trim();
-
 const editMethod: ObjectMethod = {
   description: "Edit the relation file for a peer (session or long_term scope; whole-file replace).",
   intents: ["edit", "edit.session", "edit.long_term"],
@@ -153,7 +131,7 @@ export async function executeRelationEdit(
 }
 
 /**
- * relation_window 的 renderXml hook：peer_id + peer_readme + self long_term/session。
+ * relation_window 的 readable hook：peer_id + peer_readme + self long_term/session。
  *
  * 2026-05-27 修订:
  * - 撤回 R8-5 的 peer_readme 删除决定:default visibility 让大量 sibling/child relation
@@ -195,8 +173,6 @@ builtinRegistry.registerExecutable("relation", {
   },
 });
 builtinRegistry.registerReadable("relation", {
-  renderXml: renderRelationWindow,
-  basicKnowledge: RELATION_WINDOW_BASIC_KNOWLEDGE,
+  readable: renderRelationWindow,
 });
 
-export { RELATION_WINDOW_BASIC_KNOWLEDGE };

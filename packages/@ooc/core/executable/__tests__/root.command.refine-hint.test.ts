@@ -1,16 +1,22 @@
 /**
- * Round 12 — refine-hint 测试
+ * refine-hint 测试
  *
- * 验证 root method 的 onFormChange 在 status="open" + args 不全时返回的 tip 包含:
- * 1. "refine" 字符串（指引 refine 路径）
- * 2. basic-knowledge 含 "open 状态" + "refine" 说明（form lifecycle 段落更新）
+ * 验证：
+ * 1. root method 的 onFormChange 在 status="open" + args 不全时返回非空 tip
+ * 2. forms.md（builtins/root/knowledge）含 refine/submit + failed 复活 + 不要 close 重开 的协议
  */
 
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { ROOT_METHODS } from "@ooc/builtins/root";
-import { KNOWLEDGE as BASIC_KNOWLEDGE } from "@ooc/core/thinkable/knowledge/basic-knowledge";
 import type { ObjectMethod } from "@ooc/core/executable/windows/_shared/method-types";
 import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
+
+const FORMS_KNOWLEDGE = readFileSync(
+  join(dirname(Bun.resolveSync("@ooc/builtins/root/package.json", process.cwd())), "knowledge", "forms.md"),
+  "utf8",
+);
 
 /**
  * Call onFormChange and return the MethodExecuteForm.
@@ -70,34 +76,23 @@ describe("Round 12 refine-hint", () => {
     }
   });
 
-  describe("basic-knowledge form lifecycle (Round 13: open → executing → success | failed)", () => {
-    it("contains 四态机描述", () => {
-      expect(BASIC_KNOWLEDGE).toContain("open → executing → success | failed");
+  describe("forms.md 填参/修复协议", () => {
+    it("指引 refine + submit", () => {
+      expect(FORMS_KNOWLEDGE).toContain("refine");
+      expect(FORMS_KNOWLEDGE).toContain("submit");
     });
 
-    it("explicitly tells LLM to use refine on open-state forms", () => {
-      expect(BASIC_KNOWLEDGE).toContain("open");
-      expect(BASIC_KNOWLEDGE).toContain("refine");
-    });
-
-    it("explicitly warns against close+reopen as default fix", () => {
-      expect(BASIC_KNOWLEDGE).toContain("不要");
+    it("warns against close+reopen as default fix", () => {
       const hasCloseReopenWarning =
-        BASIC_KNOWLEDGE.includes("close 重开") ||
-        BASIC_KNOWLEDGE.includes("close + 重开") ||
-        BASIC_KNOWLEDGE.includes("不要为了") ||
-        BASIC_KNOWLEDGE.includes("close 重 open");
+        FORMS_KNOWLEDGE.includes("close 重开") ||
+        FORMS_KNOWLEDGE.includes("close + 重开") ||
+        FORMS_KNOWLEDGE.includes("close 重 open");
       expect(hasCloseReopenWarning).toBe(true);
     });
 
-    it("Round 13: 描述 failed 可 refine 复活路径", () => {
-      expect(BASIC_KNOWLEDGE).toContain("failed");
-      const hasReviveWording =
-        BASIC_KNOWLEDGE.includes("复活") ||
-        BASIC_KNOWLEDGE.includes("切回 open") ||
-        BASIC_KNOWLEDGE.includes("回 open") ||
-        BASIC_KNOWLEDGE.includes("修回 open");
-      expect(hasReviveWording).toBe(true);
+    it("描述失败可 refine 复活路径", () => {
+      expect(FORMS_KNOWLEDGE).toContain("失败");
+      expect(FORMS_KNOWLEDGE).toContain("复活");
     });
   });
 });

@@ -6,20 +6,44 @@
  */
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  resolveStoneDir,
-} from "../persistable/index.js";
-import type { ReadableFn } from "../executable/windows/_shared/registry.js";
-import type { ObjectMethod } from "../executable/windows/_shared/method-types.js";
-import type {
-  ServerLoaderEntry,
-  StoneObjectRef,
-  UiMethods,
-} from "../executable/object/types.js";
-import type { StoneObjectDeclaration } from "../executable/object/object-types.js";
+import { resolveStoneDir } from "../persistable/index.js";
+import type { StoneObjectRef } from "../persistable/index.js";
+import type { ReadableFn, ObjectDefinition } from "../executable/windows/_shared/registry.js";
+
+/**
+ * loader 缓存条目（loader 私有；按 mtime 失效）。
+ *
+ * `window` 即 stone 的 `export const window`（Partial<ObjectDefinition>），其 `readable`
+ * 已合并独立 `readable.ts` 的导出——两者同属 ObjectDefinition.readable，不再拆成两个字段。
+ * HTTP call_method 走 `window.methods` 里 `for_ui_access` 的方法（2026-06-11 废 ui_methods 维度）。
+ */
+interface LoaderCacheEntry {
+  mtime: number;
+  window: Partial<ObjectDefinition> | undefined;
+}
 
 export class ServerLoader {
-  private readonly cache = new Map<string, ServerLoaderEntry>();
+  private readonly cache = new Map<string, LoaderCacheEntry>();
+
+  /** 加载 stone 的独立 `readable.ts`（default 或具名 `readable` 导出）；缺失返回 undefined。 */
+  private async loadReadableTs(
+    readableFile: string,
+  ): Promise<{ fn: ReadableFn; mtime: number } | undefined> {
+    try {
+      const stats = await stat(readableFile);
+      const mod = await import(`${readableFile}?t=${stats.mtimeMs}`);
+      const fn =
+        typeof mod.default === "function"
+          ? mod.default
+          : typeof mod.readable === "function"
+            ? mod.readable
+            : undefined;
+      return fn ? { fn: fn as ReadableFn, mtime: stats.mtimeMs } : undefined;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+      throw e;
+    }
+  }
 
   private async resolveExecutableFile(
     ref: StoneObjectRef,
@@ -42,33 +66,18 @@ export class ServerLoader {
     }
   }
 
-  private async loadEntry(stoneRef: StoneObjectRef): Promise<ServerLoaderEntry | undefined> {
+  private async loadEntry(stoneRef: StoneObjectRef): Promise<LoaderCacheEntry | undefined> {
     const resolvedStoneDir = await resolveStoneDir(stoneRef);
     const readableFile = join(resolvedStoneDir, "readable.ts");
     const executableInfo = await this.resolveExecutableFile(stoneRef);
 
+    // 无 executable/index.ts：仅有独立 readable.ts → window 只携带 readable。
     if (!executableInfo) {
-      try {
-        const readableStats = await stat(readableFile);
-        const readableMod = await import(`${readableFile}?t=${readableStats.mtimeMs}`);
-        let readable: ReadableFn | undefined;
-        if (typeof readableMod.default === "function") {
-          readable = readableMod.default as ReadableFn;
-        } else if (typeof readableMod.readable === "function") {
-          readable = readableMod.readable as ReadableFn;
-        }
-        const entry: ServerLoaderEntry = {
-          mtime: readableStats.mtimeMs,
-          window: undefined,
-          uiMethods: {},
-          readable,
-        };
-        this.cache.set(readableFile, entry);
-        return entry;
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-        throw e;
-      }
+      const r = await this.loadReadableTs(readableFile);
+      if (!r) return undefined;
+      const entry: LoaderCacheEntry = { mtime: r.mtime, window: { readable: r.fn } };
+      this.cache.set(readableFile, entry);
+      return entry;
     }
 
     const { path: serverFile, mtime: serverMtime } = executableInfo;
@@ -79,49 +88,26 @@ export class ServerLoader {
 
     if ("llm_methods" in mod) {
       throw new Error(
-        `${serverFile}: 'llm_methods' 已被移除；请改写为 \`export const window: StoneObjectDeclaration = { methods: { ... } }\``,
+        `${serverFile}: 'llm_methods' 已被移除；请改写为 \`export const window: Partial<ObjectDefinition> = { methods: { ... } }\``,
       );
     }
 
-    let readable: ReadableFn | undefined;
-    try {
-      const readableStats = await stat(readableFile);
-      const readableMod = await import(`${readableFile}?t=${readableStats.mtimeMs}`);
-      if (typeof readableMod.default === "function") {
-        readable = readableMod.default as ReadableFn;
-      } else if (typeof readableMod.readable === "function") {
-        readable = readableMod.readable as ReadableFn;
-      }
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
-    }
+    const win = (mod.window ?? undefined) as Partial<ObjectDefinition> | undefined;
+    const readableTs = await this.loadReadableTs(readableFile);
+    // 合并 readable.ts 进 window.readable（window 自带 readable 优先），二者同属 ObjectDefinition.readable。
+    const window: Partial<ObjectDefinition> | undefined =
+      win || readableTs
+        ? { ...(win ?? {}), readable: win?.readable ?? readableTs?.fn }
+        : undefined;
 
-    const entry: ServerLoaderEntry = {
-      mtime: serverMtime,
-      window: (mod.window ?? undefined) as StoneObjectDeclaration | undefined,
-      uiMethods: (mod.ui_methods ?? {}) as UiMethods,
-      readable,
-    };
-
-    // methods is the canonical field; no merging needed
-
+    const entry: LoaderCacheEntry = { mtime: serverMtime, window };
     this.cache.set(serverFile, entry);
     return entry;
   }
 
-  /** 动态加载 stone 的 `export const window`，按 mtime 缓存。 */
-  async loadObjectWindow(stoneRef: StoneObjectRef): Promise<StoneObjectDeclaration | undefined> {
+  /** 动态加载 stone 的 `export const window`（readable 已合并 readable.ts），按 mtime 缓存。 */
+  async loadObjectWindow(stoneRef: StoneObjectRef): Promise<Partial<ObjectDefinition> | undefined> {
     return (await this.loadEntry(stoneRef))?.window;
-  }
-
-  /** 动态加载 stone 的 ui_methods。 */
-  async loadUiServerMethods(stoneRef: StoneObjectRef): Promise<UiMethods> {
-    return (await this.loadEntry(stoneRef))?.uiMethods ?? {};
-  }
-
-  /** 动态加载 stone 的 readable.ts 导出的渲染函数。 */
-  async loadObjectReadable(stoneRef: StoneObjectRef): Promise<ReadableFn | undefined> {
-    return (await this.loadEntry(stoneRef))?.readable;
   }
 
   /** 使单个 stone 的缓存条目失效（热更新用）。 */
@@ -150,18 +136,8 @@ export function createServerLoader(): ServerLoader {
 /** 动态加载 stone 的 `export const window`，按 mtime 缓存（委托默认实例）。 */
 export async function loadObjectWindow(
   stoneRef: StoneObjectRef,
-): Promise<StoneObjectDeclaration | undefined> {
+): Promise<Partial<ObjectDefinition> | undefined> {
   return defaultServerLoader.loadObjectWindow(stoneRef);
-}
-
-/** 动态加载 stone 的 server/index.ts 中 ui_methods（委托默认实例）。 */
-export async function loadUiServerMethods(stoneRef: StoneObjectRef): Promise<UiMethods> {
-  return defaultServerLoader.loadUiServerMethods(stoneRef);
-}
-
-/** 动态加载 stone 的 readable.ts 导出的渲染函数（委托默认实例）。 */
-export async function loadObjectReadable(stoneRef: StoneObjectRef): Promise<ReadableFn | undefined> {
-  return defaultServerLoader.loadObjectReadable(stoneRef);
 }
 
 /** 测试钩子：清空默认实例的 loader 缓存。 */

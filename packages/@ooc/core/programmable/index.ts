@@ -57,7 +57,7 @@ export {
   SUPERVISOR_OBJECT_ID,
   type HttpDirectMainWriteInput,
   type HttpDirectMainWriteResult,
-  type MetaprogWorktreeRef,
+  type SessionWorktreeRef,
   type ScopeClass,
   type PrIssueDecision,
   type RollbackInput,

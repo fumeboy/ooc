@@ -1,30 +1,29 @@
 /**
- * Protocol knowledge windows — extracted from the old synthesizer.collectExecutableKnowledgeEntries.
+ * Protocol knowledge windows — source="protocol" 的协议知识。
  *
- * Produces KnowledgeWindow entries with source="protocol" covering:
- * - Global BASIC_KNOWLEDGE + ROOT_KNOWLEDGE
- * - REFLECTABLE knowledge (gated on sessionId === "super")
- * - Type-level basicKnowledge (per window type present in context)
- * - Creator-reply protocol knowledge (per creator do/talk window)
- * - End-form reflection reminder (when business thread opens "end" form)
+ * 两类：
+ * - **root builtin knowledge**：`builtins/root/knowledge/*.md`（交互核心 / root method 菜单 /
+ *   talk·super / do·move / form / skills / 自我演化 / super flow / end 反思）。按各篇 frontmatter
+ *   的 activates_on 对当前 thread 逐篇匹配，命中才注入——Object 只在相关交互面看到对应切片。
+ * - **creator-reply 协议**：动态按 creator do/talk window 的 id 生成，不属于静态 root 知识。
  */
 import type { ContextWindow, KnowledgeWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
-import { BASIC_KNOWLEDGE_PATH, KNOWLEDGE } from "../knowledge/basic-knowledge.js";
-import { ROOT_BASIC_PATH, ROOT_KNOWLEDGE } from "@ooc/builtins/root";
-import {
-  END_REFLECTION_REMINDER_KNOWLEDGE,
-  END_REFLECTION_REMINDER_PATH,
-  REFLECTABLE_BASIC_PATH,
-  REFLECTABLE_KNOWLEDGE,
-  REFLECTABLE_GOVERNANCE_KNOWLEDGE,
-  REFLECTABLE_GOVERNANCE_PATH,
-} from "../reflectable/reflectable-knowledge.js";
-import { SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants.js";
+import { computeActivations, loadKnowledgeIndexFromDir } from "../knowledge/index.js";
+import type { KnowledgeIndex } from "../knowledge/types.js";
+import { dirname, join } from "node:path";
 import type { ThreadContext } from "./index.js";
-import type { MethodExecWindow } from "../../executable/windows/_shared/types.js";
+
+/** root builtin 包的 knowledge 目录（随框架包发布，按包名解析，与 world 无关）。 */
+function resolveRootKnowledgeDir(): string | undefined {
+  try {
+    return join(dirname(Bun.resolveSync("@ooc/builtins/root/package.json", process.cwd())), "knowledge");
+  } catch {
+    return undefined;
+  }
+}
 
 let syntheticIdCounter = 0;
 function nextSyntheticId(): string {
@@ -48,6 +47,39 @@ function makeKnowledgeWindow(
     source,
     body,
   };
+}
+
+/**
+ * root builtin knowledge 索引 —— 随框架包发布、进程内不可变，首次加载后 memoize。
+ * 测试可经 clearRootKnowledgeCache 重置。
+ */
+let rootKnowledgeIndex: KnowledgeIndex | undefined;
+async function loadRootKnowledgeIndex(): Promise<KnowledgeIndex> {
+  if (rootKnowledgeIndex) return rootKnowledgeIndex;
+  const dir = resolveRootKnowledgeDir();
+  rootKnowledgeIndex = dir
+    ? await loadKnowledgeIndexFromDir(dir)
+    : { byPath: new Map() };
+  return rootKnowledgeIndex;
+}
+
+/**
+ * 按 activates_on 把 root builtin knowledge 中命中当前 thread 的篇目转成 KnowledgeWindow。
+ * full → 完整 body；summary → 仅 description（body 空），与 activator 渲染对齐。
+ */
+async function buildRootKnowledgeWindows(thread: ThreadContext): Promise<KnowledgeWindow[]> {
+  const index = await loadRootKnowledgeIndex();
+  if (index.byPath.size === 0) return [];
+  const out: KnowledgeWindow[] = [];
+  for (const act of computeActivations(thread, index)) {
+    const body = act.presentation === "full" ? act.doc.body : "";
+    out.push({
+      ...makeKnowledgeWindow(act.path, body, "protocol"),
+      presentation: act.presentation,
+      description: act.doc.frontmatter.description,
+    } as KnowledgeWindow);
+  }
+  return out;
 }
 
 /**
@@ -101,87 +133,25 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
 /**
  * Produce all protocol-level knowledge windows for a thread.
  *
- * Includes: global basics, super-session reflectable knowledge, type-level basics,
- * creator-reply protocol hints, and end-reflection reminder.
+ * - root builtin knowledge（按 activates_on 命中当前 thread 的篇目）
+ * - creator-reply 协议（动态按 creator do/talk window 生成）
  */
-export function buildProtocolKnowledgeWindows(
+export async function buildProtocolKnowledgeWindows(
   thread: ThreadContext,
-  registry: ObjectRegistry = builtinRegistry,
-): KnowledgeWindow[] {
-  const windows: KnowledgeWindow[] = [];
-  const entries = new Map<string, string>();
+  _registry: ObjectRegistry = builtinRegistry,
+): Promise<KnowledgeWindow[]> {
+  const windows: KnowledgeWindow[] = await buildRootKnowledgeWindows(thread);
 
-  // 1) Global protocol entries
-  entries.set(BASIC_KNOWLEDGE_PATH, KNOWLEDGE);
-  entries.set(ROOT_BASIC_PATH, ROOT_KNOWLEDGE);
-
-  // 2) Super session reflectable knowledge
-  if (thread.persistence?.sessionId === SUPER_SESSION_ID) {
-    entries.set(REFLECTABLE_BASIC_PATH, REFLECTABLE_KNOWLEDGE);
-    entries.set(REFLECTABLE_GOVERNANCE_PATH, REFLECTABLE_GOVERNANCE_KNOWLEDGE);
-  }
-
-  // 3) Type-level basicKnowledge — inject per window type present
-  const presentTypes = new Set<string>();
-  for (const w of thread.contextWindows ?? []) presentTypes.add(w.type);
-  for (const t of presentTypes) {
-    let def;
-    try {
-      def = registry.getObjectDefinition(t as ContextWindow["type"]);
-    } catch {
-      continue;
-    }
-    if (!def.basicKnowledge) continue;
-    const path = `internal/windows/${t}/basic`;
-    if (!entries.has(path)) {
-      entries.set(path, def.basicKnowledge);
-    }
-  }
-
-  // 4) Creator-reply protocol knowledge
-  // batch C narrowing(N1/N4): contextWindows 契约层是 base[]；narrow 回 union[] 以读 isCreatorWindow 并传入 buildCreatorReplyKnowledge。
+  // creator-reply 协议：每个 creator do/talk window 一条，按 window id 去重。
+  const seen = new Set<string>();
   for (const w of (thread.contextWindows ?? []) as ContextWindow[]) {
     const isCreator = (w.type === "do" || w.type === "talk") && w.isCreatorWindow === true;
     if (!isCreator) continue;
     const path = `internal/windows/${w.type}/creator-reply/${w.id}`;
-    if (entries.has(path)) continue;
-    entries.set(path, buildCreatorReplyKnowledge(w));
-  }
-
-  // 5) End-form reflection reminder (G2)
-  for (const w of thread.contextWindows ?? []) {
-    if (w.type !== "method_exec") continue;
-    const form = w as MethodExecWindow;
-    try {
-      const isEndForm = form.method === "end";
-      const inSuperSession = thread.persistence?.sessionId === SUPER_SESSION_ID;
-      if (isEndForm && !inSuperSession && !entries.has(END_REFLECTION_REMINDER_PATH)) {
-        entries.set(END_REFLECTION_REMINDER_PATH, END_REFLECTION_REMINDER_KNOWLEDGE);
-      }
-    } catch (err) {
-      console.warn(`[protocol] end-reflection-reminder inject failed: ${(err as Error).message}`);
-    }
-  }
-
-  // 6) Convert entries map → KnowledgeWindow list
-  for (const [path, body] of entries) {
-    windows.push(makeKnowledgeWindow(path, body, "protocol"));
+    if (seen.has(path)) continue;
+    seen.add(path);
+    windows.push(makeKnowledgeWindow(path, buildCreatorReplyKnowledge(w), "protocol"));
   }
 
   return windows;
-}
-
-/**
- * Compute per-window type-level basicKnowledge paths for a given thread.
- * Used by tests and the old knowledgeEntries map output.
- */
-export function collectProtocolEntries(
-  thread: ThreadContext,
-  registry: ObjectRegistry = builtinRegistry,
-): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const w of buildProtocolKnowledgeWindows(thread, registry)) {
-    if (w.body != null) result[w.path] = w.body;
-  }
-  return result;
 }

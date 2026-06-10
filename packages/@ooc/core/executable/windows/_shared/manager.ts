@@ -431,15 +431,15 @@ export class WindowManager {
       const raw = await entry.exec(ctx);
       if (raw && typeof raw === "object" && "ok" in raw) {
         if (raw.ok) {
-          if ("window" in raw && raw.window) {
+          if (raw.window) {
             const win = raw.window as ContextWindow;
             this.insertTypedWindow(win, thread);
             result = `Constructed ${win.type} window ${win.id}`;
           } else {
-            result = (raw as { ok: true; result?: string }).result;
+            result = raw.result;
           }
         } else {
-          result = (raw as { ok: false; error: string }).error;
+          result = raw.error ?? "method failed";
           isError = true;
         }
       } else {
@@ -628,16 +628,16 @@ export class WindowManager {
         const raw = await entry.exec(ctx);
         if (raw && typeof raw === "object" && "ok" in raw) {
           if (raw.ok) {
-            if ("window" in raw && raw.window) {
+            if (raw.window) {
               // Constructor outcome: mount the returned window.
               const win = raw.window as ContextWindow;
               this.insertTypedWindow(win, thread);
               result = `Constructed ${win.type} window ${win.id}`;
             } else {
-              result = (raw as { ok: true; result?: string }).result;
+              result = raw.result;
             }
           } else {
-            result = (raw as { ok: false; error: string }).error;
+            result = raw.error ?? "method failed";
             isError = true;
           }
         } else {

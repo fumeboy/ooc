@@ -1,6 +1,7 @@
 import type { LlmInputItem, LlmMessage } from "../llm/types";
 import { isBuiltinObjectId, objectDir, readSelf, resolveStoneIdentityRef, stoneDir, threadDir } from "../../persistable";
 import { createDefaultPipeline } from "./pipeline.js";
+import { estimateWindowsTokens, loadBudgetThresholds, type BudgetThresholds } from "./budget.js";
 import { XmlRenderer } from "./renderers/xml.js";
 import type { ContextWindow } from "../../executable/windows/_shared/types.js";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../../_shared/types/thread.js";
@@ -18,13 +19,11 @@ export { hashArgs, diffArgs } from "./intent.js";
 export { BudgetManager } from "./budget.js";
 export type { ContextSnapshot } from "./snapshot.js";
 export { XmlRenderer } from "./renderers/xml.js";
-export { JsonRenderer } from "./renderers/json.js";
-export { TraceRenderer } from "./renderers/trace.js";
 export { ContextPipeline, createDefaultPipeline } from "./pipeline.js";
 export type { PipelinePhase, PipelineContext } from "./pipeline.js";
 
 /**
- * Thread 运行时类型 —— canonical 源已于 batch C5 迁入 `@ooc/core/_shared/types/thread.ts`；
+ * Thread 运行时类型 —— canonical 源在 `@ooc/core/_shared/types/thread.ts`；
  * 此处 re-export 保持旧 import 路径 (`thinkable/context`) 可用，并打破
  * thinkable → executable 的类型反向依赖（ContextWindow 现从 `_shared` 单向引入）。
  */
@@ -159,7 +158,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
   }
 
   if (event.category === "permission" && event.kind === "permission_ask") {
-    // Q0c: 渲染区分 pending / approved / rejected 三态;让 LLM 在 transcript 中看到完整审批历史。
+    // 渲染区分 pending / approved / rejected 三态;让 LLM 在 transcript 中看到完整审批历史。
     const windowTag = event.windowId ? ` window_id=${event.windowId}` : "";
     const argsTag = event.argsSummary ? `\n  args: ${event.argsSummary}` : "";
     const decided = event.decided;
@@ -183,7 +182,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
   }
 
   if (event.category === "permission" && event.kind === "permission_denied") {
-    // Q0b: deny 路径渲染 — 紧邻位置还会有一条合成的 function_call_output, 这里只补一条
+    // deny 路径渲染 — 紧邻位置还会有一条合成的 function_call_output, 这里只补一条
     // 给 LLM 的 system 提示, 便于 LLM 在多步 reasoning 中识别拒绝。
     const windowTag = event.windowId ? ` window_id=${event.windowId}` : "";
     const argsTag = event.argsSummary ? `\n  args: ${event.argsSummary}` : "";
@@ -333,11 +332,33 @@ export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]>
     .map((item) => ({ role: item.role, content: item.content }));
 }
 
+/**
+ * 当本轮可见窗口的 token 估算超过 soft 阈值时，构造一条瞬时 system 警告。
+ *
+ * 仅影响本轮 LLM 输入，不进 thread.events。overflow（被 budget 排除的窗口）由
+ * XmlRenderer 的 <context_overflow> 节点直接呈现，这里只补一条 soft 档提示，
+ * 提示 LLM 可主动 compress 精简。
+ */
+function buildBudgetWarningItem(
+  currentTokens: number,
+  thresholds: BudgetThresholds,
+): LlmInputItem {
+  return {
+    type: "message",
+    role: "system",
+    content:
+      `<context_budget_warning current="${currentTokens}" soft="${thresholds.soft}" hard="${thresholds.hard}"/>\n` +
+      `当前估算 token 接近预算上限 (current=${currentTokens}, soft=${thresholds.soft}, hard=${thresholds.hard})。` +
+      `系统已按相关性把低相关窗口排除在 context 之外（见 <context_overflow>）。你可主动 compress(scope=windows, target_ids=[...]) ` +
+      `进一步精简，或继续推进任务。`,
+  };
+}
+
 /** 构造 Responses-first LLM 输入 items。 */
 export async function buildInputItems(
   thread: ThreadContext
 ): Promise<{ instructions?: string; input: LlmInputItem[] }> {
-  // Phase F: ContextPipeline + XmlRenderer production path
+  // ContextPipeline + XmlRenderer production path
   const pipeline = createDefaultPipeline();
   const snapshot = await pipeline.run(thread);
 
@@ -370,6 +391,14 @@ export async function buildInputItems(
   // [ooc:paths] meta node for metaprogramming / path anchors
   const pathsItem = await buildPathsItem(thread);
 
+  // Budget soft-warning: 预算分配由 pipeline.run 唯一负责（snapshot.windows 即 in-budget
+  // 集合，overflow 由 renderer 的 <context_overflow> 呈现）。这里只在可见窗口仍超 soft
+  // 阈值时补一条瞬时警告，紧跟 XML context message 之后，使 LLM 看到 context 即看到提示。
+  const thresholds = loadBudgetThresholds(thread);
+  const currentTokens = estimateWindowsTokens(snapshot.windows);
+  const budgetWarning =
+    currentTokens > thresholds.soft ? [buildBudgetWarningItem(currentTokens, thresholds)] : [];
+
   return {
     ...(instructions ? { instructions } : {}),
     input: [
@@ -378,6 +407,7 @@ export async function buildInputItems(
         role: "system",
         content
       },
+      ...budgetWarning,
       ...(pathsItem ? [pathsItem] : []),
       ...transcript
     ]

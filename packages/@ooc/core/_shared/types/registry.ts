@@ -25,7 +25,6 @@ export interface RenderContext {
   thread: ThreadContext;
   window: ContextObject;
 }
-export type RenderHook = (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]>;
 
 export type ReadableFn = (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]>;
 
@@ -51,12 +50,16 @@ export type ConsumedMessageIdsHook = (
 /**
  * Object 类型定义（canonical，2026-06-03 ooc-6 cleanup Phase A：原 ObjectTypeDefinition 重命名）。
  *
- * 已删除 deprecated 字段：
- * - 旧 `commands` 字段已弃用，使用 `methods`
- * - `prototype` → 使用 `parentClass`
+ * 已删除字段（2026-06-10 cleanup）：
+ * - 旧 `commands` → `methods`；`prototype` → `parentClass`
+ * - `type` —— registry Map key 即 type，字段冗余（ObjectType 类型本身也在逐步退役）
+ * - `renderXml` → `readable`（签名一致的标准替代）
+ * - `basicKnowledge` —— type 级协议知识通道退役
+ *
+ * stone 的 `executable/index.ts` `export const window` 即本形状的 Partial
+ * （旧 StoneObjectDeclaration 已删，与本定义冗余）。
  */
 export interface ObjectDefinition {
-  type: ObjectType;
   methods: Record<string, ObjectMethod>;
   /**
    * Window method 表（归 readable 维度，控制 window 展示）。与 methods（object method,
@@ -64,9 +67,7 @@ export interface ObjectDefinition {
    */
   windowMethods?: Record<string, WindowMethod>;
   onClose?: OnCloseHook;
-  renderXml?: RenderHook;
   compressView?: CompressViewHook;
-  basicKnowledge?: string;
   readable?: ReadableFn;
   isBuiltinFeature?: boolean;
   parentClass?: string | null;

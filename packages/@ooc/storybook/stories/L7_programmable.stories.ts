@@ -17,12 +17,12 @@ export const L7_STORIES: Story[] = [
       await postJson(app, "/api/stones", { objectId: id });
       const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { alpha: { paths: ["alpha"], intent: () => [], exec: async () => ({ ok: true }) } } };\nexport const ui_methods = {};`);
+        `export const window = { methods: { alpha: { description: "alpha", intents: ["alpha"], exec: async () => ({ ok: true }) } } };`);
       await sleep(350);
       const w1 = await loadObjectWindow({ baseDir, objectId: id });
       check(!!w1?.methods?.alpha, "首版 method alpha 未加载");
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { beta: { paths: ["beta"], intent: () => [], exec: async () => ({ ok: true }) } } };\nexport const ui_methods = {};`);
+        `export const window = { methods: { beta: { description: "beta", intents: ["beta"], exec: async () => ({ ok: true }) } } };`);
       await sleep(350);
       const w2 = await loadObjectWindow({ baseDir, objectId: id });
       check(!!w2?.methods?.beta && !w2?.methods?.alpha, `热更未反映新 method：${JSON.stringify(Object.keys(w2?.methods ?? {}))}`);
@@ -32,21 +32,21 @@ export const L7_STORIES: Story[] = [
   story({
     id: "L7-UI-METHOD-HOTRELOAD",
     layer: "programmable",
-    expectation: "改 ui_methods 后 /call_method 反映新逻辑",
-    design: "programmable：ui_methods 热更后 HTTP 调用走新实现。server-loader 热更 + api.call-method",
+    expectation: "改 for_ui_access 方法后 /call_method 反映新逻辑",
+    design: "programmable：for_ui_access 方法热更后 HTTP 调用走新实现。server-loader 热更 + api.call-method",
     run: async ({ app, baseDir }) => {
       const id = "prog_ui";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const ui_methods = { f: { fn: () => ({ v: 1 }) } };\nexport const window = { methods: {} };`);
+        `export const window = { methods: { f: { description: "f", for_ui_access: true, exec: () => ({ ok: true, data: { v: 1 } }) } } };`);
       await sleep(350);
       let r = await postJson(app, `/api/stones/${id}/call_method`, { method: "f", args: {} });
-      check(JSON.stringify(r.json?.returnValue) === JSON.stringify({ v: 1 }), `v1 returnValue=${JSON.stringify(r.json?.returnValue)}`);
+      check(JSON.stringify(r.json?.data) === JSON.stringify({ v: 1 }), `v1 data=${JSON.stringify(r.json?.data)}`);
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const ui_methods = { f: { fn: () => ({ v: 2 }) } };\nexport const window = { methods: {} };`);
+        `export const window = { methods: { f: { description: "f", for_ui_access: true, exec: () => ({ ok: true, data: { v: 2 } }) } } };`);
       await sleep(350);
       r = await postJson(app, `/api/stones/${id}/call_method`, { method: "f", args: {} });
-      check(JSON.stringify(r.json?.returnValue) === JSON.stringify({ v: 2 }), `热更后 returnValue=${JSON.stringify(r.json?.returnValue)}`);
+      check(JSON.stringify(r.json?.data) === JSON.stringify({ v: 2 }), `热更后 data=${JSON.stringify(r.json?.data)}`);
     },
   }),
 
@@ -58,7 +58,7 @@ export const L7_STORIES: Story[] = [
     run: async ({ app }) => {
       const id = "prog_src";
       await postJson(app, "/api/stones", { objectId: id });
-      const code = "export const ui_methods = { ping: { fn: () => 'pong' } };\n";
+      const code = "export const window = { methods: { ping: { description: 'ping', for_ui_access: true, exec: () => ({ ok: true, data: 'pong' }) } } };\n";
       const put = await putJson(app, `/api/stones/${id}/server-source`, { code }, { "X-Overwrite-Confirm": "true" });
       check(put.status === 200, `PUT status=${put.status}`);
       const get = await getJson(app, `/api/stones/${id}/server-source`);

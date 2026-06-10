@@ -28,25 +28,17 @@ export const L2_STORIES: Story[] = [
   story({
     id: "L2-ROOT-KNOWLEDGE",
     layer: "thinkable",
-    expectation: "root 协议知识（ROOT_KNOWLEDGE）列出可用 root method",
-    design: "thinkable：root window 每轮注入协议知识，告诉 LLM 能调哪些 root method。builtins/root/executable",
+    expectation: "root method 菜单知识（root-methods.md）列出可用 root method",
+    design: "thinkable：root window 按 activates_on 注入 builtins/root/knowledge/*.md；root-methods.md 列出能调哪些 root method。",
     run: async () => {
-      const { ROOT_KNOWLEDGE } = await import("@ooc/builtins/root");
-      check(typeof ROOT_KNOWLEDGE === "string" && ROOT_KNOWLEDGE.length > 50, "ROOT_KNOWLEDGE 缺失");
-      check(/talk/.test(ROOT_KNOWLEDGE) && /program/.test(ROOT_KNOWLEDGE), "ROOT_KNOWLEDGE 未列出 talk/program");
-    },
-  }),
-
-  story({
-    id: "L2-CONTEXT-WINDOW-TYPES",
-    layer: "thinkable",
-    expectation: "已注册 ObjectType 经 /api/windows/_shared/types 暴露 type + methods",
-    design: "thinkable/executable：ContextObject 类型目录。modules/ui/api.list-window-types.ts",
-    run: async ({ app }) => {
-      const r = await getJson(app, "/api/windows/_shared/types");
-      check(r.status === 200, `status=${r.status}`);
-      const types = (r.json?.items ?? []).map((e: any) => e.type);
-      check(types.includes("file") && types.includes("talk"), `types 缺 file/talk：${JSON.stringify(types)}`);
+      const { readFileSync } = await import("node:fs");
+      const { dirname, join } = await import("node:path");
+      const md = readFileSync(
+        join(dirname(Bun.resolveSync("@ooc/builtins/root/package.json", process.cwd())), "knowledge", "root-methods.md"),
+        "utf8",
+      );
+      check(md.length > 50, "root-methods.md 缺失");
+      check(/talk/.test(md) && /program/.test(md), "root-methods.md 未列出 talk/program");
     },
   }),
 

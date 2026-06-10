@@ -30,7 +30,7 @@
  * 随 OOC 代码仓发版，Agent 不可改写。
  */
 
-import { mkdir, rm, rmdir, stat, writeFile, cp } from "node:fs/promises";
+import { rmdir, stat, cp } from "node:fs/promises";
 import { dirname, join, sep } from "node:path";
 import { createStoneObject, stoneDir, stoneKnowledgeDir } from "../persistable/stone-object.js";
 import { writeSelf } from "../persistable/stone-self.js";
@@ -69,7 +69,7 @@ import {
 /** Supervisor 的 objectId（治理身份：rollback 仅 supervisor 可调；PR-Issue 默认收件人）。 */
 export const SUPERVISOR_OBJECT_ID = "supervisor";
 
-/** worktree branch 命名约定：`metaprog/{objectId}/{token}`（{token} 由 caller 提供或自动生成）。 */
+/** 历史 metaprog worktree 残留目录名——仅供 GC 清理（去 metaprog 后不再产生此类分支）。 */
 const WORKTREE_BRANCH_PREFIX = "metaprog";
 
 /**
@@ -131,17 +131,33 @@ async function gcEmptyMetaprogTree(baseDir: string): Promise<void> {
   await sweep(metaprogRoot);
 }
 
-export interface MetaprogWorktreeRef {
+/**
+ * 合入/驳回后清理 session worktree：解除注册（保留运行时数据）+ GC 空父目录。
+ * `gitWorktreeUnregister` 内部已 prune bare repo stale 注册，无需额外 prune。
+ * best-effort：unregister 失败 warn 但不阻塞（caller 下次启动 prune 兜底）。
+ */
+async function cleanupWorktreeAfterMerge(
+  repo: string,
+  wtPath: string,
+  baseDir: string,
+  branch: string,
+  ctx: string,
+): Promise<void> {
+  const r = gitWorktreeUnregister(repo, wtPath);
+  if (!r.ok) {
+    // eslint-disable-next-line no-console
+    console.warn(`[stone-versioning] ${ctx} worktree cleanup failed branch=${branch} stderr=${r.stderr}`);
+  }
+  await gcEmptyWorktreeParents(wtPath, baseDir);
+}
+
+export interface SessionWorktreeRef {
   /** OOC world 根。 */
   baseDir: string;
-  /** worktree 的发起 Object（main-side authorObjectId）。 */
-  objectId: string;
-  /** worktree 对应的 git branch 名（即 `${WORKTREE_BRANCH_PREFIX}/${objectId}/${token}`）。 */
+  /** session worktree 对应的 git branch 名（`session-<sid>`）。 */
   branch: string;
-  /** worktree 在磁盘上的绝对路径（`${baseDir}/stones/${branch}`）。 */
+  /** worktree 在磁盘上的绝对路径。 */
   path: string;
-  /** 创建时 main 当前 commit sha（资料用，merge 时通过 gitMergeBase 重新解析）。 */
-  baseCommit: string;
 }
 
 /** 主仓库（main 工作树）目录，所有 git 操作的 cwd。 */
@@ -165,13 +181,6 @@ function worktreePath(baseDir: string, branch: string): string {
 /** caller-supplied scope-key 用于串行化所有同一 baseDir 上的 git 操作。 */
 function gitQueueKey(baseDir: string): string {
   return `git:${baseDir}`;
-}
-
-/** 生成短随机 token —— Date.now base36 + 4 位随机，避免外部依赖。 */
-function generateToken(): string {
-  const t = Date.now().toString(36);
-  const r = Math.random().toString(36).slice(2, 6);
-  return `${t}${r}`;
 }
 
 /** 单段 objectId 合法字符（同原 isValidObjectId：不含 `/`）。 */
@@ -262,7 +271,7 @@ function extractObjectIdsFromPaths(paths: string[]): string[] {
  * ---------------------------------------------------------------- */
 
 export interface CommitWorktreeInput {
-  worktree: MetaprogWorktreeRef;
+  worktree: SessionWorktreeRef;
   intent: string;
   authorObjectId: string;
 }
@@ -310,14 +319,29 @@ export type ClassifyError =
   | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
 
 /**
- * 路径划界判定：branch 累积 diff vs main merge-base，每个文件路径必须以
- * `selfScopePrefix(authorObjectId)` 起头才算 self-scope（R5/R6）。前缀对嵌套 child
- * 基于物理布局（nestedObjectPath：`objects/parent/children/child/`），直拼会误判。
- * supervisor 走同款路径判定——改自己 stones 是 self-scope（ff），改他人 stones 是
- * cross-scope（自动开 PR-Issue，可由 supervisor 自审）。
+ * 路径划界核心（无 queue，caller 须已持 git queue）：branch 累积 diff vs main
+ * merge-base，每个文件路径必须以 `selfScopePrefix(authorObjectId)` 起头才算 self-scope
+ * （R5/R6）。前缀对嵌套 child 基于物理布局（nestedObjectPath：`objects/parent/children/child/`），
+ * 直拼会误判。`classifyWorktreeBranch`（带 queue）与 `tryMergeSelf`（已在 queue 内）共用此核心。
+ */
+function classifyDiffAgainstMain(
+  repo: string,
+  branch: string,
+  authorObjectId: string,
+): { ok: true; scope: ScopeClass; paths: string[] } | { ok: false; gitCode: GitErrorCode; stderr: string } {
+  const r = gitDiffNames(repo, STONES_MAIN_BRANCH, branch);
+  if (!r.ok) return { ok: false, gitCode: r.code, stderr: r.stderr };
+  const prefix = selfScopePrefix(authorObjectId);
+  const scope: ScopeClass = r.value.every((p) => p.startsWith(prefix)) ? "self-scope" : "cross-scope";
+  return { ok: true, scope, paths: r.value };
+}
+
+/**
+ * 路径划界判定（公共可观测原语）。supervisor 走同款判定——改自己 stones 是 self-scope（ff），
+ * 改他人 stones 是 cross-scope（自动开 PR-Issue，可由 supervisor 自审）。
  */
 export async function classifyWorktreeBranch(
-  worktree: MetaprogWorktreeRef,
+  worktree: SessionWorktreeRef,
   authorObjectId: string,
 ): Promise<ClassifyResult | ClassifyError> {
   if (!isValidObjectId(authorObjectId)) {
@@ -325,13 +349,9 @@ export async function classifyWorktreeBranch(
   }
 
   return enqueueSessionWrite(gitQueueKey(worktree.baseDir), async () => {
-    const repo = repoDir(worktree.baseDir);
-    const r = gitDiffNames(repo, STONES_MAIN_BRANCH, worktree.branch);
-    if (!r.ok) return { ok: false, code: "GIT", gitCode: r.code, stderr: r.stderr } as const;
-    // 自治区路径 = nestedObjectPath(authorObjectId) 物理前缀（嵌套 child 经 children/ 翻译）。
-    const prefix = selfScopePrefix(authorObjectId);
-    const scope: ScopeClass = r.value.every((p) => p.startsWith(prefix)) ? "self-scope" : "cross-scope";
-    return { ok: true, scope, paths: r.value } as const;
+    const c = classifyDiffAgainstMain(repoDir(worktree.baseDir), worktree.branch, authorObjectId);
+    if (!c.ok) return { ok: false, code: "GIT", gitCode: c.gitCode, stderr: c.stderr } as const;
+    return { ok: true, scope: c.scope, paths: c.paths } as const;
   });
 }
 
@@ -357,7 +377,7 @@ export type TryMergeSelfResult =
  *   5. 成功 ff → cleanup worktree
  */
 export async function tryMergeSelf(
-  worktree: MetaprogWorktreeRef,
+  worktree: SessionWorktreeRef,
   authorObjectId: string,
 ): Promise<TryMergeSelfResult> {
   if (!isValidObjectId(authorObjectId)) {
@@ -375,13 +395,11 @@ export async function tryMergeSelf(
       return { ok: false, code: "GIT", gitCode: rebase.code, stderr: rebase.stderr } as const;
     }
 
-    // step 2: classify
-    const diff = gitDiffNames(repo, STONES_MAIN_BRANCH, worktree.branch);
-    if (!diff.ok) return { ok: false, code: "GIT", gitCode: diff.code, stderr: diff.stderr } as const;
-    const prefix = selfScopePrefix(authorObjectId);
-    const isSelf = diff.value.every((p) => p.startsWith(prefix));
-    if (!isSelf) {
-      return { ok: true, kind: "must-pr-issue", paths: diff.value } as const;
+    // step 2: classify（rebase 后 path 集合可能变化，重判）
+    const cls = classifyDiffAgainstMain(repo, worktree.branch, authorObjectId);
+    if (!cls.ok) return { ok: false, code: "GIT", gitCode: cls.gitCode, stderr: cls.stderr } as const;
+    if (cls.scope === "cross-scope") {
+      return { ok: true, kind: "must-pr-issue", paths: cls.paths } as const;
     }
 
     // step 3: ff merge in repo (main work-tree)
@@ -403,15 +421,7 @@ export async function tryMergeSelf(
     if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
 
     // step 4: cleanup worktree（解除注册，保留运行时数据；session worktree=flows/<sid> 物理合一）
-    const removeWt = gitWorktreeUnregister(repo, worktree.path);
-    // silent-swallow ban: 失败不阻塞 ff 成功，但必须 warn 让运维知情（caller 可下次启动 prune）
-    if (!removeWt.ok) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[stone-versioning] tryMergeSelf worktree cleanup failed branch=${worktree.branch} stderr=${removeWt.stderr}`,
-      );
-    }
-    await gcEmptyWorktreeParents(worktree.path, worktree.baseDir);
+    await cleanupWorktreeAfterMerge(repo, worktree.path, worktree.baseDir, worktree.branch, "tryMergeSelf");
     return { ok: true, kind: "merged", commitSha: head.value } as const;
   });
 }
@@ -421,7 +431,7 @@ export async function tryMergeSelf(
  * ---------------------------------------------------------------- */
 
 export interface RequestPrIssueInput {
-  worktree: MetaprogWorktreeRef;
+  worktree: SessionWorktreeRef;
   intent: string;
   authorObjectId: string;
   /** 可选的 PR 标题；缺省由 intent 前 60 字符构造。 */
@@ -568,22 +578,13 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
       const head = gitHead(repo);
       if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
 
-      // cleanup worktree (best-effort) — silent-swallow ban: 失败 warn 但不阻塞 merge
-      const rmMerge = gitWorktreeUnregister(repo, worktreePath(input.baseDir, branch));
-      if (!rmMerge.ok) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[stone-versioning] resolvePrIssue(merge) worktree remove failed branch=${branch} stderr=${rmMerge.stderr}`,
-        );
-      }
-      const pruneMerge = gitWorktreePrune(repo);
-      if (!pruneMerge.ok) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[stone-versioning] resolvePrIssue(merge) worktree prune failed stderr=${pruneMerge.stderr}`,
-        );
-      }
-      await gcEmptyWorktreeParents(worktreePath(input.baseDir, branch), input.baseDir);
+      await cleanupWorktreeAfterMerge(
+        repo,
+        worktreePath(input.baseDir, branch),
+        input.baseDir,
+        branch,
+        "resolvePrIssue(merge)",
+      );
 
       try {
         await closePrIssue({
@@ -600,22 +601,14 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
       return { ok: true, kind: "merged", commitSha: head.value } as const;
     }
 
-    // reject — silent-swallow ban: 失败 warn 但不阻塞 reject
-    const rmReject = gitWorktreeUnregister(repo, worktreePath(input.baseDir, branch));
-    if (!rmReject.ok) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[stone-versioning] resolvePrIssue(reject) worktree remove failed branch=${branch} stderr=${rmReject.stderr}`,
-      );
-    }
-    const pruneReject = gitWorktreePrune(repo);
-    if (!pruneReject.ok) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[stone-versioning] resolvePrIssue(reject) worktree prune failed stderr=${pruneReject.stderr}`,
-      );
-    }
-    await gcEmptyWorktreeParents(worktreePath(input.baseDir, branch), input.baseDir);
+    // reject
+    await cleanupWorktreeAfterMerge(
+      repo,
+      worktreePath(input.baseDir, branch),
+      input.baseDir,
+      branch,
+      "resolvePrIssue(reject)",
+    );
     const archive = gitArchiveBranch(repo, branch);
     if (!archive.ok) {
       return { ok: false, code: "GIT", gitCode: archive.code, stderr: archive.stderr } as const;
@@ -753,17 +746,10 @@ export async function pruneStaleWorktrees(baseDir: string): Promise<PruneResult>
     const removed: string[] = [];
     if (list.ok) {
       for (const e of list.value) {
-        // 物理路径不存在的 worktree（脏状态）—— 顺手清
         if (e.path === repo) continue;
-        try {
-          const stat = await import("node:fs/promises").then((m) => m.stat(e.path));
-          // intentional: stat 仅作存在性探测，成功时无需进一步使用，下一轮迭代
-          void stat;
-        } catch {
-          // intentional: 路径已不存在（ENOENT 等），记入 removed 让 caller 看到；
-          // prune 会清掉对应 admin 文件
-          removed.push(e.path);
-        }
+        // 物理路径已不存在的 worktree（脏状态）记入 removed 让 caller 看到；prune 清对应 admin 文件。
+        const exists = await stat(e.path).then(() => true).catch(() => false);
+        if (!exists) removed.push(e.path);
       }
     }
     // silent-swallow ban: prune 失败 warn 但不影响整体 ok（caller 仍能拿到 removed）
@@ -846,14 +832,9 @@ export async function httpDirectMainWrite(
  * ---------------------------------------------------------------- */
 
 export const __testing = {
-  generateToken,
   gitQueueKey,
   isValidObjectId,
   selfScopePrefix,
   worktreePath,
   repoDir,
 };
-
-// 强制把 rm 当作活跃符号，避免未来误删（pruneStaleWorktrees 实际可能扩展用之）
-// intentional: silent-swallow ban 例外——这是 unused-import keep-alive，不是错误吞噬。
-void rm;

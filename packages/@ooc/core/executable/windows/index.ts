@@ -53,7 +53,6 @@ export type {
   ObjectRegistry,
   OnCloseHook,
   OnCloseContext,
-  RenderHook,
   RenderContext,
   ReadableFn,
   MethodVisibilityContext,
@@ -98,7 +97,7 @@ import "./relation/index.js";
 // 其余 builtin types 通过 extendable/index.js 加载。
 import "../../extendable/index.js";
 
-// Boot-time 校验：所有 object type 必须配齐 renderXml 或 readable hook。
+// Boot-time 校验：所有 object type 必须配齐 readable hook。
 // 延迟到 microtask 执行：本 barrel 与 root/executable / extendable 等存在循环 import，
 // 同步在 module-eval 末尾跑 assert 会在某些加载顺序下"过早"触发（彼时 root 等类型尚未
 // registerObjectType 完成），assert 抛错反而中断 root/executable 的 eval → ROOT_METHODS

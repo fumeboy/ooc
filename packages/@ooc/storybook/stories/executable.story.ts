@@ -1,8 +1,8 @@
 /**
  * Story: executable —— LLM 经稳定 tool 原语在 ContextObject 上调 Method 改变世界。
  *
- * 控制面（无 LLM）只验**结构**：① Object 自定义 ui_methods 在 ContextObject 上执行（method 调用）；
- * ② Object 定义的 window.commands（LLM 路径命令）经 loader 可加载。深度（4 原语 exec/close/wait/compress
+ * 控制面（无 LLM）只验**结构**：① Object 自定义 for_ui_access 方法经 HTTP call_method 执行；
+ * ② Object 定义的 window.methods（LLM 路径命令）经 loader 可加载。深度（4 原语 exec/close/wait/compress
  * 驱动真实编辑）属 Tier B + e2e S1/S2。规格见 executable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { setTimeout as sleep } from "node:timers/promises";
@@ -14,26 +14,26 @@ export async function runControlPlane(): Promise<StoryResult> {
   const srv = await mkServer();
   const { app, baseDir } = srv;
   try {
-    // TC-EXEC-01: ui_methods 在 ContextObject 上执行（method 调用改变/返回世界状态）
+    // TC-EXEC-01: for_ui_access 方法经 HTTP call_method 执行（返回世界状态走 data）
     {
       const id = "calc";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const ui_methods = { add: { fn: (_c, a) => ({ sum: a.x + a.y }) } };\nexport const window = { methods: {} };`);
+        `export const window = { methods: { add: { description: "add", for_ui_access: true, exec: ({ args }) => ({ ok: true, data: { sum: args.x + args.y } }) } } };`);
       await sleep(350);
       const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "add", args: { x: 2, y: 3 } });
-      rec.eq("TC-EXEC-01", "ui_methods 在 ContextObject 上执行并返回结果", r.json?.returnValue, { sum: 5 });
+      rec.eq("TC-EXEC-01", "for_ui_access 方法经 HTTP 执行并 data 通道返回结果", r.json?.data, { sum: 5 });
     }
 
-    // TC-EXEC-02: window.commands（LLM 路径命令）经 loader 可加载（executable 的命令面）
+    // TC-EXEC-02: window.methods（LLM 路径命令）经 loader 可加载（executable 的命令面）
     {
       const id = "cmd_obj";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { run: { description: "run", intents: ["run"], exec: async () => ({ ok: true }) } } };\nexport const ui_methods = {};`);
+        `export const window = { methods: { run: { description: "run", intents: ["run"], exec: async () => ({ ok: true }) } } };`);
       const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
       const win = await loadObjectWindow({ baseDir, objectId: id });
-      rec.ok("TC-EXEC-02", "window.commands（LLM 路径命令）经 loader 可加载",
+      rec.ok("TC-EXEC-02", "window.methods（LLM 路径命令）经 loader 可加载",
         !!win?.methods?.run && JSON.stringify(win.methods.run.intents) === JSON.stringify(["run"]),
         `methods=${JSON.stringify(Object.keys(win?.methods ?? {}))}`);
     }

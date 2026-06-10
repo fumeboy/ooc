@@ -451,14 +451,14 @@ describe("buildContext (ContextWindow model)", () => {
   it("always injects executable basic knowledge into system context", async () => {
     const messages = await buildContext(makeThread({ id: "t1" }));
     const xml = messages[0]?.content ?? "";
-    // KNOWLEDGE 现在的形态：一行一个原语，不再是 "open / refine / submit / close / wait"
+    // interaction-core.md（object::root 恒激活）：三原语 + 私有思考空间 + 收尾决策
     expect(xml).toContain("ContextWindow");
     expect(xml).toContain("exec(window_id");
-    // wait 新签名（spec 2026-05-17）：on 必填，reason 可选
+    // wait 新签名：on 必填，reason 可选
     expect(xml).toContain("wait(on");
-    // 关键提示：思考空间 + talk 是与 user 唯一通道
+    // 关键提示：私有思考空间 + 收尾走 talk_window 回报
     expect(xml).toContain("思考空间");
-    expect(xml).toContain('method="talk"');
+    expect(xml).toContain("talk_window");
   });
 
   // 2026-06-10 ObjectMethod API 重构后，form 知识合成（knowledge_window + <path>）已移除：

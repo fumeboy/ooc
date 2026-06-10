@@ -190,6 +190,29 @@ export function clearKnowledgeLoaderCache(): void {
 }
 
 /**
+ * 从单个目录加载 knowledge 索引（无祖先 / 父类链 / pool 合并）。
+ *
+ * 给框架内置知识用：root 等 builtin object 的 knowledge 随框架包发布、运行进程内不可变，
+ * 由 caller 自行 memoize。idPath 为相对该目录的路径（去 .md）。
+ */
+export async function loadKnowledgeIndexFromDir(dir: string): Promise<KnowledgeIndex> {
+  const byPath = new Map<string, KnowledgeDoc>();
+  for (const f of await collectMdFiles(dir)) {
+    const parsed = await readAndParse(f.path);
+    if (!parsed) continue;
+    const idPath = toIdPath(dir, f.path);
+    byPath.set(idPath, {
+      path: idPath,
+      file: f.path,
+      frontmatter: parsed.frontmatter,
+      body: parsed.body,
+      mtime: f.mtime,
+    });
+  }
+  return { byPath };
+}
+
+/**
  * 读 + 解析单篇 knowledge md。
  *
  * 解析失败（含旧 schema / 非法 trigger）→ console.warn 含文件路径，返回 undefined

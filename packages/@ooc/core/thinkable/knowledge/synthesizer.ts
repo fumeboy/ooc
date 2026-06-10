@@ -25,7 +25,7 @@ import { builtinRegistry } from "../../executable/windows/index.js";
 import type { ContextWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { SUPER_ALIAS_TARGET } from "../../executable/windows/_shared/super-constants.js";
 import { loadObjectWindow } from "../../runtime/server-loader.js";
-import type { StoneObjectDeclaration } from "../../executable/object/object-types.js";
+import type { ObjectDefinition } from "../../executable/windows/_shared/registry.js";
 
 /**
  * 确保 `_builtin/<id>` 框架 class 已注册进 registry（供 instance 的 parentClass 链解析）。
@@ -65,17 +65,15 @@ export async function ensureSelfObjectTypeRegistered(
   if (registeredTypes.includes(selfId as any)) return;
   try {
     const stoneRef = { baseDir: thread.persistence!.baseDir, objectId: selfId };
-    const objWin: StoneObjectDeclaration | undefined = await loadObjectWindow(stoneRef);
+    const objWin: Partial<ObjectDefinition> | undefined = await loadObjectWindow(stoneRef);
     const parentClass: string | null | undefined =
       objWin?.parentClass !== undefined ? objWin.parentClass : await readStoneClass(stoneRef);
     ensureBuiltinClassRegistered(registry, parentClass);
     const mergedMethods = { ...(objWin?.methods ?? {}) };
     registry.registerNewObjectType(selfId as any, {
       methods: mergedMethods,
-      renderXml: objWin?.renderXml,
       readable: objWin?.readable,
       onClose: objWin?.onClose,
-      basicKnowledge: typeof objWin?.basicKnowledge === "string" ? objWin.basicKnowledge : undefined,
       parentClass,
     });
   } catch (err) {
@@ -155,7 +153,7 @@ export async function derivePeerObjectWindows(
         }
       }
 
-      const objWin: StoneObjectDeclaration | undefined = await loadObjectWindow(peerStoneRef);
+      const objWin: Partial<ObjectDefinition> | undefined = await loadObjectWindow(peerStoneRef);
       const registeredTypes = registry.listRegisteredObjectTypes();
       if (!registeredTypes.includes(peerId as any) && objWin) {
         const parentClass: string | null | undefined =
@@ -164,10 +162,8 @@ export async function derivePeerObjectWindows(
         const mergedMethods = { ...(objWin.methods ?? {}) };
         registry.registerNewObjectType(peerId as any, {
           methods: mergedMethods,
-          renderXml: objWin.renderXml,
           readable: objWin.readable,
           onClose: objWin.onClose,
-          basicKnowledge: typeof objWin.basicKnowledge === "string" ? objWin.basicKnowledge : undefined,
           parentClass,
         });
       }

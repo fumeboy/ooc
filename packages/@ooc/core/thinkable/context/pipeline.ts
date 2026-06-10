@@ -15,7 +15,7 @@
 import type { ThreadContext } from "./index.js";
 import type { ContextWindow } from "../../executable/windows/_shared/types.js";
 import type { ContextSnapshot } from "./snapshot.js";
-import type { IntentCache, Intent } from "./intent.js";
+import type { IntentCache } from "./intent.js";
 import { BudgetManager, loadBudgetThresholds } from "./budget.js";
 import { SystemProcessor } from "./processors/system.js";
 import { WindowEnrichmentProcessor } from "./processors/enrichment.js";
@@ -46,7 +46,7 @@ export class ContextPipeline {
     if (!thread.intentCache) {
       thread.intentCache = intentCache;
     }
-    // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 PipelineContext.windows。
+    // contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 PipelineContext.windows。
     const ctx: PipelineContext = { intentCache, windows: [...(thread.contextWindows ?? [])] as ContextWindow[] };
 
     for (const phase of this.phases) {
@@ -61,21 +61,11 @@ export class ContextPipeline {
     const thresholds = loadBudgetThresholds(thread);
     const { visible, overflow } = budget.allocate(ctx.windows, thresholds.hard);
 
-    // Build trace from intentCache
-    const traceIntents: Record<string, Intent[]> = {};
-    for (const [formId, entry] of intentCache) {
-      traceIntents[formId] = entry.intents;
-    }
-
     return {
       thread: { id: thread.id, status: thread.status },
       self: { objectId: thread.persistence?.objectId ?? "root" },
       windows: visible,
       overflow,
-      trace: {
-        intents: traceIntents,
-        perWindow: {},
-      },
     } as ContextSnapshot;
   }
 }

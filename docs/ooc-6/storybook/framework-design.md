@@ -8,7 +8,7 @@
 ## 1. 定位与三层边界
 
 storybook = **OOC 能力目录**：回答「OOC 能做什么 + 证明它能 + 展示它怎么做」。它把原先分散在
-`_verify.ts`（4 特性控制面）/`_demo_session.ts`（2 场景演示）/`tests/harness/playbooks`（8 维度）里的
+旧 `_verify.ts`（已删，迁入 `stories/*.story.ts`）/`_demo_session.ts`（2 场景演示）/`tests/harness/playbooks`（8 维度）里的
 「能力证明」收编成一个**有覆盖矩阵的体系**。与其它测试层分工：
 
 | 层 | 职责 | 进 CI |
@@ -52,7 +52,7 @@ packages/@ooc/storybook/
 
 | 复用 | 来源 | 用途 |
 |---|---|---|
-| `mkServer` 基座 | `_verify.ts:49-107` 模式（ensureStoneRepo+buildServer） | createStone 经 HTTP worktree 的正确前提 |
+| `mkServer` 基座 | `stories/_harness/control-plane.ts`（ensureStoneRepo+buildServer+app.handle） | createStone 经 HTTP worktree 的正确前提 |
 | 观察孔/评分纯函数 | `packages/@ooc/tests/e2e/backend/_fixture.ts`（`scoreScenario:620`/`stoneFileCommits:488`/`listMemoryFiles:561`/`hasValidFrontmatter:580` 等） | Tier B 产物核验 |
 | `processTrace`/`waitJob` | `_demo_session.ts:46/34` | Tier B 过程轨迹 |
 | `pool`/`writeDashboard` 范式 | `tests/harness/orchestrate.ts:204/217` | runner 并发 + 矩阵 |

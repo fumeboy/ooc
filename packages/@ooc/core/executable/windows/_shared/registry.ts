@@ -19,7 +19,6 @@ export type {
   OnCloseContext,
   OnCloseHook,
   RenderContext,
-  RenderHook,
   ReadableFn,
   CompressViewHook,
   ObjectDefinition,

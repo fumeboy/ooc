@@ -28,16 +28,6 @@ import { larkExec } from "../cli.js";
 const MAX_RENDER_BYTES = 8192;
 const DEFAULT_TAIL = 30;
 
-const PROTOCOL_KNOWLEDGE = `feishu_chat window — 飞书群聊/单聊。
-
-方法：
-- refresh: 拉最近 N 条消息
-- search: 本群关键字搜索
-- send: 发新消息（需 confirm=true 才真发，否则 dry-run）
-- reply: 引用某条消息回复（需 confirm=true）
-- subscribe: 登记周期刷新
-- close: 关闭窗口
-`.trim();
 const MAX_TAIL = 50;
 
 const REFRESH_TIP = `feishu_chat.refresh 拉取本群最近消息到 window.buffer。
@@ -475,6 +465,5 @@ builtinRegistry.registerExecutable("feishu_chat", {
   },
 });
 builtinRegistry.registerReadable("feishu_chat", {
-  renderXml: renderFeishuChat,
-  basicKnowledge: PROTOCOL_KNOWLEDGE,
+  readable: renderFeishuChat,
 });

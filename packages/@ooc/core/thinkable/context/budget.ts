@@ -1,24 +1,16 @@
 /**
- * Context budget — BudgetManager (P6).
+ * Context budget — BudgetManager。
  *
- * Design: docs/2026-05-25-context-compression-design.md §4.3 / §4.4 (legacy)
- *         + P6 BudgetManager redesign.
- * Meta:   meta/object.doc.ts:thinkable.children.context_budget
+ * 预算是 context 唯一的自动裁剪闸门：
+ *   - score(window): 由 provenance / priority / recency / signalCount 算出 0.0–1.0 相关性
+ *   - allocate(windows, totalBudget, estimateTokenFn?): 按相关性排序, 在 token 预算内
+ *     返回 { visible, overflow }; overflow 不丢, 由 renderer 的 <context_overflow> 呈现
  *
- * P6 (2026-06-03): Legacy applyNaturalDecay / applyEmergencyGuard / estimateThreadTokens
- * have been removed. BudgetManager is the canonical API:
- *   - score(window): compute 0.0–1.0 relevance from provenance, priority, recency, signal count
- *   - allocate(windows, totalBudget, estimateTokenFn?): rank windows by relevance and
- *     return { visible, overflow } within the token budget.
+ * compressLevel 仅由 LLM 的 compress/expand 命令与 renderer 显式控制——预算不自动推进档位。
  *
- * compressLevel is still honored by compress/expand LLM commands and the renderer,
- * but automatic level advancement (natural decay / emergency guard) is removed —
- * budget is now enforced exclusively via BudgetManager.allocate inclusion/exclusion.
- *
- * Config:
- * - Path: stones/<self>/config/context-budget.json
- *   { "naturalDecay": { ... }, "budget": { "soft": number, "hard": number } }
- * - loadBudgetThresholds reads the soft/hard thresholds used for LLM warning injection.
+ * 配置: stones/<self>/config/context-budget.json
+ *   { "budget": { "soft": number, "hard": number } }
+ * loadBudgetThresholds 读取 soft/hard 阈值。
  */
 
 import { readFileSync, existsSync } from "node:fs";
@@ -32,9 +24,9 @@ import type { ThreadContext } from "./index";
 
 /** Budget 阈值配置 (token 估算 soft/hard 上限)。 */
 export interface BudgetThresholds {
-  /** soft 阈值: 超过即给 LLM 一条 <context_budget_warning>; 默认 100000 字符 (≈ 25K token 粗估)。 */
+  /** soft 阈值: 可见窗口 token 超过即给 LLM 一条 <context_budget_warning>; 默认 100000 字符 (≈ 25K token 粗估)。 */
   soft: number;
-  /** hard 阈值: 超过则系统强制降级 (level 0→1→2, 最后 events fold); 默认 180000。 */
+  /** hard 阈值: allocate 的 token 预算上限, 超出的窗口归入 overflow (不渲染但保留); 默认 180000。 */
   hard: number;
 }
 
@@ -42,6 +34,25 @@ export const DEFAULT_BUDGET_THRESHOLDS: BudgetThresholds = {
   soft: 100000,
   hard: 180000,
 };
+
+/**
+ * 单窗口 token 估算的唯一来源：JSON 序列化长度 / 4 的启发式。
+ * BudgetManager.allocate 与 soft-warning 检测共用同一份，避免估算口径漂移。
+ */
+export function estimateWindowTokens(w: ContextWindow): number {
+  try {
+    return Math.ceil(JSON.stringify(w).length / 4);
+  } catch {
+    return 100;
+  }
+}
+
+/** 一组窗口的 token 估算之和。 */
+export function estimateWindowsTokens(windows: ContextWindow[]): number {
+  let total = 0;
+  for (const w of windows) total += estimateWindowTokens(w);
+  return total;
+}
 
 /** 从 stone 配置 / 默认值加载 budget 阈值。 */
 export function loadBudgetThresholds(thread: ThreadContext): BudgetThresholds {
@@ -54,12 +65,10 @@ export function loadBudgetThresholds(thread: ThreadContext): BudgetThresholds {
 }
 
 interface BudgetConfigFile {
-  naturalDecay?: Partial<Record<string, number>>;
   budget?: Partial<BudgetThresholds>;
 }
 
-/** 读取 stone 上的 context-budget.json; 失败 / 缺失一律返回 null。
- *  仅 loadBudgetThresholds 使用; 保留 naturalDecay 字段为宽松类型以兼容旧配置文件。 */
+/** 读取 stone 上的 context-budget.json; 失败 / 缺失一律返回 null。仅 loadBudgetThresholds 使用。 */
 function readBudgetConfigFile(thread: ThreadContext): BudgetConfigFile | null {
   if (!thread.persistence) return null;
   let configPath: string;
@@ -78,14 +87,10 @@ function readBudgetConfigFile(thread: ThreadContext): BudgetConfigFile | null {
   }
 }
 
-// ─────────────────────────── BudgetManager (P6) ──────────────────────────────
+// ─────────────────────────── BudgetManager ───────────────────────────────────
 
 /**
- * BudgetManager — replaces the legacy heuristic decay/guard system with semantic
- * relevance scoring and real tokenizer-based budget allocation.
- *
- * P6 (2026-06-03): Canonical budget API. Legacy applyNaturalDecay /
- * applyEmergencyGuard / estimateThreadTokens have been removed.
+ * BudgetManager — 基于语义相关性打分 + token 预算分配的 context 裁剪器。
  */
 
 const PROVENANCE_WEIGHTS: Record<string, number> = {
@@ -160,13 +165,7 @@ export class BudgetManager {
     visible: ContextWindow[];
     overflow: Array<{ id: string; title: string; relevance: number; reason: string }>;
   } {
-    const estimate = estimateTokenFn ?? ((w: any) => {
-      try {
-        return Math.ceil(JSON.stringify(w).length / 4);
-      } catch {
-        return 100; // fallback
-      }
-    });
+    const estimate = estimateTokenFn ?? estimateWindowTokens;
 
     // Score all windows
     const now = Date.now();

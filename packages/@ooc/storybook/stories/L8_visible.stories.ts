@@ -24,19 +24,6 @@ export const L8_STORIES: Story[] = [
   }),
 
   story({
-    id: "L8-TYPES-CATALOG",
-    layer: "visible",
-    expectation: "/api/objects/_shared/types 列出全部已注册 type",
-    design: "visible/executable：对象类型目录（前端按 type 索引 method）。api.list-window-types 别名",
-    run: async ({ app }) => {
-      const r = await getJson(app, "/api/objects/_shared/types");
-      check(r.status === 200, `status=${r.status}`);
-      const types = (r.json?.items ?? []).map((e: any) => e.type);
-      check(types.length >= 5 && types.includes("file"), `types 异常：${JSON.stringify(types)}`);
-    },
-  }),
-
-  story({
     id: "L8-WORLD-CONFIG",
     layer: "visible",
     expectation: "/api/world/config 返回 siteName 等 world 级配置",

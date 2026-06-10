@@ -21,7 +21,7 @@ import {
   commitWorktree,
   requestPrIssueReview,
   tryMergeSelf,
-  type MetaprogWorktreeRef,
+  type SessionWorktreeRef,
 } from "./versioning.js";
 import { gitBranchDelete, gitStatus } from "./git.js";
 import { STONES_MAIN_BRANCH } from "../persistable/common.js";
@@ -146,12 +146,10 @@ export async function evolveSelfMerge(
   // diff（合入前快照，给返回值带 files；commit 后工作树清空）
   const diff = await evolveSelfDiff(baseDir, objectId, creatorSessionId);
   const branch = sessionStoneBranch(creatorSessionId);
-  const worktree: MetaprogWorktreeRef = {
+  const worktree: SessionWorktreeRef = {
     baseDir,
-    objectId,
     branch,
     path: wtPath,
-    baseCommit: "",
   };
 
   // 1. commit 业务 session 在 worktree 里的改动（署名 objectId）

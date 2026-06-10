@@ -89,26 +89,9 @@ function onClosePlanWindow(ctx: OnCloseContext): boolean | void {
   }
 }
 
-const PLAN_BASIC_KNOWLEDGE = `
-plan_window 是 thread 的行动计划窗口（first-class ContextWindow）。
-由 root.plan method 创建/更新；支持 sub plan 嵌套 + 通过 do.share_windows 共享给子 thread。
-
-在 plan_window 上可调命令（通过 exec(parent_window_id="<plan_window_id>", method="X", args=...) 调用）：
-- update_plan: 更新 plan.title / description
-- add_step: 追加 step（参数 text 必填；status 可选，默认 pending）
-- update_step: 修改某 step 的 text / status（参数 step_id 必填）
-- expand_step: 把 step 展开为 sub plan_window（创建 child + 写回 subPlanWindowId）
-- collapse_subplan: 反向；archive sub plan_window + 清 subPlanWindowId
-- mark_done: 标记 plan_window 自身完成（status → "done"）
-- close: 关闭 plan_window（cascade 把所有 sub plan_window 切 archived）
-
-renderXml: <plan_window>...<description?/><steps count><step id status sub_plan_window_id?/>...</steps></plan_window>
-`.trim();
-
 // readable 维度自注册（readable + compressView + onClose + basicKnowledge）。
 builtinRegistry.registerReadable("plan", {
   onClose: onClosePlanWindow,
   readable,
   compressView: compressPlanWindow,
-  basicKnowledge: PLAN_BASIC_KNOWLEDGE,
 });

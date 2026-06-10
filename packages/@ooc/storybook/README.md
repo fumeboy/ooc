@@ -34,7 +34,6 @@ runner.ts / catalog-runner.ts                    # 聚合 → dashboard / storie
 
 ## 迁移状态
 
-- `_verify.ts`：**已迁入** `stories/*.story.ts` 的 Tier A。保留作历史参考，新增/修改请改 stories。
 - `_demo_session.ts`：agent-native 演示模式源，Tier B 的 `_harness/agent-native.ts` 从它抽公共驱动。
 - 测试规格（Tier A TC + Tier B rubric）**已归属各维度 OOC Object 的 `knowledge/tests.md`**（Phase 3，2026-06-09）；
   原 storybook `specs/` 已删，orchestrate 改读对象树。

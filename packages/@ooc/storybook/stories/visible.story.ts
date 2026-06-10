@@ -54,7 +54,7 @@ export async function runControlPlane(): Promise<StoryResult> {
         rec.ok("TC-VIS-02", "Vite serve /@fs visible 组件返回模块代码",
           resp.status === 200 && body.includes("export default"), `status=${resp.status}`);
         const ep = join(dirOf("ui_demo"), "executable", "index.ts");
-        writeStoneFile(baseDir, "ui_demo", "executable/index.ts", `export const ui_methods = {};`);
+        writeStoneFile(baseDir, "ui_demo", "executable/index.ts", `export const window = { methods: {} };`);
         const er = await fetch(`${VITE}/@fs${ep}`);
         const eb = await er.text();
         rec.ok("TC-VIS-03", "Vite 安全边界：拒绝 serve executable 路径（403）",
@@ -96,13 +96,13 @@ export async function runControlPlane(): Promise<StoryResult> {
       writeStoneFile(baseDir, id, "visible/index.tsx",
         `export default function Demo({ callMethod }: any) { const onClick = () => callMethod?.("greet", { name: "ooc" }); return null; }`);
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const ui_methods = { greet: { fn: (_ctx, args) => ({ hello: args.name }) } };\nexport const window = { methods: {} };`);
+        `export const window = { methods: { greet: { description: "greet", for_ui_access: true, exec: ({ args }) => ({ ok: true, data: { hello: args.name } }) } } };`);
       await sleep(300);
       const urlResp = await getJson(app, `/api/objects/stone/${id}/client-source-url`);
       const callResp = await postJson(app, `/api/stones/${id}/call_method`, { method: "greet", args: { name: "ooc" } });
       rec.ok("TC-VIS-05", "UI↔行为闭环：visible 组件存在 + callMethod 端点调通 executable",
-        urlResp.status === 200 && callResp.json?.returnValue?.hello === "ooc",
-        `urlOk=${urlResp.status}, call=${JSON.stringify(callResp.json?.returnValue)}`);
+        urlResp.status === 200 && callResp.json?.data?.hello === "ooc",
+        `urlOk=${urlResp.status}, call=${JSON.stringify(callResp.json?.data)}`);
     }
   } finally {
     await srv.cleanup();

@@ -19,7 +19,8 @@
 import type { ServerLoader } from "./server-loader.js";
 import type { StoneDefinition, StoneRegistry } from "./stone-registry.js";
 import type { ObjectRegistry } from "./object-registry.js";
-import type { StoneObjectDeclaration, StoneObjectRef } from "../executable/object/types.js";
+import type { ObjectDefinition } from "../executable/windows/_shared/registry.js";
+import type { StoneObjectRef } from "../persistable/index.js";
 
 export interface ObjectTypeRegistrarDeps {
   readonly worldPath: string;
@@ -83,24 +84,14 @@ export class ObjectTypeRegistrar {
           parentClass,
         });
         this.deps.registry.registerReadable(objectId as any, {
-          renderXml: windowDef?.renderXml,
           readable: windowDef?.readable,
           onClose: windowDef?.onClose,
-          basicKnowledge:
-            typeof windowDef?.basicKnowledge === "string"
-              ? windowDef.basicKnowledge
-              : undefined,
         });
       } else {
         this.deps.registry.registerNewObjectType(objectId as any, {
           methods: mergedMethods,
-          renderXml: windowDef?.renderXml,
           readable: windowDef?.readable,
           onClose: windowDef?.onClose,
-          basicKnowledge:
-            typeof windowDef?.basicKnowledge === "string"
-              ? windowDef.basicKnowledge
-              : undefined,
           parentClass,
         });
       }
@@ -145,7 +136,7 @@ export class ObjectTypeRegistrar {
    * 否则取 stone `package.json` 的权威继承声明 `ooc.class`。缺省 undefined → 隐式继承 root。
    */
   private resolveParentClass(
-    windowDef: StoneObjectDeclaration | undefined,
+    windowDef: Partial<ObjectDefinition> | undefined,
     def: StoneDefinition,
   ): string | null | undefined {
     if (windowDef?.parentClass !== undefined) return windowDef.parentClass;

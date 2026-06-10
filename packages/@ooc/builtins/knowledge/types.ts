@@ -8,8 +8,8 @@ import type { Viewport } from "@ooc/core/extendable/_shared/viewport.js";
  * - explicit  ：LLM 通过 \`open(method="open_knowledge", path)\` 显式 pin；
  *               持久化到 thread.contextWindows；可被 LLM \`close\` 释放。
  *               render 时从 stone knowledge loader 取正文。
- * - protocol  ：每轮自动注入的协议常量（src/executable/index.ts KNOWLEDGE）
- *               与每个 method_exec form 的 \`knowledge()\` 派生条目；
+ * - protocol  ：按 activates_on 注入的 root builtin knowledge（builtins/root/knowledge/*.md）
+ *               与 creator-reply 等协议派生条目；
  *               不持久化，每轮 buildInputItems / captureContextSnapshot 时合成；
  *               LLM 不可 close（\`close\` hook 会拒绝并写 inject）。
  * - activator ：pools/objects/{id}/knowledge/*.md 经 intentPaths 命中激活的条目；

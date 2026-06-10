@@ -2,7 +2,7 @@
  * fs-search.test — U1 ~ U6 of feat-fs-search-codeagent-parity plan.
  *
  * Each section is gated by a top-level describe to keep the file scannable:
- * - U1: SearchWindow type + render + close + basicKnowledge
+ * - U1: SearchWindow type + render + close
  * - U2: file_window.edit
  * - U3: root.write_file
  * - U4: root.glob + search_window.open_match
@@ -23,7 +23,6 @@ import {
   type SearchWindow,
 } from "../windows/index";
 import {
-  SEARCH_WINDOW_BASIC_KNOWLEDGE,
 } from "@ooc/builtins/search/readable.js";
 import { renderContextXml } from "../../__tests__/render-context-xml";
 import { makeThread } from "../../__tests__/make-thread";
@@ -49,12 +48,10 @@ function callFormChange(
 
 // ---------- U1 ----------
 
-describe("U1: SearchWindow type + render + basicKnowledge", () => {
-  it("registry has 'search' definition with non-empty methods and basicKnowledge", () => {
+describe("U1: SearchWindow type + render", () => {
+  it("registry has 'search' definition with non-empty methods", () => {
     const def = builtinRegistry.getObjectDefinition("search");
     expect(Object.keys(def.methods).length).toBeGreaterThan(0);
-    expect(typeof def.basicKnowledge).toBe("string");
-    expect((def.basicKnowledge as string).length).toBeGreaterThan(0);
   });
 
   it("generateWindowId('search') returns id starting with w_search_", () => {
@@ -160,11 +157,6 @@ describe("U1: SearchWindow type + render + basicKnowledge", () => {
     expect(thread.contextWindows.find((w) => w.id === sw.id)).toBeUndefined();
   });
 
-  it("basicKnowledge mentions open_match and close methods", () => {
-    expect(SEARCH_WINDOW_BASIC_KNOWLEDGE).toContain("open_match");
-    expect(SEARCH_WINDOW_BASIC_KNOWLEDGE).toContain("close");
-    expect(SEARCH_WINDOW_BASIC_KNOWLEDGE).toContain("truncated");
-  });
 });
 
 // ---------- U2 / U3 / U4 / U5 / U6 placeholders (filled in subsequent units) ----------

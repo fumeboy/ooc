@@ -1,17 +1,18 @@
 /**
  * Story: programmable —— Object 自定义方法（executable）。
  *
- * 能力：Object 通过 executable/index.ts 定义自定义方法，经 HTTP 被外部调用，方法执行时拿到
- * 自己的 stone 目录（ctx.self.dir）；改源码后热更新立即生效。规格见 programmable 对象 knowledge/tests.md（.ooc-world-meta）。
+ * 能力：Object 通过 executable/index.ts 的 `window.methods` 定义自定义方法。标 `for_ui_access`
+ * 的方法经 HTTP `call_method` 被外部调用，响应即标准 MethodOutcome（结构化数据走 `data`）；
+ * 改源码后热更新立即生效。规格见 programmable 对象 knowledge/tests.md（.ooc-world-meta）。
+ * （2026-06-11 废 ui_methods 维度后统一到 window.methods + for_ui_access。）
  */
-import { statSync } from "node:fs";
-import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
 import { seedTask, waitJob, processTrace, getStoneSelfWithRetry, threadLlmInfraFailed, calledMethodOk } from "../_harness/agent-native";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
-const EXEC = (body: string) => `${body}\nexport const window = { methods: {} };`;
+/** 包一个只含 methods 的 stone executable 源。 */
+const M = (methods: string) => `export const window = { methods: ${methods} };`;
 /** dev hot-reload（fs.watch）失效有 debounce —— 改 executable 源码后等其生效再调用。 */
 const HOT = 350;
 
@@ -20,40 +21,36 @@ export async function runControlPlane(): Promise<StoryResult> {
   const srv = await mkServer();
   const { app, baseDir } = srv;
   try {
-    // TC-PROG-01: 定义 ui_methods 并经 HTTP 调用
+    // TC-PROG-01: for_ui_access 方法经 HTTP 调用，从 MethodOutcome.data 取结果
     {
       const id = "echo_agent";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        EXEC(`export const ui_methods = { echo: { fn: (ctx, args) => ({ youSaid: args.text }) } };`));
+        M(`{ echo: { description: "echo", for_ui_access: true, exec: ({ args }) => ({ ok: true, data: { youSaid: args.text } }) } }`));
       const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "echo", args: { text: "hello" } });
-      rec.eq("TC-PROG-01", "ui_methods 经 HTTP 调用返回正确值", r.json?.returnValue, { youSaid: "hello" });
+      rec.eq("TC-PROG-01", "for_ui_access 方法经 HTTP 调用，data 通道返回正确值", r.json?.data, { youSaid: "hello" });
     }
 
-    // TC-PROG-02: 方法拿到 ctx.self.dir 且目录真实存在
+    // TC-PROG-02: for_ui_access 方法经 data 通道返回嵌套结构化数据（前端取数通道）
     {
-      const id = "dir_checker";
+      const id = "data_shaper";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        EXEC(`export const ui_methods = { getMyDir: { fn: (ctx) => ({ myDir: ctx.self.dir }) } };`));
-      const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "getMyDir" });
-      const myDir: string = r.json?.returnValue?.myDir ?? "";
-      const endsOk = myDir.endsWith(join("stones", "main", "objects", id));
-      const exists = (() => { try { return statSync(myDir).isDirectory(); } catch { return false; } })();
-      rec.ok("TC-PROG-02", "方法拿到 ctx.self.dir（自己的 stone 路径）且目录真实存在",
-        endsOk && exists, `myDir=${myDir}, endsOk=${endsOk}, exists=${exists}`);
+        M(`{ shape: { description: "shape", for_ui_access: true, exec: ({ args }) => ({ ok: true, data: { items: [args.a, args.b], count: 2 } }) } }`));
+      const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "shape", args: { a: 1, b: 2 } });
+      rec.eq("TC-PROG-02", "for_ui_access 方法经 data 通道返回嵌套结构化数据", r.json?.data, { items: [1, 2], count: 2 });
     }
 
-    // TC-PROG-03: window.commands 可经 loadObjectWindow 加载（LLM 路径自定义命令）
+    // TC-PROG-03: 不带 for_ui_access 的 LLM 路径自定义命令经 loadObjectWindow 加载
     {
       const id = "cmd_demo";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { greet: { description: "greet", intents: ["greet"], exec: async () => ({ reply: "hi" }) } } };\nexport const ui_methods = {};`);
+        M(`{ greet: { description: "greet", intents: ["greet"], exec: async () => ({ ok: true, result: "hi" }) } }`));
       const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
       const win = await loadObjectWindow({ baseDir, objectId: id });
       const ok = !!win?.methods?.greet && JSON.stringify(win?.methods?.greet?.intents) === JSON.stringify(["greet"]);
-      rec.ok("TC-PROG-03", "window.commands（LLM 路径自定义命令）经 loader 加载", ok,
+      rec.ok("TC-PROG-03", "window.methods（LLM 路径自定义命令）经 loader 加载", ok,
         `hasGreet=${!!win?.methods?.greet}, intents=${JSON.stringify(win?.methods?.greet?.intents)}`);
     }
 
@@ -61,17 +58,18 @@ export async function runControlPlane(): Promise<StoryResult> {
     {
       const id = "hot_prog";
       await postJson(app, "/api/stones", { objectId: id });
-      writeStoneFile(baseDir, id, "executable/index.ts", EXEC(`export const ui_methods = { ping: { fn: () => "v1" } };`));
+      writeStoneFile(baseDir, id, "executable/index.ts",
+        M(`{ ping: { description: "ping", for_ui_access: true, exec: () => ({ ok: true, data: "v1" }) } }`));
       await sleep(HOT);
       const r1 = await postJson(app, `/api/stones/${id}/call_method`, { method: "ping" });
       writeStoneFile(baseDir, id, "executable/index.ts",
-        EXEC(`export const ui_methods = { ping: { fn: () => "v2" }, pong: { fn: () => "pong" } };`));
+        M(`{ ping: { description: "ping", for_ui_access: true, exec: () => ({ ok: true, data: "v2" }) }, pong: { description: "pong", for_ui_access: true, exec: () => ({ ok: true, data: "pong" }) } }`));
       await sleep(HOT);
       const r2 = await postJson(app, `/api/stones/${id}/call_method`, { method: "ping" });
       const r3 = await postJson(app, `/api/stones/${id}/call_method`, { method: "pong" });
-      const ok = r1.json?.returnValue === "v1" && r2.json?.returnValue === "v2" && r3.json?.returnValue === "pong";
+      const ok = r1.json?.data === "v1" && r2.json?.data === "v2" && r3.json?.data === "pong";
       rec.ok("TC-PROG-04", "热更新：改 executable 后已有方法变更、新增方法立即生效", ok,
-        `ping(v1)=${r1.json?.returnValue}, ping(v2)=${r2.json?.returnValue}, pong=${r3.json?.returnValue}`);
+        `ping(v1)=${r1.json?.data}, ping(v2)=${r2.json?.data}, pong=${r3.json?.data}`);
     }
   } finally {
     await srv.cleanup();

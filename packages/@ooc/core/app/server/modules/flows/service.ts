@@ -8,7 +8,8 @@ import {
   writeThread,
   STONE_CHILDREN_SUBDIR,
 } from "@ooc/core/persistable";
-import { loadUiServerMethods } from "@ooc/core/runtime/server-loader";
+import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
+import { normalizeMethodOutcome } from "@ooc/core/_shared/types/method.js";
 import { enrichContextWindows } from "@ooc/core/thinkable/context/window-enrichment";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import { initContextWindows, injectPeerWindowsIfObjectThread } from "@ooc/core/executable/windows";
@@ -50,16 +51,6 @@ function assertNotSuperSessionId(sessionId: string): void {
       `sessionId '${SUPER_SESSION_ID}' is reserved for system reflection flow; pick a different sessionId`,
     );
   }
-}
-
-function httpContext() {
-  return {
-    self: { dir: "" },
-    thread: {
-      id: "http",
-      inject() {},
-    },
-  } as never;
 }
 
 function createInboxMessage(text: string, toThreadId: string, replyToWindowId?: string) {
@@ -912,33 +903,37 @@ export function createFlowsService(deps: {
       args?: Record<string, unknown>;
     }) {
       await ensureFlowObjectExists(sessionId, objectId);
-      // intentional: silent-swallow ban 例外——sessionId 在 loadUiServerMethods 之外未直接用，
+      // intentional: silent-swallow ban 例外——sessionId 在 loadObjectWindow 之外未直接用，
       // void 抑制 unused-var 警告，并非错误吞噬。
       void sessionId;
-      let methods;
+      let window;
       try {
-        methods = await loadUiServerMethods({ baseDir: deps.baseDir, objectId });
+        window = await loadObjectWindow({ baseDir: deps.baseDir, objectId });
       } catch (error) {
         throw new AppServerError(
           "METHOD_LOAD_FAILED",
-          `failed to load ui_methods for flow object ${objectId}: ${(error as Error).message}`,
+          `failed to load object window for flow object ${objectId}: ${(error as Error).message}`,
           { sessionId, objectId, method }
         );
       }
+      // HTTP call_method 只暴露 window.methods 里标了 for_ui_access 的方法（人类/client 侧专路）。
+      const methods = window?.methods ?? {};
       const entry = methods[method];
-      if (!entry) {
+      if (!entry || entry.for_ui_access !== true) {
         throw new AppServerError(
           "METHOD_NOT_FOUND",
-          `ui method '${method}' not found on flow object '${objectId}'`,
-          { sessionId, objectId, method, available: Object.keys(methods) }
+          `method '${method}' not found or not for_ui_access on flow object '${objectId}'`,
+          { sessionId, objectId, method, available: Object.keys(methods).filter((m) => methods[m].for_ui_access === true) }
         );
       }
       try {
-        return { returnValue: await entry.fn(httpContext(), args) };
+        // HTTP 入口无 thread/manager，最小 ctx 只带 args。响应即规范化 MethodOutcome
+        // ——前端从 data 字段取结构化数据、result 取消息文本。
+        return normalizeMethodOutcome(await entry.exec({ args }));
       } catch (error) {
         throw new AppServerError(
           "INTERNAL_ERROR",
-          `ui method '${method}' threw: ${(error as Error).message}`,
+          `method '${method}' threw: ${(error as Error).message}`,
           { sessionId, objectId, method }
         );
       }

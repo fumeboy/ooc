@@ -1,12 +1,12 @@
 /**
  * Tier A（control-plane）共享 harness。
  *
- * 基座沿用 _verify.ts 的已验证方式：`ensureStoneRepo` + `buildServer` + `app.handle`
+ * 基座用已验证方式：`ensureStoneRepo` + `buildServer` + `app.handle`
  * （进程内、不起端口）。这是 createStone 经 HTTP 走 worktree 版本化的正确前提——
  * backend e2e fixture 的 startApp({initStoneGit}) 用的是普通 git init，布局不同，故此处不复用其 server 启动，
  * 只复用其**观察/评分纯函数**（layout 无关，见 stories 各自 import）。
  *
- * 关键约束（_verify.ts 踩过的坑）：
+ * 关键约束（历史踩过的坑）：
  *  - 涉及 versioning 的写（self/readme/executable）**必经 HTTP API**（worktree commit）；
  *    直写磁盘未提交会和后续 worktree ff-merge 冲突。直写仅用于非 versioning 的热更（writeStoneFile）。
  */

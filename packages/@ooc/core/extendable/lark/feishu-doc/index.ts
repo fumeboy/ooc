@@ -25,18 +25,6 @@ import { readWorldConfig, DEFAULT_LARK_TENANT_HOST } from "../../../persistable/
 
 const MAX_RENDER_BYTES = 12288;
 
-const PROTOCOL_KNOWLEDGE = `feishu_doc window — 飞书文档。
-
-方法：
-- read: 拉文档内容到 window.content
-- search_in_doc: 文档内查找
-- append: 在文档末尾追加（需 confirm=true）
-- patch_block: 修改/插入特定 block（需 confirm=true）
-- share_link: 返回可分享 URL
-- attach_to_chat: 把 doc 链接发到 chat（需 confirm=true）
-- close: 关闭窗口
-`.trim();
-
 const READ_TIP = `feishu_doc.read 拉取文档内容到 window.content。
 参数：format（可选 "markdown"|"blocks"，默认 markdown）。`;
 
@@ -476,6 +464,5 @@ builtinRegistry.registerExecutable("feishu_doc", {
   },
 });
 builtinRegistry.registerReadable("feishu_doc", {
-  renderXml: renderFeishuDoc,
-  basicKnowledge: PROTOCOL_KNOWLEDGE,
+  readable: renderFeishuDoc,
 });

@@ -11,7 +11,7 @@
  *       <context_windows>
  *         <window id type status [sharing read_only]>
  *           <title>...</title>
- *           ... type-specific content (readable / renderXml / compressView)
+ *           ... type-specific content (readable / compressView)
  *           <commands hint="...">...</commands>
  *           <sub_windows>...</sub_windows>?
  *         </window>
@@ -35,7 +35,7 @@ import {
 import { builtinRegistry } from "../../../executable/windows/index.js";
 import { extractBasicDescription, conciseDescription } from "../../../executable/windows/_shared/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
-import { loadObjectReadable, loadObjectWindow } from "../../../runtime/server-loader.js";
+import { loadObjectWindow } from "../../../runtime/server-loader.js";
 import { readReadable, type StoneObjectRef } from "../../../persistable/index.js";
 import {
   appendNode,
@@ -149,7 +149,7 @@ async function resolveReadableForType(
 
   const stoneRef: StoneObjectRef = { baseDir: persistence.baseDir, objectId: classType };
 
-  // Step 2: StoneObjectDeclaration.readable
+  // Step 2: stone `export const window`.readable（loader 已把独立 readable.ts 合并进此字段）
   try {
     const objWin = await loadObjectWindow(stoneRef);
     if (objWin?.readable) {
@@ -157,15 +157,7 @@ async function resolveReadableForType(
     }
   } catch { /* continue */ }
 
-  // Step 3: readable.ts dynamic function
-  try {
-    const readableFn = await loadObjectReadable(stoneRef);
-    if (readableFn) {
-      return await readableFn(renderCtx);
-    }
-  } catch { /* continue */ }
-
-  // Step 4: readable.md static content (readReadable falls back to legacy readme.md internally)
+  // Step 3: readable.md static content (readReadable falls back to legacy readme.md internally)
   try {
     const readableText = await readReadable(stoneRef);
     if (readableText && readableText.trim().length > 0) {
@@ -263,22 +255,13 @@ async function renderWindowNode(
     const readableChildren = await resolveObjectReadable(renderedWindow, renderCtx, thread, registry);
     if (readableChildren) {
       children.push(...readableChildren);
-    } else if (!def) {
-      // fail-soft：未注册 type 且无 readable（无 persistence / 磁盘 readable 也取不到）——占位不崩。
-      // 仅对**已注册却缺 renderXml**（下方）才抛，那是真的接口契约违反。
+    } else {
+      // fail-soft：readable hook 无产出（未注册 type / 无 persistence / 磁盘 readable 取不到）——占位不崩。
       children.push(
-        xmlElement("readable", { source: "unregistered" }, [
-          xmlText(`Object type "${renderedWindow.type}" 未注册且无 readable（stone 可能后台注册中或新建未就绪）。`),
+        xmlElement("readable", { source: def ? "empty" : "unregistered" }, [
+          xmlText(`Object type "${renderedWindow.type}" 无 readable 产出（stone 可能后台注册中或新建未就绪）。`),
         ]),
       );
-    } else {
-      if (!def.renderXml) {
-        throw new Error(
-          `XmlRenderer: window type "${renderedWindow.type}" 缺少 renderXml hook（接口契约）。`,
-        );
-      }
-      const typeChildren = await def.renderXml(renderCtx);
-      children.push(...typeChildren);
     }
   }
 
