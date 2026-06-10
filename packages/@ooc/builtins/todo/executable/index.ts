@@ -12,7 +12,6 @@ import {
   type TodoWindow,
 } from "@ooc/core/extendable/_shared/types.js";
 
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 const TODO_TIP = `todo 登记一条可见待办，产生 todo_window。
 参数：content（必填，待办内容）、activates_on（可选，命中这些 intent 时强提醒）。`;
@@ -33,8 +32,7 @@ const todoConstructor: ObjectMethod = {
       activates_on: { type: "array", description: "命中这些 intent 时强提醒" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasActivates = Array.isArray(args.activates_on) && args.activates_on.length > 0;
     const intents = hasActivates ? [{ name: "todo.activates_on" }] : [{ name: "todo" }];
     const hasContent = typeof args.content === "string" && args.content.trim().length > 0;

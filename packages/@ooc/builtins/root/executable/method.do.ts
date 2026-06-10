@@ -4,7 +4,6 @@
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 import "@ooc/core/executable/windows/do/index.js";
 
@@ -26,8 +25,7 @@ export const doMethod: ObjectMethod = {
       share_windows: { type: "array", required: false, description: "要在子线程创建时一并分享的 windows 列表" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const intents = args.wait === true ? [{ name: DoMethodPath.Wait }] : [{ name: DoMethodPath.Do }];
     const hasMsg = typeof args.msg === "string" && args.msg.trim().length > 0;
     return {

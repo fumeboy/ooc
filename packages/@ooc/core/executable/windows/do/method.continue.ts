@@ -3,7 +3,6 @@ import type {
   ObjectMethod,
 } from "../_shared/method-types.js";
 import type { MethodCallSchema } from "../../../thinkable/context/intent.js";
-import type { MethodExecWindow } from "../method_exec/types.js";
 import type { DoWindow } from "../_shared/types.js";
 import { notifyThreadActivated } from "../../../observable/index.js";
 import { appendInbox, findThreadInScope, makeMessage } from "./helpers.js";
@@ -56,8 +55,7 @@ export const continueMethod: ObjectMethod = {
       wait: { type: "boolean", required: false, default: false, description: "true 时本 thread 进入 waiting，等对端回写消息再唤醒" },
     },
   } as MethodCallSchema,
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const intents = args.wait === true ? [{ name: "continue.wait" }] : [{ name: "continue" }];
     const hasMsg = typeof args.msg === "string" && args.msg.trim().length > 0;
     return {

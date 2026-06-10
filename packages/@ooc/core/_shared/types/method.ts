@@ -92,12 +92,11 @@ export interface ObjectMethod {
    * If a method does NOT declare onFormChange, the system skips form creation entirely
    * and fires exec directly when the method is called.
    *
-   * batch C7: `ctx.form` 在零依赖层退化为 base `ContextWindow`；需要 MethodExecWindow
-   * 具体字段的 method 在 runtime 层自行 narrow。
+   * ctx.args = form 当前累积参数（runtime 传 form.accumulatedArgs），与 exec 的 ctx.args 对齐。
    */
   onFormChange?(
     change: FormChangeEvent,
-    ctx: { form: ContextWindow; intents: Intent[] },
+    ctx: { args: Record<string, unknown> },
   ): MethodExecuteForm;
   /** Optional parameter schema for structured rendering and fail-soft validation. */
   schema?: MethodCallSchema;

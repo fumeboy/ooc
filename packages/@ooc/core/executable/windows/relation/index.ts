@@ -27,7 +27,6 @@ import { generateWindowId, type TalkWindow } from "../_shared/types.js";
 import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
 import type { RelationWindow } from "./types.js";
 import type { Intent, MethodCallSchema } from "@ooc/core/thinkable/context/intent.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 /** relation_window 的 type-level basicKnowledge。 */
 const RELATION_WINDOW_BASIC_KNOWLEDGE = `
@@ -61,8 +60,7 @@ const editMethod: ObjectMethod = {
       scope: { type: "string", required: true, enum: ["session", "long_term"], description: "session: this session only; long_term: persisted across sessions via super flow" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const scope = args.scope;
     const intents: Intent[] = [];
     if (scope === "session") intents.push({ name: "edit.session" });

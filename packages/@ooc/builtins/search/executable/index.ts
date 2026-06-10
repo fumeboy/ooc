@@ -42,8 +42,7 @@ const openMatchMethod: ObjectMethod = {
       index: { type: "number", required: true, description: "match index from search_window.matches[].index" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     let tip = OPEN_MATCH_TIP;
     let quick_exec_submit = false;
     if (typeof args.index === "number") {
@@ -138,8 +137,7 @@ const searchConstructor: ObjectMethod = {
       case_insensitive: { type: "boolean", description: "grep: case insensitive match" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const isGrep = typeof args.path === "string" || typeof args.glob === "string" || args.case_insensitive === true;
     const intents = [{ name: isGrep ? "grep" : "glob" }];
     let tip = SEARCH_TIP;

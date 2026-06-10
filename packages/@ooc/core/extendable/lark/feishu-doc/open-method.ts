@@ -11,7 +11,6 @@ import {
   generateWindowId,
   type FeishuDocWindow,
 } from "../../../executable/windows/_shared/types.js";
-import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
 import type { WindowManager } from "../../../executable/windows/_shared/manager.js";
 
 const OPEN_TIP = `open_feishu_doc 创建飞书文档 window。
@@ -31,8 +30,7 @@ export const openFeishuDocMethod: ObjectMethod = {
       doc_title: { type: "string", description: "文档标题" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasToken = typeof args.doc_token === "string" && args.doc_token.length > 0;
     return {
       tip: hasToken ? `Opening doc ${args.doc_token}...` : OPEN_TIP,

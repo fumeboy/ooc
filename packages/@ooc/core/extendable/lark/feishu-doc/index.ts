@@ -22,7 +22,6 @@ import type { FeishuDocWindow } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
 import { larkExec } from "../cli.js";
 import { readWorldConfig, DEFAULT_LARK_TENANT_HOST } from "../../../persistable/index.js";
-import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
 
 const MAX_RENDER_BYTES = 12288;
 
@@ -80,8 +79,7 @@ const searchInDocMethod: ObjectMethod = {
       limit: { type: "number", description: "最多返回行数" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasQuery = typeof args.query === "string" && args.query.length > 0;
     return {
       tip: hasQuery ? `Searching for ${args.query}...` : SEARCH_TIP,
@@ -101,8 +99,7 @@ const appendMethod: ObjectMethod = {
       confirm: { type: "boolean", description: "true 才真追加" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const intents = args.confirm === true ? [{ name: "append.confirmed" }] : [{ name: "append" }];
     const hasText = typeof args.text === "string" && args.text.length > 0;
     let tip = APPEND_TIP;
@@ -124,8 +121,7 @@ const patchBlockMethod: ObjectMethod = {
       expected_version: { type: "string", description: "dry-run 返回的 versionId" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const intents = args.confirm === true ? [{ name: "patch_block.confirmed" }] : [{ name: "patch_block" }];
     const hasBlock = typeof args.block_id === "string" && args.block_id.length > 0;
     let tip = PATCH_TIP;
@@ -155,8 +151,7 @@ const attachToChatMethod: ObjectMethod = {
       as: { type: "string", enum: ["bot", "user"] },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const intents = args.confirm === true ? [{ name: "attach_to_chat.confirmed" }] : [{ name: "attach_to_chat" }];
     const hasChat = typeof args.chat_id === "string" && args.chat_id.length > 0;
     let tip = ATTACH_TIP;

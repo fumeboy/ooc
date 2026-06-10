@@ -4,7 +4,6 @@
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 import "@ooc/builtins/knowledge";
 
@@ -19,8 +18,7 @@ export const openKnowledgeMethod: ObjectMethod = {
       path: { type: "string", required: true, description: "knowledge 索引中的路径（不带 .md）" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasPath = typeof args.path === "string" && args.path.length > 0;
     return {
       tip: hasPath ? `Opening knowledge ${args.path}...` : OPEN_KNOWLEDGE_TIP,

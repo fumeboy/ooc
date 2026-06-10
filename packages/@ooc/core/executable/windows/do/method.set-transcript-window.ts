@@ -3,7 +3,6 @@
  */
 
 import type { WindowMethod } from "../../../_shared/types/window-method.js";
-import type { MethodExecWindow } from "../method_exec/types.js";
 import {
   windowSetTranscriptViewport,
   hasAnyTranscriptViewportField,
@@ -23,8 +22,7 @@ export const setTranscriptWindowCommandForDo: WindowMethod = {
       range_end: { type: "number", required: false, description: "区间终点" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const ready = hasAnyTranscriptViewportField(args);
     return {
       tip: ready ? "Updating transcript viewport..." : SET_TRANSCRIPT_TIP,

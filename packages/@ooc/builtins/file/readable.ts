@@ -14,7 +14,6 @@ import type {
   WindowMethodExecutionContext,
   WindowMethodOutcome,
 } from "@ooc/core/_shared/types/window-method.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import { asTuple } from "@ooc/builtins/_shared/executable/utils.js";
 
 const MAX_FILE_WINDOW_BYTES = 32768;
@@ -114,8 +113,7 @@ const setViewportMethod: WindowMethod = {
       column_end: { type: "number", description: "结束字符列（不含）" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     let tip = SET_VIEWPORT_TIP;
     let quick_exec_submit = false;
     if (hasAnyViewportField(args)) {

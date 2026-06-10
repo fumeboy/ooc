@@ -4,7 +4,6 @@
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 import "@ooc/builtins/file";
 
@@ -21,8 +20,7 @@ export const openFileMethod: ObjectMethod = {
       columns: { type: "array", required: false, description: "[start, end] 列范围" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasPath = typeof args.path === "string" && args.path.length > 0;
     return {
       tip: hasPath ? `Opening file ${args.path}...` : OPEN_FILE_TIP,

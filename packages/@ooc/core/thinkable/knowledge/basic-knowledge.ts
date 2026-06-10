@@ -321,9 +321,7 @@ export const window: StoneObjectDeclaration = {
   description: "<self> 自我门面",
   methods: {
     readLines: {
-      paths: ["readLines"],
-      intent: () => [],
-      onFormChange: () => [],
+      description: "按行截取文件内容",
       exec: async ({ args }) => {
         const text = await readFile(String(args.path), "utf8");
         const lines = text.split("\\n");

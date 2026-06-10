@@ -24,7 +24,6 @@ import { builtinRegistry, type RenderContext } from "../../../executable/windows
 import type { FeishuChatWindow, FeishuChatMessage } from "./types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
 import { larkExec } from "../cli.js";
-import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
 
 const MAX_RENDER_BYTES = 8192;
 const DEFAULT_TAIL = 30;
@@ -75,8 +74,7 @@ const searchMethod: ObjectMethod = {
       limit: { type: "number", description: "最多返回条数" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasQuery = typeof args.query === "string" && args.query.length > 0;
     return {
       tip: hasQuery ? `Searching for ${args.query}...` : SEARCH_TIP,
@@ -97,8 +95,7 @@ const sendMethod: ObjectMethod = {
       confirm: { type: "boolean", description: "true 才真发；首次 submit 走 dry-run" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const intents = args.confirm === true ? [{ name: "send.confirmed" }] : [{ name: "send" }];
     const hasText = typeof args.text === "string" && args.text.length > 0;
     let tip = SEND_TIP;
@@ -121,8 +118,7 @@ const replyMethod: ObjectMethod = {
       confirm: { type: "boolean" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const intents = args.confirm === true ? [{ name: "reply.confirmed" }] : [{ name: "reply" }];
     const hasText = typeof args.text === "string" && args.text.length > 0;
     const hasReplyTo = typeof args.reply_to === "string" && args.reply_to.length > 0;
@@ -143,8 +139,7 @@ const subscribeMethod: ObjectMethod = {
       interval_ms: { type: "number", required: true, description: "refresh 间隔毫秒；0 取消订阅" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasInterval = typeof args.interval_ms === "number";
     return {
       tip: hasInterval ? `Subscribing with interval ${args.interval_ms}ms...` : SUBSCRIBE_TIP,

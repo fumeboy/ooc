@@ -2,7 +2,6 @@ import { describe, it, expect } from "bun:test";
 import { ROOT_METHODS, getOpenableMethods, deriveRootIntentPaths } from "../windows";
 import { programMethod } from "@ooc/builtins/root/executable/method.program";
 import type { Intent } from "@ooc/core/thinkable/context/intent.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
 
 /**
@@ -14,24 +13,11 @@ function callFormChange(
   status: "open" | "executing" | "success" | "failed",
 ): MethodExecuteForm {
   if (!cmd.onFormChange) return { intents: [] };
-  const form: MethodExecWindow = {
-    id: "test_form",
-    type: "method_exec",
-    parentWindowId: "root",
-    title: "test",
-    method: "test",
-    description: "",
-    accumulatedArgs: args,
-    intentPaths: [],
-    loadedKnowledgePaths: [],
-    status,
-    createdAt: 0,
-  };
   const change =
     status !== "open"
       ? { kind: "status_changed" as const, to: status, from: "open" as const }
       : { kind: "args_refined" as const, args, added: [] as string[], removed: [] as string[], changed: [] as string[] };
-  return cmd.onFormChange(change, { form, intents: [] });
+  return cmd.onFormChange(change, { args });
 }
 
 describe("executable methods", () => {

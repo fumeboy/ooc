@@ -11,7 +11,6 @@ import {
   generateWindowId,
   type FeishuChatWindow,
 } from "../../../executable/windows/_shared/types.js";
-import type { MethodExecWindow } from "../../../executable/windows/method_exec/types.js";
 import type { WindowManager } from "../../../executable/windows/_shared/manager.js";
 
 const OPEN_TIP = `open_feishu_chat 创建飞书群聊/单聊 window。
@@ -29,8 +28,7 @@ export const openFeishuChatMethod: ObjectMethod = {
       tail_count: { type: "number", description: "首屏 buffer 条数（默认 30）" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasChatId = typeof args.chat_id === "string" && args.chat_id.length > 0;
     return {
       tip: hasChatId ? `Opening chat ${args.chat_id}...` : OPEN_TIP,

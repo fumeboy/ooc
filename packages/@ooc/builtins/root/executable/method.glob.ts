@@ -4,7 +4,6 @@
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 import "@ooc/builtins/search";
 
@@ -20,8 +19,7 @@ export const globMethod: ObjectMethod = {
       cwd: { type: "string", required: false, description: "搜索根目录" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasPattern = typeof args.pattern === "string" && args.pattern.length > 0;
     return {
       tip: hasPattern ? `globbing ${args.pattern}...` : GLOB_TIP,

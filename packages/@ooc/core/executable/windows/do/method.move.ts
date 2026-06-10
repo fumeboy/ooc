@@ -19,7 +19,6 @@ import type {
 } from "../_shared/method-types.js";
 import type { MethodCallSchema } from "../../../thinkable/context/intent.js";
 import type { ContextWindow, DoWindow, SharingState } from "../_shared/types.js";
-import type { MethodExecWindow } from "../method_exec/types.js";
 import type { WindowManager } from "../_shared/manager.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import { findChild } from "./helpers.js";
@@ -187,8 +186,7 @@ export const moveMethod: ObjectMethod = {
       mode: { type: "string", required: true, enum: ["ref", "move"], description: '"ref" 只读 snapshot；"move" 所有权移交' },
     },
   } as MethodCallSchema,
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const mode = args.mode as string | undefined;
     const intents = [];
     if (mode === "ref") intents.push({ name: "move.ref" });

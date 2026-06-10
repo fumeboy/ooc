@@ -4,7 +4,6 @@
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 import "@ooc/builtins/file";
 
@@ -20,8 +19,7 @@ export const writeFileMethod: ObjectMethod = {
       content: { type: "string", required: true, description: "要写入的完整文件内容" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasPath = typeof args.path === "string" && args.path.length > 0;
     const hasContent = typeof args.content === "string";
     const ready = hasPath && hasContent;

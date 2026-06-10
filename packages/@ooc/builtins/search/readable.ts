@@ -11,7 +11,6 @@ import {
   hasAnyResultsViewportField,
 } from "./executable/results-viewport.js";
 import type { WindowMethod } from "@ooc/core/_shared/types/window-method.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 const SEARCH_PREVIEW_COUNT = 3;
 const SEARCH_SNIPPET_TRUNCATE = 200;
@@ -98,8 +97,7 @@ const setResultsWindowCommandForSearch: WindowMethod = {
       matches_end: { type: "number", description: "End of range (non-negative integer; must pair with matches_start)" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     let tip = "set_results_window 需要 matches_tail 或 matches_start+matches_end 之一。";
     if (hasAnyResultsViewportField(args)) {
       tip = "参数已就绪，submit 应用视口调整。";

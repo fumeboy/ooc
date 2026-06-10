@@ -4,7 +4,6 @@
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 import "@ooc/builtins/todo";
 
@@ -25,8 +24,7 @@ export const todoMethod: ObjectMethod = {
       activates_on: { type: "array", required: false, description: "命中这些 intent 时强提醒" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasActivates = Array.isArray(args.activates_on) && args.activates_on.length > 0;
     const intents = hasActivates ? [{ name: TodoMethodPath.OnMethodPath }] : [{ name: "todo" }];
     const hasContent = typeof args.content === "string" && args.content.trim().length > 0;

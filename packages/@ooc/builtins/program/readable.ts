@@ -11,7 +11,6 @@ import {
   hasAnyHistoryViewportField,
 } from "./executable/history-viewport.js";
 import type { WindowMethod } from "@ooc/core/_shared/types/window-method.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 /** program_window 的 readable hook：history 摘要（按 historyViewport 截取）+ 最近一条 full output。 */
 export function readable(ctx: RenderContext): XmlNode[] {
@@ -76,8 +75,7 @@ const setHistoryWindowMethod: WindowMethod = {
       history_end: { type: "number", description: "End of range (non-negative integer; must pair with history_start)" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     let tip = "set_history_window 需要 history_tail 或 history_start+history_end 之一。";
     if (hasAnyHistoryViewportField(args)) {
       tip = "参数已就绪，submit 应用视口调整。";

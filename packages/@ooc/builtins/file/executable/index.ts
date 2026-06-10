@@ -75,8 +75,7 @@ const editMethod: ObjectMethod = {
       edits: { type: "array", description: "批量替换 [{old, new}, ...]，与 old/new 二选一" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const single = isString(args.old) && isString(args.new);
     const batch = Array.isArray(args.edits) && args.edits.length > 0;
     let tip = EDIT_TIP;
@@ -250,8 +249,7 @@ const fileConstructor: ObjectMethod = {
     },
   },
   permission: () => "allow",
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const isWrite = typeof args.content === "string";
     const intents = [{ name: isWrite ? "write_file" : "open_file" }];
     let tip = isWrite ? FILE_CONSTRUCTOR_TIP_WRITE : FILE_CONSTRUCTOR_TIP_OPEN;

@@ -8,7 +8,6 @@ import type {
 } from "@ooc/core/extendable/_shared/method-types.js";
 import { createObjectInSession } from "@ooc/core/persistable/index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 const CREATE_OBJECT_TIP = `create_object 建一个全新对象的骨架（仅业务 session 可调）。
 参数：objectId（必填，新对象 id）、selfMd（必填）、readableMd（必填）、knowledge（可选 {filename: content}）。
@@ -40,8 +39,7 @@ export const createObjectMethod: ObjectMethod = {
       knowledge: { type: "object", required: false, description: "可选 seed knowledge" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const missing: string[] = [];
     if (!asString(args.objectId)) missing.push("objectId");
     if (!asString(args.selfMd)) missing.push("selfMd");

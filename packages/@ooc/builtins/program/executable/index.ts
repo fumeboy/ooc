@@ -6,7 +6,6 @@ import type {
   MethodExecutionContext,
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/method-types.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import {
   ROOT_WINDOW_ID,
@@ -38,8 +37,7 @@ const execMethod: ObjectMethod = {
       code: { type: "string", required: true, description: "Code string to execute" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
     const intents = [];
@@ -119,8 +117,7 @@ const programConstructor: ObjectMethod = {
       code: { type: "string", required: true, description: "Code string to execute" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const lang = (args.language ?? args.lang) as string | undefined;
     const code = typeof args.code === "string" ? args.code.trim() : "";
     const intents = [];

@@ -4,7 +4,6 @@
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 import "@ooc/core/executable/windows/talk/index.js";
 
@@ -24,8 +23,7 @@ export const talkMethod: ObjectMethod = {
       title: { type: "string", required: true, description: "本会话的简短主题" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const target = typeof args.target === "string" ? args.target.trim() : "";
     const title = typeof args.title === "string" ? args.title.trim() : "";
     const ready = Boolean(target && title);

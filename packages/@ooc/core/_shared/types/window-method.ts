@@ -43,10 +43,11 @@ export interface WindowMethod {
   /**
    * Called on form lifecycle / args changes. Returns MethodExecuteForm (tip + intents + quick_exec_submit).
    * If omitted, no form is created and exec fires directly.
+   * ctx.args = form 当前累积参数，与 ObjectMethod.onFormChange 对齐。
    */
   onFormChange?(
     change: FormChangeEvent,
-    ctx: { form: ContextWindow; intents: Intent[] },
+    ctx: { args: Record<string, unknown> },
   ): MethodExecuteForm;
   schema?: MethodCallSchema;
   /** 不同于 ObjectMethod.exec：额外接收 ctx.windowState，返回新 state。 */

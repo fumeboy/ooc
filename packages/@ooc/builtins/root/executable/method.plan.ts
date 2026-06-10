@@ -4,7 +4,6 @@
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import { isString } from "@ooc/builtins/_shared/executable/utils.js";
 
 import "@ooc/builtins/plan";
@@ -36,8 +35,7 @@ export const planMethod: ObjectMethod = {
       steps: { type: "array", required: false, description: "步骤列表 [{ id?, text, status? }]" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const ready = hasAnyInput(args);
     return {
       tip: ready ? "Creating plan..." : PLAN_TIP,

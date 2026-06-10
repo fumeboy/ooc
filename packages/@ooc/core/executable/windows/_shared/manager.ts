@@ -245,10 +245,7 @@ export class WindowManager {
     thread: ThreadContext,
   ): { intents: Intent[]; quickExecSubmit: boolean } {
     const defaultIntent: Intent = { name: form.method };
-    // Start with previous intents (if any) so status_changed/intent_changed events
-    // carry the current intents to onFormChange.
     const cache: IntentCache | undefined = (thread as any).intentCache;
-    const prevIntents = cache?.get(form.id)?.intents ?? [defaultIntent];
 
     if (!entry.onFormChange) {
       const intents = [defaultIntent];
@@ -262,7 +259,7 @@ export class WindowManager {
 
     let result: ReturnType<NonNullable<ObjectMethod["onFormChange"]>> | undefined;
     try {
-      result = entry.onFormChange(change, { form, intents: prevIntents });
+      result = entry.onFormChange(change, { args: form.accumulatedArgs });
     } catch {
       result = { intents: [defaultIntent] };
     }

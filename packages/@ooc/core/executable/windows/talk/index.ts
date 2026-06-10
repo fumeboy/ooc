@@ -20,7 +20,6 @@ import {
   generateWindowId,
   type ContextWindow,
 } from "../_shared/types.js";
-import type { MethodExecWindow } from "../method_exec/types.js";
 import { sayMethod } from "./method.say.js";
 import { waitMethod } from "./method.wait.js";
 import { closeMethod } from "./method.close.js";
@@ -245,8 +244,7 @@ const talkConstructor: ObjectMethod = {
       title: { type: "string", required: true, description: "本会话的简短主题" },
     },
   } as MethodCallSchema,
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const target = typeof args.target === "string" ? args.target.trim() : "";
     const title = typeof args.title === "string" ? args.title.trim() : "";
     const ready = Boolean(target && title);

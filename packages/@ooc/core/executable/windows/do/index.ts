@@ -18,7 +18,6 @@ import {
   type ContextWindow,
   type SharingState,
 } from "../_shared/types.js";
-import type { MethodExecWindow } from "../method_exec/types.js";
 import type { ThreadPersistenceRef } from "../../../persistable/common.js";
 import { continueMethod } from "./method.continue.js";
 import { waitMethod } from "./method.wait.js";
@@ -347,8 +346,7 @@ const doConstructor: ObjectMethod = {
       share_windows: { type: "array", required: false, description: '要在子线程创建时一并分享的 windows 列表，每条形如 { window_id: "<id>", mode: "ref" | "move" }' },
     },
   } as MethodCallSchema,
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const intents = args.wait === true ? [{ name: "do.wait" }] : [{ name: "do" }];
     const hasMsg = typeof args.msg === "string" && args.msg.trim().length > 0;
     return {

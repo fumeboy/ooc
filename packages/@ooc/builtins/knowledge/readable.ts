@@ -16,7 +16,6 @@ import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
 import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
 import type { WindowMethod } from "@ooc/core/_shared/types/window-method.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 const MAX_KNOWLEDGE_BYTES = 8192;
 
@@ -107,8 +106,7 @@ const setViewportMethod: WindowMethod = {
       column_end: { type: "number", description: "结束字符列（不含）" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = change.kind === "args_refined" ? change.args : (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     let tip = "set_viewport 可选 line_start/line_end/column_start/column_end；未传字段保留当前值。";
     if (hasAnyViewportField(args)) {
       tip = "参数已就绪，submit 应用视口调整。";

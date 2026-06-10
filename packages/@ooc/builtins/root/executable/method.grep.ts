@@ -4,7 +4,6 @@
 
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 
 import "@ooc/builtins/search";
 
@@ -22,8 +21,7 @@ export const grepMethod: ObjectMethod = {
       case_insensitive: { type: "boolean", required: false, description: "是否忽略大小写" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasPattern = typeof args.pattern === "string" && args.pattern.length > 0;
     return {
       tip: hasPattern ? `grepping for ${args.pattern}...` : GREP_TIP,

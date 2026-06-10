@@ -3,7 +3,6 @@ import type {
   ObjectMethod,
 } from "../_shared/method-types.js";
 import type { MethodCallSchema } from "../../../thinkable/context/intent.js";
-import type { MethodExecWindow } from "../method_exec/types.js";
 import type { TalkWindow } from "../_shared/types.js";
 import { deliverTalkMessage } from "./delivery.js";
 
@@ -47,8 +46,7 @@ export const sayMethod: ObjectMethod = {
       wait: { type: "boolean", required: false, default: false, description: "true 时等待回复" },
     },
   } as MethodCallSchema,
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const intents = args.wait === true ? [{ name: "say.wait" }] : [{ name: "say" }];
     const hasMsg = typeof args.msg === "string" && args.msg.trim().length > 0;
     return {

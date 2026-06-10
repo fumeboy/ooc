@@ -13,7 +13,6 @@ import {
 } from "@ooc/core/extendable/_shared/types.js";
 import type { PlanWindow, PlanWindowStep } from "../types.js";
 
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
 import { isString } from "@ooc/builtins/_shared/executable/utils.js";
 
@@ -52,8 +51,7 @@ const updatePlanMethod: ObjectMethod = {
       description: { type: "string", description: "新 plan 说明" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasAny = isString(args.title) || isString(args.description);
     return {
       tip: hasAny ? "Updating plan..." : "update_plan: 至少提供 title 或 description 之一。",
@@ -92,8 +90,7 @@ const addStepMethod: ObjectMethod = {
       },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasText = isString(args.text) && args.text.trim().length > 0;
     return {
       tip: hasText ? "Adding step..." : "add_step: 需要 args.text（步骤描述）。",
@@ -132,8 +129,7 @@ const updateStepMethod: ObjectMethod = {
       },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasStepId = isString(args.step_id);
     const hasField = isString(args.text) || args.status !== undefined;
     return {
@@ -178,8 +174,7 @@ const expandStepMethod: ObjectMethod = {
       description: { type: "string", description: "sub plan 的描述" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasStepId = isString(args.step_id);
     return {
       tip: hasStepId ? "Expanding step..." : "expand_step: 需要 args.step_id。",
@@ -238,8 +233,7 @@ const collapseSubplanMethod: ObjectMethod = {
       step_id: { type: "string", required: true, description: "目标 step id" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     return {
       tip: isString(args.step_id) ? "Collapsing subplan..." : "collapse_subplan: 需要 args.step_id。",
       intents: [{ name: "collapse_subplan" }],
@@ -343,8 +337,7 @@ const planConstructor: ObjectMethod = {
       steps: { type: "array", description: "steps 数组 [{id?, text, status?}, ...]" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     const hasInput = constructorHasAnyInput(args);
     return {
       tip: hasInput ? "Creating plan..." : PLAN_TIP,

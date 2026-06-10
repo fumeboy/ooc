@@ -18,7 +18,6 @@ import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
 import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
 
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import { basenameOfPath } from "@ooc/builtins/_shared/executable/utils.js";
 
 const reloadMethod: ObjectMethod = {
@@ -45,8 +44,7 @@ const knowledgeConstructor: ObjectMethod = {
       path: { type: "string", required: true, description: "knowledge 索引中的路径（不带 .md）" },
     },
   },
-  onFormChange(change, { form }) {
-    const args = (form as MethodExecWindow).accumulatedArgs;
+  onFormChange(change, { args }) {
     let tip = OPEN_KNOWLEDGE_TIP;
     let quick_exec_submit = false;
     const path = typeof args.path === "string" ? args.path : "";
