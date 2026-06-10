@@ -10,7 +10,7 @@ import { ExternalLink } from "lucide-react";
 import type { ContextWindow } from "../../context-snapshot";
 import { MarkdownContent } from "../../../../shared/ui/MarkdownContent";
 
-type FeishuDocWindow = Extract<ContextWindow, { type: "feishu_doc" }>;
+type FeishuDocWindow = Extract<ContextWindow, { class: "feishu_doc" }>;
 
 /**
  * 模块级缓存的 world config(siteName / larkTenantHost)。

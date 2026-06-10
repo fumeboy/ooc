@@ -18,7 +18,7 @@ import type { SkillEntry } from "@ooc/core/persistable/stone-skills.js";
  * 同名 skill object 级优先（plan §D1）。
  */
 export interface SkillIndexWindow extends BaseContextWindow {
-  type: "skill_index";
+  class: "skill_index";
   status: "active";
   /** 派生时已扫描出的 skill 列表（每轮重算）。 */
   skills: SkillEntry[];

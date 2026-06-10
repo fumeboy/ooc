@@ -246,7 +246,7 @@ function pickText(m: Record<string, unknown>): string {
 }
 
 async function executeRefresh(ctx: MethodExecutionContext): Promise<string | undefined> {
-  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  // P6.§3: manager 已保证 self.class === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const count = clampCount(ctx.args.count, DEFAULT_TAIL);
   const sinceId = asString(ctx.args.since_message_id);
@@ -296,7 +296,7 @@ function extractCursor(raw: unknown): string | undefined {
 }
 
 async function executeSearch(ctx: MethodExecutionContext): Promise<string | undefined> {
-  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  // P6.§3: manager 已保证 self.class === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const query = asString(ctx.args.query);
   if (!query) return "[feishu_chat.search] 缺少 query。";
@@ -334,7 +334,7 @@ async function executeSearch(ctx: MethodExecutionContext): Promise<string | unde
 }
 
 async function executeSend(ctx: MethodExecutionContext): Promise<string | undefined> {
-  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  // P6.§3: manager 已保证 self.class === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const text = asString(ctx.args.text);
   if (!text) return "[feishu_chat.send] 缺少 text。";
@@ -367,7 +367,7 @@ async function executeSend(ctx: MethodExecutionContext): Promise<string | undefi
 }
 
 async function executeReply(ctx: MethodExecutionContext): Promise<string | undefined> {
-  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  // P6.§3: manager 已保证 self.class === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const replyTo = asString(ctx.args.reply_to);
   const text = asString(ctx.args.text);
@@ -390,7 +390,7 @@ async function executeReply(ctx: MethodExecutionContext): Promise<string | undef
 }
 
 function executeSubscribe(ctx: MethodExecutionContext): string | undefined {
-  // P6.§3: manager 已保证 self.type === "feishu_chat"。
+  // P6.§3: manager 已保证 self.class === "feishu_chat"。
   const window = ctx.self as FeishuChatWindow;
   const interval = Number(ctx.args.interval_ms);
   if (!Number.isFinite(interval) || interval < 0) {

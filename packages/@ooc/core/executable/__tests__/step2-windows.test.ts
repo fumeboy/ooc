@@ -38,7 +38,7 @@ describe("Step 2 window lifecycles", () => {
 
       // 创建 talk_window 指向 bob
       await execRootMethod("talk", { thread, args: { target: "bob", title: "release plan" } });
-      const talkWindow = thread.contextWindows.find((w): w is TalkWindow => w.type === "talk" && !(w as TalkWindow).isCreatorWindow);
+      const talkWindow = thread.contextWindows.find((w): w is TalkWindow => w.class === "talk" && !(w as TalkWindow).isCreatorWindow);
       expect(talkWindow).toBeDefined();
       expect(talkWindow!.target).toBe("bob");
 
@@ -78,7 +78,7 @@ describe("Step 2 window lifecycles", () => {
       args: { language: "shell", code: "echo first" },
     });
     const programWindow = thread.contextWindows.find(
-      (w): w is ProgramWindow => w.type === "program",
+      (w): w is ProgramWindow => w.class === "program",
     );
     expect(programWindow).toBeDefined();
     expect(programWindow!.history).toHaveLength(1);
@@ -109,8 +109,8 @@ describe("Step 2 window lifecycles", () => {
       args: { content: "buy milk" },
     });
     thread.contextWindows = mgr.toData();
-    const todo = thread.contextWindows.find((w) => w.type === "todo")!;
-    expect(todo.type).toBe("todo");
+    const todo = thread.contextWindows.find((w) => w.class === "todo")!;
+    expect(todo.class).toBe("todo");
 
     const mgr2 = WindowManager.fromThread(thread, builtinRegistry);
     expect(mgr2.close(todo.id, thread)).toBe(true);
@@ -133,7 +133,7 @@ describe("Step 2 window lifecycles", () => {
       });
       thread.contextWindows = mgr.toData();
       expect(opened.autoSubmitted).toBe(true);
-      const fw = thread.contextWindows.find((w): w is FileWindow => w.type === "file");
+      const fw = thread.contextWindows.find((w): w is FileWindow => w.class === "file");
       expect(fw).toBeDefined();
       expect(fw!.path).toBe(file);
 
@@ -172,7 +172,7 @@ describe("Step 2 window lifecycles", () => {
       });
       thread.contextWindows = mgr.toData();
       expect(opened.autoSubmitted).toBe(true);
-      const kw = thread.contextWindows.find((w): w is KnowledgeWindow => w.type === "knowledge");
+      const kw = thread.contextWindows.find((w): w is KnowledgeWindow => w.class === "knowledge");
       expect(kw).toBeDefined();
       expect(kw!.path).toBe("manual");
 
@@ -221,7 +221,7 @@ describe("Step 2 window lifecycles", () => {
       // assistant 创建 talk_window 指向 bob
       await execRootMethod("talk", { thread: assistantThread, args: { target: "bob", title: "ask bob" } });
       const talkToBob = assistantThread.contextWindows.find(
-        (w): w is TalkWindow => w.type === "talk" && (w as TalkWindow).target === "bob",
+        (w): w is TalkWindow => w.class === "talk" && (w as TalkWindow).target === "bob",
       );
       expect(talkToBob).toBeDefined();
 
@@ -246,7 +246,7 @@ describe("Step 2 window lifecycles", () => {
       ))!;
       expect(bobThread).toBeTruthy();
       const bobCreatorTalk = bobThread.contextWindows.find(
-        (w): w is TalkWindow => w.type === "talk" && (w as TalkWindow).target === "assistant" && Boolean((w as TalkWindow).isCreatorWindow),
+        (w): w is TalkWindow => w.class === "talk" && (w as TalkWindow).target === "assistant" && Boolean((w as TalkWindow).isCreatorWindow),
       );
       expect(bobCreatorTalk).toBeDefined();
 

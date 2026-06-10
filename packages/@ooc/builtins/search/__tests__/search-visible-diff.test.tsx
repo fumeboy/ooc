@@ -19,9 +19,9 @@ test("search visible/diff default-exports a component", () => {
 describe("SearchWindowDiff", () => {
   it("Case 1: 新增 match → added", () => {
     const tree = SearchDiff({
-      previous: { type: "search", matches: [{ path: "a", line: 1 }] },
+      previous: { class: "search", matches: [{ path: "a", line: 1 }] },
       current: {
-        type: "search",
+        class: "search",
         matches: [
           { path: "a", line: 1 },
           { path: "b", line: 2 },
@@ -34,21 +34,21 @@ describe("SearchWindowDiff", () => {
   it("Case 2: 删除 match → removed", () => {
     const tree = SearchDiff({
       previous: {
-        type: "search",
+        class: "search",
         matches: [
           { path: "a", line: 1 },
           { path: "b", line: 2 },
         ],
       },
-      current: { type: "search", matches: [{ path: "a", line: 1 }] },
+      current: { class: "search", matches: [{ path: "a", line: 1 }] },
     });
     expect(countByStatus(tree, "removed")).toBeGreaterThanOrEqual(1);
   });
 
   it("Case 3: snippet 变 → changed", () => {
     const tree = SearchDiff({
-      previous: { type: "search", matches: [{ path: "a", line: 1, snippet: "old" }] },
-      current: { type: "search", matches: [{ path: "a", line: 1, snippet: "new" }] },
+      previous: { class: "search", matches: [{ path: "a", line: 1, snippet: "old" }] },
+      current: { class: "search", matches: [{ path: "a", line: 1, snippet: "new" }] },
     });
     expect(countByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });

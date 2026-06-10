@@ -18,7 +18,7 @@ function ws(
   contentHash: string,
   extra?: Partial<WindowSnapshotEntry>,
 ): WindowSnapshotEntry {
-  return { id, type, contentHash, ...extra };
+  return { id, class: type, contentHash, ...extra };
 }
 
 describe("computeWindowDiff — 4 态分支", () => {

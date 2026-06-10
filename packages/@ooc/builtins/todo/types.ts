@@ -8,7 +8,7 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
  * - 没有 LLM 可调用的 method；只能被 close
  */
 export interface TodoWindow extends BaseContextWindow {
-  type: "todo";
+  class: "todo";
   content: string;
   activatesOn?: string[];
   status: "open" | "done";

@@ -24,12 +24,12 @@ describe("PlanWindowDiff", () => {
   it("Case 1: add step → added", () => {
     const tree = PlanDiff({
       previous: {
-        type: "plan",
+        class: "plan",
         title: "T",
         steps: [{ id: "s1", text: "a", status: "pending" }],
       },
       current: {
-        type: "plan",
+        class: "plan",
         title: "T",
         steps: [
           { id: "s1", text: "a", status: "pending" },
@@ -43,14 +43,14 @@ describe("PlanWindowDiff", () => {
   it("Case 2: remove step → removed", () => {
     const tree = PlanDiff({
       previous: {
-        type: "plan",
+        class: "plan",
         steps: [
           { id: "s1", text: "a" },
           { id: "s2", text: "b" },
         ],
       },
       current: {
-        type: "plan",
+        class: "plan",
         steps: [{ id: "s1", text: "a" }],
       },
     });
@@ -60,11 +60,11 @@ describe("PlanWindowDiff", () => {
   it("Case 3: status 变化 (pending → done) → changed", () => {
     const tree = PlanDiff({
       previous: {
-        type: "plan",
+        class: "plan",
         steps: [{ id: "s1", text: "task", status: "pending" }],
       },
       current: {
-        type: "plan",
+        class: "plan",
         steps: [{ id: "s1", text: "task", status: "done" }],
       },
     });
@@ -73,17 +73,17 @@ describe("PlanWindowDiff", () => {
 
   it("Case 4: text 变化 → changed", () => {
     const tree = PlanDiff({
-      previous: { type: "plan", steps: [{ id: "s1", text: "old" }] },
-      current: { type: "plan", steps: [{ id: "s1", text: "new" }] },
+      previous: { class: "plan", steps: [{ id: "s1", text: "old" }] },
+      current: { class: "plan", steps: [{ id: "s1", text: "new" }] },
     });
     expect(findByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });
 
   it("Case 5: subPlanWindowId 新增 → 含 sub plan link 字样", () => {
     const tree = PlanDiff({
-      previous: { type: "plan", steps: [{ id: "s1", text: "t" }] },
+      previous: { class: "plan", steps: [{ id: "s1", text: "t" }] },
       current: {
-        type: "plan",
+        class: "plan",
         steps: [{ id: "s1", text: "t", subPlanWindowId: "w_sub_1" }],
       },
     });
@@ -93,16 +93,16 @@ describe("PlanWindowDiff", () => {
   it("Case 6: 完全不变 → unchanged", () => {
     const steps = [{ id: "s1", text: "t", status: "pending" }];
     const tree = PlanDiff({
-      previous: { type: "plan", title: "T", steps },
-      current: { type: "plan", title: "T", steps },
+      previous: { class: "plan", title: "T", steps },
+      current: { class: "plan", title: "T", steps },
     });
     expect(findByStatus(tree, "unchanged")).toBeGreaterThanOrEqual(1);
   });
 
   it("Case 7: title changed → changed", () => {
     const tree = PlanDiff({
-      previous: { type: "plan", title: "old", steps: [] },
-      current: { type: "plan", title: "new", steps: [] },
+      previous: { class: "plan", title: "old", steps: [] },
+      current: { class: "plan", title: "new", steps: [] },
     });
     expect(findByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });

@@ -30,7 +30,7 @@ function fixture(initialState: unknown) {
     extraWindows: [
       {
         id: "f1",
-        type: "file",
+        class: "file",
         parentWindowId: "root",
         title: "f",
         status: "open",

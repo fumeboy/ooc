@@ -22,7 +22,7 @@ export type ResultsViewport = TranscriptViewport;
  * - 注册 method：open_match / close / set_results_window
  */
 export interface SearchWindow extends BaseContextWindow {
-  type: "search";
+  class: "search";
   status: "open" | "closed";
   kind: "glob" | "grep";
   /** 触发本次搜索的查询：glob pattern 或 grep regex */

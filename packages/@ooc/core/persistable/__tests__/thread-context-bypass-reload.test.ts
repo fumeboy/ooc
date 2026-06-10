@@ -57,7 +57,7 @@ describe("§10 thread-context bypass reload regression", () => {
     thread.contextWindows = [
       {
         id: "todo_keep",
-        type: "todo",
+        class: "todo",
         title: "builtin todo",
         status: "open",
         content: "body",
@@ -90,7 +90,7 @@ describe("§10 thread-context bypass reload regression", () => {
     const talkWindowId = "talk_to_callee";
     const talkWindow: TalkWindow = {
       id: talkWindowId,
-      type: "talk",
+      class: "talk",
       parentWindowId: "root",
       title: "agent_callee",
       status: "open",
@@ -144,7 +144,7 @@ describe("§10 thread-context bypass reload regression", () => {
       { baseDir, sessionId, objectId: peerId },
       {
         id: peerId,
-        type: peerId,
+        class: peerId,
         parentWindowId: "root",
         title: `peer: ${peerId}`,
         status: "open",
@@ -154,7 +154,7 @@ describe("§10 thread-context bypass reload regression", () => {
 
     const peerWindow = {
       id: peerId,
-      type: peerId,
+      class: peerId,
       parentWindowId: "root",
       title: `peer: ${peerId}`,
       status: "open",
@@ -193,7 +193,7 @@ describe("§10 thread-context bypass reload regression", () => {
     const talkWindowId = "talk_user_to_agent";
     const talkWindow: TalkWindow = {
       id: talkWindowId,
-      type: "talk",
+      class: "talk",
       parentWindowId: "root",
       title: "agent_t",
       status: "open",

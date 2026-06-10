@@ -129,7 +129,7 @@ describe("file worktree redirect (P2)", () => {
     // window 指向 canonical main（模拟 open_file 在无 worktree 时拿到的 window）
     const window: FileWindow = {
       id: "w_file_x",
-      type: "file",
+      class: "file",
       parentWindowId: "root",
       title: "self.md",
       status: "open",
@@ -155,7 +155,7 @@ describe("file worktree redirect (P2)", () => {
     const baseDir = await newWorld(["alice"]);
     const window: FileWindow = {
       id: "w_file_x",
-      type: "file",
+      class: "file",
       parentWindowId: "root",
       title: "self.md",
       status: "open",
@@ -179,7 +179,7 @@ describe("file worktree redirect (P2)", () => {
     const baseDir = await newWorld(["alice"]);
     const window: FileWindow = {
       id: "w_file_x",
-      type: "file",
+      class: "file",
       parentWindowId: "root",
       title: "self.md",
       status: "open",

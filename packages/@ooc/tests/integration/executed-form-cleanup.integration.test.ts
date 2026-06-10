@@ -39,7 +39,7 @@ describe.skipIf(!hasLlmEnv)("integration: executed-form-cleanup", () => {
     expect(countFormExecutions(root)).toBeGreaterThanOrEqual(1);
 
     const programForms = root.contextWindows.filter(
-      (w) => w.type === "method_exec" && (w as MethodExecWindow).method === "program",
+      (w) => w.class === "method_exec" && (w as MethodExecWindow).method === "program",
     );
     expect(programForms.length).toBe(0);
   }, 120_000);

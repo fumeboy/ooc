@@ -14,8 +14,8 @@ export function enrichContextWindows(
   registry: ObjectRegistry = builtinRegistry,
 ): ContextWindow[] {
   return (windows ?? []).map((window) => {
-    const effVis = registry.resolveEffectiveVisibleType(window.type as any);
-    return effVis && effVis !== window.type
+    const effVis = registry.resolveEffectiveVisibleType(window.class as any);
+    return effVis && effVis !== window.class
       ? { ...window, effectiveVisibleType: effVis }
       : window;
   });

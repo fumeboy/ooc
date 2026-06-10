@@ -24,7 +24,7 @@ function thread(overrides: Partial<ThreadContext> = {}): ThreadContext {
 function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
   return {
     id: "f",
-    type: "method_exec",
+    class: "method_exec",
     parentWindowId: "root",
     title: "x",
     status: "open",
@@ -248,7 +248,7 @@ describe("evaluateTrigger", () => {
     const t = parseTrigger("object::talk");
     const talkW: ContextWindow = {
       id: "w1",
-      type: "talk",
+      class: "talk",
       parentWindowId: "root",
       title: "t",
       status: "open",
@@ -268,7 +268,7 @@ describe("evaluateTrigger", () => {
     expect(t.kind).toBe("object"); // 已归一化
     const talkW: ContextWindow = {
       id: "w1",
-      type: "talk",
+      class: "talk",
       parentWindowId: "root",
       title: "t",
       status: "open",
@@ -286,7 +286,7 @@ describe("evaluateTrigger", () => {
     expect(evaluateTrigger(t, thread())).toBe(true);
     expect(evaluateTrigger(t, thread({ contextWindows: [] }))).toBe(true);
     // 有其它 window 时同样命中
-    const todoW = { id: "w_t", type: "todo", parentWindowId: "root", title: "x", status: "open", createdAt: 0 } as ContextWindow;
+    const todoW = { id: "w_t", class: "todo", parentWindowId: "root", title: "x", status: "open", createdAt: 0 } as ContextWindow;
     expect(evaluateTrigger(t, thread({ contextWindows: [todoW] }))).toBe(true);
   });
 
@@ -295,7 +295,7 @@ describe("evaluateTrigger", () => {
     const t = parseTrigger("object_id::agent_alice");
     const objW: ContextWindow = {
       id: "agent_alice",
-      type: "agent_alice" as any,
+      class: "agent_alice" as any,
       parentWindowId: "root",
       title: "Agent Alice",
       status: "open",
@@ -334,7 +334,7 @@ describe("evaluateTrigger", () => {
     const t = parseTrigger("method::talk::say");
     const talkW: ContextWindow = {
       id: "wt",
-      type: "talk",
+      class: "talk",
       parentWindowId: "root",
       title: "t",
       status: "open",

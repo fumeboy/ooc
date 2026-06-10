@@ -96,7 +96,7 @@ test("F2 用户让 assistant 通过 chat 改文件 → fs 真改", async ({ page
   // 改用 thread state 而非 .cw-row UI selector，避免 ContextSnapshotViewer 节点 label 文本漂移。
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fileWindowNodeCount = ((calleeThread?.contextWindows ?? []) as any[]).filter(
-    (w) => w?.type === "file",
+    (w) => w?.class === "file",
   ).length;
 
   const result = scoreScenario({

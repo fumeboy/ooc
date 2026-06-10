@@ -149,10 +149,10 @@ export async function readThread(
               );
               continue;
             }
-            if (!knownTypes.has(win.type) && win.type !== persistence.objectId) {
+            if (!knownTypes.has(win.class) && win.class !== persistence.objectId) {
               observeWarn(
                 "readThread.thread-context.unregistered-type",
-                `[readThread] thread-context.json: dropped object ${win.id} with unregistered type ${win.type}`,
+                `[readThread] thread-context.json: dropped object ${win.id} with unregistered type ${win.class}`,
               );
               continue;
             }
@@ -160,17 +160,17 @@ export async function readThread(
           } else {
             // inline ContextWindow（builtin feature）
             const win = entry as ContextWindow;
-            if (!knownTypes.has(win.type) && win.type !== persistence.objectId) {
+            if (!knownTypes.has(win.class) && win.class !== persistence.objectId) {
               observeWarn(
                 "readThread.thread-context.unregistered-inline",
-                `[readThread] thread-context.json: dropped inline window ${win.id} with unregistered type ${win.type}`,
+                `[readThread] thread-context.json: dropped inline window ${win.id} with unregistered type ${win.class}`,
               );
               continue;
             }
             // Resilience: 若一个 builtin feature 类型在磁盘上意外存在 state.json
             //   （旧布局残留），打 warn 不阻塞 —— state ≠ context 不变量靠新写盘端守门，
             //   读端只警告。
-            if (registry.isBuiltinFeatureType(win.type)) {
+            if (registry.isBuiltinFeatureType(win.class)) {
               // 没有强校验副作用；保留 warn hook 以便后续 §10 cleanup 时定位。
               // 注意：不主动 readRuntimeObjectState 探测（噪音太多）。
             }
@@ -216,10 +216,10 @@ export async function readThread(
             );
             continue;
           }
-          if (!knownTypes.has(win.type)) {
+          if (!knownTypes.has(win.class)) {
             observeWarn(
               "readThread.registry.unregistered-type",
-              `[readThread] registry: dropped object ${win.id} with unregistered type ${win.type}`,
+              `[readThread] registry: dropped object ${win.id} with unregistered type ${win.class}`,
             );
             continue;
           }

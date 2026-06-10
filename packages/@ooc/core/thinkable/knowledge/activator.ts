@@ -30,7 +30,7 @@ export function computeActivations(
   // 收集显式打开的 knowledge_window 的 path（force-full）
   const forced = new Set<string>();
   for (const window of thread.contextWindows ?? []) {
-    if (window.type === "knowledge") {
+    if (window.class === "knowledge") {
       forced.add((window as KnowledgeWindow).path);
     }
   }

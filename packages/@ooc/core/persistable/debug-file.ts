@@ -47,8 +47,8 @@ export function captureContextSnapshot(
   // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 ContextSnapshot.contextWindows。
   const contextWindows = ((thread.contextWindows ?? []) as ContextWindow[]).map((w) => {
     // P6.§7: enrichment effectiveVisibleType（沿 parentClass 继承链回退到可渲染 type）。
-    const effVis = registry.resolveEffectiveVisibleType(w.type as any);
-    if (effVis && effVis !== w.type) {
+    const effVis = registry.resolveEffectiveVisibleType(w.class as any);
+    if (effVis && effVis !== w.class) {
       return { ...w, effectiveVisibleType: effVis };
     }
     return w;

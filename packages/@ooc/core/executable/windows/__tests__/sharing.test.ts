@@ -23,7 +23,7 @@ function findChild(parent: ThreadContext): ThreadContext {
 }
 
 function findDoWindow(thread: ThreadContext): { id: string } {
-  const win = (thread.contextWindows ?? []).find((w) => w.type === "do" && !(w as DoWindow).isCreatorWindow);
+  const win = (thread.contextWindows ?? []).find((w) => w.class === "do" && !(w as DoWindow).isCreatorWindow);
   if (!win) throw new Error("expected do_window in parent");
   return { id: win.id };
 }
@@ -31,7 +31,7 @@ function findDoWindow(thread: ThreadContext): { id: string } {
 function makeFileWindowFixture(thread: ThreadContext, id: string, path: string): void {
   const fileWindow: ContextWindow = {
     id,
-    type: "file",
+    class: "file",
     title: `file: ${path}`,
     status: "open",
     createdAt: Date.now(),
@@ -91,7 +91,7 @@ describe("root.do.share_windows", () => {
     const childFile = (child.contextWindows ?? []).find((w) => w.id === "w_file_2");
     expect(childFile).toBeDefined();
     expect(childFile?.sharing).toBeUndefined();
-    expect(childFile?.type).toBe("file");
+    expect(childFile?.class).toBe("file");
   });
 });
 
@@ -147,12 +147,12 @@ describe("do_window.move 归还路径", () => {
     const child = findChild(parent);
     // 子要修改 file path 模拟 latest 内容（实际场景是 file_window.edit 之类）
     const childFile = (child.contextWindows ?? []).find((w) => w.id === "w_file_5");
-    if (childFile && childFile.type === "file") {
+    if (childFile && childFile.class === "file") {
       (childFile as FileWindow).path = "/tmp/e-modified.txt";
     }
     // 子在 creator do_window 上发起归还
     const creator = (child.contextWindows ?? []).find(
-      (w) => w.type === "do" && (w as DoWindow).isCreatorWindow,
+      (w) => w.class === "do" && (w as DoWindow).isCreatorWindow,
     );
     expect(creator).toBeDefined();
 
@@ -172,7 +172,7 @@ describe("do_window.move 归还路径", () => {
     // 父侧：恢复 owner，吸收子的 latest path
     const parentFile = (parent.contextWindows ?? []).find((w) => w.id === "w_file_5");
     expect(parentFile?.sharing).toBeUndefined();
-    if (parentFile && parentFile.type === "file") {
+    if (parentFile && parentFile.class === "file") {
       expect((parentFile as FileWindow).path).toBe("/tmp/e-modified.txt");
     }
     // 子侧：副本被移除
@@ -195,8 +195,8 @@ describe("archiveDoWindowChild 自动归还", () => {
     // 模拟 archive：直接调 archive helper（绕开 mgr 缓存层）
     const { archiveDoWindowChild } = await import("../do/helpers");
     const doWindow = (parent.contextWindows ?? []).find((w) => w.id === doWindowId);
-    expect(doWindow?.type).toBe("do");
-    if (doWindow?.type === "do") {
+    expect(doWindow?.class).toBe("do");
+    if (doWindow?.class === "do") {
       archiveDoWindowChild(parent, doWindow as DoWindow);
     }
 

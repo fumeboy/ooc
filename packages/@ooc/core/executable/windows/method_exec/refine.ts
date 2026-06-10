@@ -35,12 +35,12 @@ async function executeRefine(ctx: MethodExecutionContext): Promise<string | unde
     // refine 触发 quick_exec_submit 且执行成功 → form 已自动移除。
     return `Form ${form.id} 参数补齐后已自动提交并执行成功（form 已关闭）。`;
   }
-  if (updated.type === "method_exec" && updated.status === "failed") {
+  if (updated.class === "method_exec" && updated.status === "failed") {
     return `Form ${form.id} 参数累积后自动提交但执行失败：${updated.result ?? "(无错误详情)"}。可继续 refine 修正后重试。`;
   }
-  const paths = updated.type === "method_exec" ? updated.intentPaths.join(", ") : "";
+  const paths = updated.class === "method_exec" ? updated.intentPaths.join(", ") : "";
   const revived = form.status === "failed" ? "（form 从 failed 复活, 已切回 open, 可 submit）" : "";
-  const tip = updated.type === "method_exec" && updated.tip ? ` tip=${JSON.stringify(updated.tip.slice(0, 200))}` : "";
+  const tip = updated.class === "method_exec" && updated.tip ? ` tip=${JSON.stringify(updated.tip.slice(0, 200))}` : "";
   return `Form ${form.id} 已累积参数${revived}。当前路径：${paths}。${tip}`;
 }
 

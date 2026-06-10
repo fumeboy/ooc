@@ -38,7 +38,7 @@ async function writeSkill(skillsDir: string, name: string, description: string):
 }
 
 function findSkillIndex(windows: ContextWindow[] | undefined): SkillIndexWindow | undefined {
-  return windows?.find((w): w is SkillIndexWindow => w.type === "skill_index");
+  return windows?.find((w): w is SkillIndexWindow => w.class === "skill_index");
 }
 
 describe("synthesizer skill_index 派生", () => {

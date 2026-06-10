@@ -10,7 +10,7 @@ import { renderMethodsNode } from "../xml.js";
  * 这是「测试全绿但功能没了」的盲区——迁移前后都缺此覆盖。
  */
 test("window method (set_viewport) still rendered in <commands> for file window", () => {
-  const node = renderMethodsNode({ id: "f1", type: "file" } as any, builtinRegistry);
+  const node = renderMethodsNode({ id: "f1", class: "file" } as any, builtinRegistry);
   expect(node).not.toBeNull();
   const serialized = JSON.stringify(node);
   expect(serialized).toContain("set_viewport"); // window method
@@ -18,6 +18,6 @@ test("window method (set_viewport) still rendered in <commands> for file window"
 });
 
 test("talk window method (set_transcript_window) rendered in <commands>", () => {
-  const node = renderMethodsNode({ id: "t1", type: "talk" } as any, builtinRegistry);
+  const node = renderMethodsNode({ id: "t1", class: "talk" } as any, builtinRegistry);
   expect(JSON.stringify(node)).toContain("set_transcript_window");
 });

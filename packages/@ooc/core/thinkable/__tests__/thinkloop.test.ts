@@ -298,10 +298,10 @@ describe("think", () => {
 
     await think(thread, llmClient);
     // 自动 submit 后直接产出 todo_window，不应留下 method_exec form
-    const todoWindows = (thread.contextWindows as ContextWindow[]).filter((w) => w.type === "todo");
+    const todoWindows = (thread.contextWindows as ContextWindow[]).filter((w) => w.class === "todo");
     expect(todoWindows).toHaveLength(1);
-    expect(todoWindows[0]?.type === "todo" && todoWindows[0].content).toBe("补充 thinkloop 集成测试");
-    const lingeringForms = thread.contextWindows.filter((w) => w.type === "method_exec");
+    expect(todoWindows[0]?.class === "todo" && todoWindows[0].content).toBe("补充 thinkloop 集成测试");
+    const lingeringForms = thread.contextWindows.filter((w) => w.class === "method_exec");
     expect(lingeringForms).toHaveLength(0);
   });
 

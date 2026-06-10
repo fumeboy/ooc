@@ -164,10 +164,37 @@
 - 全量 `check-tsc` 因用户并行 protocol 重构有连锁错误（见上协作边界）。
 - **未 commit**（用户并行改 thinkable，避免裹挟）。回归测试除 CI gate 外未跑（env-gated e2e 已同步改写但未实跑）。
 
+---
+
+## ✅ 第四批（2026-06-11）：ObjectType 类型彻底删除（commit 2ad55f1c）
+- 不是改成 string alias——`ObjectType` 类型整体退役，全仓统一裸 `string`。
+- 动机：ObjectType 是 window type 的历史债务；method/window method 注册已统一按 id（很多旧 builtin
+  window 现在是 builtin object），type 已无独立语义。
+
+## ✅ 第五批（2026-06-11）：window.type 字段 → window.class（本批）
+- **运行时**：`BaseContextWindow.type` → `class`；ContextWindow discriminated union 各分支 discriminant
+  `type:"do"…` → `class:"do"`；`ObjectRegistry.lookupMethod/lookupWindowMethod(self:{class})`。
+- **序列化层统一**（关键裂缝修复）：`buildThreadContextEntries` ref 分支原写 `type: window.class`，
+  inline 分支写整窗 `class`——字段名不一致。统一为 `class`：`ThreadContextEntry` ref 形态、
+  `WindowSnapshotEntry`（observable/window-hash.ts + web/window-diff.helpers.ts）、`WindowDiffEntry`、
+  `resolveWindowDiffKind` 全部从 `type` 收敛到 `class`。
+- **误伤治理**：全局 `.type`→`.class` 误伤 90+ 非 window 的 `type` 字段（LlmInputItem.type、
+  FlowObjectMetadata.type="flow-object"、React element `.type`〔test-utils 树遍历〕、`{type,path}` 知识
+  helper、MethodArgSpec.type 等），按 tsc 列 + 运行时 fail 逐一还原。
+- **验证**：`check-tsc` 0 error；`test:storybook` 63 pass / 0 fail；diff 渲染器 + 持久化 reconcile +
+  P6 constructor + program-self 全部 383+ pass / 0 fail（误伤还原后）。
+- **.ooc-world-meta 回流**（submodule commit d710baa）：programmable/self.md `window.type`→`class`、
+  program-self-and-shell.md `getObjectDefinition(window.class)`、context-construction.md `（ObjectType）`/
+  `type=peerId`→`class`。遗留 `thinkable/tests.md:45` L2 引用已删端点 `/api/windows/_shared/types` +
+  ObjectType，需 AgentOfThinkable 整体重写该 test item（非符号替换），留作反馈未自改。
+
+---
+
 ## 关键文件锚点
 - method 类型：`packages/@ooc/core/_shared/types/method.ts`
 - registry 类型：`packages/@ooc/core/_shared/types/registry.ts`
 - registry 实现：`packages/@ooc/core/runtime/object-registry.ts`
 - 渲染器：`packages/@ooc/core/thinkable/context/renderers/xml.ts`
 - 协议知识注入：`packages/@ooc/core/thinkable/context/protocol.ts`
-- ObjectType 定义：`packages/@ooc/core/_shared/types/context-window.ts:22`
+- ContextWindow / BaseContextWindow.class：`packages/@ooc/core/_shared/types/context-window.ts`
+- 序列化 entry：`packages/@ooc/core/persistable/flow-thread-context.ts`（ThreadContextEntry / buildThreadContextEntries）

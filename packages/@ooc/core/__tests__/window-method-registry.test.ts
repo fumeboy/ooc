@@ -23,12 +23,12 @@ test("lookupWindowMethod resolves via parentClass chain", () => {
   const r = new ObjectRegistry();
   r.registerNewObjectType("base_doc", { methods: {}, windowMethods: { set_viewport: wm } });
   r.registerNewObjectType("my_doc", { methods: {}, parentClass: "base_doc" });
-  expect(r.lookupWindowMethod({ type: "my_doc" }, "set_viewport")).toBeDefined();
+  expect(r.lookupWindowMethod({ class: "my_doc" }, "set_viewport")).toBeDefined();
 });
 
 test("lookupWindowMethod on unknown type returns undefined (no throw)", () => {
   const r = new ObjectRegistry();
-  expect(r.lookupWindowMethod({ type: "nope_type" }, "set_viewport")).toBeUndefined();
+  expect(r.lookupWindowMethod({ class: "nope_type" }, "set_viewport")).toBeUndefined();
 });
 
 test("seedFrom key-merges windowMethods to per-world registry", () => {

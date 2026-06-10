@@ -202,7 +202,7 @@ async function executeExpandStep(ctx: MethodExecutionContext): Promise<string | 
   const childId = generateWindowId("plan");
   const child: PlanWindow = {
     id: childId,
-    type: "plan",
+    class: "plan",
     parentWindowId: ROOT_WINDOW_ID,
     title: childTitle,
     status: "active",
@@ -265,7 +265,7 @@ async function executeCollapseSubplan(ctx: MethodExecutionContext): Promise<stri
   const childIdx = all.findIndex((c) => c.id === childId);
   if (childIdx >= 0) {
     const child = all[childIdx]!;
-    if (child.type === "plan") {
+    if (child.class === "plan") {
       const archivedChild: PlanWindow = { ...(child as PlanWindow), status: "archived" };
       if (ctx.manager) {
         (ctx.manager as WindowManager).upsertWindow(archivedChild, ctx.thread);
@@ -362,7 +362,7 @@ const planConstructor: ObjectMethod = {
 
     const plan: PlanWindow = {
       id: generateWindowId("plan"),
-      type: "plan",
+      class: "plan",
       parentWindowId: ROOT_WINDOW_ID,
       title: inputTitle ?? "Plan",
       status: "active",

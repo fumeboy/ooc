@@ -56,7 +56,7 @@ function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage
   const fromThreadId = inboxMessage.fromThreadId;
   if (!fromThreadId) return undefined;
   const candidates = thread.contextWindows.filter(
-    (w) => w.type === "do" && (w as { targetThreadId?: string }).targetThreadId === fromThreadId,
+    (w) => w.class === "do" && (w as { targetThreadId?: string }).targetThreadId === fromThreadId,
   );
   if (candidates.length === 0) return undefined;
   const creator = candidates.find((w) => (w as { isCreatorWindow?: boolean }).isCreatorWindow === true);
@@ -286,9 +286,9 @@ const BUILTIN_WINDOW_TYPES: ReadonlySet<string> = new Set([
  * is neither a builtin window type nor a builtin Object id.
  */
 function isPeerWindow(w: ContextWindow): boolean {
-  if (w.id !== w.type) return false;
-  if (BUILTIN_WINDOW_TYPES.has(w.type)) return false;
-  if (isBuiltinObjectId(w.type)) return false;
+  if (w.id !== w.class) return false;
+  if (BUILTIN_WINDOW_TYPES.has(w.class)) return false;
+  if (isBuiltinObjectId(w.class)) return false;
   return true;
 }
 

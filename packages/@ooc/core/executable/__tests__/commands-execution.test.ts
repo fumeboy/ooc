@@ -33,9 +33,9 @@ describe("method execution side effects", () => {
       thread,
       args: { plan: "完成 thinkloop 真实测试\n\n先打通 tool call 与 command execute" },
     });
-    const planWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "plan");
-    expect(planWindow?.type).toBe("plan");
-    expect(planWindow && planWindow.type === "plan" && planWindow.description).toContain(
+    const planWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "plan");
+    expect(planWindow?.class).toBe("plan");
+    expect(planWindow && planWindow.class === "plan" && planWindow.description).toContain(
       "完成 thinkloop 真实测试",
     );
   });
@@ -49,11 +49,11 @@ describe("method execution side effects", () => {
         activates_on: ["program", "exec"],
       },
     });
-    const todoWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "todo");
-    expect(todoWindow?.type).toBe("todo");
-    expect(todoWindow && todoWindow.type === "todo" && todoWindow.content).toBe("补充 thinkloop 集成测试");
+    const todoWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "todo");
+    expect(todoWindow?.class).toBe("todo");
+    expect(todoWindow && todoWindow.class === "todo" && todoWindow.content).toBe("补充 thinkloop 集成测试");
     expect(
-      todoWindow && todoWindow.type === "todo" && todoWindow.activatesOn,
+      todoWindow && todoWindow.class === "todo" && todoWindow.activatesOn,
     ).toEqual(["program", "exec"]);
   });
 
@@ -79,9 +79,9 @@ describe("method execution side effects", () => {
       configurable: true,
     });
     const creatorBefore = child.contextWindows.find(
-      (w) => w.type === "do" && (w as { isCreatorWindow?: boolean }).isCreatorWindow,
+      (w) => w.class === "do" && (w as { isCreatorWindow?: boolean }).isCreatorWindow,
     );
-    expect(creatorBefore?.type).toBe("do");
+    expect(creatorBefore?.class).toBe("do");
     expect((creatorBefore as { status: string }).status).toBe("running");
 
     await execRootMethod("end", {
@@ -94,7 +94,7 @@ describe("method execution side effects", () => {
     const out = child.outbox ?? [];
     expect(out.some((m) => m.content === "已完成：见 memo/x.md")).toBe(true);
     const creatorAfter = child.contextWindows.find(
-      (w) => w.type === "do" && (w as { isCreatorWindow?: boolean }).isCreatorWindow,
+      (w) => w.class === "do" && (w as { isCreatorWindow?: boolean }).isCreatorWindow,
     );
     expect((creatorAfter as { status: string }).status).toBe("archived");
   });
@@ -122,10 +122,10 @@ describe("method execution side effects", () => {
       thread,
       args: { target: "user", title: "发布计划" },
     });
-    const talkWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "talk");
-    expect(talkWindow?.type).toBe("talk");
-    expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("user");
-    expect(talkWindow && talkWindow.type === "talk" && talkWindow.title).toBe("发布计划");
+    const talkWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "talk");
+    expect(talkWindow?.class).toBe("talk");
+    expect(talkWindow && talkWindow.class === "talk" && talkWindow.target).toBe("user");
+    expect(talkWindow && talkWindow.class === "talk" && talkWindow.title).toBe("发布计划");
   });
 
   it("talk accepts arbitrary objectId target (cross-object)", async () => {
@@ -134,9 +134,9 @@ describe("method execution side effects", () => {
       thread,
       args: { target: "researcher", title: "ask" },
     });
-    const talkWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.type === "talk");
-    expect(talkWindow?.type).toBe("talk");
-    expect(talkWindow && talkWindow.type === "talk" && talkWindow.target).toBe("researcher");
+    const talkWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "talk");
+    expect(talkWindow?.class).toBe("talk");
+    expect(talkWindow && talkWindow.class === "talk" && talkWindow.target).toBe("researcher");
   });
 
   it("talk rejects empty target", async () => {

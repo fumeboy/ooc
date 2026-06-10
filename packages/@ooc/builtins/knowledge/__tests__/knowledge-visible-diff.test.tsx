@@ -19,13 +19,13 @@ describe("KnowledgeWindowDiff", () => {
   it("Case 1: body 变 + frontmatter 字段 diff → 含 changed 字段", () => {
     const tree = KnowledgeDiff({
       previous: {
-        type: "knowledge",
+        class: "knowledge",
         path: "k.md",
         body: "old body",
         frontmatter: { title: "A" },
       },
       current: {
-        type: "knowledge",
+        class: "knowledge",
         path: "k.md",
         body: "new body",
         frontmatter: { title: "B" },
@@ -37,7 +37,7 @@ describe("KnowledgeWindowDiff", () => {
   it("Case 2: added (previous undefined) → 不崩", () => {
     const tree = KnowledgeDiff({
       previous: undefined,
-      current: { type: "knowledge", path: "k.md", body: "x" },
+      current: { class: "knowledge", path: "k.md", body: "x" },
     });
     expect(tree).toBeDefined();
     expect(countByStatus(tree, "added")).toBeGreaterThanOrEqual(1);

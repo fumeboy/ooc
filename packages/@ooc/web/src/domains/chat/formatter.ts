@@ -48,7 +48,7 @@ function extractMarks(argumentsValue: unknown): ToolMark[] | undefined {
     .filter(isRecord)
     .map((entry) => ({
       messageId: typeof entry.messageId === "string" ? entry.messageId : undefined,
-      type: typeof entry.type === "string" ? entry.type : undefined,
+      type: typeof entry.class === "string" ? entry.class : undefined,
       tip: typeof entry.tip === "string" ? entry.tip : undefined,
     }));
 }
@@ -404,7 +404,7 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
   // 而不是只看到 JSON 化的 open 工具卡。
   const talkWindowTargets = new Map<string, string>();
   for (const w of thread.contextWindows ?? []) {
-    if (w.type === "talk") talkWindowTargets.set(w.id, w.target);
+    if (w.class === "talk") talkWindowTargets.set(w.id, w.target);
   }
 
   // 收集"发给 user 的 outbox 消息"作为 outbound message lines。

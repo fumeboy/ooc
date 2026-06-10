@@ -27,14 +27,14 @@ describe("do method (ContextWindow model)", () => {
 
     // 父侧 do_window 指向 child
     const doWindow = parent.contextWindows.find(
-      (w): w is DoWindow => w.type === "do" && !(w as DoWindow).isCreatorWindow,
+      (w): w is DoWindow => w.class === "do" && !(w as DoWindow).isCreatorWindow,
     );
     expect(doWindow).toBeDefined();
     expect(doWindow!.targetThreadId).toBe(childId);
 
     // child 自己有 creator do_window 指向父
     const childCreatorWindow = child.contextWindows.find(
-      (w): w is DoWindow => w.type === "do" && (w as DoWindow).isCreatorWindow === true,
+      (w): w is DoWindow => w.class === "do" && (w as DoWindow).isCreatorWindow === true,
     );
     expect(childCreatorWindow).toBeDefined();
     expect(childCreatorWindow!.id).toBe(creatorWindowIdOf(childId));
@@ -60,7 +60,7 @@ describe("do method (ContextWindow model)", () => {
     });
     const childId = parent.childThreadIds![0]!;
     const doWindowId = parent.contextWindows.find(
-      (w) => w.type === "do" && !(w as DoWindow).isCreatorWindow,
+      (w) => w.class === "do" && !(w as DoWindow).isCreatorWindow,
     )!.id;
 
     const mgr = WindowManager.fromThread(parent, builtinRegistry);
@@ -90,7 +90,7 @@ describe("do method (ContextWindow model)", () => {
     });
     const childId = parent.childThreadIds![0]!;
     const doWindowId = parent.contextWindows.find(
-      (w) => w.type === "do" && !(w as DoWindow).isCreatorWindow,
+      (w) => w.class === "do" && !(w as DoWindow).isCreatorWindow,
     )!.id;
 
     const mgr = WindowManager.fromThread(parent, builtinRegistry);
@@ -118,7 +118,7 @@ describe("do method (ContextWindow model)", () => {
     expect(parent.status).toBe("waiting");
     expect(parent.inboxSnapshotAtWait).toBe(0);
     // form 成功后应已自动消失，仅留 do_window 与 creator window
-    expect(parent.contextWindows.find((w) => w.type === "method_exec")).toBeUndefined();
-    expect(parent.contextWindows.some((w) => w.type === "do" && !(w as DoWindow).isCreatorWindow)).toBe(true);
+    expect(parent.contextWindows.find((w) => w.class === "method_exec")).toBeUndefined();
+    expect(parent.contextWindows.some((w) => w.class === "do" && !(w as DoWindow).isCreatorWindow)).toBe(true);
   });
 });

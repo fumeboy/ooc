@@ -41,7 +41,7 @@ async function setupCaller(opts: {
   const talkWindowId = generateWindowId("talk");
   const talkWindow: TalkWindow = {
     id: talkWindowId,
-    type: "talk",
+    class: "talk",
     parentWindowId: ROOT_WINDOW_ID,
     title: `talk-${opts.target}`,
     status: "open",
@@ -175,7 +175,7 @@ describe("talk-delivery target='super' alias", () => {
       initContextWindows(superAlice, { creatorThreadId: "root", initialTaskTitle: "reflect" });
       const creator = superAlice.contextWindows.find((w) => (w as TalkWindow).isCreatorWindow);
       expect(creator).toBeDefined();
-      expect(creator!.type).toBe("talk"); // ← 修复核心：cross-session creator 不是 do
+      expect(creator!.class).toBe("talk"); // ← 修复核心：cross-session creator 不是 do
       expect((creator as TalkWindow).target).toBe("alice");
       expect((creator as TalkWindow).targetThreadId).toBe("root");
       await writeThread(superAlice);

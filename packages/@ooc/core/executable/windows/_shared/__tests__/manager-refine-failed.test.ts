@@ -34,7 +34,7 @@ async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string
     arguments: { title: "派生", method: "do", description: "fork" },
   });
   const form = thread.contextWindows.find(
-    (w): w is MethodExecWindow => w.type === "method_exec",
+    (w): w is MethodExecWindow => w.class === "method_exec",
   );
   if (!form) throw new Error("expected method_exec form created (do with no msg)");
   // 2. submit → 失败 (do 缺 msg → form 进 failed)
@@ -55,7 +55,7 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
       arguments: { title: "派生", method: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
-      (w): w is MethodExecWindow => w.type === "method_exec",
+      (w): w is MethodExecWindow => w.class === "method_exec",
     )!;
     expect(form.status).toBe("open");
 
@@ -112,7 +112,7 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
       arguments: { title: "派生", method: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
-      (w): w is MethodExecWindow => w.type === "method_exec",
+      (w): w is MethodExecWindow => w.class === "method_exec",
     )!;
     // 手工把 status 改成 executing 模拟中间态
     const mgr = WindowManager.fromThread(thread, builtinRegistry);

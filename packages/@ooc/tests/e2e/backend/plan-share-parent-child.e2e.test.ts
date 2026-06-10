@@ -53,24 +53,24 @@ function findPlanWindowById(
   id: string,
 ): PlanWindow | undefined {
   const w = (thread.contextWindows ?? []).find((x) => x.id === id);
-  return w && w.type === "plan" ? (w as PlanWindow) : undefined;
+  return w && w.class === "plan" ? (w as PlanWindow) : undefined;
 }
 
 /** 找出 thread 上唯一的非 creator do_window（root.do 创建的对端通道）。 */
 function findParentSideDoWindow(thread: ThreadContext): DoWindow {
   const win = (thread.contextWindows ?? []).find(
-    (w) => w.type === "do" && !(w as DoWindow).isCreatorWindow,
+    (w) => w.class === "do" && !(w as DoWindow).isCreatorWindow,
   );
-  if (!win || win.type !== "do") throw new Error("expected parent-side do_window");
+  if (!win || win.class !== "do") throw new Error("expected parent-side do_window");
   return win as DoWindow;
 }
 
 /** 通过子 thread 持有的 creator do_window 找到子→父归还通道。 */
 function findChildCreatorDoWindow(child: ThreadContext): DoWindow {
   const win = (child.contextWindows ?? []).find(
-    (w) => w.type === "do" && (w as DoWindow).isCreatorWindow,
+    (w) => w.class === "do" && (w as DoWindow).isCreatorWindow,
   );
-  if (!win || win.type !== "do") throw new Error("expected creator do_window on child");
+  if (!win || win.class !== "do") throw new Error("expected creator do_window on child");
   return win as DoWindow;
 }
 
@@ -115,7 +115,7 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
       args: { plan: "重构 thinkable 维度" },
     });
     const rootPlan = (parent.contextWindows ?? []).find(
-      (w) => w.type === "plan",
+      (w) => w.class === "plan",
     ) as PlanWindow | undefined;
     expect(rootPlan).toBeDefined();
     const PW1 = rootPlan!.id;
@@ -245,7 +245,7 @@ describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () 
       args: { plan: "为 v2 做准备" },
     });
     const rootPlan = (parent.contextWindows ?? []).find(
-      (w) => w.type === "plan",
+      (w) => w.class === "plan",
     ) as PlanWindow;
     const PW1 = rootPlan.id;
     await execOnPlanWindow(parent, PW1, "add_step", { text: "step a" });
@@ -307,7 +307,7 @@ describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
     const parent = makeThread({ id: "_test_thinkable_b6_c_parent" });
     await execRootMethod("plan", { thread: parent, args: { plan: "p" } });
     const rootPlan = (parent.contextWindows ?? []).find(
-      (w) => w.type === "plan",
+      (w) => w.class === "plan",
     ) as PlanWindow;
     const PW1 = rootPlan.id;
     await execOnPlanWindow(parent, PW1, "add_step", { text: "x" });
@@ -336,7 +336,7 @@ describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
     const parent = makeThread({ id: "_test_thinkable_b6_c_dup" });
     await execRootMethod("plan", { thread: parent, args: { plan: "p" } });
     const PW1 = ((parent.contextWindows ?? []).find(
-      (w) => w.type === "plan",
+      (w) => w.class === "plan",
     ) as PlanWindow).id;
 
     await execRootMethod("do", {
@@ -376,7 +376,7 @@ describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
     const parent = makeThread({ id: "_test_thinkable_b6_c_cascade" });
     await execRootMethod("plan", { thread: parent, args: { plan: "p" } });
     const PW1 = ((parent.contextWindows ?? []).find(
-      (w) => w.type === "plan",
+      (w) => w.class === "plan",
     ) as PlanWindow).id;
     await execOnPlanWindow(parent, PW1, "add_step", { text: "first" });
 

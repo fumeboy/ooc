@@ -11,8 +11,8 @@
  *   5. createFlowObject({ class: "no-such-class" }) → ClassNotFoundError.
  *   6. resolveMethod walks parentClass chain (smoke check via dispatch): a stub class with
  *      parentClass: "root" can dispatch root method "talk" successfully (constructor returns ok+object).
- *   7. self.type mismatch → manager rejects dispatch (a method registered on class X cannot run when
- *      self.type === Y, with X not in Y's chain).
+ *   7. self.class mismatch → manager rejects dispatch (a method registered on class X cannot run when
+ *      self.class === Y, with X not in Y's chain).
  *
  * Side-effect imports load builtins/root + core windows so the registry has full state
  * (talk/do/plan/... constructors registered, `lookupConstructor` and `resolveMethod` chains work).
@@ -115,7 +115,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     expect(result.startsWith("[")).toBe(false); // no error prefix
 
     // Find the newly-mounted talk_window in mgr.
-    const talkWindow = mgr.list().find((w) => w.type === "talk");
+    const talkWindow = mgr.list().find((w) => w.class === "talk");
     expect(talkWindow).toBeDefined();
 
     // Wait for thread-context.json flush.
@@ -129,7 +129,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     expect(inlineEntry).toBeDefined();
     // builtin feature → completely inlined, NOT a `_ref` entry
     expect((inlineEntry as { _ref?: boolean })._ref).toBeUndefined();
-    expect((inlineEntry as { type: string }).type).toBe("talk");
+    expect((inlineEntry as { class: string }).class).toBe("talk");
     expect((inlineEntry as { target?: string }).target).toBe("peer_alice");
 
     // No independent dir for the talk_window
@@ -159,7 +159,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     // 模拟 initContextWindows 注入的 self 门面窗（id=type=objectId，标记 isSelfWindow）。
     const selfWin = {
       id: persistence.objectId,
-      type: persistence.objectId,
+      class: persistence.objectId,
       parentWindowId: ROOT_WINDOW_ID,
       title: persistence.objectId,
       status: "open",
@@ -204,7 +204,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     const result = opened.submitResult ?? "";
     expect(result.startsWith("[")).toBe(false);
 
-    const planWindow = mgr.list().find((w) => w.type === "plan") as PlanWindow | undefined;
+    const planWindow = mgr.list().find((w) => w.class === "plan") as PlanWindow | undefined;
     expect(planWindow).toBeDefined();
     const planId = planWindow!.id;
 
@@ -230,7 +230,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     expect(await exists(planStateFile)).toBe(true);
     const planState = JSON.parse(await readFile(planStateFile, "utf8")) as Record<string, unknown>;
     expect(planState.id).toBe(planId);
-    expect(planState.type).toBe("plan");
+    expect(planState.class).toBe("plan");
     // state.json must NOT carry contextWindows (object dimension only).
     expect("contextWindows" in planState).toBe(false);
 
@@ -241,7 +241,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     expect(refEntry).toBeDefined();
     expect((refEntry as { _ref?: boolean })._ref).toBe(true);
     expect((refEntry as { refObjectId?: string }).refObjectId).toBe(planId);
-    expect((refEntry as { type: string }).type).toBe("plan");
+    expect((refEntry as { class: string }).class).toBe("plan");
   });
 
   // ─── Test 3: reportStateEdit on independent object → state.json reflects mutation ──
@@ -249,7 +249,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const plan: PlanWindow = {
       id: "plan_edit_target",
-      type: "plan",
+      class: "plan",
       parentWindowId: ROOT_WINDOW_ID,
       title: "before",
       status: "active",
@@ -288,7 +288,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const plan: PlanWindow = {
       id: "plan_ctx_target",
-      type: "plan",
+      class: "plan",
       parentWindowId: ROOT_WINDOW_ID,
       title: "demo",
       status: "active",
@@ -347,20 +347,20 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
 
     // 2. Manager-level dispatch lookup finds the same entry — declaringType is the ancestor (root)
     //    where the method is declared. This is the wiring that submit() consults.
-    const entry = builtinRegistry.lookupMethodEntry({ type: stubType as never }, "talk");
+    const entry = builtinRegistry.lookupMethodEntry({ class: stubType as never }, "talk");
     expect(entry).toBeDefined();
     expect(entry!.declaringType).toBe("root");
     expect(entry!.entry.kind).toBeUndefined(); // root.talk is the delegator (not kind="constructor"; that's on the talk type)
 
     // 3. End-to-end dispatch via openMethodExec on a stub-typed parent — verifies the wiring reaches
     //    submit(). With the current §3 strict-equality guard, manager will fail the form with a
-    //    [method-error] outcome (declaringType "root" !== parent.type stub). This still proves the
+    //    [method-error] outcome (declaringType "root" !== parent.class stub). This still proves the
     //    dispatch lookup walked the chain successfully; the failure surface is the §3 guard, not the
     //    chain walk. If §3 relaxes to "in chain" semantics (per plan §3 wording), this test should
     //    flip to expect autoSubmitted result without the [method-error] prefix.
     const stubParent = {
       id: `w_stub_${Date.now()}`,
-      type: stubType as never,
+      class: stubType as never,
       parentWindowId: ROOT_WINDOW_ID,
       title: "stub parent",
       status: "active",
@@ -380,10 +380,10 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     expect(opened.formId).toBeDefined();
   });
 
-  // ─── Test 7: self.type mismatch — method declared on X cannot run when self.type === Y ─
-  test("Test 7: self.type mismatch — manager rejects dispatch (method not in self's class chain)", async () => {
+  // ─── Test 7: self.class mismatch — method declared on X cannot run when self.class === Y ─
+  test("Test 7: self.class mismatch — manager rejects dispatch (method not in self's class chain)", async () => {
     // Register a stub class with parentClass:null (no inheritance) and an own method "stub_only".
-    // Then put that method's form on a DIFFERENT parent.type ("plan") — plan doesn't have "stub_only"
+    // Then put that method's form on a DIFFERENT parent.class ("plan") — plan doesn't have "stub_only"
     // in its chain (plan inherits from root, not from stubX).
     const stubType = `__test_isolated_${Date.now()}`;
     builtinRegistry.registerNewObjectType(stubType as never, {
@@ -402,7 +402,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     // Create an actual plan_window in the thread (the "wrong" parent type for stub_only).
     const planWindow: PlanWindow = {
       id: "plan_isolation_target",
-      type: "plan",
+      class: "plan",
       parentWindowId: ROOT_WINDOW_ID,
       title: "isolation target",
       status: "active",

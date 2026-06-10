@@ -116,12 +116,12 @@ function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
   return {
     ...payload,
     contextWindows: payload.contextWindows.map((window) => {
-      if (window.type === "knowledge" && window.source !== undefined && window.source !== "explicit") {
+      if (window.class === "knowledge" && window.source !== undefined && window.source !== "explicit") {
         const { id: _id, createdAt: _createdAt, ...rest } = window;
         return rest;
       }
       // skill_index 也是每轮 derive 出来的非持久化 window;createdAt=Date.now() 每次都新。
-      if (window.type === "skill_index") {
+      if (window.class === "skill_index") {
         const { createdAt: _createdAt, ...rest } = window;
         return rest;
       }
@@ -188,7 +188,7 @@ function extractTalkPeers(
 ): ListThreadsItem["talkPeers"] {
   const peers: ListThreadsItem["talkPeers"] = [];
   for (const window of windows ?? []) {
-    if (window.type !== "talk") continue;
+    if (window.class !== "talk") continue;
     peers.push({
       targetObjectId: window.target,
       targetThreadId: window.targetThreadId,
@@ -440,7 +440,7 @@ export function createFlowsService(deps: {
       const talkWindowId = generateWindowId("talk");
       const talkWindow: TalkWindow = {
         id: talkWindowId,
-        type: "talk",
+        class: "talk",
         parentWindowId: ROOT_WINDOW_ID,
         title: targetObjectId,
         status: "open",
@@ -530,7 +530,7 @@ export function createFlowsService(deps: {
 
       // 幂等：已经有指向同 target 的非 creator talk_window 时复用它。
       const existing = ((userThread.contextWindows ?? []) as ContextWindow[]).find(
-        (w): w is TalkWindow => w.type === "talk" && !w.isCreatorWindow && w.target === target,
+        (w): w is TalkWindow => w.class === "talk" && !w.isCreatorWindow && w.target === target,
       );
       if (existing) {
         // 无 initialMessage：纯幂等创建窗口语义，无消息要送，早返回。
@@ -570,7 +570,7 @@ export function createFlowsService(deps: {
       const talkWindowId = generateWindowId("talk");
       const talkWindow: TalkWindow = {
         id: talkWindowId,
-        type: "talk",
+        class: "talk",
         parentWindowId: ROOT_WINDOW_ID,
         title: target,
         status: "open",
@@ -831,7 +831,7 @@ export function createFlowsService(deps: {
         );
       }
       const talkWindows = ((userThread.contextWindows ?? []) as ContextWindow[]).filter(
-        (w): w is TalkWindow => w.type === "talk" && !w.isCreatorWindow,
+        (w): w is TalkWindow => w.class === "talk" && !w.isCreatorWindow,
       );
       const target = targetWindowId
         ? talkWindows.find((w) => w.id === targetWindowId)

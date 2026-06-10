@@ -20,7 +20,7 @@ export type HistoryViewport = TranscriptViewport;
  * - 注册 method：exec / close / set_history_window
  */
 export interface ProgramWindow extends BaseContextWindow {
-  type: "program";
+  class: "program";
   status: "open" | "closed";
   history: ProgramExecRecord[];
   /**

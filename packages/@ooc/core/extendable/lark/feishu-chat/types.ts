@@ -37,7 +37,7 @@ export interface FeishuChatMessage {
 }
 
 export interface FeishuChatWindow extends BaseContextWindow {
-  type: "feishu_chat";
+  class: "feishu_chat";
   status: "open" | "closed";
   chatId: string;
   chatName: string;

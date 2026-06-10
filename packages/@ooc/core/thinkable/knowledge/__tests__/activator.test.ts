@@ -27,7 +27,7 @@ function indexOf(...docs: KnowledgeDoc[]): KnowledgeIndex {
 function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
   return {
     id: "f",
-    type: "method_exec",
+    class: "method_exec",
     parentWindowId: "root",
     title: "x",
     status: "open",
@@ -103,7 +103,7 @@ describe("computeActivations (trigger map)", () => {
     const index = indexOf(doc("a", "A", { "window::talk": "show_content" }));
     const talkWindow: ContextWindow = {
       id: "w_talk",
-      type: "talk",
+      class: "talk",
       parentWindowId: "root",
       title: "talk",
       status: "open",
@@ -140,11 +140,11 @@ describe("computeActivations (trigger map)", () => {
   });
 
   test("method trigger requires matching parent window type", () => {
-    // method::talk::say should match form { method: "say", parent.type === "talk" }
+    // method::talk::say should match form { method: "say", parent.class === "talk" }
     const index = indexOf(doc("a", "A", { "method::talk::say": "show_content" }));
     const talkWindow: ContextWindow = {
       id: "w_talk",
-      type: "talk",
+      class: "talk",
       parentWindowId: "root",
       title: "talk",
       status: "open",
@@ -228,7 +228,7 @@ describe("computeActivations (trigger map)", () => {
     const index = indexOf(doc("a", "A", undefined));
     const knWindow: ContextWindow = {
       id: "kn_w_1",
-      type: "knowledge",
+      class: "knowledge",
       parentWindowId: "root",
       title: "a",
       status: "open",

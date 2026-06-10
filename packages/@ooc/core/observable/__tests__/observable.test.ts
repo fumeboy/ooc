@@ -213,7 +213,7 @@ describe("observable persistable debug files", () => {
       contextWindows: [
         {
           id: "w_file_a",
-          type: "file",
+          class: "file",
           title: "src/a.ts",
           status: "open",
           createdAt: 1,
@@ -221,7 +221,7 @@ describe("observable persistable debug files", () => {
         } as never,
         {
           id: "w_file_b",
-          type: "file",
+          class: "file",
           title: "src/b.ts",
           status: "open",
           createdAt: 2,
@@ -291,7 +291,7 @@ describe("observable persistable debug files", () => {
       contextWindows: [
         {
           id: "w_file_tracked",
-          type: "file",
+          class: "file",
           title: "tracked.ts",
           status: "open",
           createdAt: 1,

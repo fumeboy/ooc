@@ -51,7 +51,7 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
       { baseDir, sessionId: "sess_p52", objectId: "todo_b" },
       {
         id: "todo_b",
-        type: "todo",
+        class: "todo",
         title: "second todo",
         status: "open",
         content: "registry b",
@@ -62,7 +62,7 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
       { baseDir, sessionId: "sess_p52", objectId: "todo_a" },
       {
         id: "todo_a",
-        type: "todo",
+        class: "todo",
         title: "first todo",
         status: "open",
         content: "registry a",
@@ -93,7 +93,7 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
       { baseDir, sessionId: "sess_p52", objectId: "todo_x" },
       {
         id: "todo_x",
-        type: "todo",
+        class: "todo",
         title: "with params",
         status: "open",
         content: "",
@@ -146,7 +146,7 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
     thread.contextWindows = [
       {
         id: "todo_legacy",
-        type: "todo",
+        class: "todo",
         title: "builtin todo",
         status: "open",
         content: "persisted via thread-context.json",

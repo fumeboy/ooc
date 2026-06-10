@@ -156,7 +156,7 @@ function lookupDeclaredPermission(
   if (call.windowId) {
     const target = thread.contextWindows?.find((w) => w.id === call.windowId);
     if (target) {
-      const fromTarget = tryWindow(target.type);
+      const fromTarget = tryWindow(target.class);
       if (fromTarget) return fromTarget;
     }
   }

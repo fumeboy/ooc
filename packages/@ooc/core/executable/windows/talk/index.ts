@@ -165,7 +165,7 @@ function compressTalkWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
 
 /** talk_window 的 onClose hook：creator talk_window 不可关闭。 */
 function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
-  if (ctx.window.type !== "talk") return;
+  if (ctx.window.class !== "talk") return;
   // batch C narrowing(N1): ctx.window 契约层是 base ContextWindow；type==="talk" 守卫后 narrow 回 TalkWindow 读 isCreatorWindow。
   const w = ctx.window as TalkWindow;
   if (w.isCreatorWindow) {
@@ -251,7 +251,7 @@ const talkConstructor: ObjectMethod = {
     const id = generateWindowId("talk");
     const talkWindow: TalkWindow = {
       id,
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title,
       status: "open",

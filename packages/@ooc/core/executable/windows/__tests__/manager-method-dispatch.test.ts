@@ -42,7 +42,7 @@ async function setupThread(baseDir: string) {
   const flow = await createFlowObject({ baseDir, sessionId: SID, objectId: SELF });
   const talkWindow: TalkWindow = {
     id: "w_talk_alice_to_critic",
-    type: "talk",
+    class: "talk",
     parentWindowId: ROOT_WINDOW_ID,
     title: `talk: ${PEER}`,
     status: "open",
@@ -52,7 +52,7 @@ async function setupThread(baseDir: string) {
   };
   const doWindow: DoWindow = {
     id: "w_do_test",
-    type: "do",
+    class: "do",
     parentWindowId: ROOT_WINDOW_ID,
     title: "do test",
     status: "running",

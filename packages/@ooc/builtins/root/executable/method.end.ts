@@ -17,7 +17,7 @@ export const endMethod: ObjectMethod = {
 function findCreatorWindow(ctx: MethodExecutionContext): DoWindow | TalkWindow | undefined {
   const list = (ctx.thread?.contextWindows ?? []) as ContextWindow[];
   for (const w of list) {
-    if ((w.type === "do" || w.type === "talk") && w.isCreatorWindow === true) {
+    if ((w.class === "do" || w.class === "talk") && w.isCreatorWindow === true) {
       return w;
     }
   }
@@ -49,7 +49,7 @@ async function autoReplyAndArchiveDo(
   const idx = list.findIndex((w: ContextWindow) => w.id === creator.id);
   if (idx >= 0) {
     const target = list[idx]!;
-    if (target.type === "do") {
+    if (target.class === "do") {
       list[idx] = { ...target, status: "archived" };
     }
   }
@@ -97,7 +97,7 @@ export async function executeEndMethod(ctx: MethodExecutionContext): Promise<str
         kind: "inject",
         text: "[end.result] 当前 thread 无 creator window（self-driven root），result 参数被忽略；仅 endSummary 仍会记录。",
       });
-    } else if (creator.type === "do") {
+    } else if (creator.class === "do") {
       await autoReplyAndArchiveDo(ctx, creator, result);
     } else {
       await autoReplyTalk(ctx, creator, result);
@@ -113,9 +113,9 @@ export async function executeEndMethod(ctx: MethodExecutionContext): Promise<str
     const creator = findCreatorWindow(ctx);
     if (creator) {
       const callerObjectId =
-        creator.type === "do" ? persistence.objectId : creator.target;
+        creator.class === "do" ? persistence.objectId : creator.target;
       const callerThreadId =
-        creator.type === "do" ? (creator as DoWindow).targetThreadId : (creator as TalkWindow).targetThreadId;
+        creator.class === "do" ? (creator as DoWindow).targetThreadId : (creator as TalkWindow).targetThreadId;
       const callerSessionId = ctx.thread.creatorSessionId ?? persistence.sessionId;
       if (callerObjectId && callerThreadId && callerObjectId !== "user") {
         notifyThreadActivated({

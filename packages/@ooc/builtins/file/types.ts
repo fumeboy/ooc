@@ -13,7 +13,7 @@ import type { Viewport } from "@ooc/core/extendable/_shared/viewport.js";
  * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 export interface FileWindow extends BaseContextWindow {
-  type: "file";
+  class: "file";
   status: "open" | "closed";
   path: string;
   /** @deprecated 移到 state.viewport；保留以兼容旧 thread.json。 */

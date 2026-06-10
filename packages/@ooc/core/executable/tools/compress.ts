@@ -140,7 +140,7 @@ function compressWindowsClean(
       alreadyAtLevel.push(window.id);
       return window;
     }
-    if (window.type === "root" || window.type === "method_exec") {
+    if (window.class === "root" || window.class === "method_exec") {
       rejected.push(window.id);
       return window;
     }

@@ -11,7 +11,7 @@
  *   ├── plan
  *   ├── contextWindows
  *   │   ├── <window id type status title>
- *   │   │   ├── ...type 特有字段
+ *   │   │   ├── ...class 特有字段
  *   │   │   ├── transcript（do/talk window：按目标 / windowId 收纳的消息）
  *   │   │   └── sub_windows
  *   │   └── ...
@@ -30,10 +30,10 @@
 
 /** 后端 src/executable/windows/_shared/types.ts ContextWindow 在前端的最小镜像。 */
 type _ContextWindowUnion =
-  | { id: string; type: "root"; title: string; status?: string; createdAt?: number }
+  | { id: string; class: "root"; title: string; status?: string; createdAt?: number }
   | {
       id: string;
-      type: "method_exec";
+      class: "method_exec";
       parentWindowId: string;
       title: string;
       status: "open" | "executing" | "success" | "failed";
@@ -62,7 +62,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "do";
+      class: "do";
       parentWindowId?: string;
       title: string;
       status: "running" | "archived";
@@ -72,7 +72,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "todo";
+      class: "todo";
       parentWindowId?: string;
       title: string;
       status: "open" | "done";
@@ -82,7 +82,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "talk";
+      class: "talk";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -92,7 +92,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "program";
+      class: "program";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -110,7 +110,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "file";
+      class: "file";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -121,7 +121,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "knowledge";
+      class: "knowledge";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -138,7 +138,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "search";
+      class: "search";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -151,7 +151,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "skill_index";
+      class: "skill_index";
       parentWindowId?: string;
       title: string;
       status: "active";
@@ -165,7 +165,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "feishu_chat";
+      class: "feishu_chat";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -189,7 +189,7 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "feishu_doc";
+      class: "feishu_doc";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -213,7 +213,7 @@ type _ContextWindowUnion =
        * - 支持 sub plan 嵌套：parentPlanWindowId + parentStepId 反向链；step.subPlanWindowId 正向链
        */
       id: string;
-      type: "plan";
+      class: "plan";
       parentWindowId?: string;
       title: string;
       status: "active" | "done" | "archived";
@@ -232,7 +232,7 @@ type _ContextWindowUnion =
 /**
  * P6.§7 (2026-06-02): ContextWindow 增加可选 enrichment 字段 effectiveVisibleType。
  *
- * 当 window.type 自身不在前端可渲染的 HANDLED_WINDOW_TYPES 集合中时，后端会沿
+ * 当 window.class 自身不在前端可渲染的 HANDLED_WINDOW_TYPES 集合中时，后端会沿
  * parentClass 继承链回退，把首个可渲染的 ancestor type 填到 effectiveVisibleType。
  * 前端渲染 switch 用 effectiveVisibleType ?? type 作为渲染 key。
  *
@@ -309,11 +309,11 @@ export type TranscriptEntry = { message: ThreadMessage; channel: "inbox" | "outb
 export type ContextNodeData =
   | { kind: "thread"; snapshot: ContextSnapshot }
   | { kind: "section"; section: "plan" | "contextWindows" | "inbox" | "outbox" | "events" }
-  | { kind: "windowGroup"; windowType: ContextWindow["type"] }
+  | { kind: "windowGroup"; windowType: ContextWindow["class"] }
   | { kind: "window"; window: ContextWindow; transcript?: TranscriptEntry[] }
   | { kind: "message"; message: ThreadMessage; channel: "inbox" | "outbox" }
   | { kind: "event"; event: unknown; index: number }
-  | { kind: "exec"; exec: NonNullable<Extract<ContextWindow, { type: "program" }>>["history"][number] };
+  | { kind: "exec"; exec: NonNullable<Extract<ContextWindow, { class: "program" }>>["history"][number] };
 
 // ---- 摘要工具 ----
 
@@ -340,7 +340,7 @@ export function estimateTokens(chars: number): number {
 // ---- 单个 window 节点构造 ----
 
 function windowBadge(window: ContextWindow): string {
-  switch (window.type) {
+  switch (window.class) {
     case "method_exec": return "FORM";
     case "do":           return "DO";
     case "todo":         return "TODO";
@@ -366,7 +366,7 @@ function windowBadge(window: ContextWindow): string {
 }
 
 function windowSummary(window: ContextWindow): string {
-  switch (window.type) {
+  switch (window.class) {
     case "method_exec":
       return `${window.method} (${window.status})`;
     case "do":
@@ -402,7 +402,7 @@ function windowSummary(window: ContextWindow): string {
 
 function windowCharCount(window: ContextWindow): number {
   let n = window.title.length;
-  switch (window.type) {
+  switch (window.class) {
     case "method_exec":
       n += window.method.length;
       n += jsonChars(window.accumulatedArgs ?? {});
@@ -453,8 +453,8 @@ function windowCharCount(window: ContextWindow): number {
 
 // ---- Window 视图归纳（与后端 src/thinkable/context/render.ts 同语义） ----
 
-type DoWindowShape = Extract<ContextWindow, { type: "do" }>;
-type TalkWindowShape = Extract<ContextWindow, { type: "talk" }>;
+type DoWindowShape = Extract<ContextWindow, { class: "do" }>;
+type TalkWindowShape = Extract<ContextWindow, { class: "talk" }>;
 
 /**
  * do_window 的视图过滤：选出与该 window targetThreadId 相关的消息。
@@ -508,11 +508,11 @@ function collectWindowConsumedMessageIds(snapshot: ContextSnapshot): Set<string>
   const inbox = snapshot.inbox ?? [];
   const outbox = snapshot.outbox ?? [];
   for (const w of snapshot.contextWindows ?? []) {
-    if (w.type === "do") {
+    if (w.class === "do") {
       for (const e of filterMessagesForDoWindow(w, inbox, outbox)) {
         if (e.message.id) consumed.add(e.message.id);
       }
-    } else if (w.type === "talk") {
+    } else if (w.class === "talk") {
       for (const e of filterMessagesForTalkWindow(w, inbox, outbox)) {
         if (e.message.id) consumed.add(e.message.id);
       }
@@ -525,7 +525,7 @@ function collectWindowConsumedMessageIds(snapshot: ContextSnapshot): Set<string>
 function buildExecNode(
   parentId: string,
   depth: number,
-  exec: Extract<ContextWindow, { type: "program" }>["history"][number],
+  exec: Extract<ContextWindow, { class: "program" }>["history"][number],
   index: number,
 ): ContextNode {
   const headLine = exec.language === "function" ? `fn:${exec.function}` : `${exec.language}: ${(exec.code ?? "").split("\n")[0] ?? ""}`;
@@ -559,8 +559,8 @@ function buildWindowNode(
   let messageCounts: { inbox: number; outbox: number } | undefined;
   let transcript: TranscriptEntry[] | undefined;
 
-  if (window.type === "do" || window.type === "talk") {
-    transcript = window.type === "do"
+  if (window.class === "do" || window.class === "talk") {
+    transcript = window.class === "do"
       ? filterMessagesForDoWindow(window, inbox, outbox)
       : filterMessagesForTalkWindow(window, inbox, outbox);
     let inboxN = 0;
@@ -574,7 +574,7 @@ function buildWindowNode(
   }
 
   // program window 把 history 当作子节点展开
-  if (window.type === "program") {
+  if (window.class === "program") {
     window.history.forEach((exec, index) => {
       children.push(buildExecNode(window.id, depth + 1, exec, index));
     });
@@ -582,7 +582,7 @@ function buildWindowNode(
 
   // 找出 parentWindowId === self.id 的 sub-window
   for (const sub of allWindows) {
-    if (sub.type === "root") continue;
+    if (sub.class === "root") continue;
     const parentId = sub.parentWindowId;
     if (parentId === window.id) {
       children.push(buildWindowNode(sub, allWindows, inbox, outbox, depth + 1));
@@ -606,7 +606,7 @@ function buildWindowNode(
 // ---- 顶层 section 构造 ----
 
 /** 在分组视图中,window type 之间的稳定显示顺序(语义优先级)。 */
-const WINDOW_TYPE_ORDER: ContextWindow["type"][] = [
+const WINDOW_TYPE_ORDER: ContextWindow["class"][] = [
   "root",
   "method_exec",
   "do",
@@ -632,24 +632,24 @@ function buildContextWindowsSection(
   const outbox = snapshot.outbox ?? [];
   // 顶层 = 非 root 且 parentWindowId 缺省 / 等于 "root"；root 自身视为顶层
   const topLevel = all.filter((w) => {
-    if (w.type === "root") return true;
+    if (w.class === "root") return true;
     const pid = w.parentWindowId;
     return !pid || pid === "root";
   });
 
   // 按 type 分组;组内按 createdAt 升序(早 → 晚),createdAt 缺省视为 0
-  const buckets = new Map<ContextWindow["type"], ContextWindow[]>();
+  const buckets = new Map<ContextWindow["class"], ContextWindow[]>();
   for (const w of topLevel) {
-    const bucket = buckets.get(w.type) ?? [];
+    const bucket = buckets.get(w.class) ?? [];
     bucket.push(w);
-    buckets.set(w.type, bucket);
+    buckets.set(w.class, bucket);
   }
   for (const bucket of buckets.values()) {
     bucket.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
   }
 
   // 输出顺序:WINDOW_TYPE_ORDER 中已知类型优先,未知类型按字典序追加
-  const orderedTypes: ContextWindow["type"][] = [];
+  const orderedTypes: ContextWindow["class"][] = [];
   for (const t of WINDOW_TYPE_ORDER) {
     if (buckets.has(t)) orderedTypes.push(t);
   }

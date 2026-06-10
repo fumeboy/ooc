@@ -54,7 +54,7 @@ describe("createProgramSelf", () => {
     }
     thread.contextWindows.push({
       id: objectId,
-      type: objectId as any,
+      class: objectId as any,
       title: "alice",
       status: "open",
       createdAt: Date.now(),
@@ -96,7 +96,7 @@ describe("createProgramSelf", () => {
     }
     thread.contextWindows.push({
       id: objectId,
-      type: objectId as any,
+      class: objectId as any,
       title: "alice",
       status: "open",
       createdAt: Date.now(),

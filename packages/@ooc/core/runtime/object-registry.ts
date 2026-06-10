@@ -214,20 +214,20 @@ export class ObjectRegistry {
     return chain;
   }
 
-  lookupMethod(self: { type: string }, methodName: string): ObjectMethod | undefined {
-    return this.resolveMethod(self.type, methodName);
+  lookupMethod(self: { class: string }, methodName: string): ObjectMethod | undefined {
+    return this.resolveMethod(self.class, methodName);
   }
 
   lookupMethodEntry(
-    self: { type: string },
+    self: { class: string },
     methodName: string,
   ): { entry: ObjectMethod; declaringType: string } | undefined {
-    const selfDef = this.store.get(self.type);
+    const selfDef = this.store.get(self.class);
     if (selfDef) {
       const selfEntry = selfDef.methods?.[methodName];
-      if (selfEntry) return { entry: selfEntry, declaringType: self.type };
+      if (selfEntry) return { entry: selfEntry, declaringType: self.class };
     }
-    for (const parentType of this.resolveParentClassChain(self.type)) {
+    for (const parentType of this.resolveParentClassChain(self.class)) {
       const def = this.store.get(parentType as string);
       if (!def) continue;
       const entry = def.methods?.[methodName];
@@ -252,8 +252,8 @@ export class ObjectRegistry {
   }
 
   /** 沿 parentClass 继承链查 window method（控制展示）。镜像 resolveMethod。 */
-  lookupWindowMethod(self: { type: string }, name: string): WindowMethod | undefined {
-    return this.resolveWindowMethod(self.type, name);
+  lookupWindowMethod(self: { class: string }, name: string): WindowMethod | undefined {
+    return this.resolveWindowMethod(self.class, name);
   }
 
   private resolveWindowMethod(type: string, name: string): WindowMethod | undefined {

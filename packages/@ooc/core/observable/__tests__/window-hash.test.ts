@@ -37,7 +37,7 @@ import {
 function makeFileWindow(overrides: Partial<FileWindow> = {}): FileWindow {
   return {
     id: "w_file_test",
-    type: "file",
+    class: "file",
     title: "src/foo.ts",
     status: "open",
     createdAt: 1700000000000,
@@ -61,8 +61,8 @@ describe("computeWindowContentHash — determinism & stability", () => {
 
   it("field insertion order change → same hash (sortedKeys)", () => {
     // 同字段、不同 key 插入顺序
-    const a = { id: "w1", type: "file", title: "t", status: "open", createdAt: 1, path: "p" } as unknown as ContextWindow;
-    const b = { path: "p", createdAt: 1, status: "open", title: "t", type: "file", id: "w1" } as unknown as ContextWindow;
+    const a = { id: "w1", class: "file", title: "t", status: "open", createdAt: 1, path: "p" } as unknown as ContextWindow;
+    const b = { path: "p", createdAt: 1, status: "open", title: "t", class: "file", id: "w1" } as unknown as ContextWindow;
     expect(computeWindowContentHash(a)).toBe(computeWindowContentHash(b));
   });
 
@@ -124,7 +124,7 @@ describe("buildWindowsSnapshot — structure & ordering", () => {
     const w = makeFileWindow({ id: "w_x", path: "/nonexistent/x.ts" });
     const snap = await buildWindowsSnapshot([w]);
     expect(snap[0]!.id).toBe("w_x");
-    expect(snap[0]!.type).toBe("file");
+    expect(snap[0]!.class).toBe("file");
     expect(snap[0]!.contentHash).toBe(computeWindowContentHash(w));
     expect(snap[0]!.status).toBe("open");
     // compressLevel undefined → not present
@@ -173,7 +173,7 @@ describe("buildWindowsSnapshot — fileDiff (Round 10 F2)", () => {
   it("non-file window has no fileDiff", async () => {
     const root: RootWindow = {
       id: "root",
-      type: "root",
+      class: "root",
       title: "root",
       status: "active",
       createdAt: 1,
@@ -220,7 +220,7 @@ describe("buildWindowsSnapshot — fileDiff (Round 10 F2)", () => {
     const prevSnap: WindowSnapshotEntry[] = [
       {
         id: "w_bin",
-        type: "file",
+        class: "file",
         contentHash: "stale",
         fileDiff: {
           previousContent: "old text",
@@ -245,7 +245,7 @@ describe("buildWindowsSnapshot — fileDiff (Round 10 F2)", () => {
     const prevSnap: WindowSnapshotEntry[] = [
       {
         id: "w_huge",
-        type: "file",
+        class: "file",
         contentHash: "stale",
         fileDiff: {
           previousContent: "small old",

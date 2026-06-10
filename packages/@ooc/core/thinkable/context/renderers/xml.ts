@@ -79,8 +79,8 @@ const COMMAND_DESC_MAX = 200;
 export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistry): XmlNode | null {
   // fail-soft：未注册 type（peer stone 后台注册中 / 新建对象未注册 / builtin 缺失）无 methods 节点。
   // registrar 契约即「render paths handle unregistered types gracefully」——此处坐实，避免 getObjectDefinition 抛崩 think loop。
-  if (!registry.has(window.type)) return null;
-  const def = registry.getObjectDefinition(window.type);
+  if (!registry.has(window.class)) return null;
+  const def = registry.getObjectDefinition(window.class);
   // object method（控制 object，归 executable）+ window method（控制展示，归 readable）
   // 统一呈现给 LLM —— exec 入口相同，LLM 不需区分两类。
   const names = [
@@ -174,17 +174,17 @@ async function resolveObjectReadable(
   thread: ThreadContext,
   registry: ObjectRegistry,
 ): Promise<XmlNode[] | undefined> {
-  if (BUILTIN_TYPES.has(window.type)) {
-    return resolveReadableForType(window.type, window, renderCtx, thread, undefined, registry);
+  if (BUILTIN_TYPES.has(window.class)) {
+    return resolveReadableForType(window.class, window, renderCtx, thread, undefined, registry);
   }
 
   const persistence = thread.persistence;
   if (!persistence) return undefined;
 
-  const selfResult = await resolveReadableForType(window.type, window, renderCtx, thread, persistence, registry);
+  const selfResult = await resolveReadableForType(window.class, window, renderCtx, thread, persistence, registry);
   if (selfResult) return selfResult;
 
-  for (const ancestorType of registry.resolveParentClassChain(window.type as any)) {
+  for (const ancestorType of registry.resolveParentClassChain(window.class as any)) {
     const ancestorResult = await resolveReadableForType(
       ancestorType, window, renderCtx, thread, persistence, registry,
     );
@@ -226,7 +226,7 @@ async function renderWindowNode(
   // （collaborable world 级 think 崩根因：peer window 的 type=peer objectId，撞未注册 peer 即整轮 think_error。）
   let def: ObjectDefinition | undefined;
   try {
-    def = registry.getObjectDefinition(renderedWindow.type as never);
+    def = registry.getObjectDefinition(renderedWindow.class as never);
   } catch {
     def = undefined;
   }
@@ -244,7 +244,7 @@ async function renderWindowNode(
           { level: String(compressLevel) },
           [
             xmlText(
-              `本 window 处于压缩态(level=${compressLevel}); type "${renderedWindow.type}" 未注册 compressView hook。通过 expand 命令恢复完整内容。`,
+              `本 window 处于压缩态(level=${compressLevel}); type "${renderedWindow.class}" 未注册 compressView hook。通过 expand 命令恢复完整内容。`,
             ),
           ],
         ),
@@ -258,7 +258,7 @@ async function renderWindowNode(
       // fail-soft：readable hook 无产出（未注册 type / 无 persistence / 磁盘 readable 取不到）——占位不崩。
       children.push(
         xmlElement("readable", { source: def ? "empty" : "unregistered" }, [
-          xmlText(`Object type "${renderedWindow.type}" 无 readable 产出（stone 可能后台注册中或新建未就绪）。`),
+          xmlText(`Object type "${renderedWindow.class}" 无 readable 产出（stone 可能后台注册中或新建未就绪）。`),
         ]),
       );
     }
@@ -276,7 +276,7 @@ async function renderWindowNode(
 
   const attrs: Record<string, string> = {
     id: window.id,
-    type: window.type,
+    type: window.class,
     status: window.status,
   };
   if (sharingState) {
@@ -321,7 +321,7 @@ function collectWindowConsumedMessageIds(
   for (const w of windows ?? []) {
     let def: ObjectDefinition | undefined;
     try {
-      def = registry.getObjectDefinition(w.type as never);
+      def = registry.getObjectDefinition(w.class as never);
     } catch {
       def = undefined;
     }

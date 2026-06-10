@@ -49,7 +49,7 @@ describe("[p0b] context compression — compress(scope=windows) + expand 最小�
       const fileWindowId = generateWindowId("file");
       const fileWindow: FileWindow = {
         id: fileWindowId,
-        type: "file",
+        class: "file",
         title: "sample.txt",
         status: "open",
         createdAt: Date.now(),

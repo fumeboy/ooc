@@ -90,7 +90,7 @@ export async function executeSearchOpenMatch(
 
   const fileWindow: FileWindow = {
     id: generateWindowId("file"),
-    type: "file",
+    class: "file",
     parentWindowId: ROOT_WINDOW_ID,
     title: basename(match.path),
     status: "open",
@@ -192,7 +192,7 @@ const searchConstructor: ObjectMethod = {
       }));
       const sw: SearchWindow = {
         id: generateWindowId("search"),
-        type: "search",
+        class: "search",
         parentWindowId: ROOT_WINDOW_ID,
         title: `grep ${pattern}`,
         status: "open",
@@ -223,7 +223,7 @@ const searchConstructor: ObjectMethod = {
     const matches: SearchMatch[] = head.map((path, index) => ({ index, path }));
     const sw: SearchWindow = {
       id: generateWindowId("search"),
-      type: "search",
+      class: "search",
       parentWindowId: ROOT_WINDOW_ID,
       title: `glob ${pattern}`,
       status: "open",

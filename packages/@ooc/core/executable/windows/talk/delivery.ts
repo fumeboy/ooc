@@ -246,7 +246,7 @@ function resolveCalleeReplyToWindowId(
   callerObjectId: string,
 ): string {
   const windows = (calleeThread.contextWindows ?? []).filter(
-    (w): w is TalkWindow => w.type === "talk",
+    (w): w is TalkWindow => w.class === "talk",
   );
   const byThreadId = windows.find((w) => w.targetThreadId === callerThreadId);
   if (byThreadId) return byThreadId.id;

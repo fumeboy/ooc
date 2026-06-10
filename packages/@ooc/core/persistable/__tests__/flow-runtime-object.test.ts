@@ -17,7 +17,7 @@ describe("flow-runtime-object — ooc-6 P5'.1 flat runtime layout", () => {
   let ref: FlowObjectRef;
   const sampleWindow: ContextWindow = {
     id: "todo_run_xyz",
-    type: "todo",
+    class: "todo",
     title: "demo todo",
     status: "open",
     content: "demo todo body",

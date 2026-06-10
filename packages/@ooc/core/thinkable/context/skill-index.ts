@@ -45,7 +45,7 @@ export async function synthesizeSkillIndex(thread: ThreadContext): Promise<Skill
 
     const skillIndex: SkillIndexWindow = {
       id: SKILL_INDEX_WINDOW_ID,
-      type: "skill_index",
+      class: "skill_index",
       parentWindowId: ROOT_WINDOW_ID,
       title: `Skills (${merged.length})`,
       status: "active",

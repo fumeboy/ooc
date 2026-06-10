@@ -36,7 +36,7 @@ function fileWindowFixture() {
     extraWindows: [
       {
         id: "f1",
-        type: "file",
+        class: "file",
         parentWindowId: "root",
         title: "f",
         status: "open",
@@ -81,7 +81,7 @@ test("windowMethod failure (direct path) throws and leaves window state untouche
   ).rejects.toThrow("line_start");
   const after = mgr.get("f1") as any;
   expect(after.state.viewport).toBeUndefined();
-  const forms = mgr.list().filter((x: any) => x.type === "method_exec");
+  const forms = mgr.list().filter((x: any) => x.class === "method_exec");
   expect(forms.length).toBe(0);
 });
 

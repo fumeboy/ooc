@@ -99,7 +99,7 @@ function nodeAffix(node: ContextNode): { icon: LucideIcon; tone: Tone; status?: 
       return { icon: WINDOW_TYPE_ICON[node.data.windowType] ?? CircleDot, tone: "neutral" };
     case "window": {
       const w = node.data.window;
-      return { icon: WINDOW_TYPE_ICON[w.type] ?? CircleDot, tone: statusToTone(w.status), status: w.status };
+      return { icon: WINDOW_TYPE_ICON[w.class] ?? CircleDot, tone: statusToTone(w.status), status: w.status };
     }
     case "message":
       return { icon: Mail, tone: "neutral" };
@@ -144,7 +144,7 @@ function TreeNodeImpl({
   const isExpanded = expanded.has(node.id);
   const hasChildren = node.children.length > 0;
   const { icon: Icon, tone, status } = nodeAffix(node);
-  const isExecuting = node.data.kind === "window" && node.data.window.type === "method_exec" && node.data.window.status === "executing";
+  const isExecuting = node.data.kind === "window" && node.data.window.class === "method_exec" && node.data.window.status === "executing";
   const renderDepth = Math.max(0, node.depth - depthOffset);
 
   return (
@@ -393,22 +393,22 @@ function WindowDetail({
 }) {
   const rows: Array<[string, string]> = [
     ["id", window.id],
-    ["type", window.type],
+    ["type", window.class],
     ["title", window.title],
     ["status", String(window.status ?? "")],
   ];
-  if (window.type !== "root" && window.parentWindowId) {
+  if (window.class !== "root" && window.parentWindowId) {
     rows.push(["parent", window.parentWindowId]);
   }
   return (
     <div className="llm-input-detail-body">
       <div className="llm-input-detail-header">
         <div>
-          <div className="llm-input-detail-title">{window.type} window · {window.title}</div>
+          <div className="llm-input-detail-title">{window.class} window · {window.title}</div>
           <div className="llm-input-detail-meta">{window.id}</div>
         </div>
       </div>
-            <WindowCommandsChips type={window.type} />
+            <WindowCommandsChips type={window.class} />
       <div className="llm-input-attrs">
         {rows.map(([k, v]) => (
           <div key={k} className="llm-input-attr-row">
@@ -452,12 +452,12 @@ function WindowDetail({
             结果是"用户在 critic 视图发了消息,自己视图看不到,切回对端才看到"——非常误导。
             修复:严格只在 user.root 自己的 thread 视图里允许内联回复。
           */}
-          {window.type === "talk" && onUserReply && selfObjectId === "user" && (
+          {window.class === "talk" && onUserReply && selfObjectId === "user" && (
             <InlineTalkComposer onSend={onUserReply} />
           )}
         </div>
       )}
-      {window.type === "talk" && onUserReply && selfObjectId === "user" && (!transcript || transcript.length === 0) && (
+      {window.class === "talk" && onUserReply && selfObjectId === "user" && (!transcript || transcript.length === 0) && (
         <div className="llm-input-transcript">
           <InlineTalkComposer onSend={onUserReply} />
         </div>

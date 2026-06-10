@@ -353,7 +353,7 @@ const fileConstructor: ObjectMethod = {
         }
         const wtWindow: FileWindow = {
           id: generateWindowId("file"),
-          type: "file",
+          class: "file",
           parentWindowId: ROOT_WINDOW_ID,
           title: basenameOfPath(path),
           status: "open",
@@ -378,7 +378,7 @@ const fileConstructor: ObjectMethod = {
       }
       const fileWindow: FileWindow = {
         id: generateWindowId("file"),
-        type: "file",
+        class: "file",
         parentWindowId: ROOT_WINDOW_ID,
         title: basenameOfPath(path),
         status: "open",
@@ -417,7 +417,7 @@ const fileConstructor: ObjectMethod = {
     }
     const fileWindow: FileWindow = {
       id: generateWindowId("file"),
-      type: "file",
+      class: "file",
       parentWindowId: ROOT_WINDOW_ID,
       title: basenameOfPath(path),
       status: "open",

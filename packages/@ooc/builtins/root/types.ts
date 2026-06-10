@@ -6,6 +6,6 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
  * 不可被 LLM 显式 open / close。注册的 command 集合 = 今天 src/executable/commands 目录全集。
  */
 export interface RootWindow extends BaseContextWindow {
-  type: "root";
+  class: "root";
   status: "active";
 }

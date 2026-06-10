@@ -59,7 +59,7 @@ export class WindowPersistence {
     const tref = threadPersistRef(thread);
     if (!tref) return;
 
-    if (this.registry.isBuiltinFeatureType(window.type)) {
+    if (this.registry.isBuiltinFeatureType(window.class)) {
       await this.writeThreadContextSnapshot(thread).catch((e) => {
         console.warn(`[WindowPersistence] writeThreadContext failed for ${window.id}: ${(e as Error).message}`);
       });
@@ -69,7 +69,7 @@ export class WindowPersistence {
     const ref = runtimeObjectRef(thread, window);
     if (!ref) return;
     try {
-      await createFlowObject(ref, { class: window.type });
+      await createFlowObject(ref, { class: window.class });
     } catch (e) {
       console.warn(`[WindowPersistence] createFlowObject failed for ${window.id}: ${(e as Error).message}`);
     }
@@ -120,7 +120,7 @@ export class WindowPersistence {
   async unpersistWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
     if (!thread.persistence) return;
     if (window.id === ROOT_WINDOW_ID) return;
-    if (this.registry.isBuiltinFeatureType(window.type)) {
+    if (this.registry.isBuiltinFeatureType(window.class)) {
       await this.writeThreadContextSnapshot(thread).catch((e) => {
         console.warn(
           `[WindowPersistence] writeThreadContext failed during delete for ${window.id}: ${(e as Error).message}`,
@@ -163,7 +163,7 @@ export class WindowPersistence {
   reportStateEdit(ref: FlowObjectRef): Promise<void> {
     const window = this.windows.get(ref.objectId);
     if (!window) return Promise.resolve();
-    if (this.registry.isBuiltinFeatureType(window.type)) return Promise.resolve();
+    if (this.registry.isBuiltinFeatureType(window.class)) return Promise.resolve();
     return writeRuntimeObjectState(ref, window);
   }
 

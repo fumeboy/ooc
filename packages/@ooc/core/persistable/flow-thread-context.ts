@@ -39,7 +39,7 @@ import {
  */
 export type ThreadContextEntry =
   | ContextWindow
-  | { id: string; type: string; _ref: true; refObjectId: string };
+  | { id: string; class: string; _ref: true; refObjectId: string };
 
 /** Thread context 文件 schema —— `{objectDir}/threads/{threadId}/thread-context.json` 的内容。 */
 export interface ThreadContextFile {
@@ -72,14 +72,14 @@ export function buildThreadContextEntries(
   for (const window of windows) {
     if (window.id === ROOT_WINDOW_ID) continue;
     if (isNonPersistedWindow(window)) continue;
-    if (registry.isBuiltinFeatureType(window.type)) {
+    if (registry.isBuiltinFeatureType(window.class)) {
       // 内置特性整窗 inline 落盘（state 即 context）。BaseContextWindow → ThreadContextEntry
       // 的 inline 分支等价于 ContextWindow union 的结构基，cast 安全。
       entries.push(window as ContextWindow);
     } else {
       entries.push({
         id: window.id,
-        type: window.type,
+        class: window.class,
         _ref: true,
         refObjectId: window.id,
       });

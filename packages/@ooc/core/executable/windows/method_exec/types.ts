@@ -15,7 +15,7 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
  *   do_window 上的 continue 时 = 该 do_window 的 id）。
  */
 export interface MethodExecWindow extends BaseContextWindow {
-  type: "method_exec";
+  class: "method_exec";
   parentWindowId: string;
   method: string;
   description: string;

@@ -19,7 +19,7 @@ import {
 
 function findCreatorDoWindow(thread: ThreadContext): DoWindow {
   const found = thread.contextWindows.find(
-    (w): w is DoWindow => w.type === "do" && (w as DoWindow).isCreatorWindow === true,
+    (w): w is DoWindow => w.class === "do" && (w as DoWindow).isCreatorWindow === true,
   );
   if (!found) throw new Error("test setup: expected creator do_window");
   return found;
@@ -55,7 +55,7 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     const thread = makeThread();
     const fw: FileWindow = {
       id: generateWindowId("file"),
-      type: "file",
+      class: "file",
       parentWindowId: ROOT_WINDOW_ID,
       title: "README.md",
       status: "open",
@@ -73,7 +73,7 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     const thread = makeThread();
     const talk: TalkWindow = {
       id: generateWindowId("talk"),
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "assistant",
       status: "open",
@@ -113,7 +113,7 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     const thread = makeThread({ skipCreatorWindow: true });
     const talk: TalkWindow = {
       id: generateWindowId("talk"),
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "creator",
       status: "open",
@@ -133,7 +133,7 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     const thread = makeThread();
     const talk: TalkWindow = {
       id: generateWindowId("talk"),
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "assistant",
       status: "open",
@@ -163,7 +163,7 @@ describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
     const thread = makeThread();
     const archived: DoWindow = {
       id: generateWindowId("do"),
-      type: "do",
+      class: "do",
       parentWindowId: ROOT_WINDOW_ID,
       title: "child task",
       status: "archived",

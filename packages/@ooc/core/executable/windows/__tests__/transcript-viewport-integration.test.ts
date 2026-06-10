@@ -68,7 +68,7 @@ describe("talk_window: transcript viewport render", () => {
   it("short transcript (< 20) renders fully + viewport meta with total + tail (no earlier_omitted)", async () => {
     const talkWindow: TalkWindow = {
       id: "w_talk_1",
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "test",
       status: "open",
@@ -102,7 +102,7 @@ describe("talk_window: transcript viewport render", () => {
   it("long transcript (> 20) clips to last 20 + earlier_omitted attribute", async () => {
     const talkWindow: TalkWindow = {
       id: "w_talk_2",
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "test",
       status: "open",
@@ -139,7 +139,7 @@ describe("talk_window: transcript viewport render", () => {
   it("render uses DEFAULT_TRANSCRIPT_VIEWPORT when window has no transcriptViewport (legacy data)", async () => {
     const talkWindow: TalkWindow = {
       id: "w_talk_legacy",
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "test",
       status: "open",
@@ -167,7 +167,7 @@ describe("talk_window: transcript viewport render", () => {
   it("range mode renders [rangeStart, rangeEnd) and exposes range attributes", async () => {
     const talkWindow: TalkWindow = {
       id: "w_talk_range",
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "test",
       status: "open",
@@ -205,7 +205,7 @@ describe("do_window: transcript viewport render", () => {
   it("long transcript clips to last 20", async () => {
     const doWindow: DoWindow = {
       id: "w_do_1",
-      type: "do",
+      class: "do",
       parentWindowId: ROOT_WINDOW_ID,
       title: "test",
       status: "running",

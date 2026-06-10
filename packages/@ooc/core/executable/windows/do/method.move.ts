@@ -71,7 +71,7 @@ function resolvePeerThread(
 async function executeMove(ctx: MethodExecutionContext): Promise<string | undefined> {
   const self = ctx.thread;
   if (!self) return "[do_window.move] 缺少 thread context。";
-  // P6.§3: manager 在 dispatch 阶段已保证 self.type === "do"，method 体不再 re-check。
+  // P6.§3: manager 在 dispatch 阶段已保证 self.class === "do"，method 体不再 re-check。
   const doWindow = ctx.self as DoWindow;
   if (doWindow.status !== "running") {
     return `[do_window.move] do_window ${doWindow.id} 状态为 ${doWindow.status}（非 running），不能再分享 window。`;
@@ -103,8 +103,8 @@ async function executeMove(ctx: MethodExecutionContext): Promise<string | undefi
         : `已借出给 thread "${source.sharing.borrowerThreadId}"`;
     return `[do_window.move] window "${window_id}" 当前是 ${stateDesc}，不能再分享。`;
   }
-  if (source.id === doWindow.id || source.type === "do" || source.type === "method_exec" || source.type === "root") {
-    return `[do_window.move] window "${window_id}" 是 ${source.type} 类型，不允许分享（仅可分享数据 / 内容型 window）。`;
+  if (source.id === doWindow.id || source.class === "do" || source.class === "method_exec" || source.class === "root") {
+    return `[do_window.move] window "${window_id}" 是 ${source.class} 类型，不允许分享（仅可分享数据 / 内容型 window）。`;
   }
 
   const peerWindows = peer.contextWindows ?? (peer.contextWindows = []);

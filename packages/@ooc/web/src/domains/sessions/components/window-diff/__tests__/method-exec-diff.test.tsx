@@ -19,24 +19,24 @@ test("method_exec diff default-exports a component", () => {
 describe("CommandExecDiff", () => {
   it("Case 1: args 新增 key → added", () => {
     const tree = MethodExecDiff({
-      previous: { type: "method_exec", method: "search", accumulatedArgs: { q: "x" } },
-      current: { type: "method_exec", method: "search", accumulatedArgs: { q: "x", limit: 10 } },
+      previous: { class: "method_exec", method: "search", accumulatedArgs: { q: "x" } },
+      current: { class: "method_exec", method: "search", accumulatedArgs: { q: "x", limit: 10 } },
     });
     expect(countByStatus(tree, "added")).toBeGreaterThanOrEqual(1);
   });
 
   it("Case 2: args 改值 → changed", () => {
     const tree = MethodExecDiff({
-      previous: { type: "method_exec", method: "search", accumulatedArgs: { q: "x" } },
-      current: { type: "method_exec", method: "search", accumulatedArgs: { q: "y" } },
+      previous: { class: "method_exec", method: "search", accumulatedArgs: { q: "x" } },
+      current: { class: "method_exec", method: "search", accumulatedArgs: { q: "y" } },
     });
     expect(countByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });
 
   it("Case 3: status 变 → changed (Round 13 四态机: open → failed)", () => {
     const tree = MethodExecDiff({
-      previous: { type: "method_exec", method: "search", status: "open" },
-      current: { type: "method_exec", method: "search", status: "failed" },
+      previous: { class: "method_exec", method: "search", status: "open" },
+      current: { class: "method_exec", method: "search", status: "failed" },
     });
     expect(countByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });

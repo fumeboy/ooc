@@ -24,14 +24,14 @@ test("example constructor 构造窗口，bump 累加业务数据", async () => {
   const def = builtinRegistry.getObjectDefinition("example");
   const out = (await def.methods!.example!.exec({ args: { message: "hi\nthere" } } as any)) as {
     ok: true;
-    object: ExampleWindow;
+    window: ExampleWindow;
   };
   expect(out.ok).toBe(true);
-  expect(out.object.type).toBe("example");
-  expect(out.object.message).toBe("hi\nthere");
-  expect(out.object.bumpCount).toBe(0);
+  expect(out.window.class).toBe("example");
+  expect(out.window.message).toBe("hi\nthere");
+  expect(out.window.bumpCount).toBe(0);
 
-  const self = out.object;
+  const self = out.window;
   await def.methods!.bump!.exec({ args: {}, self } as any);
   expect(self.bumpCount).toBe(1);
 });
@@ -40,7 +40,7 @@ test("example readable 渲染 bump_count + viewport 切片后的 message", async
   const { readable } = await import("@ooc/builtins/example/readable.js");
   const nodes = readable({
     window: {
-      type: "example",
+      class: "example",
       message: "line0\nline1\nline2",
       bumpCount: 3,
       state: { viewport: { lineStart: 0, lineEnd: 1, columnStart: 0, columnEnd: 80 } },

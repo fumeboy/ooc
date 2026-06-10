@@ -24,14 +24,14 @@ export type ThreadMessage = {
 export type ContextWindow =
   | {
       id: string;
-      type: "root";
+      class: "root";
       title: string;
       status?: string;
       createdAt?: number;
     }
   | {
       id: string;
-      type: "method_exec";
+      class: "method_exec";
       parentWindowId: string;
       title: string;
       status: "open" | "executing" | "success" | "failed";
@@ -46,7 +46,7 @@ export type ContextWindow =
     }
   | {
       id: string;
-      type: "do";
+      class: "do";
       parentWindowId?: string;
       title: string;
       status: "running" | "archived";
@@ -56,7 +56,7 @@ export type ContextWindow =
     }
   | {
       id: string;
-      type: "todo";
+      class: "todo";
       parentWindowId?: string;
       title: string;
       status: "open" | "done";
@@ -66,7 +66,7 @@ export type ContextWindow =
     }
   | {
       id: string;
-      type: "talk";
+      class: "talk";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -79,7 +79,7 @@ export type ContextWindow =
     }
   | {
       id: string;
-      type: "program";
+      class: "program";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -97,7 +97,7 @@ export type ContextWindow =
     }
   | {
       id: string;
-      type: "file";
+      class: "file";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
@@ -108,7 +108,7 @@ export type ContextWindow =
     }
   | {
       id: string;
-      type: "knowledge";
+      class: "knowledge";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";

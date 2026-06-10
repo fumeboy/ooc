@@ -203,7 +203,7 @@ export function LoopDiffView({
     const entry = entryByIdMemo.get(expandedId);
     if (!entry) return;
     // file_window 走 fileDiff payload 路径 — 不需要 fetch
-    if (entry.type === "file") {
+    if (entry.class === "file") {
       const cur = entry.current;
       // 若有 fileDiff payload，直接渲染；否则 fallback 仍需 input 兜底（content 提取）
       if (cur?.fileDiff) return;
@@ -262,10 +262,10 @@ export function LoopDiffView({
   const renderDetail = (windowId: string) => {
     const entry = entryByIdMemo.get(windowId);
     if (!entry) return null;
-    const windowType = entry.type ?? "unknown";
+    const windowType = entry.class ?? "unknown";
 
     // file_window：entry.current 带后端附挂的 fileDiff，免 fetch 直传 WindowDiff（C-2）
-    if (entry.type === "file") {
+    if (entry.class === "file") {
       return (
         <DiffRendererErrorBoundary
           previous={entry.previous}

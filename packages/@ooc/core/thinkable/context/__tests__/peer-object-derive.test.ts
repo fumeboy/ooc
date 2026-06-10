@@ -46,7 +46,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     const thread = makePeerThread("agent_self", [
       {
         id: "w_talk_1",
-        type: "talk",
+        class: "talk",
         parentWindowId: "root",
         title: "talk to peer1",
         status: "open",
@@ -57,7 +57,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     ]);
     const result = await derivePeerObjectWindows(thread);
     expect(result.length).toBe(1);
-    expect(result[0]!.type).toBe("agent_peer1" as any);
+    expect(result[0]!.class).toBe("agent_peer1" as any);
     expect(result[0]!.id).toBe("agent_peer1");
   });
 
@@ -65,7 +65,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     const thread = makePeerThread("agent_self", [
       {
         id: "w_talk_1",
-        type: "talk",
+        class: "talk",
         parentWindowId: "root",
         title: "talk to super",
         status: "open",
@@ -101,7 +101,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     const thread = makePeerThread("agent_self", [
       {
         id: "w_talk_1",
-        type: "talk",
+        class: "talk",
         parentWindowId: "root",
         title: "talk to peer",
         status: "open",
@@ -121,7 +121,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     const thread = makePeerThread("agent_self", [
       {
         id: "w_talk_1",
-        type: "talk",
+        class: "talk",
         parentWindowId: "root",
         title: "talk to peer",
         status: "open",

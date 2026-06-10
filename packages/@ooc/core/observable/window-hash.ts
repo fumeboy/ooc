@@ -101,7 +101,7 @@ export function computeWindowContentHash(window: ContextWindow): string {
  */
 export type WindowSnapshotEntry = {
   id: string;
-  type: string;
+  class: string;
   contentHash: string;
   parentWindowId?: string;
   status?: string;
@@ -176,7 +176,7 @@ export async function buildWindowsSnapshot(
   for (const w of windows) {
     const entry: WindowSnapshotEntry = {
       id: w.id,
-      type: w.type,
+      class: w.class,
       contentHash: computeWindowContentHash(w),
     };
     if (w.parentWindowId) entry.parentWindowId = w.parentWindowId;
@@ -184,7 +184,7 @@ export async function buildWindowsSnapshot(
     if (w.compressLevel !== undefined && w.compressLevel !== 0) {
       entry.compressLevel = w.compressLevel;
     }
-    if (w.type === "file") {
+    if (w.class === "file") {
       entry.fileDiff = await computeFileDiff(w as FileWindow, previousSnapshot);
     }
     out.push(entry);

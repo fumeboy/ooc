@@ -167,7 +167,7 @@ describe("executeProgramMethod creates a program_window with first exec", () => 
     const outcome = result as { ok: true; window: ProgramWindow };
     expect(outcome.ok).toBe(true);
     const win = outcome.window;
-    expect(win.type).toBe("program");
+    expect(win.class).toBe("program");
     expect(win.history).toHaveLength(1);
     expect(win.history[0]?.output).toContain("hello");
     expect(win.history[0]?.ok).toBe(true);
@@ -180,7 +180,7 @@ describe("executeProgramMethod creates a program_window with first exec", () => 
     expect(typeof result).toBe("object");
     expect((result as { ok: false; error: string }).ok).toBe(false);
     expect((result as { ok: false; error: string }).error).toBeDefined();
-    expect(thread.contextWindows.find((w) => w.type === "program")).toBeUndefined();
+    expect(thread.contextWindows.find((w) => w.class === "program")).toBeUndefined();
   });
 });
 
@@ -189,7 +189,7 @@ describe("executeProgramWindowExec missing-args error path", () => {
     const thread = makeThread({ id: "t_pw_exec_no_args" });
     const programWindow: ProgramWindow = {
       id: "program_test",
-      type: "program",
+      class: "program",
       parentWindowId: "root",
       title: "test",
       status: "open",

@@ -19,8 +19,8 @@ test("do diff default-exports a component", () => {
 describe("DoWindowDiff", () => {
   it("Case 1: status 变化 (running → archived) → changed", () => {
     const tree = DoDiff({
-      previous: { type: "do", status: "running", targetThreadId: "t1" },
-      current: { type: "do", status: "archived", targetThreadId: "t1" },
+      previous: { class: "do", status: "running", targetThreadId: "t1" },
+      current: { class: "do", status: "archived", targetThreadId: "t1" },
     });
     expect(countByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });
@@ -28,15 +28,15 @@ describe("DoWindowDiff", () => {
   it("Case 2: previous undefined → added", () => {
     const tree = DoDiff({
       previous: undefined,
-      current: { type: "do", status: "running" },
+      current: { class: "do", status: "running" },
     });
     expect(countByStatus(tree, "added")).toBeGreaterThanOrEqual(1);
   });
 
   it("Case 3: 不变 → unchanged", () => {
     const tree = DoDiff({
-      previous: { type: "do", status: "running", targetThreadId: "t1" },
-      current: { type: "do", status: "running", targetThreadId: "t1" },
+      previous: { class: "do", status: "running", targetThreadId: "t1" },
+      current: { class: "do", status: "running", targetThreadId: "t1" },
     });
     expect(countByStatus(tree, "unchanged")).toBeGreaterThanOrEqual(1);
   });

@@ -22,7 +22,7 @@ test("file readable reads viewport from window.state", async () => {
   const { readable } = await import("@ooc/builtins/file/readable.js");
   const nodes = await readable({
     window: {
-      type: "file",
+      class: "file",
       path: "/etc/hostname",
       state: { viewport: { lineStart: 0, lineEnd: 1, columnStart: 0, columnEnd: 80 } },
     },
@@ -36,7 +36,7 @@ test("file readable back-compat reads legacy top-level viewport", async () => {
   const { readable } = await import("@ooc/builtins/file/readable.js");
   const nodes = await readable({
     window: {
-      type: "file",
+      class: "file",
       path: "/etc/hostname",
       viewport: { lineStart: 0, lineEnd: 7, columnStart: 0, columnEnd: 80 },
     },

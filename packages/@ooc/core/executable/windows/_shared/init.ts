@@ -125,7 +125,7 @@ export function initContextWindows(
   const creatorWindow: ContextWindow = sameObject
     ? ({
         id: creatorWindowId,
-        type: "do",
+        class: "do",
         parentWindowId: ROOT_WINDOW_ID,
         title: opts.initialTaskTitle,
         status: "running",
@@ -136,7 +136,7 @@ export function initContextWindows(
       } satisfies DoWindow)
     : ({
         id: creatorWindowId,
-        type: "talk",
+        class: "talk",
         parentWindowId: ROOT_WINDOW_ID,
         title: opts.initialTaskTitle,
         status: "open",
@@ -176,7 +176,7 @@ function injectSelfWindowIfObjectThread(thread: ThreadContext): void {
 
   const selfWindow: ContextWindow = {
     id,
-    type: objectId as any,
+    class: objectId as any,
     parentWindowId: ROOT_WINDOW_ID,
     title: objectId,
     status: "open",
@@ -238,7 +238,7 @@ export async function injectPeerWindowsIfObjectThread(thread: ThreadContext): Pr
     if (existingIds.has(peerId)) continue;
     newWindows.push({
       id: peerId,
-      type: peerId as any,
+      class: peerId as any,
       parentWindowId: ROOT_WINDOW_ID,
       title: `peer: ${peerId}`,
       status: "open",

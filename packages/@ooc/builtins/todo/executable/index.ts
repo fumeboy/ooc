@@ -52,7 +52,7 @@ const todoConstructor: ObjectMethod = {
       : undefined;
     const todoWindow: TodoWindow = {
       id: generateWindowId("todo"),
-      type: "todo",
+      class: "todo",
       parentWindowId: ROOT_WINDOW_ID,
       title: deriveTodoTitle(content),
       status: "open",

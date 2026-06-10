@@ -29,7 +29,7 @@ function makeMethodExecWindow(
 ): MethodExecWindow {
   return {
     id: "f_test",
-    type: "method_exec",
+    class: "method_exec",
     parentWindowId: "root",
     title: overrides.method,
     status: "open",
@@ -66,8 +66,8 @@ function systemContent(input: Awaited<ReturnType<typeof buildInputItems>>): stri
     .join("\n\n");
 }
 
-function paths(windows: { type: string; path?: string }[]): string[] {
-  return windows.filter((w) => w.type === "knowledge").map((w) => w.path ?? "");
+function paths(windows: { class: string; path?: string }[]): string[] {
+  return windows.filter((w) => w.class === "knowledge").map((w) => w.path ?? "");
 }
 
 describe("end-reflection-reminder thread-level integration", () => {

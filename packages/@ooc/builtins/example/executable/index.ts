@@ -44,7 +44,7 @@ const exampleConstructor: ObjectMethod = {
     const message = isString(ctx.args.message) ? ctx.args.message : "(empty)";
     const window: ExampleWindow = {
       id: generateWindowId("example"),
-      type: "example",
+      class: "example",
       parentWindowId: ROOT_WINDOW_ID,
       title: "example",
       status: "open",

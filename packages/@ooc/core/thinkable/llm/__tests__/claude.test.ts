@@ -12,7 +12,7 @@ describe("claude provider", () => {
               type: "tool_use",
               id: "toolu_1",
               name: "exec",
-              input: { title: "README", type: "file" }
+              input: { title: "README", class: "file" }
             }
           ]
         }),
@@ -44,7 +44,7 @@ describe("claude provider", () => {
       {
         id: "toolu_1",
         name: "exec",
-        arguments: { title: "README", type: "file" }
+        arguments: { title: "README", class: "file" }
       }
     ]);
     expect(result.outputItems).toEqual([
@@ -57,7 +57,7 @@ describe("claude provider", () => {
         type: "function_call",
         call_id: "toolu_1",
         name: "exec",
-        arguments: { title: "README", type: "file" }
+        arguments: { title: "README", class: "file" }
       }
     ]);
   });

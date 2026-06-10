@@ -16,8 +16,8 @@
  *      c) currentLoopIndex=0 时 needsPrevious 忽略 (没有前一 loop)
  *      d) previous fetcher reject → 不传染 current；result.current 仍可拿到
  *      e) current fetcher reject → rethrow，调用方能 setDetailsError
- *   2. file_window 短路逻辑 (renderDetail 内的 entry.type==='file' + fileDiff 分支)
- *      通过 grep-style 静态断言: LoopDiffView 源码含 `if (entry.type === "file")`
+ *   2. file_window 短路逻辑 (renderDetail 内的 entry.class==='file' + fileDiff 分支)
+ *      通过 grep-style 静态断言: LoopDiffView 源码含 `if (entry.class === "file")`
  *      + `if (cur?.fileDiff) return;` — 保证 file 路径不进 fetch effect。
  *
  * 不覆盖（受限于无 DOM / 无 RTL）：
@@ -170,7 +170,7 @@ describe("Round 14 H1 — file_window 短路保护 (静态源码断言)", () => 
     const path = new URL("../LoopDiffView.tsx", import.meta.url).pathname;
     const src = fs.readFileSync(path, "utf8");
     // 关键短路: file_window 有 fileDiff 时直接 return, 不进 fetchLoopInputsForDiff
-    expect(src).toContain('if (entry.type === "file")');
+    expect(src).toContain('if (entry.class === "file")');
     expect(src).toContain("if (cur?.fileDiff) return;");
     // 关键防回归: deps array 必须不含 detailsLoading (否则 self-cancel bug 重现)
     // 抓 effect 的 deps array 段

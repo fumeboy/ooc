@@ -34,10 +34,10 @@ describe("context-snapshot · plan window", () => {
       id: "thr_test",
       status: "running",
       contextWindows: [
-        { id: "root", type: "root", title: "root" },
+        { id: "root", class: "root", title: "root" },
         {
           id: "plan_1",
-          type: "plan",
+          class: "plan",
           title: "Implement feature X",
           description: "我们要做的事",
           status: "active",
@@ -68,7 +68,7 @@ describe("context-snapshot · plan window", () => {
     expect(node!.charCount).toBeGreaterThanOrEqual(expectedMin);
     // data 应保留完整 window，详情面板才能渲染各 step
     expect(node!.data.kind).toBe("window");
-    if (node!.data.kind === "window" && node!.data.window.type === "plan") {
+    if (node!.data.kind === "window" && node!.data.window.class === "plan") {
       expect(node!.data.window.steps).toHaveLength(5);
       expect(node!.data.window.steps[0]!.status).toBe("done");
       expect(node!.data.window.steps[1]!.status).toBe("in-progress");
@@ -83,10 +83,10 @@ describe("context-snapshot · plan window", () => {
     const snapshot: ContextSnapshot = {
       id: "thr_test",
       contextWindows: [
-        { id: "root", type: "root", title: "root" },
+        { id: "root", class: "root", title: "root" },
         {
           id: "plan_parent",
-          type: "plan",
+          class: "plan",
           title: "Parent plan",
           status: "active",
           steps: [
@@ -96,7 +96,7 @@ describe("context-snapshot · plan window", () => {
         },
         {
           id: "plan_child",
-          type: "plan",
+          class: "plan",
           title: "Child plan",
           status: "active",
           steps: [{ id: "c1", text: "Child step", status: "pending" }],
@@ -113,13 +113,13 @@ describe("context-snapshot · plan window", () => {
     expect(child).not.toBeNull();
 
     // 父 step.subPlanWindowId 必须保留：PlanWindowDetail 会用它渲染 [sub plan: <id>] 链接
-    if (parent!.data.kind === "window" && parent!.data.window.type === "plan") {
+    if (parent!.data.kind === "window" && parent!.data.window.class === "plan") {
       expect(parent!.data.window.steps[0]!.subPlanWindowId).toBe("plan_child");
     } else {
       throw new Error("expected plan parent window data");
     }
     // 子 plan parentPlanWindowId/parentStepId 必须保留供"Parent: <link>"渲染
-    if (child!.data.kind === "window" && child!.data.window.type === "plan") {
+    if (child!.data.kind === "window" && child!.data.window.class === "plan") {
       expect(child!.data.window.parentPlanWindowId).toBe("plan_parent");
       expect(child!.data.window.parentStepId).toBe("s1");
     } else {
@@ -131,10 +131,10 @@ describe("context-snapshot · plan window", () => {
     const snapshot: ContextSnapshot = {
       id: "thr_test",
       contextWindows: [
-        { id: "root", type: "root", title: "root" },
+        { id: "root", class: "root", title: "root" },
         {
           id: "plan_archived",
-          type: "plan",
+          class: "plan",
           title: "Old plan",
           status: "archived",
           steps: [],
@@ -149,7 +149,7 @@ describe("context-snapshot · plan window", () => {
     expect(node).not.toBeNull();
     expect(node!.badge).toBe("PLAN 0/0");
     expect(node!.summary).toBe("Old plan");
-    if (node!.data.kind === "window" && node!.data.window.type === "plan") {
+    if (node!.data.kind === "window" && node!.data.window.class === "plan") {
       expect(node!.data.window.status).toBe("archived");
       expect(node!.data.window.steps).toHaveLength(0);
     }

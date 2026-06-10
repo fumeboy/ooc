@@ -41,7 +41,7 @@ interface SessionThreadsIndexProps {
   selfObjectId?: string;
 }
 
-type TalkWindow = Extract<ContextWindow, { type: "talk" }>;
+type TalkWindow = Extract<ContextWindow, { class: "talk" }>;
 
 export function SessionThreadsIndex({
   sessionId,
@@ -112,7 +112,7 @@ export function SessionThreadsIndex({
 
   const talkWindows = useMemo(
     () =>
-      (thread?.contextWindows ?? []).filter((w): w is TalkWindow => w.type === "talk"),
+      (thread?.contextWindows ?? []).filter((w): w is TalkWindow => w.class === "talk"),
     [thread],
   );
 

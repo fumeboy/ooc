@@ -34,7 +34,7 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
     const creatorTalkId = generateWindowId("talk");
     const creatorTalk: TalkWindow = {
       id: creatorTalkId,
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "creator",
       status: "open",

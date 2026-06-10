@@ -73,7 +73,7 @@ export async function execRootMethod(
         } else if (ctx.thread) {
           ctx.thread.contextWindows = [...(ctx.thread.contextWindows ?? []), raw.window];
         }
-        return `Constructed ${raw.window.type} window ${raw.window.id}`;
+        return `Constructed ${raw.window.class} window ${raw.window.id}`;
       }
       return (raw as { ok: true; result?: string }).result;
     }

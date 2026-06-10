@@ -78,12 +78,12 @@ function compressPlanWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
  */
 function onClosePlanWindow(ctx: OnCloseContext): boolean | void {
   const w = ctx.window;
-  if (w.type !== "plan") return;
+  if (w.class !== "plan") return;
   // sub plan_window 是通过 parentPlanWindowId 软链关联（不是 parentWindowId）;
   // 所以 WindowManager 的 cascade close 不会自动追到它们 —— 这里显式把它们切到 archived。
   const all = ctx.thread.contextWindows ?? [];
   for (const c of all) {
-    if (c.type === "plan" && (c as PlanWindow).parentPlanWindowId === w.id) {
+    if (c.class === "plan" && (c as PlanWindow).parentPlanWindowId === w.id) {
       (c as PlanWindow).status = "archived";
     }
   }

@@ -35,8 +35,8 @@ describe.skipIf(!hasLlmEnv)("integration: plan-then-execute", () => {
 
     expect(root.status).toBe("done");
     // 2026-05-26: plan 升格为 plan_window
-    const planWindow = root.contextWindows.find((w) => w.type === "plan");
-    expect(planWindow?.type).toBe("plan");
+    const planWindow = root.contextWindows.find((w) => w.class === "plan");
+    expect(planWindow?.class).toBe("plan");
     expect(countFormExecutions(root)).toBeGreaterThanOrEqual(1);
   }, 180_000);
 });

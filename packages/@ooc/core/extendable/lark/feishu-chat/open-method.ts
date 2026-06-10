@@ -59,7 +59,7 @@ export async function executeOpenFeishuChat(
 
   const window: FeishuChatWindow = {
     id: generateWindowId("feishu_chat"),
-    type: "feishu_chat",
+    class: "feishu_chat",
     parentWindowId: ROOT_WINDOW_ID,
     title: chatName,
     status: "open",

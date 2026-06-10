@@ -25,7 +25,7 @@ export interface FeishuDocBlock {
 }
 
 export interface FeishuDocWindow extends BaseContextWindow {
-  type: "feishu_doc";
+  class: "feishu_doc";
   status: "open" | "closed";
   docToken: string;
   docKind: "doc" | "docx" | "sheet" | "base" | "wiki" | "drive_md";

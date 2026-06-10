@@ -40,7 +40,7 @@ async function exists(file: string): Promise<boolean> {
 function makePlan(id: string, title: string, content: string, createdAt: number): PlanWindow {
   return {
     id,
-    type: "plan",
+    class: "plan",
     parentWindowId: ROOT_WINDOW_ID,
     title,
     status: "active",
@@ -92,7 +92,7 @@ describe("WindowManager dual-write — flat runtime object + thread context regi
 
     // 1. 扁平 state.json 内容 = 整个 ContextWindow
     const stateRaw = await readFile(stateFile, "utf8");
-    expect(JSON.parse(stateRaw)).toMatchObject({ id: "plan_dual_1", type: "plan", title: "demo" });
+    expect(JSON.parse(stateRaw)).toMatchObject({ id: "plan_dual_1", class: "plan", title: "demo" });
 
     // 2. thread context.json 包含该 member
     const reg = await readContextRegistry(persistence);

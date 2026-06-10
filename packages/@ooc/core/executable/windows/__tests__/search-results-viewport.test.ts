@@ -43,7 +43,7 @@ function makeSearchWindow(opts: {
 }): SearchWindow {
   return {
     id: opts.id ?? "w_search_1",
-    type: "search",
+    class: "search",
     parentWindowId: ROOT_WINDOW_ID,
     title: "grep test",
     status: "open",
@@ -314,7 +314,7 @@ describe("open_match honors full matches array (not viewport-clipped)", () => {
     });
     expect(out).toBeUndefined();
     // file_window 已挂上
-    const fileWin = thread.contextWindows.find((w) => w.type === "file");
+    const fileWin = thread.contextWindows.find((w) => w.class === "file");
     expect(fileWin).toBeDefined();
   });
 });

@@ -15,7 +15,7 @@ import type { TranscriptViewport } from "../_shared/transcript-viewport.js";
  * - 视图：transcript 按 outbox.windowId === self.id || inbox.replyToWindowId === self.id 过滤
  */
 export interface TalkWindow extends BaseContextWindow {
-  type: "talk";
+  class: "talk";
   /** 目标 flow object id；"user" 也是一个 object。 */
   target: string;
   /** 对端 thread id；首条消息派送时由 talk-delivery 解析/创建并回填。 */

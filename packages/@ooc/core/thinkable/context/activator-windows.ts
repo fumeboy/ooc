@@ -39,7 +39,7 @@ export async function buildActivatorKnowledgeWindows(
 
   const explicitPaths = new Set(
     (thread.contextWindows ?? [])
-      .filter((w): w is KnowledgeWindow => w.type === "knowledge" && (w as KnowledgeWindow).source === "explicit")
+      .filter((w): w is KnowledgeWindow => w.class === "knowledge" && (w as KnowledgeWindow).source === "explicit")
       .map((w) => w.path),
   );
 
@@ -55,7 +55,7 @@ export async function buildActivatorKnowledgeWindows(
       const body = act.presentation === "full" ? truncateKnowledgeBody(act.doc.body) : "";
       out.push({
         id: nextSyntheticId(),
-        type: "knowledge",
+        class: "knowledge",
         parentWindowId: ROOT_WINDOW_ID,
         title: act.path,
         status: "open",

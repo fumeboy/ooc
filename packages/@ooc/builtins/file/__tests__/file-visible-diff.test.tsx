@@ -26,7 +26,7 @@ function makeFileDiff(opts?: {
   path?: string;
 }) {
   return {
-    type: "file",
+    class: "file",
     contentHash: "h_cur",
     fileDiff: {
       previousContent: opts?.previousContent ?? "old\nline\n",
@@ -65,8 +65,8 @@ describe("FileWindowDiff (builtins visible/diff)", () => {
 
   it("Case D: fileDiff 缺失但有 content fallback → synthetic mergeview", () => {
     const tree = FileWindowDiff({
-      previous: { type: "file", content: "old text", path: "src/x.ts" },
-      current: { type: "file", content: "new text", path: "src/x.ts" },
+      previous: { class: "file", content: "old text", path: "src/x.ts" },
+      current: { class: "file", content: "new text", path: "src/x.ts" },
     });
     expect(findTestId(tree, "file-window-diff")).toBe(true);
     expect(containsText(tree, "fallback content")).toBe(true);
@@ -74,8 +74,8 @@ describe("FileWindowDiff (builtins visible/diff)", () => {
 
   it("Case E: fileDiff 缺失且无 content → 软退化 Notice", () => {
     const tree = FileWindowDiff({
-      previous: { type: "file" }, // 无 content / fileDiff
-      current: { type: "file" },
+      previous: { class: "file" }, // 无 content / fileDiff
+      current: { class: "file" },
     });
     expect(containsText(tree, "not yet available")).toBe(true);
     // 不崩

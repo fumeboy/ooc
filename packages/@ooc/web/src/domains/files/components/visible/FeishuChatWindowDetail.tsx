@@ -7,7 +7,7 @@
 import React from "react";
 import type { ContextWindow } from "../../context-snapshot";
 
-type FeishuChatWindow = Extract<ContextWindow, { type: "feishu_chat" }>;
+type FeishuChatWindow = Extract<ContextWindow, { class: "feishu_chat" }>;
 
 export default function FeishuChatWindowDetail({ window }: { window: ContextWindow }) {
   const w = window as FeishuChatWindow;

@@ -150,7 +150,7 @@ const programConstructor: ObjectMethod = {
     const record = await runOneExec(thread, execArgs);
     const programWindow: ProgramWindow = {
       id: generateWindowId("program"),
-      type: "program",
+      class: "program",
       parentWindowId: ROOT_WINDOW_ID,
       title: deriveProgramTitle(execArgs),
       status: "open",

@@ -181,7 +181,7 @@ function extractMarkdownTitle(body: string): string | undefined {
 }
 
 async function executeRead(ctx: MethodExecutionContext): Promise<string | undefined> {
-  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  // P6.§3: manager 已保证 self.class === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const format = ctx.args.format === "blocks" ? "blocks" : "markdown";
 
@@ -259,7 +259,7 @@ function pickDocument(raw: unknown): FetchedDoc | undefined {
 }
 
 function executeSearchInDoc(ctx: MethodExecutionContext): string | undefined {
-  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  // P6.§3: manager 已保证 self.class === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const query = asString(ctx.args.query);
   if (!query) return "[feishu_doc.search_in_doc] 缺少 query。";
@@ -282,7 +282,7 @@ function executeSearchInDoc(ctx: MethodExecutionContext): string | undefined {
 }
 
 async function executeAppend(ctx: MethodExecutionContext): Promise<string | undefined> {
-  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  // P6.§3: manager 已保证 self.class === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const text = asString(ctx.args.text);
   if (!text) return "[feishu_doc.append] 缺少 text。";
@@ -315,7 +315,7 @@ async function executeAppend(ctx: MethodExecutionContext): Promise<string | unde
 }
 
 async function executePatchBlock(ctx: MethodExecutionContext): Promise<string | undefined> {
-  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  // P6.§3: manager 已保证 self.class === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const blockId = asString(ctx.args.block_id);
   const op = asString(ctx.args.op);
@@ -377,7 +377,7 @@ async function executePatchBlock(ctx: MethodExecutionContext): Promise<string | 
 }
 
 async function executeShareLink(ctx: MethodExecutionContext): Promise<string | undefined> {
-  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  // P6.§3: manager 已保证 self.class === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   // 租户 host 由 .world.json 的 LarkTenantHost 字段配置（默认 feishu.cn）。
   // 私有部署 / 公海版 / 国际版用户必须配，否则链接 404。
@@ -401,7 +401,7 @@ async function executeShareLink(ctx: MethodExecutionContext): Promise<string | u
 }
 
 async function executeAttachToChat(ctx: MethodExecutionContext): Promise<string | undefined> {
-  // P6.§3: manager 已保证 self.type === "feishu_doc"。
+  // P6.§3: manager 已保证 self.class === "feishu_doc"。
   const window = ctx.self as FeishuDocWindow;
   const chatId = asString(ctx.args.chat_id);
   if (!chatId) return "[feishu_doc.attach_to_chat] 缺少 chat_id。";

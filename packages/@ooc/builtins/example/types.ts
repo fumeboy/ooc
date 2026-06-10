@@ -11,7 +11,7 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
  * 与业务数据物理分离——与 file_window 同构。
  */
 export interface ExampleWindow extends BaseContextWindow {
-  type: "example";
+  class: "example";
   status: "open" | "closed";
   message: string;
   bumpCount: number;

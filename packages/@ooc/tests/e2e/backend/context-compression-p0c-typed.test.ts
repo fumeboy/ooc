@@ -106,7 +106,7 @@ describe("[p0c] file_window.compressView", () => {
       const fileWindowId = generateWindowId("file");
       const fileWindow: FileWindow = {
         id: fileWindowId,
-        type: "file",
+        class: "file",
         title: "sample.txt",
         status: "open",
         createdAt: Date.now(),
@@ -183,7 +183,7 @@ describe("[p0c] search_window.compressView", () => {
     }));
     const searchWindow: SearchWindow = {
       id: searchWindowId,
-      type: "search",
+      class: "search",
       title: "grep 'foo'",
       status: "open",
       createdAt: Date.now(),
@@ -257,7 +257,7 @@ describe("[p0c] do_window.compressView", () => {
     const doWindowId = generateWindowId("do");
     const doWindow: DoWindow = {
       id: doWindowId,
-      type: "do",
+      class: "do",
       title: "spawn helper",
       status: "running",
       createdAt: Date.now(),
@@ -345,7 +345,7 @@ describe("[p0c] talk_window.compressView", () => {
     const talkWindowId = generateWindowId("talk");
     const talkWindow: TalkWindow = {
       id: talkWindowId,
-      type: "talk",
+      class: "talk",
       title: "talk to peer_object",
       status: "open",
       createdAt: Date.now(),
@@ -421,7 +421,7 @@ describe("[p0c] talk_window.compressView", () => {
     const talkWindowId = generateWindowId("talk");
     const talkWindow: TalkWindow = {
       id: talkWindowId,
-      type: "talk",
+      class: "talk",
       title: "talk to peer_object",
       status: "open",
       createdAt: Date.now(),

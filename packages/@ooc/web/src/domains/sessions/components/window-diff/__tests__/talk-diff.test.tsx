@@ -23,13 +23,13 @@ describe("TalkWindowDiff", () => {
   it("Case 1: 新增 1 条消息 → 含 added", () => {
     const tree = TalkDiff({
       previous: {
-        type: "talk",
+        class: "talk",
         target: "alice",
         status: "open",
         transcript: [{ id: "m1", from: "a", content: "hi" }],
       },
       current: {
-        type: "talk",
+        class: "talk",
         target: "alice",
         status: "open",
         transcript: [
@@ -44,7 +44,7 @@ describe("TalkWindowDiff", () => {
   it("Case 2: 删 1 条消息 → 含 removed", () => {
     const tree = TalkDiff({
       previous: {
-        type: "talk",
+        class: "talk",
         target: "alice",
         transcript: [
           { id: "m1", content: "hi" },
@@ -52,7 +52,7 @@ describe("TalkWindowDiff", () => {
         ],
       },
       current: {
-        type: "talk",
+        class: "talk",
         target: "alice",
         transcript: [{ id: "m1", content: "hi" }],
       },
@@ -62,24 +62,24 @@ describe("TalkWindowDiff", () => {
 
   it("Case 3: 同 id 但 content 变 → 含 changed", () => {
     const tree = TalkDiff({
-      previous: { type: "talk", transcript: [{ id: "m1", content: "old" }] },
-      current: { type: "talk", transcript: [{ id: "m1", content: "new" }] },
+      previous: { class: "talk", transcript: [{ id: "m1", content: "old" }] },
+      current: { class: "talk", transcript: [{ id: "m1", content: "new" }] },
     });
     expect(findByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });
 
   it("Case 4: 完全不变 → unchanged 占主", () => {
     const tree = TalkDiff({
-      previous: { type: "talk", target: "alice", transcript: [{ id: "m1", content: "hi" }] },
-      current: { type: "talk", target: "alice", transcript: [{ id: "m1", content: "hi" }] },
+      previous: { class: "talk", target: "alice", transcript: [{ id: "m1", content: "hi" }] },
+      current: { class: "talk", target: "alice", transcript: [{ id: "m1", content: "hi" }] },
     });
     expect(findByStatus(tree, "unchanged")).toBeGreaterThanOrEqual(1);
   });
 
   it("Case 5: target 字段 changed → 含 changed", () => {
     const tree = TalkDiff({
-      previous: { type: "talk", target: "alice" },
-      current: { type: "talk", target: "bob" },
+      previous: { class: "talk", target: "alice" },
+      current: { class: "talk", target: "bob" },
     });
     expect(findByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });
@@ -87,7 +87,7 @@ describe("TalkWindowDiff", () => {
   it("Case 6: previous undefined → 不崩；含 added", () => {
     const tree = TalkDiff({
       previous: undefined,
-      current: { type: "talk", target: "alice", transcript: [{ id: "m1", content: "hi" }] },
+      current: { class: "talk", target: "alice", transcript: [{ id: "m1", content: "hi" }] },
     });
     expect(tree).toBeDefined();
     expect(findByStatus(tree, "added")).toBeGreaterThanOrEqual(1);

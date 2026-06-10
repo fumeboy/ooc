@@ -90,7 +90,7 @@ describe("persistable single object flow", () => {
     await writeThreadContext(persistence, [
       // @ts-expect-error - intentionally write legacy unregistered type inline
       { id: "w_issue_x", type: "issue", title: "old issue ref", status: "open" },
-      { id: "w_todo_x", type: "todo", title: "real todo", status: "open", content: "", createdAt: 1 },
+      { id: "w_todo_x", class: "todo", title: "real todo", status: "open", content: "", createdAt: 1 },
     ]);
 
     const restored = await readThread(ref, "legacy");

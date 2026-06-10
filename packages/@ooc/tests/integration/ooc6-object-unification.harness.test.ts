@@ -101,11 +101,11 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(thread.contextWindows.length).toBeGreaterThan(0);
     const selfWindow = thread.contextWindows.find((w) => w.id === "test_agent");
     expect(selfWindow).toBeDefined();
-    // ooc-6: window.id = objectId, window.type = objectId
-    expect(selfWindow!.type).toBe("test_agent" as any);
+    // ooc-6: window.id = objectId, window.class = objectId
+    expect(selfWindow!.class).toBe("test_agent" as any);
     expect(selfWindow!.id).toBe("test_agent");
 
-    const doWindow = thread.contextWindows.find((w) => w.type === "do") as DoWindow | undefined;
+    const doWindow = thread.contextWindows.find((w) => w.class === "do") as DoWindow | undefined;
     expect(doWindow).toBeDefined();
     expect(doWindow!.isCreatorWindow).toBe(true);
 
@@ -113,7 +113,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const todoId = mgr.insertTypedWindow({
       id: "w_todo_1",
-      type: "todo",
+      class: "todo",
       parentWindowId: "root",
       title: "Test Todo",
       status: "open",
@@ -126,12 +126,12 @@ describe("ooc-6 Object Unification harness cycle", () => {
 
     const todo = thread.contextWindows.find((w) => w.id === todoId) as TodoWindow | undefined;
     expect(todo).toBeDefined();
-    expect(todo!.type).toBe("todo");
+    expect(todo!.class).toBe("todo");
     expect(todo!.content).toBe("Complete the harness test");
 
     // ContextWindow union is equivalent to ContextObject
     const asObject: any = todo;
-    expect(asObject.type).toBe("todo");
+    expect(asObject.class).toBe("todo");
   });
 
   // ── Point 1: Builtin objects in src/extendable/base/ ─────────────────────
@@ -171,7 +171,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     mgr.insertTypedWindow({
       id: "readable_test",
-      type: "readable_test" as any,
+      class: "readable_test" as any,
       parentWindowId: "root",
       title: "Readable Test",
       status: "open",
@@ -233,7 +233,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     mgr.insertTypedWindow({
       id: "w_knowledge_test",
-      type: "knowledge",
+      class: "knowledge",
       parentWindowId: "root",
       title: "Test Knowledge",
       status: "open",
@@ -251,7 +251,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
       (w) => w.id === "w_knowledge_test",
     ) as KnowledgeWindow | undefined;
     expect(knowledge).toBeDefined();
-    expect(knowledge!.type).toBe("knowledge");
+    expect(knowledge!.class).toBe("knowledge");
     expect(knowledge!.path).toBe("test/knowledge");
   });
 
@@ -267,7 +267,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const windowId = mgr.insertTypedWindow({
       id: "w_knowledge_persist",
-      type: "knowledge",
+      class: "knowledge",
       parentWindowId: "root",
       title: "Persist Test Knowledge",
       status: "open",
@@ -298,7 +298,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
       objectId: windowId,
     });
     expect(flat).toBeDefined();
-    expect(flat!.type).toBe("knowledge");
+    expect(flat!.class).toBe("knowledge");
     expect((flat as any).path).toBe("test/persist");
     expect(flat!.title).toBe("Persist Test Knowledge");
 
@@ -366,7 +366,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(peerWindows.length).toBeGreaterThan(0);
     const peer = peerWindows.find((w) => w.id === peerId);
     expect(peer).toBeDefined();
-    expect(peer!.type).toBe(peerId as any);
+    expect(peer!.class).toBe(peerId as any);
     expect(peer!.title).toBe("Peer Agent"); // from readme title
 
   });
@@ -406,7 +406,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
       extraWindows: [
         {
           id: "w_todo_1",
-          type: "todo",
+          class: "todo",
           parentWindowId: "root",
           title: "Test Todo",
           status: "open",
@@ -415,7 +415,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
         } as ContextWindow,
         {
           id: "agent_alice",
-          type: "agent_alice" as any,
+          class: "agent_alice" as any,
           parentWindowId: "root",
           title: "Custom Agent",
           status: "open",
@@ -446,7 +446,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
       extraWindows: [
         {
           id: "w_todo_1",
-          type: "todo",
+          class: "todo",
           parentWindowId: "root",
           title: "Test Todo",
           status: "open",

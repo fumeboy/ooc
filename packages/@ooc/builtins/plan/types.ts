@@ -32,7 +32,7 @@ export interface PlanWindowStep {
 }
 
 export interface PlanWindow extends BaseContextWindow {
-  type: "plan";
+  class: "plan";
   /** plan_window status: active=进行中；done=已完成；archived=已归档（cascade close 子时也会被切到 archived）。 */
   status: "active" | "done" | "archived";
   /** plan 主题（已在 BaseContextWindow.title 体现；plan_window 内仅复用 base.title）。 */

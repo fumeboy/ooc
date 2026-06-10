@@ -34,14 +34,14 @@ import type { ThreadContext } from "@ooc/core/thinkable/context";
 // ─────────────────────────── helpers ──────────────────────────────────────────
 
 function findPlanWindow(thread: ThreadContext): PlanWindow {
-  const w = (thread.contextWindows ?? []).find((x) => x.type === "plan");
-  if (!w || w.type !== "plan") throw new Error("expected plan_window in thread");
+  const w = (thread.contextWindows ?? []).find((x) => x.class === "plan");
+  if (!w || w.class !== "plan") throw new Error("expected plan_window in thread");
   return w as PlanWindow;
 }
 
 function findPlanWindowById(thread: ThreadContext, id: string): PlanWindow | undefined {
   const w = (thread.contextWindows ?? []).find((x) => x.id === id);
-  return w && w.type === "plan" ? (w as PlanWindow) : undefined;
+  return w && w.class === "plan" ? (w as PlanWindow) : undefined;
 }
 
 /** 模拟 manager.openMethodExec 流程的极简化：直接调 entry.exec，并模拟 manager 状态。 */
@@ -86,7 +86,7 @@ describe("[B4] plan_window — basic闭环", () => {
       thread,
       args: { title: "Refactored Plan", description: "go!" },
     });
-    const plans = thread.contextWindows.filter((w) => w.type === "plan");
+    const plans = thread.contextWindows.filter((w) => w.class === "plan");
     expect(plans).toHaveLength(2);
     const secondPlan = plans.find((p) => (p as PlanWindow).title === "Refactored Plan") as PlanWindow;
     expect(secondPlan).toBeDefined();
@@ -221,7 +221,7 @@ describe("[B4] plan_window — basic闭环", () => {
     const childPlan = (child.contextWindows ?? []).find((w) => w.id === plan.id);
     expect(childPlan).toBeDefined();
     expect(childPlan?.sharing).toBeUndefined();
-    expect(childPlan?.type).toBe("plan");
+    expect(childPlan?.class).toBe("plan");
   });
 });
 

@@ -8,7 +8,7 @@
  *   （各自调用 WindowVisible），无 type 则 JSON 兜底。
  *
  * 解析顺序（MVP 四档，含档 2 user 自有 diff.tsx）：
- *  1. type 来自 current?.type ?? previous?.type；无 → json。
+ *  1. type 来自 current?.class ?? previous?.class；无 → json。
  *  2. BUILTIN_DIFF[type] 命中 → static。
  *  3. 否则（user-defined type）→ dynamic-diff（objectId=type）：
  *     a. 尝试动态加载 visible/diff.tsx（clientSourceUrl ?file=diff）。
@@ -40,8 +40,8 @@ export type WindowDiffKind =
  */
 export function resolveWindowDiffKind(props: WindowDiffProps): WindowDiffKind {
   const type =
-    (props.current as { type?: string } | undefined)?.type ??
-    (props.previous as { type?: string } | undefined)?.type;
+    (props.current as { class?: string } | undefined)?.class ??
+    (props.previous as { class?: string } | undefined)?.class;
   if (!type) return { kind: "json" };
   if (BUILTIN_DIFF[type]) return { kind: "static", key: type };
   return { kind: "dynamic-diff", objectId: type };
@@ -196,8 +196,8 @@ export function WindowDiff({
 
   // json 档：显式传全 4 个必需 prop
   const type =
-    (current as { type?: string } | undefined)?.type ??
-    (previous as { type?: string } | undefined)?.type ??
+    (current as { class?: string } | undefined)?.class ??
+    (previous as { class?: string } | undefined)?.class ??
     "unknown";
   const id =
     (current as { id?: string } | undefined)?.id ??

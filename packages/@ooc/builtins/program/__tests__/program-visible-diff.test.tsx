@@ -18,9 +18,9 @@ test("program visible/diff default-exports a component", () => {
 describe("ProgramWindowDiff", () => {
   it("Case 1: 新增 exec → added", () => {
     const tree = ProgramDiff({
-      previous: { type: "program", history: [{ execId: "e1", code: "ls", output: "ok", ok: true }] },
+      previous: { class: "program", history: [{ execId: "e1", code: "ls", output: "ok", ok: true }] },
       current: {
-        type: "program",
+        class: "program",
         history: [
           { execId: "e1", code: "ls", output: "ok", ok: true },
           { execId: "e2", code: "pwd", output: "/x", ok: true },
@@ -33,8 +33,8 @@ describe("ProgramWindowDiff", () => {
   it("Case 2: 不变 → unchanged", () => {
     const h = [{ execId: "e1", code: "ls", output: "ok", ok: true }];
     const tree = ProgramDiff({
-      previous: { type: "program", history: h },
-      current: { type: "program", history: h },
+      previous: { class: "program", history: h },
+      current: { class: "program", history: h },
     });
     expect(countByStatus(tree, "unchanged")).toBeGreaterThanOrEqual(1);
   });

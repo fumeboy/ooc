@@ -59,7 +59,7 @@ function mkWindow(
 ): ContextWindow {
   const now = Date.now();
   return {
-    type: "knowledge",
+    class: "knowledge",
     parentWindowId: "root",
     status: "open",
     createdAt: now,
@@ -198,7 +198,7 @@ describe("BudgetManager.allocate", () => {
   it("form-bound window (boundFormId) inherits the form's relevance score", () => {
     const form = mkWindow({
       id: "form_1",
-      type: "method_exec",
+      class: "method_exec",
       title: "my form",
       parentWindowId: "root",
       status: "open",
@@ -213,7 +213,7 @@ describe("BudgetManager.allocate", () => {
     // form-bound knowledge window：自身分低但 boundFormId 指向 form（如 intent 触发的知识窗）
     const bound = mkWindow({
       id: "kn_1",
-      type: "knowledge",
+      class: "knowledge",
       title: "form-bound knowledge",
       parentWindowId: "form_1",
       status: "open",

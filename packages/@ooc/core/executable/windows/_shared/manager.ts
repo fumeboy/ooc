@@ -211,7 +211,7 @@ export class WindowManager {
       : this.registry.lookupWindowMethod(parent, opts.method);
     if (!objectEntry && !windowEntry) {
       throw new Error(
-        `openMethodExec: method "${opts.method}" not registered on window "${parent.type}" (id=${parent.id})`,
+        `openMethodExec: method "${opts.method}" not registered on window "${parent.class}" (id=${parent.id})`,
       );
     }
     const entry = (objectEntry ?? windowEntry) as ObjectMethod;
@@ -229,7 +229,7 @@ export class WindowManager {
 
     const form: MethodExecWindow = {
       id: formId,
-      type: "method_exec",
+      class: "method_exec",
       parentWindowId: parentId,
       title: opts.title,
       status: "open",
@@ -283,7 +283,7 @@ export class WindowManager {
     args: Record<string, unknown>,
     windowEntry?: import("../../../_shared/types/window-method.js").WindowMethod,
   ): Promise<string | undefined> {
-    const ownerFlowObjectRef = this.registry.isBuiltinFeatureType(parent.type)
+    const ownerFlowObjectRef = this.registry.isBuiltinFeatureType(parent.class)
       ? undefined
       : runtimeObjectRef(thread, parent);
     const ownerThreadRef = threadPersistRef(thread);
@@ -321,7 +321,7 @@ export class WindowManager {
           if (raw.window) {
             const win = raw.window as ContextWindow;
             this.insertTypedWindow(win, thread);
-            result = `Constructed ${win.type} window ${win.id}`;
+            result = `Constructed ${win.class} window ${win.id}`;
           } else {
             result = raw.result;
           }
@@ -370,7 +370,7 @@ export class WindowManager {
    */
   async refine(formId: string, args: Record<string, unknown>): Promise<boolean> {
     const form = this.windows.get(formId);
-    if (!form || form.type !== "method_exec") return false;
+    if (!form || form.class !== "method_exec") return false;
     if (form.status !== "open" && form.status !== "failed") return false;
     const parent = this.requireParent(form.parentWindowId);
     const entry = this.lookupMethodEntry(parent, form.method);
@@ -445,7 +445,7 @@ export class WindowManager {
    */
   async submit(formId: string, thread: ThreadContext): Promise<string | undefined> {
     const form = this.windows.get(formId);
-    if (!form || form.type !== "method_exec") {
+    if (!form || form.class !== "method_exec") {
       throw new Error(`submit: form "${formId}" not found or not a method_exec window`);
     }
     if (form.status !== "open") {
@@ -459,7 +459,7 @@ export class WindowManager {
       : this.registry.lookupWindowMethod(parent, form.method);
     if (!resolved && !windowEntry) {
       throw new Error(
-        `submit: method "${form.method}" not registered on parent window type "${parent.type}"`,
+        `submit: method "${form.method}" not registered on parent window type "${parent.class}"`,
       );
     }
     const entry = (resolved?.entry ?? windowEntry) as ObjectMethod;
@@ -478,7 +478,7 @@ export class WindowManager {
     let result: string | undefined;
     let isError = false;
     try {
-      const ownerFlowObjectRef = this.registry.isBuiltinFeatureType(parent.type)
+      const ownerFlowObjectRef = this.registry.isBuiltinFeatureType(parent.class)
         ? undefined
         : runtimeObjectRef(thread, parent);
       const ownerThreadRef = threadPersistRef(thread);
@@ -519,7 +519,7 @@ export class WindowManager {
               // Constructor outcome: mount the returned window.
               const win = raw.window as ContextWindow;
               this.insertTypedWindow(win, thread);
-              result = `Constructed ${win.type} window ${win.id}`;
+              result = `Constructed ${win.class} window ${win.id}`;
             } else {
               result = raw.result;
             }
@@ -572,7 +572,7 @@ export class WindowManager {
     const window = this.windows.get(windowId);
     if (!window) return false;
 
-    const def = this.registry.getObjectDefinition(window.type);
+    const def = this.registry.getObjectDefinition(window.class);
     if (def.onClose) {
       const allowed = def.onClose({ thread, window });
       if (allowed === false) return false;
@@ -590,7 +590,7 @@ export class WindowManager {
   /** 仅供 method 实现使用：把 form 的 result 字段写入并保留 failed 状态。 */
   setResultFailed(formId: string, result: string): void {
     const form = this.windows.get(formId);
-    if (!form || form.type !== "method_exec") return;
+    if (!form || form.class !== "method_exec") return;
     this.windows.set(formId, { ...form, status: "failed", result });
   }
 
@@ -602,7 +602,7 @@ export class WindowManager {
       if (rootInTable) return rootInTable;
       return {
         id: ROOT_WINDOW_ID,
-        type: "root",
+        class: "root",
         title: "root",
         status: "active",
         createdAt: 0,
@@ -677,7 +677,7 @@ function isLegacyErrorResult(result: string): boolean {
 
 /** 把 window 关联的所有 knowledge path 抽出来，用于引用计数。 */
 function collectKnowledgePathsOf(window: ContextWindow): string[] {
-  if (window.type === "method_exec") {
+  if (window.class === "method_exec") {
     return [
       ...(window.methodKnowledgePaths ?? []),
       ...(window.loadedKnowledgePaths ?? []),

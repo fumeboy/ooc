@@ -80,7 +80,7 @@ const knowledgeConstructor: ObjectMethod = {
 
     const knowledgeWindow: KnowledgeWindow = {
       id: generateWindowId("knowledge"),
-      type: "knowledge",
+      class: "knowledge",
       parentWindowId: ROOT_WINDOW_ID,
       title: basenameOfPath(path),
       status: "open",

@@ -80,7 +80,7 @@ export interface ContextWindowRelevance {
  */
 export interface BaseContextWindow {
   id: string;
-  type: string;
+  class: string;
   parentWindowId?: string;
   title: string;
   status: WindowStatus;

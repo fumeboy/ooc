@@ -25,12 +25,12 @@ export interface FlowObjectMetadata {
   /**
    * P6.§7 (2026-06-02): 实例所属的 Class（也是一个 string id；必须在 object registry 注册过）。
    *
-   * Class 是方法继承链的载体——method 解析按「实例 self.type → class definition.methods →
+   * Class 是方法继承链的载体——method 解析按「实例 self.class → class definition.methods →
    * parentClass.methods → … → root.methods」沿父类链向上回退。`registerObjectType` 与
    * `resolveMethod` 共同在 `_shared/registry.ts` 实装该机制。
    *
-   * 缺省（旧 .flow.json 没有该字段）→ 兼容读取，方法解析仍通过 self.type 直接走
-   * registry，等价于 class === self.type。新写入路径在创建 flow object 时会显式带上 class。
+   * 缺省（旧 .flow.json 没有该字段）→ 兼容读取，方法解析仍通过 self.class 直接走
+   * registry，等价于 class === self.class。新写入路径在创建 flow object 时会显式带上 class。
    */
   class?: string;
 }

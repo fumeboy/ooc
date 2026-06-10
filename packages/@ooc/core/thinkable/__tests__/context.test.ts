@@ -16,7 +16,7 @@ import { makeThread } from "../../__tests__/make-thread";
 function execForm(overrides: Partial<MethodExecWindow>): MethodExecWindow {
   return {
     id: overrides.id ?? "f_x",
-    type: "method_exec",
+    class: "method_exec",
     parentWindowId: ROOT_WINDOW_ID,
     title: overrides.title ?? "form",
     status: overrides.status ?? "open",
@@ -150,7 +150,7 @@ describe("buildContext (ContextWindow model)", () => {
         // 普通 do_window(非 creator)同样指向 t_creator
         {
           id: "w_do_other",
-          type: "do",
+          class: "do",
           parentWindowId: ROOT_WINDOW_ID,
           title: "non-creator",
           status: "running",
@@ -160,7 +160,7 @@ describe("buildContext (ContextWindow model)", () => {
         // creator do_window 应被优先选中
         {
           id: "w_do_creator",
-          type: "do",
+          class: "do",
           parentWindowId: ROOT_WINDOW_ID,
           title: "creator",
           status: "running",
@@ -265,7 +265,7 @@ describe("buildContext (ContextWindow model)", () => {
     const planId = `${thread.id}_plan`;
     thread.contextWindows.push({
       id: planId,
-      type: "plan",
+      class: "plan",
       title: "Plan",
       status: "active",
       createdAt: 0,
@@ -296,7 +296,7 @@ describe("buildContext (ContextWindow model)", () => {
     const thread: ThreadContext = makeThread({ id: "t_peer" });
     thread.contextWindows.push({
       id: "w_peer_expert",
-      type: "expert", // 未注册的 peer stone 类型
+      class: "expert", // 未注册的 peer stone 类型
       title: "expert (peer)",
       status: "open",
       createdAt: 0,
@@ -343,7 +343,7 @@ describe("buildContext (ContextWindow model)", () => {
       extraWindows: [
         {
           id: "w_todo_1",
-          type: "todo",
+          class: "todo",
           parentWindowId: ROOT_WINDOW_ID,
           title: "记一笔",
           status: "open",
@@ -385,7 +385,7 @@ describe("buildContext (ContextWindow model)", () => {
       extraWindows: [
         {
           id: "w_do_child",
-          type: "do",
+          class: "do",
           parentWindowId: ROOT_WINDOW_ID,
           title: "对子线程",
           status: "running",

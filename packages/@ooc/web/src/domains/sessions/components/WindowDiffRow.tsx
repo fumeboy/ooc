@@ -71,7 +71,7 @@ export function WindowDiffRow({
         <span className="window-diff-row-status-icon" aria-hidden>
           {status.icon}
         </span>
-        <span className="window-diff-row-type">{entry.type}</span>
+        <span className="window-diff-row-type">{entry.class}</span>
         <code className="window-diff-row-id">{entry.id}</code>
         {summary && (
           <span className="window-diff-row-summary muted small">{summary}</span>

@@ -82,7 +82,7 @@ test("F3 grep → search_window 出现在 ContextSnapshotViewer", async ({ page,
   // 改用 thread state 而非 .cw-row UI selector，避免 ContextSnapshotViewer 节点 label 文本漂移。
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const searchWindowCount = ((calleeThread?.contextWindows ?? []) as any[]).filter(
-    (w) => w?.type === "search",
+    (w) => w?.class === "search",
   ).length;
 
   // assistant 文本中是否含正确数字

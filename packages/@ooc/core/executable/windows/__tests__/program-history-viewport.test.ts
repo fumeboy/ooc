@@ -50,7 +50,7 @@ function makeProgramWindow(opts: {
 }): ProgramWindow {
   return {
     id: opts.id ?? "w_prog_1",
-    type: "program",
+    class: "program",
     parentWindowId: ROOT_WINDOW_ID,
     title: "prog test",
     status: "open",
@@ -345,7 +345,7 @@ describe("root.program creates program_window with DEFAULT_HISTORY_VIEWPORT", ()
     expect(typeof out).toBe("object");
     const outcome = out as { ok: true; window: ProgramWindow };
     expect(outcome.ok).toBe(true);
-    expect(outcome.window.type).toBe("program");
+    expect(outcome.window.class).toBe("program");
     expect(outcome.window.state?.historyViewport).toEqual({ tail: 10 });
   });
 });

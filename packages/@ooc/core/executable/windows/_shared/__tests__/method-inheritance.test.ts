@@ -79,10 +79,10 @@ describe("resolveMethod + parentClass chain (P6.§7)", () => {
     expect(inherited?.description).toBeTruthy();
   });
 
-  test("lookupMethod (parent.type API) walks chain identically", () => {
+  test("lookupMethod (parent.class API) walks chain identically", () => {
     const t = `__test_via_window_${Date.now()}`;
     builtinRegistry.registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
-    const found = builtinRegistry.lookupMethod({ type: t as never }, "talk");
+    const found = builtinRegistry.lookupMethod({ class: t as never }, "talk");
     expect(found).toBeDefined();
     expect(found?.description).toBeTruthy();
   });

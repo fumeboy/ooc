@@ -160,7 +160,7 @@ function compressDoWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
 }
 
 function onCloseDoWindow(ctx: OnCloseContext): boolean | void {
-  if (ctx.window.type !== "do") return;
+  if (ctx.window.class !== "do") return;
   // batch C narrowing(N1): ctx.window 契约层是 base ContextWindow；type==="do" 守卫后
   // narrow 回 DoWindow 以读 isCreatorWindow 并传给 archiveDoWindowChild。
   const window = ctx.window as DoWindow;
@@ -216,7 +216,7 @@ function buildChildInitialWindows(
 ): DoWindow[] {
   const creatorWindow: DoWindow = {
     id: creatorWindowIdOf(childId),
-    type: "do",
+    class: "do",
     parentWindowId: ROOT_WINDOW_ID,
     title: initialTitle,
     status: "running",
@@ -267,8 +267,8 @@ function applyInitialShare(
   if (source.sharing) {
     return `window "${entry.window_id}" 已是 sharing 状态，不能再分享`;
   }
-  if (source.type === "do" || source.type === "method_exec" || source.type === "root") {
-    return `window "${entry.window_id}" 是 ${source.type} 类型，不允许分享`;
+  if (source.class === "do" || source.class === "method_exec" || source.class === "root") {
+    return `window "${entry.window_id}" 是 ${source.class} 类型，不允许分享`;
   }
 
   const childWindows = child.contextWindows ?? (child.contextWindows = []);
@@ -410,7 +410,7 @@ const doConstructor: ObjectMethod = {
     // 4) build do_window —— 不在此处 insert,manager.submit §2 分支统一走 insertTypedWindow
     const doWindow: DoWindow = {
       id: generateWindowId("do"),
-      type: "do",
+      class: "do",
       parentWindowId: ROOT_WINDOW_ID,
       title: initialTitle,
       status: "running",

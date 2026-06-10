@@ -6,8 +6,8 @@
  * （client-source-url → /@fs dynamic import）。无 per-type switch、无 HANDLED_WINDOW_TYPES。
  *
  * 解析顺序（Review 修订，M3：object 自己的 visible 优先于继承的 builtin）：
- *  1. BUILTIN_VISIBLE[window.type]（**原始 type 直命中**，不经 effectiveVisibleType）→ 静态 builtin。
- *  2. 否则（user-defined type）→ dynamic：加载该 object 自己的 stone visible（objectId=window.type）。
+ *  1. BUILTIN_VISIBLE[window.class]（**原始 type 直命中**，不经 effectiveVisibleType）→ 静态 builtin。
+ *  2. 否则（user-defined type）→ dynamic：加载该 object 自己的 stone visible（objectId=window.class）。
  *  3. dynamic notFound（该 object 没写 visible）→ fallback BUILTIN_VISIBLE[effectiveVisibleType]（继承链）。
  *  4. 仍无 → JSON 兜底。
  *
@@ -39,7 +39,7 @@ export type WindowVisibleKind =
 /**
  * 纯函数：决定一个 window 的初步渲染策略（静态 / 动态 / JSON）。
  *
- * 用**原始 window.type** 直命中 builtin（不是 effectiveVisibleType），否则继承会抢在 object
+ * 用**原始 window.class** 直命中 builtin（不是 effectiveVisibleType），否则继承会抢在 object
  * 自己的 visible 前面（M3）。user-defined type 一律走 dynamic（objectId=type, scope=stone）；
  * 动态加载内部 notFound 时再回退 effectiveVisibleType builtin / JSON。
  */
@@ -47,8 +47,8 @@ export function resolveWindowVisibleKind(
   window: ContextWindow,
   sessionId: string | undefined,
 ): WindowVisibleKind {
-  if (BUILTIN_VISIBLE[window.type]) return { kind: "static", key: window.type };
-  return { kind: "dynamic", objectId: window.type, scope: "stone", sessionId };
+  if (BUILTIN_VISIBLE[window.class]) return { kind: "static", key: window.class };
+  return { kind: "dynamic", objectId: window.class, scope: "stone", sessionId };
 }
 
 type WindowComp = ComponentType<{ window: ContextWindow }>;
@@ -58,7 +58,7 @@ const dynamicCache = new Map<string, WindowComp>();
 /**
  * 无 visible 时的回退：展示该 object/window 的 **readable 文本**（对外呈现文本，
  * 即该 object 的 readme，经 `/api/stones/<id>/readme` 取）。window 所属 object 的 id
- * = `window.type`（与 resolveWindowVisibleKind 的 dynamic objectId 同源）。
+ * = `window.class`（与 resolveWindowVisibleKind 的 dynamic objectId 同源）。
  *
  * - readable 文本存在 → markdown 渲染。
  * - 加载中 → 占位提示。
@@ -66,14 +66,14 @@ const dynamicCache = new Map<string, WindowComp>();
  */
 function makeReadableFallback(jsonFallback: WindowComp): WindowComp {
   return function ReadableFallback({ window }: { window: ContextWindow }) {
-    const { text, isLoading } = usePeerReadme(window.type);
+    const { text, isLoading } = usePeerReadme(window.class);
     if (text && text.trim().length > 0) {
       return (
         <div className="llm-input-detail-body">
           <div className="llm-input-detail-header">
             <div>
               <div className="llm-input-detail-title">{window.title}</div>
-              <div className="llm-input-detail-meta">readable · {window.type}</div>
+              <div className="llm-input-detail-meta">readable · {window.class}</div>
             </div>
           </div>
           <div className="llm-input-readable markdown markdown-content">
@@ -181,7 +181,7 @@ export function WindowVisible({
   // visible；object 没写 visible（notFound）时落到这个 fallback。
   const inheritedKey = window.effectiveVisibleType;
   const InheritedFallback =
-    inheritedKey && inheritedKey !== window.type ? BUILTIN_VISIBLE[inheritedKey] : undefined;
+    inheritedKey && inheritedKey !== window.class ? BUILTIN_VISIBLE[inheritedKey] : undefined;
   const Fallback: WindowComp = InheritedFallback ?? ReadableFallback;
 
   const C = loadDynamic(kind.objectId, kind.sessionId, Fallback);

@@ -12,7 +12,7 @@ import type { TranscriptViewport } from "../_shared/transcript-viewport.js";
  *   通过 set_transcript_window 命令调整；详见 _shared/transcript-viewport.ts
  */
 export interface DoWindow extends BaseContextWindow {
-  type: "do";
+  class: "do";
   targetThreadId: string;
   status: "running" | "archived";
   /** 标记为初始 creator do_window，不可被 LLM close（spec § 初始 creator 对话 window）。 */

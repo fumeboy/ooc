@@ -22,7 +22,7 @@ test("WindowDisplayState carries independent lines/columns slicing", () => {
 test("BaseContextWindow carries optional state", () => {
   const w = {
     id: "x",
-    type: "file",
+    class: "file",
     title: "x",
     status: "open",
     createdAt: 0,

@@ -63,7 +63,7 @@ describe("U1: SearchWindow type + render", () => {
     const thread = makeThread({ id: "t_render_test" });
     const sw: SearchWindow = {
       id: "w_search_test",
-      type: "search",
+      class: "search",
       parentWindowId: "root",
       title: "grep 'foo'",
       status: "open",
@@ -94,7 +94,7 @@ describe("U1: SearchWindow type + render", () => {
     const thread = makeThread({ id: "t_render_empty" });
     const sw: SearchWindow = {
       id: "w_search_empty",
-      type: "search",
+      class: "search",
       parentWindowId: "root",
       title: "glob '*.tsx'",
       status: "open",
@@ -120,7 +120,7 @@ describe("U1: SearchWindow type + render", () => {
     const thread = makeThread({ id: "t_render_trunc" });
     const sw: SearchWindow = {
       id: "w_search_trunc",
-      type: "search",
+      class: "search",
       parentWindowId: "root",
       title: "trunc",
       status: "open",
@@ -140,7 +140,7 @@ describe("U1: SearchWindow type + render", () => {
     const thread = makeThread({ id: "t_close_search" });
     const sw: SearchWindow = {
       id: "w_search_to_close",
-      type: "search",
+      class: "search",
       parentWindowId: "root",
       title: "close me",
       status: "open",
@@ -185,7 +185,7 @@ async function makeFileFixture(name: string, body: string) {
   const thread = makeThread({ id: `t_edit_${name.replace(/\W+/g, "_")}` });
   const fw: FileWindow = {
     id: `w_file_${name.replace(/\W+/g, "_")}`,
-    type: "file",
+    class: "file",
     parentWindowId: "root",
     title: name,
     status: "open",
@@ -316,7 +316,7 @@ describe("U2: file_window.edit", () => {
     const thread = makeThread({ id: "t_missing_file" });
     const fw: FileWindow = {
       id: "w_file_missing",
-      type: "file",
+      class: "file",
       parentWindowId: "root",
       title: "missing",
       status: "open",
@@ -393,7 +393,7 @@ describe("U3: root.write_file", () => {
     expect(onDisk).toBe("hello write_file\n");
 
     // file_window spawned
-    const fws = thread.contextWindows.filter((w) => w.type === "file" && (w as FileWindow).path === path);
+    const fws = thread.contextWindows.filter((w) => w.class === "file" && (w as FileWindow).path === path);
     expect(fws.length).toBe(1);
   });
 
@@ -448,7 +448,7 @@ describe("U3: root.write_file", () => {
     expect(out.ok).toBe(true);
     expect(out.executed).toBe(false);
     expect(out.form_id).toBeDefined();
-    expect(thread.contextWindows.filter((w) => w.type === "file").length).toBe(0);
+    expect(thread.contextWindows.filter((w) => w.class === "file").length).toBe(0);
   });
 
   it("edge: missing content → form stays open (not auto-submitted)", async () => {
@@ -457,7 +457,7 @@ describe("U3: root.write_file", () => {
     expect(out.ok).toBe(true);
     expect(out.executed).toBe(false);
     expect(out.form_id).toBeDefined();
-    expect(thread.contextWindows.filter((w) => w.type === "file").length).toBe(0);
+    expect(thread.contextWindows.filter((w) => w.class === "file").length).toBe(0);
   });
 
   it("edge: empty string content → 0-byte file written", async () => {
@@ -474,7 +474,7 @@ describe("U3: root.write_file", () => {
     const thread = makeThread({ id: "t_wf_spawn_once" });
     await dispatchWriteFile(thread, { path, content: "x" });
     const matches = thread.contextWindows.filter(
-      (w) => w.type === "file" && (w as FileWindow).path === path,
+      (w) => w.class === "file" && (w as FileWindow).path === path,
     );
     expect(matches.length).toBe(1);
   });
@@ -532,7 +532,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     expect(out.ok).toBe(true);
     expect(out.executed).toBe(true);
 
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow | undefined;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow | undefined;
     expect(sw).toBeDefined();
     expect(sw!.kind).toBe("glob");
     expect(sw!.matches.map((m) => m.path)).toEqual(["a.ts", "b.ts", "c.ts"]);
@@ -543,7 +543,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     const dir = await makeGlobFixtureDir("glob-recursive", ["top.ts", "sub/inner.ts", "deep/deeper/x.ts"]);
     const thread = makeThread({ id: "t_glob_recursive" });
     await dispatchGlob(thread, { pattern: "**/*.ts", cwd: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     const paths = sw.matches.map((m) => m.path).sort();
     expect(paths).toEqual(["deep/deeper/x.ts", "sub/inner.ts", "top.ts"]);
   });
@@ -552,7 +552,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     const dir = await makeGlobFixtureDir("glob-empty", ["a.md"]);
     const thread = makeThread({ id: "t_glob_empty" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     expect(sw.matches).toEqual([]);
     expect(sw.truncated).toBe(false);
   });
@@ -563,7 +563,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     const dir = await makeGlobFixtureDir("glob-truncate", files);
     const thread = makeThread({ id: "t_glob_truncate" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     expect(sw.matches.length).toBe(200);
     expect(sw.truncated).toBe(true);
   });
@@ -573,21 +573,21 @@ describe("U4: root.glob + search_window.open_match", () => {
     const out = JSON.parse(await dispatchGlob(thread, { cwd: TEMP }));
     expect(out.executed).toBe(false);
     expect(out.form_id).toBeDefined();
-    expect(thread.contextWindows.find((w) => w.type === "search")).toBeUndefined();
+    expect(thread.contextWindows.find((w) => w.class === "search")).toBeUndefined();
   });
 
   it("open_match happy: spawns file_window at the match path", async () => {
     const dir = await makeGlobFixtureDir("glob-open-match", ["one.ts", "two.ts", "three.ts"]);
     const thread = makeThread({ id: "t_open_match_happy" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     // sorted: one.ts (0), three.ts (1), two.ts (2)
     expect(sw.matches[1]!.path).toBe("three.ts");
 
     const out = JSON.parse(await dispatchOpenMatch(thread, sw.id, { index: 1 }));
     expect(out.ok).toBe(true);
     expect(out.executed).toBe(true);
-    const fws = thread.contextWindows.filter((w) => w.type === "file") as FileWindow[];
+    const fws = thread.contextWindows.filter((w) => w.class === "file") as FileWindow[];
     // open_match 现在把 match.path（相对 searchRoot）解析成绝对路径，让 file_window
     // 走 fs.readFile 不再依赖 process.cwd()。
     expect(fws.some((fw) => fw.path.endsWith("three.ts"))).toBe(true);
@@ -598,7 +598,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     const dir = await makeGlobFixtureDir("glob-oor", ["only.ts"]);
     const thread = makeThread({ id: "t_open_match_oor" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     const out = JSON.parse(await dispatchOpenMatch(thread, sw.id, { index: 99 }));
     expect(out.result).toContain("不存在");
   });
@@ -607,7 +607,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     const dir = await makeGlobFixtureDir("glob-no-idx", ["a.ts"]);
     const thread = makeThread({ id: "t_open_match_no_idx" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     // empty args → no auto-submit per WindowManager rule; form left open with input knowledge prompt
     const out = JSON.parse(await dispatchOpenMatch(thread, sw.id, {}));
     expect(out.ok).toBe(true);
@@ -619,7 +619,7 @@ describe("U4: root.glob + search_window.open_match", () => {
     const dir = await makeGlobFixtureDir("glob-no-idx-exec", ["a.ts"]);
     const thread = makeThread({ id: "t_open_match_exec_no_idx" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     const result = await executeSearchOpenMatch({
       thread,
       args: {}, // missing index
@@ -633,14 +633,14 @@ describe("U4: root.glob + search_window.open_match", () => {
     const dir = await makeGlobFixtureDir("glob-integ", ["a.ts", "b.ts"]);
     const thread = makeThread({ id: "t_glob_integ" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     const matchesBefore = sw.matches.length;
     await dispatchOpenMatch(thread, sw.id, { index: 0 });
 
     const swAfter = thread.contextWindows.find((w) => w.id === sw.id) as SearchWindow;
     expect(swAfter.matches.length).toBe(matchesBefore);
 
-    const fws = thread.contextWindows.filter((w) => w.type === "file");
+    const fws = thread.contextWindows.filter((w) => w.class === "file");
     expect(fws.length).toBeGreaterThan(0);
   });
 });
@@ -679,7 +679,7 @@ describe("U5: root.grep", () => {
     });
     const thread = makeThread({ id: "t_grep_simple" });
     await dispatchGrep(thread, { pattern: "function foo", path: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     expect(sw.kind).toBe("grep");
     expect(sw.matches.length).toBe(1);
     expect(sw.matches[0]!.line).toBe(0);
@@ -693,7 +693,7 @@ describe("U5: root.grep", () => {
     });
     const thread = makeThread({ id: "t_grep_multi" });
     await dispatchGrep(thread, { pattern: "needle", path: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     expect(sw.matches.length).toBe(3);
     expect(sw.matches[0]!.line).toBe(1);
     expect(sw.matches[2]!.path.endsWith("z.ts")).toBe(true);
@@ -705,7 +705,7 @@ describe("U5: root.grep", () => {
     });
     const thread = makeThread({ id: "t_grep_ci" });
     await dispatchGrep(thread, { pattern: "foo", path: dir, case_insensitive: true });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     expect(sw.matches.length).toBe(3);
   });
 
@@ -713,7 +713,7 @@ describe("U5: root.grep", () => {
     const dir = await makeGrepFixtureDir("grep-empty", { "a.ts": "nothing here\n" });
     const thread = makeThread({ id: "t_grep_empty" });
     await dispatchGrep(thread, { pattern: "needle", path: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     expect(sw.matches).toEqual([]);
     expect(sw.truncated).toBe(false);
   });
@@ -730,7 +730,7 @@ describe("U5: root.grep", () => {
     expect(parsed.executed).toBe(true);
     // 关键: window_id 字段必须出现, 且指向 search_window
     expect(parsed.window_id).toBeDefined();
-    const sw = thread.contextWindows.find((w) => w.type === "search");
+    const sw = thread.contextWindows.find((w) => w.class === "search");
     expect(sw).toBeDefined();
     expect(parsed.window_id).toBe(sw!.id);
     // window_id 必须不是 form_id (form 已 executed)
@@ -742,7 +742,7 @@ describe("U5: root.grep", () => {
     const filePath = join(dir, "only.ts");
     const thread = makeThread({ id: "t_grep_onefile" });
     await dispatchGrep(thread, { pattern: "needle", path: filePath });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     expect(sw.matches.length).toBe(2);
   });
 
@@ -759,12 +759,12 @@ describe("U5: root.grep", () => {
     const dir = await makeGrepFixtureDir("grep-integ-open", { "big.ts": lines.join("\n") + "\n" });
     const thread = makeThread({ id: "t_grep_integ_open" });
     await dispatchGrep(thread, { pattern: "TARGET_TOKEN", path: dir });
-    const sw = thread.contextWindows.find((w) => w.type === "search") as SearchWindow;
+    const sw = thread.contextWindows.find((w) => w.class === "search") as SearchWindow;
     expect(sw.matches.length).toBe(1);
     expect(sw.matches[0]!.line).toBe(40);
 
     await dispatchOpenMatch(thread, sw.id, { index: 0 });
-    const fw = thread.contextWindows.find((w) => w.type === "file") as FileWindow;
+    const fw = thread.contextWindows.find((w) => w.class === "file") as FileWindow;
     expect(fw.lines).toBeDefined();
     expect(fw.lines![0]).toBeLessThanOrEqual(40);
     expect(fw.lines![1]).toBeGreaterThanOrEqual(40);

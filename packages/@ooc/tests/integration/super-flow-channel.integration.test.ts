@@ -92,7 +92,7 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
     const talkWindowId = generateWindowId("talk");
     const superTalkWindow: TalkWindow = {
       id: talkWindowId,
-      type: "talk",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "ask self for reflection",
       status: "open",

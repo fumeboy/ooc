@@ -107,7 +107,7 @@ export async function derivePeerObjectWindows(
 
   // 1) From talk_window
   const talkWindows = (thread.contextWindows ?? []).filter(
-    (w): w is TalkWindow => w.type === "talk",
+    (w): w is TalkWindow => w.class === "talk",
   );
   const peerEarliest = new Map<string, number>();
   for (const w of talkWindows) {
@@ -158,7 +158,7 @@ export async function derivePeerObjectWindows(
 
     out.push({
       id: peerId,
-      type: peerId as any,
+      class: peerId as any,
       parentWindowId: "root",
       title,
       status: "open",

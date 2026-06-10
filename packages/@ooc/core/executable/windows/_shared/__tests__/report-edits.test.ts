@@ -42,7 +42,7 @@ async function exists(file: string): Promise<boolean> {
 function makePlan(id: string, title: string, description: string): PlanWindow {
   return {
     id,
-    type: "plan",
+    class: "plan",
     parentWindowId: ROOT_WINDOW_ID,
     title,
     status: "active",
@@ -120,13 +120,13 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
       description: "fork",
     });
     const form = thread.contextWindows.find(
-      (w): w is MethodExecWindow => w.type === "method_exec",
+      (w): w is MethodExecWindow => w.class === "method_exec",
     );
     // openMethodExec returns formId via the result; but mgr.toData() reflects the in-memory map.
     // Use mgr's snapshot directly:
     thread.contextWindows = mgr.toData();
     const liveForm = mgr.toData().find(
-      (w): w is MethodExecWindow => w.type === "method_exec",
+      (w): w is MethodExecWindow => w.class === "method_exec",
     )!;
 
     const stateFile = runtimeObjectStateFile({
@@ -183,7 +183,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
       arguments: { title: "派生", method: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
-      (w): w is MethodExecWindow => w.type === "method_exec",
+      (w): w is MethodExecWindow => w.class === "method_exec",
     );
     expect(form).toBeDefined();
     expect(form!.status).toBe("open");
@@ -225,7 +225,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
       | MethodExecWindow
       | undefined;
     expect(entry).toBeDefined();
-    expect(entry!.type).toBe("method_exec");
+    expect(entry!.class).toBe("method_exec");
     expect(entry!.accumulatedArgs).toMatchObject({ wait: true });
   });
 });

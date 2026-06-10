@@ -94,7 +94,7 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S3 multi-turn-followup", ()
 
       // 复用同一 talk_window：callee thread 自带的初始 creator talk_window 数应为 1
       const calleeTalkWindows =
-        calleeAfterTurn2?.contextWindows?.filter((w) => w.type === "talk") ?? [];
+        calleeAfterTurn2?.contextWindows?.filter((w) => w.class === "talk") ?? [];
       const reusedSameTalkWindow = calleeTalkWindows.length === 1;
 
       const result = scoreScenario({

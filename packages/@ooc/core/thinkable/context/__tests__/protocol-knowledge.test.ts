@@ -12,14 +12,14 @@ import { buildProtocolKnowledgeWindows } from "../protocol";
 import { makeThread } from "../../../__tests__/make-thread";
 import type { MethodExecWindow } from "../../../executable/windows/_shared/types";
 
-function paths(windows: { type: string; path?: string }[]): string[] {
-  return windows.filter((w) => w.type === "knowledge").map((w) => w.path ?? "");
+function paths(windows: { class: string; path?: string }[]): string[] {
+  return windows.filter((w) => w.class === "knowledge").map((w) => w.path ?? "");
 }
 
 function makeEndForm(): MethodExecWindow {
   return {
     id: "f_end",
-    type: "method_exec",
+    class: "method_exec",
     parentWindowId: "root",
     title: "end",
     status: "open",
@@ -68,17 +68,17 @@ describe("root builtin knowledge activation", () => {
   });
 
   it("per-type 知识按 object::<type> 激活、不串台（plan/search/feishu_chat/feishu_doc）", async () => {
-    const cases: Array<{ type: string; path: string }> = [
-      { type: "plan", path: "plan" },
-      { type: "search", path: "search" },
-      { type: "feishu_chat", path: "feishu-chat" },
-      { type: "feishu_doc", path: "feishu-doc" },
+    const cases: Array<{ class: string; path: string }> = [
+      { class: "plan", path: "plan" },
+      { class: "search", path: "search" },
+      { class: "feishu_chat", path: "feishu-chat" },
+      { class: "feishu_doc", path: "feishu-doc" },
     ];
     for (const c of cases) {
       const withWin = makeThread({
-        id: `t_${c.type}`,
+        id: `t_`,
         extraWindows: [
-          { id: `w_${c.type}`, type: c.type, parentWindowId: "root", title: c.type, status: "open", createdAt: 1 } as any,
+          { id: `w_`, class: c.class, parentWindowId: "root", title: c.class, status: "open", createdAt: 1 } as any,
         ],
       });
       const p = paths(await buildProtocolKnowledgeWindows(withWin));

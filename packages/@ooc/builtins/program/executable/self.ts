@@ -59,21 +59,21 @@ export function createProgramSelf(
     async callMethod(windowId, method, args = {}) {
       const window = thread.contextWindows.find((w) => w.id === windowId);
       if (!window) {
-        const visible = thread.contextWindows.map((w) => `${w.id}(${w.type})`).join(", ") || "(无)";
+        const visible = thread.contextWindows.map((w) => `${w.id}(${w.class})`).join(", ") || "(无)";
         throw new Error(
           `windowId ${windowId} 不在当前 thread.contextWindows；当前可见：${visible}`,
         );
       }
 
       // 取该 window type 的 methods
-      const def = registry.getObjectDefinition(window.type);
+      const def = registry.getObjectDefinition(window.class);
       const methods = def.methods;
 
       const entry = methods[method];
       if (!entry) {
         const available = Object.keys(methods).join(", ") || "(无)";
         throw new Error(
-          `windowId ${windowId} (${window.type}) 上不存在 method ${method}；当前可用：${available}`,
+          `windowId ${windowId} (${window.class}) 上不存在 method ${method}；当前可用：${available}`,
         );
       }
 

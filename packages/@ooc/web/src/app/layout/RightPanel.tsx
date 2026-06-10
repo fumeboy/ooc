@@ -160,6 +160,6 @@ function isUserOwnedOrCreated(objectId: string | undefined, thread: ThreadContex
   if (thread?.creatorObjectId === "user") return true;
   // 兼容旧 thread.json：缺 creatorObjectId 时看 creator window 是不是指向 user 的 talk_window
   const creator = thread?.contextWindows?.find((w) => "isCreatorWindow" in w && w.isCreatorWindow);
-  if (creator && creator.type === "talk" && creator.target === "user") return true;
+  if (creator && creator.class === "talk" && creator.target === "user") return true;
   return false;
 }

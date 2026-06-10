@@ -41,9 +41,9 @@ export async function runControlPlane(): Promise<StoryResult> {
     {
       const userCtx = readThreadContextJson(baseDir, sid, "user", "root");
       const wins: any[] = userCtx?.contextWindows ?? [];
-      const talkWin = wins.find((w) => w?.type === "talk" && (w?.target === target || w?.targetObjectId === target));
+      const talkWin = wins.find((w) => w?.class === "talk" && (w?.target === target || w?.targetObjectId === target));
       rec.ok("TC-COLLAB-02", "user.root 挂了指向 target 的 talk_window（cross-object talk 路由表）",
-        !!talkWin, `windows=${JSON.stringify(wins.map((w) => ({ t: w?.type, tg: w?.target })))?.slice(0, 160)}`);
+        !!talkWin, `windows=${JSON.stringify(wins.map((w) => ({ t: w?.class, tg: w?.target })))?.slice(0, 160)}`);
     }
   } finally {
     await srv.cleanup();

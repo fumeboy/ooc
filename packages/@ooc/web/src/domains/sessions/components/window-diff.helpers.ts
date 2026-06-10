@@ -49,7 +49,7 @@ export interface FileDiffData {
 
 export interface WindowSnapshotEntry {
   id: string;
-  type: string;
+  class: string;
   contentHash: string;
   parentWindowId?: string;
   status?: string;
@@ -67,8 +67,8 @@ export type WindowDiffStatus = "added" | "changed" | "removed" | "unchanged";
 
 export interface WindowDiffEntry {
   id: string;
-  /** 显示用 type label —— 取 current.type 或 previous.type（removed 时 fallback）。 */
-  type: string;
+  /** 显示用 type label —— 取 current.class 或 previous.class（removed 时 fallback）。 */
+  class: string;
   status: WindowDiffStatus;
   /** current loop 的 entry；removed 时 undefined。 */
   current?: WindowSnapshotEntry;
@@ -108,7 +108,7 @@ export function computeWindowDiff(
       // previous 有 snapshot 但缺这个 id → added
       result.push({
         id: cur.id,
-        type: cur.type,
+        class: cur.class,
         status: "added",
         current: cur,
       });
@@ -118,7 +118,7 @@ export function computeWindowDiff(
     if (cur.contentHash === prev.contentHash) {
       result.push({
         id: cur.id,
-        type: cur.type,
+        class: cur.class,
         status: "unchanged",
         current: cur,
         previous: prev,
@@ -126,7 +126,7 @@ export function computeWindowDiff(
     } else {
       result.push({
         id: cur.id,
-        type: cur.type,
+        class: cur.class,
         status: "changed",
         current: cur,
         previous: prev,
@@ -140,7 +140,7 @@ export function computeWindowDiff(
     if (seenIds.has(prev.id)) continue;
     result.push({
       id: prev.id,
-      type: prev.type,
+      class: prev.class,
       status: "removed",
       previous: prev,
     });

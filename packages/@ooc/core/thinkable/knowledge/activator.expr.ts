@@ -187,7 +187,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       if (trigger.objectType === "root") return true;
       const list = (thread.contextWindows ?? []) as ContextWindow[]; // batch C narrowing(N4): base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
       for (const w of list) {
-        if (w.type !== trigger.objectType) continue;
+        if (w.class !== trigger.objectType) continue;
         if (isOpen(w)) return true;
       }
       return false;
@@ -210,7 +210,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       for (const w of list) byId.set(w.id, w);
 
       for (const w of list) {
-        if (w.type !== "method_exec") continue;
+        if (w.class !== "method_exec") continue;
         const form = w as MethodExecWindow;
         if (form.method !== trigger.method) continue;
         // form 必须 open 才视为"该 method 当前活跃"——success/failed 不算
@@ -255,7 +255,7 @@ function parentTypeOf(
   const pid = form.parentWindowId;
   if (!pid || pid === "root") return "root";
   const parent = byId.get(pid);
-  return parent?.type ?? "root";
+  return parent?.class ?? "root";
 }
 
 /**

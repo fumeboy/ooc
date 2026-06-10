@@ -29,8 +29,8 @@ export const L4_STORIES: Story[] = [
       const p = join(baseDir, "flows", sid, "objects", "user", "threads", userT.threadId, "thread-context.json");
       check(existsSync(p), `user thread-context.json 不存在`);
       const ctx = JSON.parse(readFileSync(p, "utf8"));
-      const hasTalk = (ctx.contextWindows ?? []).some((w: any) => w.type === "talk");
-      check(hasTalk, `user 线程无 talk_window：${JSON.stringify((ctx.contextWindows ?? []).map((w: any) => w.type))}`);
+      const hasTalk = (ctx.contextWindows ?? []).some((w: any) => w.class === "talk");
+      check(hasTalk, `user 线程无 talk_window：${JSON.stringify((ctx.contextWindows ?? []).map((w: any) => w.class))}`);
     },
   }),
 

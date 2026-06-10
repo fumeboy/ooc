@@ -57,7 +57,7 @@ export async function executeOpenFeishuDoc(
 
   const window: FeishuDocWindow = {
     id: generateWindowId("feishu_doc"),
-    type: "feishu_doc",
+    class: "feishu_doc",
     parentWindowId: ROOT_WINDOW_ID,
     title: docTitle,
     status: "open",

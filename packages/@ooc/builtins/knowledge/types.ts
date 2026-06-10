@@ -26,7 +26,7 @@ import type { Viewport } from "@ooc/core/extendable/_shared/viewport.js";
  * activator 来源走总数 20 项 + 单篇 8KB 截断。
  */
 export interface KnowledgeWindow extends BaseContextWindow {
-  type: "knowledge";
+  class: "knowledge";
   status: "open" | "closed";
   path: string;
   /** 四类来源；缺省视为 explicit（向后兼容旧 thread.json）。 */

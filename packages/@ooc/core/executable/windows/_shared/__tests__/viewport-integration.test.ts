@@ -28,7 +28,7 @@ describe("viewport: file_window integration", () => {
       await writeFile(file, "hello\n");
       const thread = makeThread({ id: "t" });
       await execRootMethod("open_file", { thread, args: { path: file, title: "x" } });
-      const fw = thread.contextWindows.find((w): w is FileWindow => w.type === "file");
+      const fw = thread.contextWindows.find((w): w is FileWindow => w.class === "file");
       expect(fw).toBeDefined();
       expect(fw!.state!.viewport).toEqual({
         lineStart: 0,
@@ -85,7 +85,7 @@ describe("viewport: file_window integration", () => {
       await writeFile(file, "x\n".repeat(500));
       const thread = makeThread({ id: "t" });
       await execRootMethod("open_file", { thread, args: { path: file, title: "f" } });
-      const fw = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
+      const fw = thread.contextWindows.find((w): w is FileWindow => w.class === "file")!;
 
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
       const opened = await mgr.openMethodExec({
@@ -98,7 +98,7 @@ describe("viewport: file_window integration", () => {
       thread.contextWindows = mgr.toData();
       expect(opened.autoSubmitted).toBe(true);
 
-      const after = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
+      const after = thread.contextWindows.find((w): w is FileWindow => w.class === "file")!;
       expect(after.state!.viewport).toEqual({
         lineStart: 0,
         lineEnd: 1000,
@@ -117,7 +117,7 @@ describe("viewport: file_window integration", () => {
       await writeFile(file, "a\n");
       const thread = makeThread({ id: "t" });
       await execRootMethod("open_file", { thread, args: { path: file, title: "f" } });
-      const fw = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
+      const fw = thread.contextWindows.find((w): w is FileWindow => w.class === "file")!;
       const origViewport = { ...fw.state!.viewport! };
 
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
@@ -131,10 +131,10 @@ describe("viewport: file_window integration", () => {
       thread.contextWindows = mgr.toData();
 
       // failed form 持有报错；window viewport 未变
-      const after = thread.contextWindows.find((w): w is FileWindow => w.type === "file")!;
+      const after = thread.contextWindows.find((w): w is FileWindow => w.class === "file")!;
       expect(after.state!.viewport).toEqual(origViewport);
       const failedForm = thread.contextWindows.find(
-        (w) => w.type === "method_exec" && (w as { method?: string }).method === "set_viewport",
+        (w) => w.class === "method_exec" && (w as { method?: string }).method === "set_viewport",
       ) as { status: string; result?: string } | undefined;
       expect(failedForm?.status).toBe("failed");
       expect(failedForm?.result ?? "").toContain("line_start");
@@ -178,7 +178,7 @@ describe("viewport: knowledge_window integration", () => {
       await execRootMethod("open_knowledge", { thread, args: { path: "longdoc", title: "long" } });
 
       const kw = thread.contextWindows.find(
-        (w): w is KnowledgeWindow => w.type === "knowledge" && (w as KnowledgeWindow).source === "explicit",
+        (w): w is KnowledgeWindow => w.class === "knowledge" && (w as KnowledgeWindow).source === "explicit",
       );
       expect(kw).toBeDefined();
       expect(kw!.state!.viewport).toEqual({
@@ -210,7 +210,7 @@ describe("viewport: knowledge_window integration", () => {
       thread.contextWindows = mgr.toData();
       expect(opened.autoSubmitted).toBe(true);
       const after = thread.contextWindows.find(
-        (w): w is KnowledgeWindow => w.type === "knowledge" && (w as KnowledgeWindow).source === "explicit",
+        (w): w is KnowledgeWindow => w.class === "knowledge" && (w as KnowledgeWindow).source === "explicit",
       )!;
       expect(after.state!.viewport).toEqual({
         lineStart: 0,
