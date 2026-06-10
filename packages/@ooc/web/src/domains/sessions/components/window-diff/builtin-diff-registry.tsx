@@ -3,7 +3,7 @@
  *
  * 对称线 A 的 builtin-visible-registry.tsx。
  * - 有 builtin 目录的从 @ooc/builtins/<type>/visible/diff 导入。
- * - 无 builtin 目录的（talk / do / relation / method_exec）从 web 本地导入。
+ * - 无 builtin 目录的（talk / do / method_exec）从 web 本地导入。
  */
 import type { ComponentType } from "react";
 import type { WindowDiffProps } from "./window-diff-props";
@@ -17,7 +17,6 @@ import PlanDiff from "@ooc/builtins/plan/visible/diff";
 // 无 builtin 目录，web 本地:
 import TalkDiff from "./TalkDiff";
 import DoDiff from "./DoDiff";
-import RelationDiff from "./RelationDiff";
 import MethodExecDiff from "./MethodExecDiff";
 
 /** builtin window type → diff 组件。组件约定 `({ previous, current }) => JSX`。 */
@@ -29,6 +28,5 @@ export const BUILTIN_DIFF: Record<string, ComponentType<WindowDiffProps>> = {
   plan: PlanDiff as ComponentType<WindowDiffProps>,
   talk: TalkDiff as ComponentType<WindowDiffProps>,
   do: DoDiff as ComponentType<WindowDiffProps>,
-  relation: RelationDiff as ComponentType<WindowDiffProps>,
   method_exec: MethodExecDiff as ComponentType<WindowDiffProps>,
 };

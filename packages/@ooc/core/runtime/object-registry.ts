@@ -39,7 +39,7 @@ export { filterMethodsByVisibility };
 
 const RENDERABLE_VISIBLE_TYPES = new Set([
   "root", "method_exec", "do", "todo", "talk", "program",
-  "file", "knowledge", "search", "relation", "skill_index",
+  "file", "knowledge", "search", "skill_index",
   "feishu_chat", "feishu_doc", "plan",
 ]);
 
@@ -81,7 +81,6 @@ const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
   ["file", { methods: {} }],
   ["knowledge", { methods: {} }],
   ["search", { methods: {} }],
-  ["relation", { methods: {} }],
   ["skill_index", { methods: {} }],
   ["feishu_chat", { methods: {} }],
   ["feishu_doc", { methods: {} }],
@@ -281,15 +280,12 @@ export class ObjectRegistry {
   }
 
   listRegisteredObjectTypes(): ObjectType[] {
-    return Array.from(this.store.keys())
-      .filter((t): t is ObjectType => t !== "relation")
-      .sort();
+    return Array.from(this.store.keys()).sort();
   }
 
   assertAllObjectDefinitionsRegistered(): void {
     const missing: ObjectType[] = [];
     for (const [type, def] of this.store) {
-      if (type === "relation") continue;
       if (!def.readable) missing.push(type);
     }
     if (missing.length > 0) {
@@ -351,7 +347,7 @@ export class ObjectRegistry {
 /**
  * Module-level singleton holding builtin object type definitions (root, file,
  * plan, program, todo, search, knowledge, skill_index, do, talk, method_exec,
- * feishu_chat, feishu_doc, relation).
+ * feishu_chat, feishu_doc).
  *
  * Builtin modules populate this via side-effect imports at module load time:
  * executable/index.ts 调 `builtinRegistry.registerExecutable("file", { methods })`，

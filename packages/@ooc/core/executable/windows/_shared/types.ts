@@ -52,8 +52,6 @@ export type { ProgramWindow, ProgramExecRecord } from "@ooc/builtins/program/typ
 export type { FileWindow } from "@ooc/builtins/file/types.js";
 export type { KnowledgeWindow } from "@ooc/builtins/knowledge/types.js";
 export type { SearchWindow, SearchMatch } from "@ooc/builtins/search/types.js";
-/** @deprecated ooc-6: RelationWindow replaced by peer Object auto-injection. Kept for backward compat. */
-export type { RelationWindow } from "../relation/types.js";
 export type { SkillIndexWindow, SkillEntry } from "@ooc/builtins/skill_index/types.js";
 export type { PlanWindow, PlanWindowStep } from "@ooc/builtins/plan/types.js";
 export type { FeishuChatWindow, FeishuChatMessage } from "../../../extendable/lark/feishu-chat/types.js";
@@ -69,8 +67,6 @@ import type { ProgramWindow } from "@ooc/builtins/program/types.js";
 import type { FileWindow } from "@ooc/builtins/file/types.js";
 import type { KnowledgeWindow } from "@ooc/builtins/knowledge/types.js";
 import type { SearchWindow } from "@ooc/builtins/search/types.js";
-/** @deprecated ooc-6: replaced by peer Object auto-injection; kept for backward compat */
-import type { RelationWindow } from "../relation/types.js";
 import type { SkillIndexWindow } from "@ooc/builtins/skill_index/types.js";
 import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/types.js";
@@ -94,8 +90,6 @@ export type ContextWindow =
   | FileWindow
   | KnowledgeWindow
   | SearchWindow
-  /** @deprecated ooc-6: replaced by peer Object auto-injection; kept for backward compat */
-  | RelationWindow
   | SkillIndexWindow
   | FeishuChatWindow
   | FeishuDocWindow

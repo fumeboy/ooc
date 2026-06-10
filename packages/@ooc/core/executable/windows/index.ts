@@ -28,7 +28,6 @@ export type {
   KnowledgeWindow,
   SearchWindow,
   SearchMatch,
-  RelationWindow,
   PlanWindow,
   PlanWindowStep,
   ObjectType,
@@ -89,8 +88,6 @@ import "./talk/index.js";
 // P6.§9 (2026-06-02): method_exec form 是 method 调用过程的临时载体（Object 内置特性）。
 import "./method_exec/index.js";
 
-// relation window 将在 Phase 6 移除，替换为 peer/children 自动注入
-import "./relation/index.js";
 
 // 其余 builtin types 通过 extendable/index.js 加载。
 import "../../extendable/index.js";

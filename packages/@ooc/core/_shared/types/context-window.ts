@@ -29,7 +29,6 @@ export type ObjectType =
   | "file"
   | "knowledge"
   | "search"
-  | "relation"
   | "skill_index"
   | "feishu_chat"
   | "feishu_doc"

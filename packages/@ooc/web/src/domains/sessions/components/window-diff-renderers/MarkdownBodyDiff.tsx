@@ -1,7 +1,7 @@
 /**
  * MarkdownBodyDiff — 共享组件：用 @codemirror/merge unifiedMergeView
  * 在 markdown 语境下做 body 文本 diff。被 KnowledgeWindowDiff /
- * RelationWindowDiff 复用。
+ * 复用。
  */
 
 import { useEffect, useRef } from "react";

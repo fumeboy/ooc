@@ -151,34 +151,6 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      type: "relation";
-      parentWindowId?: string;
-      title: string;
-      status: "open" | "closed";
-      /** 对端 objectId(去重 key);与 talk_window.target 同源。 */
-      peerId: string;
-      // 2026-05-27: 撤回 R8-5 的 peerReadme 删除。default visibility 派生大量
-      // sibling/child relation 后,没 peer 身份介绍则空壳;peer readme 重新挂回。
-      /** peer stone readme 路径(`stones/<branch>/objects/<peer>/readme.md`)。 */
-      peerReadmePath?: string;
-      /** peer readme 正文(只读;文件缺失/空 → undefined)。 */
-      peerReadmeBody?: string;
-      /** peer readme 文件是否存在(false = peer stone 没 readme 或 lazy)。 */
-      peerReadmeExists?: boolean;
-      /** self 对该 peer 的 long_term relation(`pools/objects/<self>/knowledge/relations/<peer>.md`)。 */
-      selfLongTermPath?: string;
-      selfLongTermBody?: string;
-      /** R8-5: long_term 文件是否实际存在(false = 懒创建未写)。 */
-      selfLongTermExists?: boolean;
-      /** self 对该 peer 的本 session relation(`flows/<sid>/objects/<self>/knowledge/relations/<peer>.md`)。 */
-      selfSessionPath?: string;
-      selfSessionBody?: string;
-      /** R8-5: session 文件是否实际存在(false = 懒创建未写)。 */
-      selfSessionExists?: boolean;
-      createdAt?: number;
-    }
-  | {
-      id: string;
       type: "skill_index";
       parentWindowId?: string;
       title: string;
@@ -377,7 +349,6 @@ function windowBadge(window: ContextWindow): string {
     case "file":         return "FILE";
     case "knowledge":    return "KNOW";
     case "search":       return "SRCH";
-    case "relation":     return "REL";
     case "root":         return "ROOT";
     case "skill_index":  return "SKILLS";
     case "feishu_chat":  return "FSCHAT";
@@ -412,8 +383,6 @@ function windowSummary(window: ContextWindow): string {
       return `${window.source ?? "explicit"} · ${window.path}` + (window.presentation ? ` · ${window.presentation}` : "");
     case "search":
       return `${window.kind} · ${window.query} · ${window.matches.length}${window.truncated ? "+" : ""} hit${window.matches.length === 1 ? "" : "s"}`;
-    case "relation":
-      return `relation: ${window.peerId}`;
     case "root":
       return "thread root";
     case "skill_index":
@@ -461,9 +430,6 @@ function windowCharCount(window: ContextWindow): number {
     case "search":
       n += window.query.length;
       for (const m of window.matches) n += m.path.length + (m.snippet?.length ?? 0);
-      break;
-    case "relation":
-      // relation_window 自身无大文本(正文在伴随的 knowledge_window);title 兜底已计
       break;
     case "root":
       break;
@@ -645,7 +611,6 @@ const WINDOW_TYPE_ORDER: ContextWindow["type"][] = [
   "method_exec",
   "do",
   "talk",
-  "relation",
   // plan 与 todo 同属行动结构，先于具体执行 (program/file/…) 渲染让用户先看到任务规划
   "plan",
   "todo",

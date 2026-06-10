@@ -9,7 +9,7 @@
  * 收拢的组件：
  * - 8 个实存 builtin `visible/index.tsx`（file/knowledge/todo/search/skill_index/plan/program/root）
  * - method_exec（本地 ./MethodExecWindowDetail）
- * - 从 viewer 内联抽出的 relation / feishu_chat / feishu_doc / do / talk
+ * - 从 viewer 内联抽出的 feishu_chat / feishu_doc / do / talk
  *
  * supervisor / user 不注册——它们返回 null、不接 window prop、不在 RENDERABLE_VISIBLE_TYPES，
  * 自然落 resolveWindowVisible 的 JSON 兜底（无害）。
@@ -26,7 +26,6 @@ import PlanWindowDetail from "@ooc/builtins/plan/visible/index";
 import ProgramWindowDetail from "@ooc/builtins/program/visible/index";
 import RootWindowDetail from "@ooc/builtins/root/visible/index";
 import MethodExecWindowDetail from "../MethodExecWindowDetail";
-import RelationWindowDetail from "./RelationWindowDetail";
 import FeishuChatWindowDetail from "./FeishuChatWindowDetail";
 import FeishuDocWindowDetail from "./FeishuDocWindowDetail";
 import DoWindowDetail from "./DoWindowDetail";
@@ -43,7 +42,6 @@ export const BUILTIN_VISIBLE: Record<string, ComponentType<{ window: ContextWind
   program: ProgramWindowDetail as ComponentType<{ window: ContextWindow }>,
   root: RootWindowDetail as ComponentType<{ window: ContextWindow }>,
   method_exec: MethodExecWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  relation: RelationWindowDetail,
   feishu_chat: FeishuChatWindowDetail,
   feishu_doc: FeishuDocWindowDetail,
   do: DoWindowDetail,

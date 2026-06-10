@@ -74,7 +74,6 @@ const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {
   file: FileText,
   knowledge: ScrollText,
   search: Search,
-  relation: Users,
   skill_index: Sparkles,
   feishu_chat: MessageSquare,
   feishu_doc: FileText,

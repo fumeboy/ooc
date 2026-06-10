@@ -12,7 +12,6 @@ test("registry covers all renderable builtin types", () => {
     "program",
     "root",
     "method_exec",
-    "relation",
     "feishu_chat",
     "feishu_doc",
     "do",

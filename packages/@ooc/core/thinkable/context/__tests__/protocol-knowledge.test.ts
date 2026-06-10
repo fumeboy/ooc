@@ -67,10 +67,9 @@ describe("root builtin knowledge activation", () => {
     expect(paths(await buildProtocolKnowledgeWindows(noForm))).not.toContain("end-reflection");
   });
 
-  it("per-type 知识按 object::<type> 激活、不串台（plan/relation/search/feishu_chat/feishu_doc）", async () => {
+  it("per-type 知识按 object::<type> 激活、不串台（plan/search/feishu_chat/feishu_doc）", async () => {
     const cases: Array<{ type: string; path: string }> = [
       { type: "plan", path: "plan" },
-      { type: "relation", path: "relation" },
       { type: "search", path: "search" },
       { type: "feishu_chat", path: "feishu-chat" },
       { type: "feishu_doc", path: "feishu-doc" },

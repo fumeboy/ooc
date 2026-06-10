@@ -151,8 +151,6 @@ describe("ooc-6 Object Unification harness cycle", () => {
       expect(def).toBeDefined();
     }
 
-    // relation should still be present for backward compat
-    expect(types).toContain("relation");
   });
 
   // ── Point 4: Readable concept ───────────────────────────────────────────
@@ -372,9 +370,6 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(peer!.type).toBe(peerId as any);
     expect(peer!.title).toBe("Peer Agent"); // from readme title
 
-    // Verify no relation window is needed - peer appears as object window directly
-    const relationWindows = peerWindows.filter((w) => w.type === "relation");
-    expect(relationWindows.length).toBe(0);
   });
 
   // ── Phase 8: New trigger format works ───────────────────────────────────

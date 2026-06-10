@@ -1,12 +1,12 @@
 /**
  * P6.§3 单元测试 — manager 层的 self-type 严格校验。
  *
- * 不变量：method 的 declaringType 必须等于 form.parent.type，否则 manager.submit
- * 不会调用 entry.exec，而是把 form 标记为 failed 并返回
- *   `[method-error] method "X" not declared on object class "Y"`
+ * 不变量：method 必须挂在它所声明的 parent type 上；form 被 re-target 到不声明该 method
+ * 的 parent type 后 submit，manager 在 lookupMethodEntry 处拒绝（"not registered on
+ * parent window type"），不会盲目调 entry.exec。
  *
- * 这是把以前散落在每个 method 体顶部的 `if (self.type !== "X") return "未挂载..."`
- * 收编到 manager 层的统一保证。method 体可以放心 cast `ctx.self as XWindow`。
+ * fixture：talk_window 上的 `say`（say 只挂 talk）re-target 到 do_window（do 没有 say）。
+ * （原 relation_window fixture 随 relation type 退役改用 talk/do。）
  */
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -26,7 +26,7 @@ import {
 import { initContextWindows } from "../_shared/init";
 import {
   ROOT_WINDOW_ID,
-  type RelationWindow,
+  type DoWindow,
   type TalkWindow,
 } from "../_shared/types";
 import type { ThreadContext } from "../../../thinkable/context";
@@ -40,21 +40,6 @@ async function setupThread(baseDir: string) {
   await createStoneObject({ baseDir, objectId: SELF });
   await createStoneObject({ baseDir, objectId: PEER });
   const flow = await createFlowObject({ baseDir, sessionId: SID, objectId: SELF });
-  const relationWindow: RelationWindow = {
-    id: `w_rel_${PEER}`,
-    type: "relation",
-    parentWindowId: ROOT_WINDOW_ID,
-    title: `relation: ${PEER}`,
-    status: "open",
-    createdAt: Date.now(),
-    peerId: PEER,
-    peerReadmePath: `stones/main/objects/${PEER}/readme.md`,
-    peerReadmeExists: false,
-    selfLongTermPath: `pools/${SELF}/knowledge/relations/${PEER}.md`,
-    selfLongTermExists: false,
-    selfSessionPath: `flows/${SID}/objects/${SELF}/knowledge/relations/${PEER}.md`,
-    selfSessionExists: false,
-  };
   const talkWindow: TalkWindow = {
     id: "w_talk_alice_to_critic",
     type: "talk",
@@ -65,6 +50,15 @@ async function setupThread(baseDir: string) {
     target: PEER,
     conversationId: "w_talk_alice_to_critic",
   };
+  const doWindow: DoWindow = {
+    id: "w_do_test",
+    type: "do",
+    parentWindowId: ROOT_WINDOW_ID,
+    title: "do test",
+    status: "running",
+    createdAt: Date.now(),
+    targetThreadId: "t_child",
+  };
   const thread: ThreadContext = {
     id: "t_root",
     status: "running",
@@ -73,45 +67,34 @@ async function setupThread(baseDir: string) {
     persistence: { ...flow, threadId: "t_root" },
   };
   initContextWindows(thread, { initialTaskTitle: "test self" });
-  thread.contextWindows = [...thread.contextWindows, relationWindow, talkWindow];
+  thread.contextWindows = [...thread.contextWindows, talkWindow, doWindow];
   await writeThread(thread);
-  return { thread, relationWindow, talkWindow };
+  return { thread, talkWindow, doWindow };
 }
 
 describe("WindowManager.submit — P6.§3 self-type guard", () => {
-  it("rejects when form.parent.type does not declare the method", async () => {
+  it("rejects when form re-targeted to a parent type that doesn't declare the method", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-mgr-disp-"));
     try {
-      const { thread, talkWindow } = await setupThread(tempRoot);
+      const { thread, talkWindow, doWindow } = await setupThread(tempRoot);
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
 
-      // 手工构造一个 form：parent = talk_window, method = "edit"（edit 只挂在 relation_window 上）。
-      // 走低阶 path（绕过 openMethodExec 的 lookupMethodEntry 早期校验）来构造严格
-      // 跨类型场景。这里直接 set 一个 method_exec form 进 manager 私有 windows 也可，
-      // 但更朴素的做法是用 openMethodExec 在合法 parent 上开 form 再人为换 parent。
-      //
-      // 简化：走 openMethodExec 在 relation_window 上开 form, 然后改 parentWindowId。
-      // 这样 form.method 能落到 registry 校验之外（用户构造的合法 form, 但被
-      // re-targeted 到错类型 parent，模拟 §3 防御场景）。
+      // 在 talk_window 上开一个 "say" form（say 只挂 talk），不带 args 避免 auto-submit。
       const opened = await mgr.openMethodExec({
         thread,
-        parentWindowId: `w_rel_${PEER}`,
-        method: "edit",
-        title: "edit relation",
-        // 不带 args, 避免 auto-submit
+        parentWindowId: talkWindow.id,
+        method: "say",
+        title: "say",
       });
       expect(opened.autoSubmitted).toBe(false);
       const formId = opened.formId!;
       expect(formId).toBeDefined();
 
-      // 把 form re-target 到 talk_window：talk_window 没有 "edit" 方法
-      const form = mgr.get(formId);
-      expect(form).toBeDefined();
-      Object.assign(form!, { parentWindowId: talkWindow.id });
+      // 把 form re-target 到 do_window：do 没有 "say" 方法。
+      const form = mgr.get(formId)!;
+      Object.assign(form, { parentWindowId: doWindow.id });
 
-      // 现在 submit 应被 manager 的 §3 校验拦下：lookupMethodEntry 在 talk_window 上
-      // 找不到 "edit" → throw（"not registered on parent window type"），这是更早的
-      // 拒绝路径（拦在 declaringType 比对前）。
+      // submit 应被 manager 拦下：lookupMethodEntry 在 do_window 上找不到 "say" → throw。
       let caught: Error | undefined;
       try {
         await mgr.submit(formId, thread);
@@ -120,36 +103,26 @@ describe("WindowManager.submit — P6.§3 self-type guard", () => {
       }
       expect(caught).toBeDefined();
       expect(caught!.message).toContain("not registered on parent window type");
-      expect(caught!.message).toContain("talk");
+      expect(caught!.message).toContain("do");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
 
-  it("happy path: matching parent.type lets submit dispatch into entry.exec", async () => {
+  it("happy path: method on its correct parent type opens a form (no not-registered error)", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-mgr-disp-ok-"));
     try {
-      const { thread } = await setupThread(tempRoot);
+      const { thread, talkWindow } = await setupThread(tempRoot);
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
 
+      // say 挂在 talk 上 → 正常开 form（不报 not-registered）。
       const opened = await mgr.openMethodExec({
         thread,
-        parentWindowId: `w_rel_${PEER}`,
-        method: "edit",
-        title: "edit relation ok",
-        args: { content: "hello", scope: "session" },
-        // args 给齐 + edit 不引入新 knowledge → auto-submit
+        parentWindowId: talkWindow.id,
+        method: "say",
+        title: "say ok",
       });
-      // 不强求 autoSubmitted（method match 列表 / knowledge 行为依实现而定），
-      // 关键是没有 [method-error]。
-      if (opened.autoSubmitted) {
-        // submitResult 应不带 [method-error] 前缀
-        const r = opened.submitResult;
-        expect(r === undefined || !r.startsWith("[method-error]")).toBe(true);
-      } else {
-        const r = await mgr.submit(opened.formId!, thread);
-        expect(r === undefined || !r.startsWith("[method-error]")).toBe(true);
-      }
+      expect(opened.formId).toBeDefined();
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
