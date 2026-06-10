@@ -22,7 +22,7 @@ import type {
 } from "../windows/_shared/method-types.js";
 import type { OnCloseContext, ReadableFn, RenderContext } from "../windows/_shared/registry.js";
 import type { XmlNode } from "../../thinkable/context/xml.js";
-import type { ProgramSelf } from "./types.js";
+import type { ProgramSelf } from "@ooc/builtins/program/executable/self.js";
 
 /**
  * Object window 的 methods[name].exec 收到的 ctx —— 标准 MethodExecutionContext + programSelf。

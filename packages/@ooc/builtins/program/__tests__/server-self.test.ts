@@ -2,14 +2,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createStoneObject, readFlowData, writeExecutableSource } from "../../persistable";
-import { createProgramSelf } from "../object/self";
+import { createStoneObject, readFlowData, writeExecutableSource } from "@ooc/core/persistable/index.js";
+import { createProgramSelf } from "../executable/self";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
-import type { ThreadContext } from "../../thinkable/context";
-import { makeThread } from "../../__tests__/make-thread";
+import type { ThreadContext } from "@ooc/core/thinkable/context.js";
+import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
-import { builtinRegistry } from "../windows/_shared/registry";
-import type { ContextWindow } from "../windows/_shared/types";
+import { builtinRegistry } from "@ooc/core/executable/windows/_shared/registry";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types";
 
 let tempRoot: string | undefined;
 
