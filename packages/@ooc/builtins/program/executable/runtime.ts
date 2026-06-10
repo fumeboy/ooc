@@ -17,10 +17,10 @@ import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import type { ProgramExecRecord } from "@ooc/core/extendable/_shared/types.js";
 import { createProgramSelf } from "@ooc/core/executable/object/self.js";
 import { deriveStoneFromThread } from "@ooc/core/persistable/index.js";
-import { executeUserCode } from "@ooc/core/executable/program/sandbox/executor.js";
-import { runShellProgram } from "@ooc/core/executable/program/shell.js";
-import { buildProgramShellEnv } from "@ooc/core/executable/program/self-env.js";
-import { formatProgramResult } from "@ooc/core/executable/program/format.js";
+import { executeUserCode } from "./sandbox/executor.js";
+import { runShellProgram } from "./shell.js";
+import { buildProgramShellEnv } from "./self-env.js";
+import { formatProgramResult } from "./format.js";
 
 /** 一次 exec 调用的入参形态。 */
 export interface ProgramExecArgs {

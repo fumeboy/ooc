@@ -1,5 +1,5 @@
-import { resolveStoneIdentityDir } from "../../persistable/index.js";
-import type { ThreadContext } from "../../thinkable/context.js";
+import { resolveStoneIdentityDir } from "@ooc/core/persistable/index.js";
+import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 
 /**
  * shell 模式下为当前线程派生额外环境变量。

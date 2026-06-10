@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createCapturingConsole } from "./console";
 import { wrapUserCode } from "./wrap";
-import type { ProgramExecutionResult } from "../types";
+import type { ProgramExecutionResult } from "../../types.js";
 
 let counter = 0;
 
