@@ -22,7 +22,7 @@ import {
   __resetSerialQueueForTests,
 } from "@ooc/core/persistable";
 import { scanRunningThreads } from "@ooc/core/app/server/runtime/thread-query";
-import { evolveSelfMerge } from "@ooc/core/programmable/evolve-self";
+import { evolveSelfMerge } from "@ooc/core/persistable/stone-evolve-self";
 import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
 

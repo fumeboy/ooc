@@ -19,7 +19,7 @@
 
 import { rmdir, stat, cp } from "node:fs/promises";
 import { dirname, join, sep } from "node:path";
-import { stoneDir } from "../persistable/stone-object.js";
+import { stoneDir } from "./stone-object.js";
 import {
   gitArchiveBranch,
   gitCheckout,
@@ -35,15 +35,15 @@ import {
   gitWorktreePrune,
   gitWorktreeUnregister,
   type GitErrorCode,
-} from "./git.js";
-import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "../persistable/pr-issue.js";
+} from "./stone-git.js";
+import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "./pr-issue.js";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import {
   nestedObjectPath,
   STONE_OBJECTS_SUBDIR,
   STONES_MAIN_BRANCH,
   SESSION_BRANCH_PREFIX,
-} from "../persistable/common.js";
+} from "./common.js";
 
 /** Supervisor 的 objectId（治理身份：rollback 仅 supervisor 可调；PR-Issue 默认收件人）。 */
 export const SUPERVISOR_OBJECT_ID = "supervisor";

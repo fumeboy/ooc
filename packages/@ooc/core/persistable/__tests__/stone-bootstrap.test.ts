@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "bun:test";
 import { mkdtempSync, existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { ensureStoneRepo, STONES_MAIN_BRANCH } from "@ooc/core/programmable/bootstrap";
+import { ensureStoneRepo, STONES_MAIN_BRANCH } from "@ooc/core/persistable/stone-bootstrap";
 
 let tempRoot: string;
 

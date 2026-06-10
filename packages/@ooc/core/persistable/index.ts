@@ -176,12 +176,12 @@ export { enqueueSessionWrite, __resetSerialQueueForTests } from "../runtime/seri
 // STONES_MAIN_BRANCH canonical 源已迁入 ./common（打破 pr-issue → bootstrap 反向依赖）。
 export { STONES_MAIN_BRANCH } from "./common";
 
-// ooc-6 批次 E1: git / versioning 编排迁入 @ooc/core/programmable。
-// persistable/index 继续 re-export 这些符号，保证 `@ooc/core/persistable` barrel 调用方零改动。
+// git / versioning 编排（stone-git / stone-bootstrap / stone-versioning / stone-evolve-self）。
+// persistable/index re-export 这些符号，作为 `@ooc/core/persistable` barrel 的统一对外面。
 export {
   ensureStoneRepo,
   type EnsureStoneRepoResult,
-} from "../programmable/bootstrap.js";
+} from "./stone-bootstrap.js";
 
 export {
   // U3: git CLI 薄包装（仅供 versioning 等高层编排使用）
@@ -211,7 +211,7 @@ export {
   type CommitInput,
   type WorktreeAddInput,
   type WorktreeEntry,
-} from "../programmable/git.js";
+} from "./stone-git.js";
 
 export {
   // U4: 高层 versioning 编排（session worktree 合入 + 治理 + 控制面直写 main）
@@ -234,7 +234,7 @@ export {
   type TryMergeSelfResult,
   type RequestPrIssueResult,
   type ResolvePrIssueResult,
-} from "../programmable/versioning.js";
+} from "./stone-versioning.js";
 
 export {
   // evolve-self: super-flow 身份合入闸门（session worktree → main）
@@ -244,7 +244,7 @@ export {
   type EvolveSelfDiff,
   type EvolveSelfMerged,
   type EvolveSelfErr,
-} from "../programmable/evolve-self.js";
+} from "./stone-evolve-self.js";
 
 export { parseMentions } from "./mention";
 

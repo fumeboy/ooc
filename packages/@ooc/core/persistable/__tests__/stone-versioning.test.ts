@@ -12,9 +12,9 @@ import {
   pruneStaleWorktrees,
   type SessionWorktreeRef,
   __testing,
-} from "@ooc/core/programmable/versioning";
+} from "@ooc/core/persistable/stone-versioning";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
-import { gitHead, gitRevParse } from "@ooc/core/programmable/git";
+import { gitHead, gitRevParse } from "@ooc/core/persistable/stone-git";
 import { readPrIssue } from "../pr-issue";
 
 let tempRoots: string[] = [];

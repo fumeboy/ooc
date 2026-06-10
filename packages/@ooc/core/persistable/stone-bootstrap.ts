@@ -28,10 +28,10 @@ import {
   STONE_OBJECTS_SUBDIR,
   STONES_MAIN_BRANCH,
   STONES_BARE_REPO_DIR,
-} from "../persistable/common.js";
+} from "./common.js";
 
 // 常量 canonical 源已迁入 persistable/common（打破 pr-issue → bootstrap 反向依赖）；
-// 此处 re-export 保持旧 import 路径（`programmable/bootstrap`）可用。
+// 此处 re-export 自 common，避让 pr-issue → bootstrap 的反向依赖。
 export { STONES_MAIN_BRANCH, STONES_BARE_REPO_DIR };
 
 const BOOTSTRAP_AUTHOR_NAME = "bootstrap";

@@ -11,7 +11,7 @@
  * （program shell $OOC_SELF_DIR）看得到完整 identity、读写都收敛到「一个目录」。
  *
  * 本文件只负责「解析 identity 目录 + lazy 建/检测 worktree」——不碰 commit/merge
- * （那是 super flow evolve_self 的事，复用 programmable/versioning）。
+ * （那是 super flow evolve_self 的事，复用 stone-versioning）。
  */
 
 import { readdir, rmdir, stat } from "node:fs/promises";
@@ -23,7 +23,7 @@ import {
   SESSION_BRANCH_PREFIX,
   type StoneObjectRef,
 } from "./common";
-import { gitWorktreeAdd } from "../programmable/git";
+import { gitWorktreeAdd } from "./stone-git";
 import { SUPER_SESSION_ID } from "../_shared/types/constants";
 
 /** business session 的 stone 分支名：`session-<sid>`。 */

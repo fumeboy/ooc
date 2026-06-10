@@ -19,13 +19,13 @@ import {
   requestPrIssueReview,
   tryMergeSelf,
   type SessionWorktreeRef,
-} from "./versioning.js";
-import { gitBranchDelete, gitStatus } from "./git.js";
-import { STONES_MAIN_BRANCH } from "../persistable/common.js";
+} from "./stone-versioning.js";
+import { gitBranchDelete, gitStatus } from "./stone-git.js";
+import { STONES_MAIN_BRANCH } from "./common.js";
 import {
   sessionStoneBranch,
   sessionWorktreePath,
-} from "../persistable/stone-worktree.js";
+} from "./stone-worktree.js";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 

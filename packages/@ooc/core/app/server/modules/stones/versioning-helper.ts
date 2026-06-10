@@ -5,10 +5,10 @@
  * 已评审」操作：所见即所得，不需 session worktree 隔离与 super flow 评审。本 helper 把写
  * 操作直接落 `stones/main/` 工作树并 commit（enqueueSessionWrite 串行化防 HTTP 并发竞争）。
  *
- * 编排核心在 persistable/programmable 的 `httpDirectMainWrite`（单一 owner）；本文件保留为
+ * 编排核心在 persistable 的 `httpDirectMainWrite`（单一 owner）；本文件保留为
  * 薄适配层——仅做命名对齐（HttpWrite* ↔ HttpDirectMainWrite*）。
  */
-import { httpDirectMainWrite } from "@ooc/core/programmable";
+import { httpDirectMainWrite } from "@ooc/core/persistable";
 
 /** wrapHttpWriteInWorktree 的成功返回。 */
 export interface HttpWriteOk {
@@ -52,7 +52,7 @@ export interface WrapHttpWriteInput {
 }
 
 /**
- * 把 HTTP 写 stone 操作直接 commit 到 main（薄适配 → programmable.httpDirectMainWrite）。
+ * 把 HTTP 写 stone 操作直接 commit 到 main（薄适配 → persistable.httpDirectMainWrite）。
  */
 export async function wrapHttpWriteInWorktree(input: WrapHttpWriteInput): Promise<HttpWriteOk | HttpWriteErr> {
   const r = await httpDirectMainWrite({
