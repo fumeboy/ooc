@@ -1,66 +1,45 @@
 /**
  * stone-versioning —— 高层编排，把 worktree commit / scope 评估 / merge /
- * PR-Issue / rollback / GC 收口在 persistable 层。
+ * PR-Issue / rollback / GC 收口在 persistable 层之上。
  *
- * 去 metaprog（2026-06-09，docs/2026-06-09-remove-metaprog-unify-session-worktree-design.md）：
- * 删除并行的 metaprog worktree 写路径（openMetaprogWorktree / supervisorCreateObject /
- * versionedStoneWrite）。stone 写只剩两个落点——
+ * stone 写只有两个落点：
  * - **LLM session 内任何 stone 写**（改自己 + 改别人/建别人）落业务 session 的 worktree
- *   （方案 A：物理 `flows/<sid>/`、branch `session-<sid>`，plain write），经 super flow
- *   `evolve_self` 合入 main。
+ *   （物理 `flows/<sid>/`、branch `session-<sid>`，plain write），经 super flow `evolve_self` 合入 main。
  * - **HTTP 控制面写**（人类已决策）经 `httpDirectMainWrite` 直写 `stones/main/` 并 commit。
  *
- * Caller 视角（保留的底层原语，供上述两路 + 治理复用）：
- * - `commitWorktree(ref, { intent, authorObjectId })` stage 全部并 commit
- * - `tryMergeSelf(ref, authorObjectId)` 尝试 self-scope ff merge：rebase 到 main
- *   HEAD → 路径分类 → 全在自治区则 ff，否则 must-pr-issue（caller 转 requestPrIssueReview）
- * - `requestPrIssueReview(ref, { intent, authorObjectId })` 在 super session 创 PR-Issue
- * - `resolvePrIssue(opts)` 让 Supervisor 的决议生效
- * - `rollback(opts)` Supervisor 署名回滚
- * - `httpDirectMainWrite(input)` 控制面写直写 main 并 commit
- * - `pruneStaleWorktrees(baseDir)` 启动 hygiene
- *
+ * 保留的底层原语（供上述两路 + 治理复用）：commitWorktree / tryMergeSelf / requestPrIssueReview /
+ * resolvePrIssue / rollback / httpDirectMainWrite / pruneStaleWorktrees。各自 docstring 详述。
  * 所有 git 子命令通过 `enqueueSessionWrite("git:" + baseDir, ...)` 串行化。
  *
- * Supervisor 对称化：supervisor 走与其它 Object 完全相同的合入路径——session worktree
- * → super flow evolve_self。改动落在 `objects/supervisor/` 下为 self-scope（ff merge），
- * 跨自治区为 cross-scope 自动开 PR-Issue。**supervisor 评审自己的 PR-Issue 是合法的**
- * （自审是治理责任的一部分）。唯一保留的特权是 `rollback`（只 supervisor 可调）。
- * supervisor 与 user 都是 Builtin Object（`packages/@ooc/builtins/{supervisor,user}`），
- * 随 OOC 代码仓发版，Agent 不可改写。
+ * Supervisor 对称化：走与其它 Object 完全相同的合入路径——改 `objects/supervisor/` 下是 self-scope
+ * （ff merge），跨自治区是 cross-scope 自动开 PR-Issue（**supervisor 自审自己的 PR-Issue 合法**，
+ * 自审是治理责任的一部分）。唯一特权是 `rollback`（仅 supervisor 可调）。supervisor 与 user 都是
+ * Builtin Object（`packages/@ooc/builtins/{supervisor,user}`），随 OOC 发版，Agent 不可改写。
  */
 
 import { rmdir, stat, cp } from "node:fs/promises";
 import { dirname, join, sep } from "node:path";
-import { createStoneObject, stoneDir, stoneKnowledgeDir } from "../persistable/stone-object.js";
-import { writeSelf } from "../persistable/stone-self.js";
-import { writeReadable } from "../persistable/stone-readme.js";
+import { stoneDir } from "../persistable/stone-object.js";
 import {
   gitArchiveBranch,
   gitCheckout,
   gitCommit,
   gitCommitAll,
-  gitCurrentBranch,
   gitDiffNames,
   gitDiffPatch,
   gitHead,
   gitMergeFastForward,
   gitRebase,
   gitRevParse,
-  gitWorktreeAdd,
   gitWorktreeList,
   gitWorktreePrune,
-  gitWorktreeRemove,
   gitWorktreeUnregister,
-  isValidBranchName,
   type GitErrorCode,
-  type GitResult,
 } from "./git.js";
 import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "../persistable/pr-issue.js";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import {
   nestedObjectPath,
-  isBuiltinObjectId,
   STONE_OBJECTS_SUBDIR,
   STONES_MAIN_BRANCH,
   SESSION_BRANCH_PREFIX,
@@ -73,11 +52,8 @@ export const SUPERVISOR_OBJECT_ID = "supervisor";
 const WORKTREE_BRANCH_PREFIX = "metaprog";
 
 /**
- * worktree 移除后 GC 空父目录（2026-06-07）。
- *
- * `git worktree remove` 只删 worktree 目录本身（`stones/metaprog/<id>/<token>`），留下空的父路径段
- * `stones/metaprog/<id>/`（甚至 `stones/metaprog/`）。本函数从 worktree 父目录起逐级 `rmdir`，只删空目录、
- * 到 `stones/metaprog/` 即止（不碰 `stones/`）。best-effort：rmdir 遇非空/不存在即停。
+ * worktree 移除后 GC 空父目录：从 worktree 父目录起逐级 `rmdir`，只删空目录、到 `stones/metaprog/`
+ * 即止（不碰 `stones/`）。best-effort：rmdir 遇非空/不存在即停。
  */
 async function gcEmptyWorktreeParents(worktreePathAbs: string, baseDir: string): Promise<void> {
   const metaprogRoot = join(baseDir, "stones", WORKTREE_BRANCH_PREFIX);
@@ -93,11 +69,8 @@ async function gcEmptyWorktreeParents(worktreePathAbs: string, baseDir: string):
 }
 
 /**
- * 后序清扫整个 `stones/metaprog/` 子树里的空目录（启动 hygiene，2026-06-07）。
- *
- * 用于回收历史遗留：旧版 worktree 移除未 GC 父目录、或非正常退出留下的空 `metaprog/<id>/`。
- * 自底向上 rmdir，只删空目录；`stones/metaprog/` 自身若清空也一并删除（取代旧的空目录残留）。
- * best-effort：任何 rmdir 失败（非空/竞态）静默跳过。
+ * 启动 hygiene：后序清扫整个 `stones/metaprog/` 子树里的空目录，回收历史遗留（旧版 worktree
+ * 移除未 GC 父目录、或非正常退出留下的空 `metaprog/<id>/`）。best-effort：rmdir 失败静默跳过。
  */
 async function gcEmptyMetaprogTree(baseDir: string): Promise<void> {
   const { readdir } = await import("node:fs/promises");
@@ -166,9 +139,9 @@ function repoDir(baseDir: string): string {
 }
 
 /**
- * worktree branch 名 → 磁盘物理路径。session 分支（`session-<sid>`）落 `flows/<sid>`
- * （方案 A，2026-06-09，与 sessionWorktreePath / stoneDir 对齐）；其余 branch（metaprog
- * 残留等）仍走 `stones/<branch>`。resolvePrIssue 的 worktree GC 依赖本映射定位真 worktree。
+ * worktree branch 名 → 磁盘物理路径。session 分支（`session-<sid>`）落 `flows/<sid>`（与
+ * sessionWorktreePath / stoneDir 对齐）；其余 branch（metaprog 残留等）仍走 `stones/<branch>`。
+ * resolvePrIssue 的 worktree GC 依赖本映射定位真 worktree。
  */
 function worktreePath(baseDir: string, branch: string): string {
   if (branch.startsWith(SESSION_BRANCH_PREFIX)) {
@@ -189,7 +162,7 @@ const OBJECT_ID_SEGMENT_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9_.-]*$/;
 /**
  * 校验 objectId（含嵌套 child：`parent/child`、`a/b/c`）。
  *
- * 嵌套语义（task#16）：objectId 用 `/` 编码父子层级，物理落点经 nestedObjectPath
+ * 嵌套语义：objectId 用 `/` 编码父子层级，物理落点经 nestedObjectPath
  * 翻译成 `objects/parent/children/child/`。放开 `/` 后必须逐段严格校验，防 path
  * traversal：
  * - 整串长度 ≤ 64
@@ -653,13 +626,11 @@ export type RollbackResult =
   | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
 
 /**
- * Supervisor 主导回滚：把 main 上 `${objectId}/` 子树恢复到目标 commit 状态，
- * 并以 Supervisor 署名提交。
+ * Supervisor 主导回滚：把 main 上 `${objectId}/` 子树恢复到目标 commit 状态，并以 Supervisor 署名提交。
  *
- * R12 enforcement at persistable layer：本函数自身强制 supervisorAuthor ===
- * SUPERVISOR_OBJECT_ID（参考 R5 #28）。LLM 命令层 / HTTP route / 测试夹具的
- * caller 校验是补充防御，但 persistable 层是唯一可信防线——任何新入口（cron /
- * 工具脚本 / 未来子模块）调本函数时都自动得到边界保护。
+ * supervisor-only：本函数自身强制 supervisorAuthor === SUPERVISOR_OBJECT_ID。LLM 命令层 / HTTP
+ * route / 测试夹具的 caller 校验是补充防御，但本层是唯一可信防线——任何新入口（cron / 工具脚本 /
+ * 未来子模块）调本函数时都自动得到边界保护。
  */
 export async function rollback(input: RollbackInput): Promise<RollbackResult> {
   if (!isValidObjectId(input.objectId)) {
@@ -669,7 +640,7 @@ export async function rollback(input: RollbackInput): Promise<RollbackResult> {
   if (!isValidObjectId(supervisorAuthor)) {
     return { ok: false, code: "INVALID_INPUT", message: `invalid supervisorAuthor '${supervisorAuthor}'` };
   }
-  // R12 supervisor-only: persistable 层强制最深防御。治理 rollback 经控制面 HTTP 端点
+  // supervisor-only 最深防御：治理 rollback 经控制面 HTTP 端点
   // （POST /api/runtime/stones/<id>/rollback，固定传 SUPERVISOR_OBJECT_ID）行使；
   // 本关是唯一可信防线，任何绕过控制面的入口都过不去。
   if (supervisorAuthor !== SUPERVISOR_OBJECT_ID) {
@@ -693,7 +664,7 @@ export async function rollback(input: RollbackInput): Promise<RollbackResult> {
     const checkout = gitCheckout(repo, STONES_MAIN_BRANCH);
     if (!checkout.ok) return { ok: false, code: "GIT", gitCode: checkout.code, stderr: checkout.stderr } as const;
 
-    // git checkout {target} -- objects/{objectId}/  (2026-05-21 layout)
+    // git checkout {target} -- objects/{objectId}/
     const restore = Bun.spawnSync(
       ["git", "checkout", target.value, "--", `objects/${input.objectId}/`],
       { cwd: repo, stdout: "pipe", stderr: "pipe" },
@@ -789,7 +760,7 @@ export type HttpDirectMainWriteResult =
   | { ok: false; code: string; message: string };
 
 /**
- * HTTP 控制面写 stone → **直接 commit main**（去 metaprog，2026-06-09）。
+ * HTTP 控制面写 stone → **直接 commit main**。
  *
  * 人类经控制面的编辑即「已决策/已评审」操作：所见即所得，无需 session 隔离与 super flow 评审。
  * 写直接落 `stones/main/` worktree，enqueueSessionWrite 串行化防 HTTP 并发 git 竞争，

@@ -1,16 +1,13 @@
 /**
- * evolve_self —— super-flow 身份合入闸门（worktree 统一模型，design §4）。
- *
- * 把「某业务 session 的 worktree 改动」正式合入 canonical main：
+ * evolve_self —— super-flow 身份合入闸门。把「某业务 session 的 worktree 改动」正式合入 canonical main：
  *   1. **diff 模式**：列出 creator session 的 worktree 工作树相对 HEAD 改了哪些 stone 文件
  *      （业务 session 的 write_file/edit 直写 worktree、未 commit）。
  *   2. **合入模式**：commit creator session 的 `session-<sid>` worktree（署名 = objectId）
  *      → rebase 到 main → self-scope ff-merge 回 main → GC（移除 worktree + 删分支）。
  *
- * 与旧 plain-overlay 模型的区别（doc §4）：**session 分支即演化单元**——不再读 overlay
- * 逐文件应用进新建实验 worktree，而是直接 commit+merge 业务 session 已有的 worktree 分支。
+ * session 分支即演化单元：直接 commit+merge 业务 session 已有的 worktree 分支，不读 overlay 逐文件重放。
  *
- * 合入分类（去 metaprog 后 worktree 可含任何 stone 改动，2026-06-09）：
+ * 合入分类（worktree 可含任何 stone 改动）：
  * - self-scope（只改自己 objects/<self>/）→ tryMergeSelf ff-merge 到 main，author = objectId。
  * - cross-scope（动了别人 / 建了新对象）→ tryMergeSelf 整体判 must-pr-issue → requestPrIssueReview
  *   开 PR-Issue 交 supervisor resolve。
@@ -81,10 +78,9 @@ async function pathExists(p: string): Promise<boolean> {
  * 把 worktree `git status --porcelain` 的一行（如 ` M objects/agent/self.md` /
  * `?? objects/other/new.ts`）转成 stone 改动相对路径。
  *
- * 去 metaprog（2026-06-09）后：业务 session 的 write_file/edit 把**任何** stone 写
- * （改自己 + 改别人/建别人）都落进同一 session worktree，所以 evolve_self 必须**列全部
- * `objects/` 改动**（含 cross-object），让 super flow 看见要评审什么——cross-scope 由
- * tryMergeSelf 整体判 must-pr-issue → requestPrIssueReview。
+ * 业务 session 的 write_file/edit 把**任何** stone 写（改自己 + 改别人/建别人）都落进同一
+ * session worktree，所以 evolve_self 必须**列全部 `objects/` 改动**（含 cross-object），让
+ * super flow 看见要评审什么——cross-scope 由 tryMergeSelf 整体判 must-pr-issue → requestPrIssueReview。
  *
  * 返回 `objects/` 前缀去掉后的路径（如 `agent/self.md` / `other/new.ts`），保留 owner
  * 段以区分跨对象改动。非 `objects/` 路径（运行时产物等）返回 undefined。
@@ -190,9 +186,8 @@ export async function evolveSelfMerge(
   }
 
   if (merge.kind === "must-pr-issue") {
-    // cross-scope 一等路径（去 metaprog，2026-06-09）：业务 session 的 worktree 现在可含
-    // cross-object 改动（改别人 / 建新对象）——tryMergeSelf 把含越界改动的 session 整体判
-    // must-pr-issue，转 requestPrIssueReview 交 supervisor resolve 后合入。
+    // cross-scope 一等路径：业务 session 的 worktree 可含 cross-object 改动（改别人 / 建新对象）——
+    // tryMergeSelf 把含越界改动的 session 整体判 must-pr-issue，转 requestPrIssueReview 交 supervisor resolve。
     const pr = await requestPrIssueReview({ worktree, intent: message, authorObjectId: objectId });
     if (!pr.ok) {
       return { ok: false, code: pr.code, message: "message" in pr ? pr.message : pr.stderr };

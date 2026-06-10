@@ -1,5 +1,5 @@
 /**
- * git CLI 薄包装 —— U3 实现，仅 stone-versioning 内部调用。
+ * git CLI 薄包装 —— 仅 stone-versioning 内部调用。
  *
  * 设计原则：
  * - 不引入 git npm 依赖；用 `Bun.spawnSync` 同步调用 git CLI（与 fs-search /
