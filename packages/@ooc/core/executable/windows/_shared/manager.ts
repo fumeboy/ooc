@@ -25,29 +25,18 @@
  */
 
 import type { ThreadContext } from "../../../thinkable/context.js";
-import { hashArgs, diffArgs, type FormChangeEvent, type Intent, type IntentCache, type MethodCallSchema, type MethodArgSpec } from "../../../thinkable/context/intent.js";
+import { hashArgs, diffArgs, type FormChangeEvent, type Intent, type IntentCache } from "../../../thinkable/context/intent.js";
+import { buildFillState } from "./schema-fill.js";
 import type { ObjectRegistry } from "./registry.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
-  isNonPersistedWindow,
   type MethodExecWindow,
   type ContextWindow,
 } from "./types.js";
 import type { ObjectMethod, MethodExecutionContext } from "./method-types.js";
-import {
-  writeRuntimeObjectState,
-  deleteRuntimeObject,
-  readContextRegistry,
-  writeContextRegistry,
-  type ContextMember,
-  type ContextRegistry,
-  type ContextParams,
-  writeThreadContext,
-  buildThreadContextEntries,
-  createFlowObject,
-} from "../../../persistable/index.js";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../persistable/common.js";
+import { WindowPersistence, threadPersistRef, runtimeObjectRef } from "./window-persistence.js";
 
 /**
  * 从 parent 上查找它注册到的 ObjectMethod。
@@ -75,9 +64,12 @@ export class WindowManager {
    * and builtin feature checks. Passed in at construction time.
    */
   readonly registry: ObjectRegistry;
+  /** 持久化职责（state.json / thread-context.json / context-registry）的委托。 */
+  private readonly persistence: WindowPersistence;
 
   private constructor(registry: ObjectRegistry) {
     this.registry = registry;
+    this.persistence = new WindowPersistence(registry, this.windows);
   }
 
   /** 从 thread.contextWindows 装载状态。 */
@@ -122,111 +114,6 @@ export class WindowManager {
   /** 列出指定 parent 下的直接子 window。 */
   childrenOf(parentId: string): ContextWindow[] {
     return this.list().filter((w) => w.parentWindowId === parentId);
-  }
-
-  // ── P4 schema + fill_state helpers ──
-
-  /**
-   * Build fill_state for a form given its schema and accumulated args.
-   * Fail-soft: validation errors are marked in fill_state but don't block refine.
-   */
-  private buildFillState(
-    schema: MethodCallSchema | undefined,
-    args: Record<string, unknown>,
-    existingFill?: MethodExecWindow["fill"],
-  ): MethodExecWindow["fill"] | undefined {
-    if (!schema) return undefined;
-    const fill: NonNullable<MethodExecWindow["fill"]> = {};
-    for (const [argName, spec] of Object.entries(schema.args)) {
-      const hasValue = argName in args && args[argName] !== undefined && args[argName] !== null && args[argName] !== "";
-      const prev = existingFill?.[argName];
-      if (!hasValue) {
-        // Missing — but check default
-        if (spec.default !== undefined) {
-          fill[argName] = {
-            status: "provided",
-            value: spec.default,
-            source: "default",
-            refinedAt: prev?.refinedAt ?? Date.now(),
-          };
-        } else {
-          fill[argName] = {
-            status: "missing",
-            source: prev?.source ?? "initial",
-            refinedAt: prev?.refinedAt,
-          };
-        }
-        continue;
-      }
-      // Has value — validate
-      const value = args[argName];
-      const error = this.validateArgValue(spec, value);
-      if (error) {
-        fill[argName] = {
-          status: "invalid",
-          value,
-          error,
-          source: prev?.source === "initial" ? "refine" : prev?.source ?? "refine",
-          refinedAt: Date.now(),
-        };
-      } else {
-        fill[argName] = {
-          status: "provided",
-          value,
-          source: prev?.source === "initial" ? "refine" : prev?.source ?? "refine",
-          refinedAt: prev?.refinedAt ?? Date.now(),
-        };
-      }
-    }
-    return fill;
-  }
-
-  private validateArgValue(spec: MethodArgSpec, value: unknown): string | undefined {
-    if (spec.enum && !spec.enum.includes(value as any)) {
-      return spec.validation?.customMessage ?? `值必须是: ${spec.enum.join(", ")}`;
-    }
-    if (spec.type === "string" && typeof value !== "string") {
-      return spec.validation?.customMessage ?? "需要字符串类型";
-    }
-    if (spec.type === "number" && typeof value !== "number") {
-      return spec.validation?.customMessage ?? "需要数字类型";
-    }
-    if (spec.type === "boolean" && typeof value !== "boolean") {
-      return spec.validation?.customMessage ?? "需要布尔类型";
-    }
-    if (spec.type === "array" && !Array.isArray(value)) {
-      return spec.validation?.customMessage ?? "需要数组类型";
-    }
-    if (spec.type === "object" && (typeof value !== "object" || value === null || Array.isArray(value))) {
-      return spec.validation?.customMessage ?? "需要对象类型";
-    }
-    const v = spec.validation;
-    if (v && typeof value === "string") {
-      if (v.minLength !== undefined && value.length < v.minLength) {
-        return v.customMessage ?? `至少 ${v.minLength} 个字符`;
-      }
-      if (v.maxLength !== undefined && value.length > v.maxLength) {
-        return v.customMessage ?? `最多 ${v.maxLength} 个字符`;
-      }
-      if (v.pattern) {
-        try {
-          if (!new RegExp(v.pattern).test(value)) {
-            return v.customMessage ?? `格式不匹配: ${v.pattern}`;
-          }
-        } catch {
-          // Invalid regex — skip
-        }
-      }
-    }
-    if (v && typeof value === "number") {
-      if (v.minimum !== undefined && value < v.minimum) {
-        return v.customMessage ?? `不能小于 ${v.minimum}`;
-      }
-      if (v.maximum !== undefined && value > v.maximum) {
-        return v.customMessage ?? `不能大于 ${v.maximum}`;
-      }
-    }
-    return undefined;
   }
 
   // ── onFormChange dispatch helper ──
@@ -356,13 +243,13 @@ export class WindowManager {
     };
     this.windows.set(formId, form);
     this.recordKnowledgeRefs(form);
-    this.persistWindow(opts.thread, form).catch((e) => console.warn(`[WindowManager] persist form failed: ${(e as Error).message}`));
+    this.persistence.persistWindow(opts.thread, form).catch((e) => console.warn(`[WindowManager] persist form failed: ${(e as Error).message}`));
 
     // schema/fill
     const methodResolved = this.registry.lookupMethodEntry(parent, opts.method);
     if (methodResolved?.entry.schema) {
       form.schema = methodResolved.entry.schema;
-      form.fill = this.buildFillState(form.schema, form.accumulatedArgs);
+      form.fill = buildFillState(form.schema, form.accumulatedArgs);
     }
 
     // Initial onFormChange: status_changed to "open"
@@ -398,8 +285,8 @@ export class WindowManager {
   ): Promise<string | undefined> {
     const ownerFlowObjectRef = this.registry.isBuiltinFeatureType(parent.type)
       ? undefined
-      : this.runtimeObjectRefForWindow(thread, parent);
-    const ownerThreadRef = this.threadPersistRefFromThread(thread);
+      : runtimeObjectRef(thread, parent);
+    const ownerThreadRef = threadPersistRef(thread);
     const ctx: MethodExecutionContext = {
       thread,
       self: parent,
@@ -468,7 +355,7 @@ export class WindowManager {
     this.windows.set(window.id, window);
     this.recordKnowledgeRefs(window);
     if (thread) {
-      this.persistWindow(thread, window).catch((e) => console.warn(`[WindowManager] persist window failed: ${(e as Error).message}`));
+      this.persistence.persistWindow(thread, window).catch((e) => console.warn(`[WindowManager] persist window failed: ${(e as Error).message}`));
     }
     return window.id;
   }
@@ -505,7 +392,7 @@ export class WindowManager {
     };
 
     if (form.schema) {
-      next.fill = this.buildFillState(form.schema, nextArgs, form.fill);
+      next.fill = buildFillState(form.schema, nextArgs, form.fill);
       next.schema = form.schema;
     }
 
@@ -593,8 +480,8 @@ export class WindowManager {
     try {
       const ownerFlowObjectRef = this.registry.isBuiltinFeatureType(parent.type)
         ? undefined
-        : this.runtimeObjectRefForWindow(thread, parent);
-      const ownerThreadRef = this.threadPersistRefFromThread(thread);
+        : runtimeObjectRef(thread, parent);
+      const ownerThreadRef = threadPersistRef(thread);
       const ctx: MethodExecutionContext = {
         thread,
         form: executing,
@@ -709,131 +596,6 @@ export class WindowManager {
 
   // ---- 内部 helper ----
 
-  private async persistWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
-    if (window.id === ROOT_WINDOW_ID) return;
-    if (isNonPersistedWindow(window)) return;
-    const tref = this.threadPersistRefFromThread(thread);
-    if (!tref) return;
-
-    if (this.registry.isBuiltinFeatureType(window.type)) {
-      await this.writeThreadContextSnapshot(thread).catch((e) => {
-        console.warn(`[WindowManager] writeThreadContext failed for ${window.id}: ${(e as Error).message}`);
-      });
-      return;
-    }
-
-    const ref = this.runtimeObjectRefForWindow(thread, window);
-    if (!ref) return;
-    try {
-      await createFlowObject(ref, { class: window.type });
-    } catch (e) {
-      console.warn(`[WindowManager] createFlowObject failed for ${window.id}: ${(e as Error).message}`);
-    }
-    try {
-      await writeRuntimeObjectState(ref, window);
-    } catch (e) {
-      console.warn(`[WindowManager] writeRuntimeObjectState failed for ${window.id}: ${(e as Error).message}`);
-      return;
-    }
-    try {
-      const reg = await readContextRegistry(tref);
-      const params = pickContextParams(window);
-      const idx = reg.members.findIndex((m) => m.objectId === window.id);
-      let next: ContextRegistry;
-      if (idx >= 0) {
-        const cur = reg.members[idx]!;
-        const merged: ContextParams = mergeContextParams(cur.params, params);
-        if (!paramsEqual(cur.params, merged)) {
-          const members = reg.members.slice();
-          members[idx] = { objectId: cur.objectId, params: merged };
-          next = { version: 1, members };
-          await writeContextRegistry(tref, next);
-        }
-      } else {
-        const member: ContextMember = {
-          objectId: window.id,
-          params: { ...params, order: reg.members.length },
-        };
-        next = { version: 1, members: [...reg.members, member] };
-        await writeContextRegistry(tref, next);
-      }
-    } catch (e) {
-      console.warn(`[WindowManager] update registry failed for ${window.id}: ${(e as Error).message}`);
-    }
-
-    await this.writeThreadContextSnapshot(thread).catch((e) => {
-      console.warn(`[WindowManager] writeThreadContext failed for ${window.id}: ${(e as Error).message}`);
-    });
-  }
-
-  private async writeThreadContextSnapshot(thread: ThreadContext): Promise<void> {
-    const tref = this.threadPersistRefFromThread(thread);
-    if (!tref) return;
-    const entries = buildThreadContextEntries(this.windows.values(), this.registry);
-    await writeThreadContext(tref, entries);
-  }
-
-  private async unpersistWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
-    if (!thread.persistence) return;
-    if (window.id === ROOT_WINDOW_ID) return;
-    if (this.registry.isBuiltinFeatureType(window.type)) {
-      await this.writeThreadContextSnapshot(thread).catch((e) => {
-        console.warn(
-          `[WindowManager] writeThreadContext failed during delete for ${window.id}: ${(e as Error).message}`,
-        );
-      });
-      return;
-    }
-    await this.removeFromRuntimeAndRegistryForWindow(thread, window);
-    await this.writeThreadContextSnapshot(thread).catch((e) => {
-      console.warn(
-        `[WindowManager] writeThreadContext failed during delete for ${window.id}: ${(e as Error).message}`,
-      );
-    });
-  }
-
-  private threadPersistRefFromThread(thread: ThreadContext): ThreadPersistenceRef | undefined {
-    if (!thread.persistence) return undefined;
-    return {
-      baseDir: thread.persistence.baseDir,
-      sessionId: thread.persistence.sessionId,
-      objectId: thread.persistence.objectId,
-      threadId: thread.persistence.threadId,
-    };
-  }
-
-  private runtimeObjectRefForWindow(thread: ThreadContext, window: ContextWindow): FlowObjectRef | undefined {
-    if (!thread.persistence) return undefined;
-    return {
-      baseDir: thread.persistence.baseDir,
-      sessionId: thread.persistence.sessionId,
-      objectId: window.id,
-    };
-  }
-
-  private async removeFromRuntimeAndRegistryForWindow(thread: ThreadContext, window: ContextWindow): Promise<void> {
-    const tref = this.threadPersistRefFromThread(thread);
-    if (!tref) return;
-    if (window.id === ROOT_WINDOW_ID) return;
-    try {
-      const reg = await readContextRegistry(tref);
-      const idx = reg.members.findIndex((m) => m.objectId === window.id);
-      if (idx < 0) return;
-      const members = reg.members.slice();
-      members.splice(idx, 1);
-      await writeContextRegistry(tref, { version: 1, members });
-    } catch (e) {
-      console.warn(`[WindowManager] remove from registry failed for ${window.id}: ${(e as Error).message}`);
-    }
-    const ref = this.runtimeObjectRefForWindow(thread, window);
-    if (!ref) return;
-    try {
-      await deleteRuntimeObject(ref);
-    } catch (e) {
-      console.warn(`[WindowManager] deleteRuntimeObject failed for ${window.id}: ${(e as Error).message}`);
-    }
-  }
-
   private requireParent(parentId: string): ContextWindow {
     if (parentId === ROOT_WINDOW_ID) {
       const rootInTable = this.windows.get(ROOT_WINDOW_ID);
@@ -881,7 +643,7 @@ export class WindowManager {
     this.releaseKnowledgeRefs(window);
     this.windows.delete(windowId);
     if (thread) {
-      this.unpersistWindow(thread, window).catch((e) => console.warn(`[WindowManager] delete-persist failed: ${(e as Error).message}`));
+      this.persistence.unpersistWindow(thread, window).catch((e) => console.warn(`[WindowManager] delete-persist failed: ${(e as Error).message}`));
     }
   }
 
@@ -896,19 +658,16 @@ export class WindowManager {
     this.windows.set(window.id, window);
     this.recordKnowledgeRefs(window);
     if (thread) {
-      this.persistWindow(thread, window).catch((e) => console.warn(`[WindowManager] persist window failed: ${(e as Error).message}`));
+      this.persistence.persistWindow(thread, window).catch((e) => console.warn(`[WindowManager] persist window failed: ${(e as Error).message}`));
     }
   }
 
   public reportStateEdit(ref: FlowObjectRef): Promise<void> {
-    const window = this.windows.get(ref.objectId);
-    if (!window) return Promise.resolve();
-    if (this.registry.isBuiltinFeatureType(window.type)) return Promise.resolve();
-    return writeRuntimeObjectState(ref, window);
+    return this.persistence.reportStateEdit(ref);
   }
 
   public reportContextEdit(thread: ThreadContext): Promise<void> {
-    return this.writeThreadContextSnapshot(thread);
+    return this.persistence.reportContextEdit(thread);
   }
 }
 
@@ -926,37 +685,4 @@ function collectKnowledgePathsOf(window: ContextWindow): string[] {
     ];
   }
   return window.windowKnowledgePaths ?? [];
-}
-
-function pickContextParams(window: ContextWindow): ContextParams {
-  const w = window as ContextWindow & {
-    compressLevel?: number;
-    parentWindowId?: string;
-  };
-  const params: ContextParams = {};
-  if (typeof w.compressLevel === "number") params.compressLevel = w.compressLevel;
-  if (typeof w.parentWindowId === "string" && w.parentWindowId !== ROOT_WINDOW_ID) {
-    params.parentObjectId = w.parentWindowId;
-  }
-  return params;
-}
-
-function mergeContextParams(cur: ContextParams, next: ContextParams): ContextParams {
-  return {
-    compressLevel: next.compressLevel ?? cur.compressLevel,
-    decayMeta: next.decayMeta !== undefined ? next.decayMeta : cur.decayMeta,
-    order: cur.order,
-    parentObjectId: next.parentObjectId ?? cur.parentObjectId,
-  };
-}
-
-function paramsEqual(a: ContextParams, b: ContextParams): boolean {
-  if ((a.compressLevel ?? null) !== (b.compressLevel ?? null)) return false;
-  if ((a.order ?? null) !== (b.order ?? null)) return false;
-  if ((a.parentObjectId ?? null) !== (b.parentObjectId ?? null)) return false;
-  const ad = a.decayMeta ?? null;
-  const bd = b.decayMeta ?? null;
-  if (ad === bd) return true;
-  if (ad === null || bd === null) return false;
-  return ad.lastTouchedAt === bd.lastTouchedAt && ad.idleRounds === bd.idleRounds;
 }
