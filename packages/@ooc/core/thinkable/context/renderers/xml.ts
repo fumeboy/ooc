@@ -315,11 +315,10 @@ async function renderContextWindowsNode(
   thread: ThreadContext,
   registry: ObjectRegistry,
 ): Promise<XmlNode | null> {
-  // guidance windows 是 transient 的 form-hint：内容经 window-enrichment（computeFormKnowledgeEntries）
-  // 投递为 form 的 knowledge，而非作为独立 <window> 渲染——它们没有 renderXml/readable hook，一旦
-  // 进入 renderWindowNode 会在 getObjectDefinition("guidance") 处抛错（"guidance" 非注册 object type），
-  // 把整轮 think loop 标 failed（harness 冒烟发现：exec(form_id,"refine",...) 后 manager 把 guidance
-  // push 进 contextWindows → 渲染崩 → thread.status=failed，即便动作已成功）。从渲染输入剔除。
+  // guidance windows 是已退役机制（2026-06-10 起 form 指引为 plain-string tip 直渲于 form），
+  // 但历史持久化的 thread-context 里可能仍残留 type="guidance" 条目——它们没有 renderXml/readable
+  // hook，一旦进入 renderWindowNode 会在 getObjectDefinition("guidance") 处抛错（非注册 object type），
+  // 把整轮 think loop 标 failed。此过滤是 legacy 数据兼容护栏，从渲染输入剔除。
   const renderable = windows.filter((w) => w.type !== "guidance");
   if (renderable.length === 0) return null;
 

@@ -4,7 +4,7 @@
  * Phases (lazy cache-aware):
  * 1. IntentCacheReader — read cached intents for each form (no computation)
  * 2. BaseWindowLoader — load persistent context windows
- * 3. Processors[] — SystemProcessor, MethodFormProcessor, KnowledgeProcessor,
+ * 3. Processors[] — SystemProcessor, WindowEnrichmentProcessor, KnowledgeProcessor,
  *    ActivatorProcessor, PeerProcessor. Each processor reads from intentCache and
  *    produces derived ContextWindows.
  * 4. BudgetManager — relevance scoring + overflow
@@ -18,7 +18,7 @@ import type { ContextSnapshot } from "./snapshot.js";
 import type { IntentCache, Intent } from "./intent.js";
 import { BudgetManager, loadBudgetThresholds } from "./budget.js";
 import { SystemProcessor } from "./processors/system.js";
-import { MethodFormProcessor } from "./processors/method.js";
+import { WindowEnrichmentProcessor } from "./processors/enrichment.js";
 import { KnowledgeProcessor } from "./processors/knowledge.js";
 import { ActivatorProcessor } from "./processors/activator.js";
 import { PeerProcessor } from "./processors/peer.js";
@@ -86,8 +86,8 @@ export class ContextPipeline {
  * Ordering:
  * 1. SystemProcessor — protocol knowledge (basics, reflectable, type-level basics,
  *    creator-reply, end-reflection reminder) + skill_index + self-type registration
- * 2. MethodFormProcessor — enrich method_exec forms (effectiveVisibleType,
- *    methodKnowledgePaths) + derive form-scoped knowledge windows
+ * 2. WindowEnrichmentProcessor — resolve effectiveVisibleType on all windows
+ *    (along the parentClass chain)
  * 3. KnowledgeProcessor — intent-triggered knowledge from intentCache
  * 4. ActivatorProcessor — traditional frontmatter trigger-based knowledge activation
  * 5. PeerProcessor — peer/children Object windows
@@ -97,7 +97,7 @@ export class ContextPipeline {
 export function createDefaultPipeline(): ContextPipeline {
   const p = new ContextPipeline();
   p.addPhase(SystemProcessor);
-  p.addPhase(MethodFormProcessor);
+  p.addPhase(WindowEnrichmentProcessor);
   p.addPhase(KnowledgeProcessor);
   p.addPhase(ActivatorProcessor);
   p.addPhase(PeerProcessor);

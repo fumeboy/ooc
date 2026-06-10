@@ -803,10 +803,9 @@ export function createFlowsService(deps: {
           { sessionId, objectId, threadId },
         );
       }
-      const enriched = await enrichContextWindows(thread.contextWindows as ContextWindow[], thread);
       const payload = {
         ...thread,
-        contextWindows: enriched.enrichedWindows ?? thread.contextWindows,
+        contextWindows: enrichContextWindows(thread.contextWindows as ContextWindow[]),
       };
       return { ...payload, hash: hashJson(stripVolatileForHash(payload)) };
     },

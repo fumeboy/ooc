@@ -177,7 +177,8 @@ export type SharingState =
  * owning form's window block.
  *
  * @deprecated 2026-06-10: replaced by MethodExecWindow.tip (plain string on the form).
- * Kept for backward compat while callers migrate.
+ * 生产方（buildGuidanceWindows）已删除；类型仅保留用于历史持久化数据的读端兼容
+ * （isVolatileDerivedWindow 剔除 + 渲染端过滤）。
  */
 export interface GuidanceWindow extends BaseContextWindow {
   type: "guidance";
@@ -240,13 +241,13 @@ export function creatorWindowIdOf(threadId: string): string {
 }
 
 /**
- * volatile derived window —— 每轮 enrichment 重新派生、从不需要持久化的窗。
+ * volatile derived window —— 旧机制每轮派生、从不需要持久化的窗。
  *
- * 当前唯一成员是 form-bound guidance（type="guidance" + provenance.kind="derived"）：
- * 由 computeFormKnowledgeEntries 每轮 onFormChange 重算生成，既非 inline builtin 也非
- * 独立 flow object（无 state.json）。落进持久化只会变成指向缺失对象的死 _ref——
- * reload 时刷屏 `references missing object ... skipping`、并随每轮 form 派生累积膨胀
- * thread-context.json。写盘端用本谓词剔除，读端跳过历史污染。
+ * 唯一成员是 form-bound guidance（type="guidance" + provenance.kind="derived"）。
+ * 2026-06-10 起该机制已退役（form 指引为 plain-string tip），不再有新的生产方；
+ * 本谓词保留用于剔除历史持久化数据中的残留——落盘的 guidance 是指向缺失对象的死
+ * _ref，reload 时会刷屏 `references missing object ... skipping`。写盘端剔除，
+ * 读端跳过历史污染。
  *
  * 双锚 type+provenance：防误伤未来可能出现的非 derived guidance / 其它 window。
  */
