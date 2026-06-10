@@ -1,0 +1,79 @@
+[
+  {
+    "id": "TC-PROG-01",
+    "name": "ui_methods 通过 HTTP 调用返回正确值",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-PROG-02",
+    "name": "方法拿到 ctx.self.dir（自己的 stone 路径）且目录真实存在",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-PROG-03",
+    "name": "window.commands（LLM 路径自定义命令）可通过 loader 加载",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-PROG-04",
+    "name": "热更新 — 修改 executable 后已有方法变更、新增方法立即生效",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-REFL-01",
+    "name": "Object 通过 ctx.self.dir 读取自己的 self.md（自观察）",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-REFL-02",
+    "name": "通过 HTTP API 修改 self.md（自修改身份）",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-REFL-03",
+    "name": "通过 HTTP API 修改 readable（自修改对外呈现）",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-REFL-04",
+    "name": "通过 HTTP API 修改 executable 代码（自修改行为）",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-REFL-05",
+    "name": "knowledge 双写：reflectable 自写 seed（stone/knowledge） + HTTP 写 sediment（pool/knowledge）",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-REFL-06",
+    "name": "reflectable × programmable 闭环：HTTP 改 executable，新方法通过 hot-reload 立即注册",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-VIS-01",
+    "name": "client-source-url API 返回正确的 absPath 和 fsUrl，指向真实存在的文件",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-VIS-02",
+    "name": "Vite serve visible 组件",
+    "status": "SKIP",
+    "detail": "Vite worldRoot (/Users/bytedance/x/ooc/ooc-2/.ooc-world-live) 与脚本 worldDir (/tmp/claude-501/ooc-storybook-ngpIui) 不一致，Vite fs.allow 不会放行"
+  },
+  {
+    "id": "TC-VIS-03",
+    "name": "Vite 安全边界 — 拒绝 executable",
+    "status": "SKIP",
+    "detail": "Vite worldRoot (/Users/bytedance/x/ooc/ooc-2/.ooc-world-live) 与脚本 worldDir (/tmp/claude-501/ooc-storybook-ngpIui) 不一致，跳过"
+  },
+  {
+    "id": "TC-VIS-04",
+    "name": "visible/index.tsx 变更触发 stone:changed kind=view 事件（Vite HMR 的后端侧信号）",
+    "status": "PASS"
+  },
+  {
+    "id": "TC-VIS-05",
+    "name": "UI↔行为闭环：visible 组件存在 + callMethod 端点可调用对应 executable 方法",
+    "status": "PASS"
+  }
+]
