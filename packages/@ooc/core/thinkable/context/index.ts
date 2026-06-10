@@ -13,8 +13,8 @@ export type {
   MethodArgSpec,
   IntentCache,
   IntentCacheEntry,
-} from "./intent.js";
-export { hashArgs, diffArgs } from "./intent.js";
+} from "@ooc/core/_shared/types/intent.js";
+export { hashArgs, diffArgs } from "@ooc/core/_shared/types/intent.js";
 
 export { BudgetManager } from "./budget.js";
 export type { ContextSnapshot } from "./snapshot.js";

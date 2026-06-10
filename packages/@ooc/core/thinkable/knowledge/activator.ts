@@ -5,7 +5,7 @@ import {
   parseTrigger,
   type Trigger,
 } from "./activator.expr";
-import type { ActivationLevel, ActivationResult, KnowledgeIndex } from "./types";
+import type { ActivationLevel, ActivationResult, KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import type { KnowledgeWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
 /** 激活集合上限，避免 context 爆炸。 */

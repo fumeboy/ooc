@@ -11,7 +11,7 @@
  * - 各 window type 通过 ObjectRegistry（registry.ts）声明自身注册的 method、关闭副作用与渲染规则
  *
  * **batch C6 分层（2026-06-05 ooc-6）**：
- * - base 部分（BaseContextWindow / ObjectType / WindowStatus / provenance / relevance /
+ * - base 部分（BaseContextWindow / string / WindowStatus / provenance / relevance /
  *   SharingState / 常量 / id 工具函数）的 canonical 源已迁入零依赖层
  *   `@ooc/core/_shared/types/context-window.ts`；本文件 re-export 它们保持旧 import 路径可用。
  * - 完整 `ContextWindow` discriminated union 依赖 builtins 各包具体 window 类型，**无法**
@@ -25,7 +25,6 @@
 
 // base 类型 / 常量 / 工具函数：从 _shared re-export（ContextWindow 除外——下方覆盖）
 export type {
-  ObjectType,
   WindowStatus,
   ContextWindowProvenance,
   ContextWindowRelevance,

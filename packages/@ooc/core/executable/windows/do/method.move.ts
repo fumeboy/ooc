@@ -17,7 +17,7 @@ import type {
   MethodExecutionContext,
   ObjectMethod,
 } from "../_shared/method-types.js";
-import type { MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import type { ContextWindow, DoWindow, SharingState } from "../_shared/types.js";
 import type { WindowManager } from "../_shared/manager.js";
 import type { ThreadContext } from "../../../thinkable/context.js";

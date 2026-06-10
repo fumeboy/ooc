@@ -45,7 +45,7 @@ import {
   xmlElement,
   xmlText,
   type XmlNode,
-} from "../xml.js";
+} from "@ooc/core/_shared/types/xml.js";
 
 // ─────────────────────────── helpers (inbox/outbox) ──────────────────────────
 

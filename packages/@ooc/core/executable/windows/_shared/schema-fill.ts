@@ -4,7 +4,7 @@
  * `buildFillState`：给 method_exec form 按 schema 计算每个 arg 的 fill 状态
  * （provided / missing / invalid）。Fail-soft：校验错误标记在 fill 里但不阻塞 refine。
  */
-import type { MethodCallSchema, MethodArgSpec } from "../../../thinkable/context/intent.js";
+import type { MethodCallSchema, MethodArgSpec } from "@ooc/core/_shared/types/intent.js";
 import type { MethodExecWindow } from "./types.js";
 
 export function buildFillState(

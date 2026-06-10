@@ -10,7 +10,7 @@ import {
 import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
 import { parseKnowledgeFile } from "./parser";
-import type { KnowledgeDoc, KnowledgeIndex } from "./types";
+import type { KnowledgeDoc, KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 
 /** 双源 loader 输入：stone (seed) + pool (sediment) 两个 ref。 */
 export interface KnowledgeLoadRefs {
@@ -223,7 +223,7 @@ export async function loadKnowledgeIndexFromDir(dir: string): Promise<KnowledgeI
  */
 async function readAndParse(
   filePath: string,
-): Promise<{ frontmatter: import("./types").KnowledgeFrontmatter; body: string } | undefined> {
+): Promise<{ frontmatter: import("@ooc/core/_shared/types/knowledge.js").KnowledgeFrontmatter; body: string } | undefined> {
   let text: string;
   try {
     text = await readFile(filePath, "utf8");

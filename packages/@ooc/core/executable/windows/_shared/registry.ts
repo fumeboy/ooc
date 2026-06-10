@@ -27,7 +27,7 @@ export type {
 export { filterMethodsByVisibility } from "../../../_shared/types/registry.js";
 
 export type { ObjectMethod } from "../../../_shared/types/method.js";
-export type { ContextWindow, ObjectType } from "./types.js";
+export type { ContextWindow } from "./types.js";
 
 export {
   builtinRegistry,

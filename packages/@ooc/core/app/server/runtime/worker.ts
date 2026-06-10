@@ -7,7 +7,7 @@ import type { ServerConfig } from "../bootstrap/config";
 import type { RuntimeJob } from "./types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import type { TalkWindow } from "@ooc/core/executable/windows/_shared/types";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@ooc/core/executable/windows/_shared/super-constants";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 import { resumePausedThread } from "./resume";
 import { scanRunningThreads } from "./thread-query";
 import { readdir } from "node:fs/promises";

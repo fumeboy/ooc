@@ -17,7 +17,7 @@ import {
   type SearchMatch,
   type SearchWindow,
 } from "../_shared/types.js";
-import { serializeXml } from "../../../thinkable/context/xml.js";
+import { serializeXml } from "@ooc/core/_shared/types/xml.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {
   DEFAULT_RESULTS_VIEWPORT,

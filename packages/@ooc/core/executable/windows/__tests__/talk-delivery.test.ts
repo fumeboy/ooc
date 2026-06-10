@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFlowObject, createFlowSession, readThread, writeThread, nestedObjectPath } from "../../../persistable";
 import { deliverTalkMessage } from "../talk/delivery";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "../_shared/super-constants";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 import { initContextWindows } from "../_shared/init";
 import { ROOT_WINDOW_ID, generateWindowId, type TalkWindow } from "../_shared/types";
 import type { ThreadContext } from "../../../thinkable/context";

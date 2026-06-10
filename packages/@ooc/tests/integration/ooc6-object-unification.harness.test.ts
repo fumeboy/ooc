@@ -44,7 +44,6 @@ import type {
   DoWindow,
   TodoWindow,
   KnowledgeWindow,
-  ObjectType,
 } from "@ooc/core/executable/windows/_shared/types";
 
 describe("ooc-6 Object Unification harness cycle", () => {
@@ -140,7 +139,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     const types = builtinRegistry.listRegisteredObjectTypes();
 
     // All builtin types should be registered (11 core types, custom removed in ooc-6)
-    const expectedBuiltins: ObjectType[] = [
+    const expectedBuiltins: string[] = [
       "root", "method_exec", "todo", "file", "knowledge",
       "search", "skill_index", "plan", "program",
       "do", "talk",
@@ -413,7 +412,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
           status: "open",
           createdAt: Date.now(),
           content: "Test",
-        },
+        } as ContextWindow,
         {
           id: "agent_alice",
           type: "agent_alice" as any,

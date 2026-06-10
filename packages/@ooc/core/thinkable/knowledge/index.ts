@@ -5,7 +5,7 @@ export type {
   KnowledgeDoc,
   KnowledgeFrontmatter,
   KnowledgeIndex
-} from "./types";
+} from "@ooc/core/_shared/types/knowledge.js";
 export { parseKnowledgeFile } from "./parser";
 export { clearKnowledgeLoaderCache, loadKnowledgeIndex, loadKnowledgeIndexFromDir, type KnowledgeLoadRefs } from "./loader";
 export { computeActivations } from "./activator";

@@ -10,7 +10,7 @@ import {
   hasAnyViewportField,
   type Viewport,
 } from "@ooc/core/extendable/_shared/viewport.js";
-import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
+import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { KnowledgeWindow } from "./types.js";
 import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";

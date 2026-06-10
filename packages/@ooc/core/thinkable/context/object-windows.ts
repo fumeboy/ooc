@@ -24,7 +24,7 @@ import type { ThreadContext } from "./index.js";
 import type { ObjectRegistry, ObjectDefinition } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
 import type { ContextWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
-import { SUPER_ALIAS_TARGET } from "../../executable/windows/_shared/super-constants.js";
+import { SUPER_ALIAS_TARGET } from "@ooc/core/_shared/types/constants.js";
 import { loadObjectWindow } from "../../runtime/server-loader.js";
 
 /**

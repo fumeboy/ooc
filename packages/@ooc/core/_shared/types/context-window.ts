@@ -18,24 +18,6 @@
 
 import type { WindowDisplayState } from "./window-state.js";
 
-/** Object 类型枚举。新增类型必须同步在 REGISTRY 中注册。 */
-export type ObjectType =
-  | "root"
-  | "method_exec"
-  | "do"
-  | "todo"
-  | "talk"
-  | "program"
-  | "file"
-  | "knowledge"
-  | "search"
-  | "skill_index"
-  | "feishu_chat"
-  | "feishu_doc"
-  | "plan"
-  | "example"
-  | (string & {});
-
 /**
  * Window 状态值汇总。
  *
@@ -98,7 +80,7 @@ export interface ContextWindowRelevance {
  */
 export interface BaseContextWindow {
   id: string;
-  type: ObjectType;
+  type: string;
   parentWindowId?: string;
   title: string;
   status: WindowStatus;
@@ -184,7 +166,7 @@ export const SKILL_INDEX_WINDOW_ID = "skill_index";
 export const SESSION_CREATOR_THREAD_ID = "__session__";
 
 /** 生成 object id；前缀按类型区分，便于日志阅读。 */
-export function generateWindowId(type: Exclude<ObjectType, "root">): string {
+export function generateWindowId(type: string): string {
   const prefixMap: Record<string, string> = {
     method_exec: "f",
     do: "w_do",

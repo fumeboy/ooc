@@ -8,7 +8,7 @@ import {
   xmlElement,
   xmlText,
   type XmlNode,
-} from "@ooc/core/thinkable/context/xml.js";
+} from "@ooc/core/_shared/types/xml.js";
 
 export function readable(ctx: RenderContext): XmlNode[] {
   const w = ctx.window as PlanWindow;

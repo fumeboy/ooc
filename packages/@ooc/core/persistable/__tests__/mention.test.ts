@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseMentions } from "../mention";
+import { parseMentions } from "@ooc/core/_shared/utils/mention.js";
 
 describe("parseMentions", () => {
   test("simple @objectId at start of string", () => {

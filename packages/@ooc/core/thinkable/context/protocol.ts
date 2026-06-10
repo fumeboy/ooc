@@ -12,7 +12,7 @@ import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types.js";
 import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
 import { computeActivations, loadKnowledgeIndexFromDir } from "../knowledge/index.js";
-import type { KnowledgeIndex } from "../knowledge/types.js";
+import type { KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import { dirname, join } from "node:path";
 import type { ThreadContext } from "./index.js";
 

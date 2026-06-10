@@ -1,6 +1,6 @@
 import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import type { ProgramWindow } from "./types.js";
-import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
+import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import {
   applyTranscriptViewport,
   type TranscriptViewport,

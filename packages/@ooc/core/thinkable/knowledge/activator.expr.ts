@@ -27,7 +27,7 @@
 
 import type { ThreadContext } from "../context";
 import type { MethodExecWindow, ContextWindow } from "../../executable/windows/_shared/types";
-import { SUPER_SESSION_ID } from "../../executable/windows/_shared/super-constants";
+import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 
 /** trigger 抽象语法树——parse 一次，evaluate 多次。
  *  2026-05-28 ooc-6: 旧的 `window` kind 在 parse 时自动归一化为

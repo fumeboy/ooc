@@ -1,5 +1,5 @@
 import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
-import type { XmlNode } from "@ooc/core/thinkable/context/xml.js";
+import type { XmlNode } from "@ooc/core/_shared/types/xml.js";
 
 /**
  * root window 的 readable hook。

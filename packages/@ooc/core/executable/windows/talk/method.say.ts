@@ -2,7 +2,7 @@ import type {
   MethodExecutionContext,
   ObjectMethod,
 } from "../_shared/method-types.js";
-import type { MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import type { TalkWindow } from "../_shared/types.js";
 import { deliverTalkMessage } from "./delivery.js";
 

@@ -26,7 +26,7 @@ export interface MethodExecWindow extends BaseContextWindow {
   status: "open" | "executing" | "success" | "failed";
   result?: string;
   /** Optional schema (from ObjectMethod.schema). Undefined if the method doesn't declare one. */
-  schema?: import("../../../thinkable/context/intent.js").MethodCallSchema;
+  schema?: import("@ooc/core/_shared/types/intent.js").MethodCallSchema;
   /**
    * Structured fill state derived from accumulatedArgs + schema.
    * Undefined if schema is not declared.

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
 import { ROOT_METHODS, getOpenableMethods, deriveRootIntentPaths } from "../windows";
 import { programMethod } from "@ooc/builtins/root/executable/method.program";
-import type { Intent } from "@ooc/core/thinkable/context/intent.js";
+import type { Intent } from "@ooc/core/_shared/types/intent.js";
 import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
 
 /**

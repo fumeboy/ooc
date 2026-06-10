@@ -332,7 +332,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
 
   // ─── Test 6: resolveMethod chain — stub class with parentClass: "root" inherits "talk" ─
   test("Test 6: stub class with parentClass=\"root\" resolves \"talk\" via chain (smoke check at dispatch lookup)", async () => {
-    // Register a brand-new ObjectType that defaults to inheriting from root.
+    // Register a brand-new string that defaults to inheriting from root.
     const stubType = `__test_stub_inherits_root_${Date.now()}`;
     builtinRegistry.registerNewObjectType(stubType as never, {
       methods: {},

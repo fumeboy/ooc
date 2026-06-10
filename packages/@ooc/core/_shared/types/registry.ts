@@ -9,7 +9,7 @@
  * **迁入本文件**：所有 hook/定义类型 + `filterMethodsByVisibility`（纯函数，无可变状态）。
  */
 
-import type { ContextWindow, ObjectType } from "./context-window.js";
+import type { ContextWindow } from "./context-window.js";
 import type { ThreadContext } from "./thread.js";
 import type { XmlNode } from "./xml.js";
 import type { ObjectMethod } from "./method.js";
@@ -52,7 +52,7 @@ export type ConsumedMessageIdsHook = (
  *
  * 已删除字段（2026-06-10 cleanup）：
  * - 旧 `commands` → `methods`；`prototype` → `parentClass`
- * - `type` —— registry Map key 即 type，字段冗余（ObjectType 类型本身也在逐步退役）
+ * - `type` —— registry Map key 即 type，字段冗余（string 类型本身也在逐步退役）
  * - `renderXml` → `readable`（签名一致的标准替代）
  * - `basicKnowledge` —— type 级协议知识通道退役
  *

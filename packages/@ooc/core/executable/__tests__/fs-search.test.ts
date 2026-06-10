@@ -26,7 +26,7 @@ import {
 } from "@ooc/builtins/search/readable.js";
 import { renderContextXml } from "../../__tests__/render-context-xml";
 import { makeThread } from "../../__tests__/make-thread";
-import type { Intent } from "@ooc/core/thinkable/context/intent.js";
+import type { Intent } from "@ooc/core/_shared/types/intent.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
 

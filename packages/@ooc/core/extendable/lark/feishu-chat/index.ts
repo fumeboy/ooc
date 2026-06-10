@@ -22,7 +22,7 @@ import type {
 } from "../../../executable/windows/_shared/method-types.js";
 import { builtinRegistry, type RenderContext } from "../../../executable/windows/_shared/registry.js";
 import type { FeishuChatWindow, FeishuChatMessage } from "./types.js";
-import { xmlElement, xmlText, truncateBytes, type XmlNode } from "../../../thinkable/context/xml.js";
+import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { larkExec } from "../cli.js";
 
 const MAX_RENDER_BYTES = 8192;

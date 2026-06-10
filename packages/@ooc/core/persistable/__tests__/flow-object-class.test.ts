@@ -1,6 +1,6 @@
 /**
  * P6.§7 (2026-06-02): createFlowObject 接受 opts.class，写入 .flow.json 的 class 字段。
- * - opts.class 指向已注册 ObjectType → 写入成功，class 字段入盘。
+ * - opts.class 指向已注册 string → 写入成功，class 字段入盘。
  * - opts.class 指向未注册 type → 抛 ClassNotFoundError（fail-loud：避免 method 解析悬空）。
  * - 不传 opts → 兼容旧调用，.flow.json 不含 class 字段。
  */

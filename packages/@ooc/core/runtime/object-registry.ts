@@ -3,10 +3,10 @@
  *
  * M1 (2026-06-02): 从 executable/windows/_shared/registry.ts 抽出。
  * 2026-06-03 ooc-6 cleanup Phase A：
- *   - 已删除 ObjectType / ObjectTypeDefinition / ObjectMethod 类型引用
+ *   - 已删除 string / ObjectTypeDefinition / ObjectMethod 类型引用
  *   - 已删除 deprecated 方法：registerObjectType / getObjectDefinition /
  *     listRegisteredObjectTypes / assertAllObjectDefinitionsRegistered
- *   - 内部统一使用 ObjectType / ObjectDefinition / ObjectMethod
+ *   - 内部统一使用 string / ObjectDefinition / ObjectMethod
  *   - ObjectDefinition 内部字段统一使用 methods / parentClass（旧 commands 字段已弃用）
  */
 import type {
@@ -21,11 +21,10 @@ import type {
 import { filterMethodsByVisibility } from "../_shared/types/registry.js";
 import type { ObjectMethod } from "../_shared/types/method.js";
 import type { WindowMethod } from "../_shared/types/window-method.js";
-import type { ContextWindow, ObjectType } from "../_shared/types/context-window.js";
+import type { ContextWindow } from "../_shared/types/context-window.js";
 
 export type {
   ObjectDefinition,
-  ObjectType,
   ObjectMethod,
   ContextWindow,
   OnCloseContext,
@@ -90,11 +89,11 @@ const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
 ];
 
 export class ObjectRegistry {
-  private readonly store = new Map<ObjectType, ObjectDefinition>();
+  private readonly store = new Map<string, ObjectDefinition>();
 
   constructor() {
     for (const [key, def] of BASE_TYPE_DEFINITIONS) {
-      this.store.set(key as ObjectType, def);
+      this.store.set(key as string, def);
     }
   }
 
@@ -110,7 +109,7 @@ export class ObjectRegistry {
    * 只更新**已 seed 的 type**（BASE_TYPE_DEFINITIONS）；新 type 走 registerNewObjectType。
    */
   registerExecutable(
-    type: ObjectType,
+    type: string,
     patch: Pick<Partial<ObjectDefinition>, "methods" | "parentClass" | "isBuiltinFeature">,
   ): void {
     this.mergeExistingDefinition(type, patch, "registerExecutable");
@@ -125,7 +124,7 @@ export class ObjectRegistry {
    * （未传字段保留 existing）。标准对象定义里 readable 维度由 `readable.ts` 自注册。
    */
   registerReadable(
-    type: ObjectType,
+    type: string,
     patch: Pick<
       Partial<ObjectDefinition>,
       "readable" | "windowMethods" | "compressView" | "onClose" | "consumedMessageIds"
@@ -140,7 +139,7 @@ export class ObjectRegistry {
    * 故 method↔windowMethod 同名无论先注册哪个维度都能 fail-loud。
    */
   private mergeExistingDefinition(
-    type: ObjectType,
+    type: string,
     partial: Partial<Omit<ObjectDefinition, "type">>,
     caller: string,
   ): void {
@@ -165,7 +164,7 @@ export class ObjectRegistry {
   }
 
   registerNewObjectType(
-    type: ObjectType,
+    type: string,
     definition: Partial<ObjectDefinition> & { methods?: Record<string, any> },
   ): void {
     const entries = definition.methods ?? {};
@@ -181,29 +180,29 @@ export class ObjectRegistry {
     });
   }
 
-  getObjectDefinition(type: ObjectType): ObjectDefinition {
+  getObjectDefinition(type: string): ObjectDefinition {
     const entry = this.store.get(type);
     if (!entry) throw new Error(`getObjectDefinition: object type "${type}" not registered`);
     return entry;
   }
 
   has(type: string): boolean {
-    return this.store.has(type as ObjectType);
+    return this.store.has(type as string);
   }
 
-  isBuiltinFeatureType(type: ObjectType): boolean {
+  isBuiltinFeatureType(type: string): boolean {
     const entry = this.store.get(type);
     if (!entry) return false;
     return entry.isBuiltinFeature === true;
   }
 
-  resolveParentClassChain(startType: ObjectType): string[] {
+  resolveParentClassChain(startType: string): string[] {
     const chain: string[] = [];
     const seen = new Set<string>([startType]);
     const MAX_DEPTH = 64;
     let cur: string | undefined = startType;
     while (cur && chain.length < MAX_DEPTH) {
-      const def = this.store.get(cur as ObjectType);
+      const def = this.store.get(cur as string);
       if (!def) break;
       const next = def.parentClass === undefined ? "root" : def.parentClass ?? undefined;
       if (!next) break;
@@ -215,36 +214,36 @@ export class ObjectRegistry {
     return chain;
   }
 
-  lookupMethod(self: { type: ObjectType }, methodName: string): ObjectMethod | undefined {
+  lookupMethod(self: { type: string }, methodName: string): ObjectMethod | undefined {
     return this.resolveMethod(self.type, methodName);
   }
 
   lookupMethodEntry(
-    self: { type: ObjectType },
+    self: { type: string },
     methodName: string,
-  ): { entry: ObjectMethod; declaringType: ObjectType } | undefined {
+  ): { entry: ObjectMethod; declaringType: string } | undefined {
     const selfDef = this.store.get(self.type);
     if (selfDef) {
       const selfEntry = selfDef.methods?.[methodName];
       if (selfEntry) return { entry: selfEntry, declaringType: self.type };
     }
     for (const parentType of this.resolveParentClassChain(self.type)) {
-      const def = this.store.get(parentType as ObjectType);
+      const def = this.store.get(parentType as string);
       if (!def) continue;
       const entry = def.methods?.[methodName];
-      if (entry) return { entry, declaringType: parentType as ObjectType };
+      if (entry) return { entry, declaringType: parentType as string };
     }
     return undefined;
   }
 
   resolveMethod(classId: string, methodName: string): ObjectMethod | undefined {
-    const selfDef = this.store.get(classId as ObjectType);
+    const selfDef = this.store.get(classId as string);
     if (selfDef) {
       const selfEntry = selfDef.methods?.[methodName];
       if (selfEntry) return selfEntry;
     }
-    for (const parentType of this.resolveParentClassChain(classId as ObjectType)) {
-      const def = this.store.get(parentType as ObjectType);
+    for (const parentType of this.resolveParentClassChain(classId as string)) {
+      const def = this.store.get(parentType as string);
       if (!def) continue;
       const entry = def.methods?.[methodName];
       if (entry) return entry;
@@ -253,22 +252,22 @@ export class ObjectRegistry {
   }
 
   /** 沿 parentClass 继承链查 window method（控制展示）。镜像 resolveMethod。 */
-  lookupWindowMethod(self: { type: ObjectType }, name: string): WindowMethod | undefined {
+  lookupWindowMethod(self: { type: string }, name: string): WindowMethod | undefined {
     return this.resolveWindowMethod(self.type, name);
   }
 
   private resolveWindowMethod(type: string, name: string): WindowMethod | undefined {
-    const selfDef = this.store.get(type as ObjectType);
+    const selfDef = this.store.get(type as string);
     const own = selfDef?.windowMethods?.[name];
     if (own) return own;
-    for (const ancestor of this.resolveParentClassChain(type as ObjectType)) {
-      const inherited = this.store.get(ancestor as ObjectType)?.windowMethods?.[name];
+    for (const ancestor of this.resolveParentClassChain(type as string)) {
+      const inherited = this.store.get(ancestor as string)?.windowMethods?.[name];
       if (inherited) return inherited;
     }
     return undefined;
   }
 
-  lookupConstructor(type: ObjectType): ObjectMethod | undefined {
+  lookupConstructor(type: string): ObjectMethod | undefined {
     const def = this.store.get(type);
     if (!def) return undefined;
     const table = def.methods;
@@ -279,12 +278,12 @@ export class ObjectRegistry {
     return undefined;
   }
 
-  listRegisteredObjectTypes(): ObjectType[] {
+  listRegisteredObjectTypes(): string[] {
     return Array.from(this.store.keys()).sort();
   }
 
   assertAllObjectDefinitionsRegistered(): void {
-    const missing: ObjectType[] = [];
+    const missing: string[] = [];
     for (const [type, def] of this.store) {
       if (!def.readable) missing.push(type);
     }
@@ -295,7 +294,7 @@ export class ObjectRegistry {
     }
   }
 
-  resolveEffectiveVisibleType(type: ObjectType): string | undefined {
+  resolveEffectiveVisibleType(type: string): string | undefined {
     if (RENDERABLE_VISIBLE_TYPES.has(type)) return type;
     for (const ancestor of this.resolveParentClassChain(type)) {
       if (RENDERABLE_VISIBLE_TYPES.has(ancestor)) return ancestor;
@@ -304,7 +303,7 @@ export class ObjectRegistry {
   }
 
   /** Snapshot all entries (useful for tests or cloning). */
-  snapshot(): Array<[ObjectType, ObjectDefinition]> {
+  snapshot(): Array<[string, ObjectDefinition]> {
     return Array.from(this.store.entries()).map(([k, v]) => [k, { ...v }]);
   }
 
@@ -312,7 +311,7 @@ export class ObjectRegistry {
   __resetForTests(): void {
     this.store.clear();
     for (const [key, def] of BASE_TYPE_DEFINITIONS) {
-      this.store.set(key as ObjectType, def);
+      this.store.set(key as string, def);
     }
   }
 

@@ -8,7 +8,7 @@ import {
   hasAnyViewportField,
   type Viewport,
 } from "@ooc/core/extendable/_shared/viewport.js";
-import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/thinkable/context/xml.js";
+import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type {
   WindowMethod,
   WindowMethodExecutionContext,

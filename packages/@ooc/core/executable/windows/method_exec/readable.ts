@@ -3,7 +3,7 @@
  */
 
 import { type RenderContext } from "../_shared/registry.js";
-import { xmlElement, xmlText, renderPathList, appendNode, type XmlNode } from "../../../thinkable/context/xml.js";
+import { xmlElement, xmlText, renderPathList, appendNode, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { MethodExecWindow } from "../_shared/types.js";
 
 export function readable(ctx: RenderContext): XmlNode[] {

@@ -16,7 +16,7 @@ import {
   type DoWindow,
   type TalkWindow,
 } from "../_shared/types.js";
-import { serializeXml } from "../../../thinkable/context/xml.js";
+import { serializeXml } from "@ooc/core/_shared/types/xml.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 
 const NOW = 1_700_000_000_000;

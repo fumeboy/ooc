@@ -23,7 +23,7 @@ export interface FlowObjectMetadata {
   /** 与 ref 同步的 objectId 副本。 */
   objectId: string;
   /**
-   * P6.§7 (2026-06-02): 实例所属的 Class（也是一个 ObjectType id；必须在 object registry 注册过）。
+   * P6.§7 (2026-06-02): 实例所属的 Class（也是一个 string id；必须在 object registry 注册过）。
    *
    * Class 是方法继承链的载体——method 解析按「实例 self.type → class definition.methods →
    * parentClass.methods → … → root.methods」沿父类链向上回退。`registerObjectType` 与

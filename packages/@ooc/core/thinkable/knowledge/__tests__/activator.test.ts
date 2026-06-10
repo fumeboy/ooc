@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { computeActivations } from "../activator";
-import type { ActivatesOn, KnowledgeDoc, KnowledgeIndex } from "../types";
+import type { ActivatesOn, KnowledgeDoc, KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import type { ThreadContext } from "../../context";
 import type { MethodExecWindow, ContextWindow } from "../../../executable/windows/_shared/types";
 

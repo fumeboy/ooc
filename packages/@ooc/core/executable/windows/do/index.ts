@@ -10,7 +10,7 @@
 
 import { builtinRegistry, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
 import type { ObjectMethod } from "../_shared/method-types.js";
-import type { MethodCallSchema } from "../../../thinkable/context/intent.js";
+import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import {
   ROOT_WINDOW_ID,
   creatorWindowIdOf,
@@ -30,7 +30,7 @@ import {
   applyTranscriptViewport,
   type TranscriptViewport,
 } from "../_shared/transcript-viewport.js";
-import { xmlElement, xmlText, type XmlNode } from "../../../thinkable/context/xml.js";
+import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import type { DoWindow } from "./types.js";
 

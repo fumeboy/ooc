@@ -1,6 +1,6 @@
 import yaml from "js-yaml";
 import { parseActivatesOn } from "./activator.expr";
-import type { KnowledgeFrontmatter } from "./types";
+import type { KnowledgeFrontmatter } from "@ooc/core/_shared/types/knowledge.js";
 
 /**
  * 把 .md 文本拆成 frontmatter 与 body。

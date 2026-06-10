@@ -25,7 +25,7 @@
  */
 
 import type { ThreadContext } from "../../../thinkable/context.js";
-import { hashArgs, diffArgs, type FormChangeEvent, type Intent, type IntentCache } from "../../../thinkable/context/intent.js";
+import { hashArgs, diffArgs, type FormChangeEvent, type Intent, type IntentCache } from "@ooc/core/_shared/types/intent.js";
 import { buildFillState } from "./schema-fill.js";
 import type { ObjectRegistry } from "./registry.js";
 import {

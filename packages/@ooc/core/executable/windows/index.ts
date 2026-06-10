@@ -4,7 +4,7 @@
  * 见 spec docs/superpowers/specs/2026-05-14-context-window-unification-design.md
  *
  * 2026-06-03 ooc-6 cleanup Phase A：已删除所有 deprecated alias re-export
- * （ObjectType / ContextObject / ObjectTypeDefinition / ObjectMethod /
+ * （string / ContextObject / ObjectTypeDefinition / ObjectMethod /
  *  MethodExecutionContext / MethodOutcome）。
  *
  * 2026-06-04 ooc-6 cleanup Phase E：已删除 registry thin wrapper 函数的 re-export
@@ -30,7 +30,6 @@ export type {
   SearchMatch,
   PlanWindow,
   PlanWindowStep,
-  ObjectType,
 } from "./_shared/types.js";
 
 export {

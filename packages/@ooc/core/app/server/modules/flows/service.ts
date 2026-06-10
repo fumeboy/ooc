@@ -23,7 +23,7 @@ import {
 import {
   SUPER_SESSION_ID,
   isSuperSessionId,
-} from "@ooc/core/executable/windows/_shared/super-constants";
+} from "@ooc/core/_shared/types/constants.js";
 import type {
   ListThreadsItem,
   ListThreadsResponse,

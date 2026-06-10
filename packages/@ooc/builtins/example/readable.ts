@@ -23,7 +23,7 @@ import {
   xmlText,
   truncateBytes,
   type XmlNode,
-} from "@ooc/core/thinkable/context/xml.js";
+} from "@ooc/core/_shared/types/xml.js";
 import type { ExampleWindow } from "./types.js";
 
 const MAX_EXAMPLE_BYTES = 8192;

@@ -39,7 +39,7 @@ import { stat } from "node:fs/promises";
 import { notifyThreadActivated } from "../../../observable/index.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import { initContextWindows, injectPeerWindowsIfObjectThread } from "../_shared/init.js";
-import { isSuperSessionId, SUPER_SESSION_ID } from "../_shared/super-constants.js";
+import { isSuperSessionId, SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 import { creatorWindowIdOf, type TalkWindow } from "../_shared/types.js";
 
 export interface TalkDeliveryInput {
