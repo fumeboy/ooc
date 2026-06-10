@@ -482,26 +482,8 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain('method="talk"');
   });
 
-  it("deduplicates identical knowledge entries across multiple forms", async () => {
-    const f1 = execForm({
-      id: "f_1",
-      method: "program",
-      accumulatedArgs: { language: "shell", code: "pwd" },
-      intentPaths: ["program", "program.shell"],
-    });
-    const f2 = execForm({
-      id: "f_2",
-      method: "program",
-      accumulatedArgs: { language: "shell", code: "ls" },
-      intentPaths: ["program", "program.shell"],
-    });
-    const thread = makeThread({ id: "t_dedupe", extraWindows: [f1, f2] });
-    const messages = await buildContext(thread);
-    const xml = messages[0]?.content ?? "";
-    // basic 出现 2 次（每个 form 一份 path），但合成的 knowledge_window 中只 1 份正文
-    expect(xml.match(/<path>internal\/executable\/program\/basic<\/path>/g)?.length).toBe(3);
-    expect(xml.match(/program 用于执行一段 shell \/ ts \/ js 代码/g)?.length).toBe(1);
-  });
+  // 2026-06-10 ObjectMethod API 重构后，form 知识合成（knowledge_window + <path>）已移除：
+  // 指引以 plain-string tip 直接渲染在 form 上，跨 form 知识正文去重语义不复存在，原 dedup 测试删除。
 
   it("emits text content raw — no XML escaping, no CDATA (表意为主)", async () => {
     const thread = makeThread({

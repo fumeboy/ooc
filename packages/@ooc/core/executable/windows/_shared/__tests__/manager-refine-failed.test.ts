@@ -1,14 +1,16 @@
 /**
  * Round 13 G2 — manager.refine 支持 failed → open 复活路径单测。
  *
- * 验证 manager 状态机:
- * 1. open 状态 refine → 仍 open + args 累积
- * 2. failed 状态 refine → 自动切回 open + args 累积 + result 清空（核心: 复活路径）
- * 3. failed 状态 submit → 抛错（要求先 refine）
- * 4. executing 状态 refine → 返 false（不允许）
+ * 2026-06-10 ObjectMethod API 重构后语义：refine 后若 onFormChange 返回
+ * quick_exec_submit=true（参数已补齐），manager.refine 会 await 自动 submit——
+ * 成功 → form 自动移除；失败 → form 落 failed 带 result。
  *
- * 不测 success → refine: success 形态下 form 已自动从 contextWindows 移除,
- * mgr.get() 拿不到, 不会走到 refine 内部分支。
+ * 验证 manager 状态机:
+ * 1. open 状态 refine（参数未补齐）→ 仍 open + args 累积
+ * 2. failed 状态 refine（参数未补齐）→ 复活回 open + args 累积 + result 清空
+ * 3. failed 状态 refine（参数补齐）→ 复活 + 自动 submit → success → form 移除
+ * 4. failed 状态直接 submit → 抛错（要求先 refine）
+ * 5. executing 状态 refine → 返 false（不允许）
  */
 
 import { describe, expect, it } from "bun:test";
@@ -45,7 +47,7 @@ async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string
 }
 
 describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
-  it("open 状态 refine → 仍 open + args 累积", async () => {
+  it("open 状态 refine（参数未补齐）→ 仍 open + args 累积", async () => {
     const thread = makeThread({ id: "t_open_refine" });
     await dispatchToolCall(thread, {
       id: "call_1",
@@ -58,16 +60,17 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
     expect(form.status).toBe("open");
 
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
-    const ok = mgr.refine(form.id, { msg: "hello" });
+    // wait 不补齐 msg → quick_exec_submit 仍 false，不触发自动 submit
+    const ok = await mgr.refine(form.id, { wait: true });
     expect(ok).toBe(true);
 
     const after = mgr.get(form.id) as MethodExecWindow;
     expect(after.status).toBe("open");
-    expect(after.accumulatedArgs.msg).toBe("hello");
+    expect(after.accumulatedArgs.wait).toBe(true);
     expect(after.result).toBeUndefined();
   });
 
-  it("failed 状态 refine → 自动切回 open + 累积 args + 清旧 result（复活路径）", async () => {
+  it("failed 状态 refine（参数未补齐）→ 复活回 open + 累积 args + 清旧 result", async () => {
     const { thread, formId } = await makeFailedForm();
     const failed = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.id === formId,
@@ -77,12 +80,13 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
     expect(failed?.result).toContain("[do] 缺少 msg");
 
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
-    const ok = mgr.refine(formId, { msg: "补齐的消息" });
+    // wait 不补齐 msg → 复活到 open 但不自动 submit
+    const ok = await mgr.refine(formId, { wait: true });
     expect(ok).toBe(true);
 
     const revived = mgr.get(formId) as MethodExecWindow;
     expect(revived.status).toBe("open"); // 关键: failed → open
-    expect(revived.accumulatedArgs.msg).toBe("补齐的消息"); // args 累积
+    expect(revived.accumulatedArgs.wait).toBe(true); // args 累积
     expect(revived.result).toBeUndefined(); // 旧 result 已清
   });
 
@@ -113,20 +117,17 @@ describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
     // 手工把 status 改成 executing 模拟中间态
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     mgr.upsertWindow({ ...form, status: "executing" });
-    const ok = mgr.refine(form.id, { msg: "试图 refine executing" });
+    const ok = await mgr.refine(form.id, { msg: "试图 refine executing" });
     expect(ok).toBe(false);
   });
 
-  it("复活路径完整验证: failed → refine → open → submit → success → 自动移除", async () => {
+  it("复活路径完整验证: failed → refine 补齐 msg → 自动 submit → success → 自动移除", async () => {
     const { thread, formId } = await makeFailedForm();
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
-    mgr.refine(formId, { msg: "终于补齐了" });
-    // 此时 form 已回 open, 可正常 submit
-    const after = mgr.get(formId) as MethodExecWindow;
-    expect(after.status).toBe("open");
-    await mgr.submit(formId, thread);
+    const ok = await mgr.refine(formId, { msg: "终于补齐了" });
+    expect(ok).toBe(true);
     thread.contextWindows = mgr.toData();
-    // do 成功 → form 自动从 contextWindows 移除 (success → 移除)
+    // msg 补齐 → quick_exec_submit → 自动 submit 成功 → form 自动从 contextWindows 移除
     expect(thread.contextWindows.find((w) => w.id === formId)).toBeUndefined();
   });
 });

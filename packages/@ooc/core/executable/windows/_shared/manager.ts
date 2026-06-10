@@ -336,7 +336,7 @@ export class WindowManager {
 
     // Fast path: method has no onFormChange → no form, exec directly.
     if (!entry.onFormChange) {
-      const result = await this.execDirect(entry, parent, opts.thread, args);
+      const result = await this.execDirect(entry, parent, opts.thread, args, windowEntry);
       return { autoSubmitted: true, directResult: result };
     }
 
@@ -388,12 +388,16 @@ export class WindowManager {
    * Direct exec path for methods without onFormChange. Builds the exec context and
    * invokes entry.exec, handling MethodOutcome / string / undefined returns.
    * Does NOT create a form window.
+   *
+   * windowEntry 非空时按 WindowMethod 语义执行：ctx 额外带 windowState，
+   * 成功把返回的新 state 写回 parent window；失败直接 throw（无 form 可留痕，fail-loud）。
    */
   private async execDirect(
     entry: ObjectMethod,
     parent: ContextWindow,
     thread: ThreadContext,
     args: Record<string, unknown>,
+    windowEntry?: import("../../../_shared/types/window-method.js").WindowMethod,
   ): Promise<string | undefined> {
     const ownerFlowObjectRef = this.registry.isBuiltinFeatureType(parent.type)
       ? undefined
@@ -413,6 +417,17 @@ export class WindowManager {
         ? () => this.reportContextEdit(thread)
         : () => Promise.resolve(),
     };
+    if (windowEntry) {
+      const windowState =
+        (parent as { state?: import("../../../_shared/types/window-state.js").WindowDisplayState })
+          .state ?? {};
+      const outcome = await windowEntry.exec({ ...ctx, windowState });
+      if (!outcome.ok) {
+        throw new Error(outcome.error);
+      }
+      this.upsertWindow({ ...parent, state: outcome.state }, thread);
+      return outcome.result;
+    }
     let result: string | undefined;
     let isError = false;
     try {
@@ -465,9 +480,11 @@ export class WindowManager {
    * 累积 method_exec form 的 args 并重算 tip/intents。
    *
    * Round 13: 允许 status="open" 或 status="failed" 上调 refine。
-   * If onFormChange returns quick_exec_submit after the refine, auto-submits.
+   * If onFormChange returns quick_exec_submit after the refine, auto-submits (awaited;
+   * caller reads back the form for the submit outcome — success 时 form 已移除，
+   * failed 时 form.result 带错误)。
    */
-  refine(formId: string, args: Record<string, unknown>): boolean {
+  async refine(formId: string, args: Record<string, unknown>): Promise<boolean> {
     const form = this.windows.get(formId);
     if (!form || form.type !== "method_exec") return false;
     if (form.status !== "open" && form.status !== "failed") return false;
@@ -526,8 +543,9 @@ export class WindowManager {
       }
 
       if (quickExecSubmit) {
-        // Auto-submit: fire and forget (async), caller reads back result from form.
-        this.submit(formId, threadRef).catch(() => {});
+        // Auto-submit（awaited，失败响亮）：method 业务失败由 submit 落 failed form；
+        // 协议级错误（form 丢失等）原样抛出。
+        await this.submit(formId, threadRef);
       }
     }
 

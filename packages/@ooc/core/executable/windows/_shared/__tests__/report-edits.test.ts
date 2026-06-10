@@ -198,6 +198,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
 
     // Now refine the form: this dispatches refine.ts which internally calls
     // ctx.manager.refine(...) followed by ctx.reportContextEdit?.() — the wired-in helper.
+    // 用 wait（不补齐 msg）refine：form 保持 open 不触发自动 submit，便于断言持久化内容。
     await dispatchToolCall(thread, {
       id: "call_2",
       name: "exec",
@@ -205,7 +206,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
         title: "累积",
         window_id: formId,
         method: "refine",
-        args: { msg: "hello-from-refine" },
+        args: { wait: true },
       },
     });
     // Allow the serial queue to flush.
@@ -214,7 +215,7 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
       const entry = f?.contextWindows.find((e) => e.id === formId) as
         | MethodExecWindow
         | undefined;
-      if (entry?.accumulatedArgs?.msg === "hello-from-refine") break;
+      if (entry?.accumulatedArgs?.wait === true) break;
       await Bun.sleep(20);
     }
 
@@ -225,6 +226,6 @@ describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
       | undefined;
     expect(entry).toBeDefined();
     expect(entry!.type).toBe("method_exec");
-    expect(entry!.accumulatedArgs).toMatchObject({ msg: "hello-from-refine" });
+    expect(entry!.accumulatedArgs).toMatchObject({ wait: true });
   });
 });

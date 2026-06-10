@@ -60,29 +60,29 @@ test("windowMethod dispatch writes new state back to window", async () => {
     args: { line_end: 123 },
   });
   expect(opened.autoSubmitted).toBe(true);
-  expect(opened.submitResult).toBe("viewport updated");
+  expect(opened.directResult).toBe("viewport updated");
   const w = mgr.get("f1") as any;
   expect(w.state.viewport.lineEnd).toBe(123);
 });
 
-test("windowMethod failure leaves window state untouched and form failed", async () => {
+// 无 onFormChange 的 windowMethod 走直接执行路径：无 form 可留痕，失败直接 throw（fail-loud）。
+test("windowMethod failure (direct path) throws and leaves window state untouched", async () => {
   const { thread, mgr } = fileWindowFixture();
   const before = mgr.get("f1") as any;
   expect(before.state.viewport).toBeUndefined();
-  await mgr.openMethodExec({
-    thread,
-    parentWindowId: "f1",
-    method: "set_bad",
-    title: "set_bad",
-    args: { x: 1 },
-  });
+  await expect(
+    mgr.openMethodExec({
+      thread,
+      parentWindowId: "f1",
+      method: "set_bad",
+      title: "set_bad",
+      args: { x: 1 },
+    }),
+  ).rejects.toThrow("line_start");
   const after = mgr.get("f1") as any;
   expect(after.state.viewport).toBeUndefined();
-  const failed = mgr
-    .list()
-    .find((x: any) => x.type === "method_exec" && x.method === "set_bad") as any;
-  expect(failed?.status).toBe("failed");
-  expect(String(failed?.result)).toContain("line_start");
+  const forms = mgr.list().filter((x: any) => x.type === "method_exec");
+  expect(forms.length).toBe(0);
 });
 
 test("windowMethod does not mutate object business data", async () => {

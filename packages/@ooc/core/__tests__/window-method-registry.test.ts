@@ -51,9 +51,18 @@ test("collision between object method and window method is rejected (split-call)
 
 test("registerExecutable does not clobber readable dimension and vice versa", () => {
   const r = new ObjectRegistry();
+  const om = { description: "test", exec: () => undefined } as any;
+  // 两个维度分注册，互不覆盖（任意先后顺序）。
+  r.registerExecutable("file", { methods: { reload: om } });
   r.registerReadable("file", { windowMethods: { set_viewport: wm } });
   const def = r.getObjectDefinition("file");
-  // 两个维度分注册，互不覆盖。
   expect(def?.windowMethods?.set_viewport).toBeDefined();
   expect(def?.methods?.reload).toBeDefined();
+
+  const r2 = new ObjectRegistry();
+  r2.registerReadable("file", { windowMethods: { set_viewport: wm } });
+  r2.registerExecutable("file", { methods: { reload: om } });
+  const def2 = r2.getObjectDefinition("file");
+  expect(def2?.windowMethods?.set_viewport).toBeDefined();
+  expect(def2?.methods?.reload).toBeDefined();
 });

@@ -25,15 +25,22 @@ async function executeRefine(ctx: MethodExecutionContext): Promise<string | unde
     return "[method_exec.refine] 缺少 manager 上下文。";
   }
   const manager = ctx.manager as WindowManager;
-  const ok = manager.refine(form.id, incoming);
+  const ok = await manager.refine(form.id, incoming);
   if (!ok) {
     return `[method_exec.refine] refine 失败：form ${form.id} 不存在或不在 open / failed 状态。`;
   }
   await ctx.reportContextEdit?.();
   const updated = manager.get(form.id);
-  const paths = updated && updated.type === "method_exec" ? updated.intentPaths.join(", ") : "";
+  if (!updated) {
+    // refine 触发 quick_exec_submit 且执行成功 → form 已自动移除。
+    return `Form ${form.id} 参数补齐后已自动提交并执行成功（form 已关闭）。`;
+  }
+  if (updated.type === "method_exec" && updated.status === "failed") {
+    return `Form ${form.id} 参数累积后自动提交但执行失败：${updated.result ?? "(无错误详情)"}。可继续 refine 修正后重试。`;
+  }
+  const paths = updated.type === "method_exec" ? updated.intentPaths.join(", ") : "";
   const revived = form.status === "failed" ? "（form 从 failed 复活, 已切回 open, 可 submit）" : "";
-  const tip = updated && updated.type === "method_exec" && updated.tip ? ` tip=${JSON.stringify(updated.tip.slice(0, 200))}` : "";
+  const tip = updated.type === "method_exec" && updated.tip ? ` tip=${JSON.stringify(updated.tip.slice(0, 200))}` : "";
   return `Form ${form.id} 已累积参数${revived}。当前路径：${paths}。${tip}`;
 }
 
