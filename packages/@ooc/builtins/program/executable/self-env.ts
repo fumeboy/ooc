@@ -1,9 +1,12 @@
 import { resolveStoneIdentityDir } from "@ooc/core/persistable/index.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context.js";
+import type { FlowObjectRef } from "@ooc/core/persistable/index.js";
 
 /**
- * shell 模式下为当前线程派生额外环境变量。
- * 当前只透出 `OOC_SELF_DIR`，让命令可稳定定位 stone 目录。
+ * shell 模式派生额外环境变量。当前只透出 `OOC_SELF_DIR`，让命令可稳定定位 stone 目录。
+ *
+ * 依赖边界：只需要 session 工作区引用（FlowObjectRef = baseDir/sessionId/objectId），
+ * **不依赖调用现场 thread**——object method 的执行环境是 session（object 的工作区），
+ * 不与某个 thread 绑定。
  *
  * 路径经 `resolveStoneIdentityDir(ref, "write")` 解析（worktree 统一模型）：
  * - business session → 该 session 的 worktree object 目录（方案 A：`flows/<sid>/objects/<id>/`，
@@ -13,14 +16,15 @@ import type { ThreadContext } from "@ooc/core/thinkable/context.js";
  *
  * mode="write"：shell 可写 identity，故 lazy 建 worktree。**不要**手拼 `stones/<id>`。
  */
-export async function buildProgramShellEnv(thread: ThreadContext): Promise<Record<string, string>> {
-  const persistence = thread.persistence;
-  if (!persistence) {
+export async function buildProgramShellEnv(
+  session: FlowObjectRef | undefined,
+): Promise<Record<string, string>> {
+  if (!session) {
     return {};
   }
 
   const selfDir = await resolveStoneIdentityDir(
-    { baseDir: persistence.baseDir, sessionId: persistence.sessionId, objectId: persistence.objectId },
+    { baseDir: session.baseDir, sessionId: session.sessionId, objectId: session.objectId },
     "write",
   );
   return {

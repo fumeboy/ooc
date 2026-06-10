@@ -4,8 +4,12 @@
  * 由 root.program 与 program_window.exec 共用：根据 args 路由到 shell / ts / js，
  * 把每次执行的输出包装成 ProgramExecRecord 追加到对应 window 的 history。
  *
- * 注意：thread.threadLocalData 的读写发生在 ProgramSelf 内部（./self.ts）；
- * shell sandbox 通过 OOC_SELF_DIR env 访问 stone 目录，不接 threadLocal 通道。
+ * 依赖边界（object method 的执行环境是 session 工作区，不与 thread 绑定）：
+ * - shell 路径：只依赖 `thread.persistence`（FlowObjectRef，session 级）——
+ *   经 buildProgramShellEnv 透出 OOC_SELF_DIR，不接 threadLocal 通道。
+ * - ts/js 路径：getData/setData 同样走 session 级 data.json；但 ProgramSelf 的
+ *   `callMethod`（查当前线程可见 windows）与 `getThreadLocal/setThreadLocal`
+ *   （线程内跨 exec 传值）语义上属于**调用现场**，是仅有的两个真 thread 依赖。
  *
  * 历史：旧版本支持 callMethod / function 子模式，调任意 window 上的命令。
  * 顶层 `exec` tool 上线后（plan exec-refactor），LLM 直接用 exec 调命令；
@@ -62,7 +66,7 @@ export async function runOneExec(
       const output = `[program.shell] 缺少 code 参数`;
       return { execId, language: "shell", code, output, ok: false, startedAt };
     }
-    const output = await runShellProgram(code, await buildProgramShellEnv(thread));
+    const output = await runShellProgram(code, await buildProgramShellEnv(thread.persistence));
     return { execId, language: "shell", code, output, ok: isOkResult(output), startedAt };
   }
 
