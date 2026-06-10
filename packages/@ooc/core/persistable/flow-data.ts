@@ -1,6 +1,5 @@
 /**
- * Flow-layer data.json IO —— 承载 ProgramSelf.getData / setData 的读写
- * （2026-05-23 起从 stone 层迁到 flow 层；详见 meta/object.doc.ts persistable.flow.session_data）。
+ * Flow-layer data.json IO —— 承载 ProgramSelf.getData / setData 的读写（session 级临时数据，落 flow 层）。
  *
  * 路径形态：`{baseDir}/flows/{sessionId}/{objectId}/data.json`
  *
@@ -79,16 +78,8 @@ export async function mergeData(
   const file = flowDataFile(ref);
   const key = `flow-data:${ref.baseDir}:${ref.sessionId}:${ref.objectId}`;
   await enqueueSessionWrite(key, async () => {
-    let existing: Record<string, unknown> = {};
-    try {
-      const raw = await readFile(file, "utf8");
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        existing = parsed as Record<string, unknown>;
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
+    // 复用 readData：缺省 `{}`、损坏（非 object / 解析失败）fail-loud（不再静默吞）。
+    const existing = await readData(ref);
     await mkdir(dirname(file), { recursive: true });
     await writeFile(file, toJson({ ...existing, ...patch }), "utf8");
   });

@@ -38,8 +38,8 @@ export interface SkillEntry {
   scope: "workspace" | "object" | "external";
 }
 
-/** workspace 级 skills 目录绝对路径（原 branch 级）。 */
-export function branchSkillsDir(baseDir: string, _stonesBranch?: string): string {
+/** workspace 级 skills 目录绝对路径（跨 Object 共享，不挂 branch）。 */
+export function branchSkillsDir(baseDir: string): string {
   return join(baseDir, "stones", "@ooc", "skills");
 }
 
@@ -121,10 +121,7 @@ async function scanSkillsDir(skillsDirPath: string, scope: "workspace" | "object
  *
  * 路径：`{baseDir}/stones/@ooc/skills/<skill-name>/SKILL.md`
  */
-export async function listBranchSkills(
-  baseDir: string,
-  _stonesBranch?: string,
-): Promise<SkillEntry[]> {
+export async function listBranchSkills(baseDir: string): Promise<SkillEntry[]> {
   const cacheKey = `workspace:${baseDir}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;

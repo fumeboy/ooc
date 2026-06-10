@@ -55,8 +55,8 @@ describe("synthesizer skill_index 派生", () => {
   test("branch + object skills 合并；object 同名优先", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-skill-synth-"));
     const stoneRef = { baseDir: tempRoot, objectId: "agent" };
-    await writeSkill(branchSkillsDir(tempRoot, "main"), "shared", "branch version");
-    await writeSkill(branchSkillsDir(tempRoot, "main"), "common", "common branch");
+    await writeSkill(branchSkillsDir(tempRoot), "shared", "branch version");
+    await writeSkill(branchSkillsDir(tempRoot), "common", "common branch");
     await writeSkill(objectSkillsDir(stoneRef), "shared", "object override"); // 同名
     await writeSkill(objectSkillsDir(stoneRef), "private", "only mine");
 
@@ -78,7 +78,7 @@ describe("synthesizer skill_index 派生", () => {
 
   test("只有 branch skills → 注入 skill_index", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-skill-synth-"));
-    await writeSkill(branchSkillsDir(tempRoot, "main"), "alpha", "alpha skill");
+    await writeSkill(branchSkillsDir(tempRoot), "alpha", "alpha skill");
 
     const thread = makeThread({
       id: "t",

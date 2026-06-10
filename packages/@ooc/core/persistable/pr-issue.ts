@@ -40,7 +40,7 @@ const MAX_PR_PATHS = 200;
 export interface PrIssuePayload {
   /** 修改意图说明（LLM 自由文本，长度由 service 层校验）。 */
   intent: string;
-  /** 待评审的 worktree branch 名（如 `metaprog/agent_of_x/abc123`）。 */
+  /** 待评审的 worktree branch 名（如 `session-<sid>`）。 */
   branch: string;
   /** branch 相对 main merge-base 的累积 patch（unified diff 文本）。 */
   diff: string;

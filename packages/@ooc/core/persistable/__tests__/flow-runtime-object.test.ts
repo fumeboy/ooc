@@ -7,7 +7,6 @@ import {
   writeRuntimeObjectState,
   readRuntimeObjectState,
   deleteRuntimeObject,
-  createRuntimeObject,
 } from "../flow-runtime-object";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
 import type { ContextWindow } from "../../executable/windows/_shared/types.js";
@@ -50,13 +49,6 @@ describe("flow-runtime-object — ooc-6 P5'.1 flat runtime layout", () => {
   it("read returns undefined when file missing (ENOENT graceful)", async () => {
     const back = await readRuntimeObjectState(ref);
     expect(back).toBeUndefined();
-  });
-
-  it("createRuntimeObject is functionally equivalent to writeRuntimeObjectState", async () => {
-    await createRuntimeObject(ref, sampleWindow);
-    const file = runtimeObjectStateFile(ref);
-    const raw = await readFile(file, "utf8");
-    expect(JSON.parse(raw)).toEqual(sampleWindow);
   });
 
   it("deleteRuntimeObject removes the object directory; second call is idempotent", async () => {

@@ -3,7 +3,7 @@
  *
  * 与 stone（设计层 + git）/ flow（运行层 + ephemeral）三分。pool 持久但不进 git。
  *
- * 路径形态（不挂 branch；详见 meta/object.doc.ts persistable.pool.no_branch patch）:
+ * 路径形态（不挂 branch）:
  *
  *   {baseDir}/pools/objects/{objectId}/
  *     .pool.json
@@ -88,7 +88,7 @@ export function poolFilesDir(ref: PoolObjectRef): string {
 /**
  * pool 的 data 顶层目录（csv-based 表数据；一张表 = 一个 csv 文件）。
  *
- * 详见 ./csv-pool.ts 与 meta/object.doc.ts persistable.pool.children.data_pool 节点。
+ * 详见 ./csv-pool.ts。
  */
 export function poolDataDir(ref: PoolObjectRef): string {
   return join(poolDir(ref), "data");

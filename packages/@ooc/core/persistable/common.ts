@@ -30,7 +30,7 @@ import { BUILTIN_OBJECT_IDS, nestedObjectPath } from "../_shared/types/thread.js
 /**
  * Intermediate `objects/` dir in the versioning-worktree layout
  * `stones/<branch>/objects/<id>`. The flat canonical layout (`stones/<id>`)
- * omits it, but git metaprog worktrees and the main-branch mirror still use it.
+ * omits it, but versioning worktrees and the main-branch mirror still use it.
  */
 export const STONE_OBJECTS_SUBDIR = "objects";
 
@@ -133,7 +133,7 @@ export function stoneDir(ref: StoneObjectRef): string {
  *
  * Priority:
  *   1. Canonical:   stones/main/objects/<id>/         (canonical / flat)
- *   2. Versioning:  stones/<branch>/objects/<id>/     (git worktree, metaprog/session)
+ *   2. Versioning:  stones/<branch>/objects/<id>/     (git worktree, session)
  *
  * If none exist, returns the canonical path (caller handles ENOENT).
  *

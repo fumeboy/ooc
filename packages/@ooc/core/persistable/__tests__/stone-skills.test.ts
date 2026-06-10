@@ -34,17 +34,17 @@ async function writeSkill(skillsDir: string, name: string, frontmatter: string, 
 describe("listBranchSkills", () => {
   test("返回空数组当 skills 目录不存在", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-skills-"));
-    const skills = await listBranchSkills(tempRoot, "main");
+    const skills = await listBranchSkills(tempRoot);
     expect(skills).toEqual([]);
   });
 
   test("happy path：列出多个 skill 并解析 description", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-skills-"));
-    const skillsDir = branchSkillsDir(tempRoot, "main");
+    const skillsDir = branchSkillsDir(tempRoot);
     await writeSkill(skillsDir, "alpha", "description: alpha desc");
     await writeSkill(skillsDir, "beta", "description: beta desc");
 
-    const skills = await listBranchSkills(tempRoot, "main");
+    const skills = await listBranchSkills(tempRoot);
     expect(skills.length).toBe(2);
     expect(skills.map((s) => s.name)).toEqual(["alpha", "beta"]); // 字典序
     expect(skills[0]?.description).toBe("alpha desc");
@@ -54,11 +54,11 @@ describe("listBranchSkills", () => {
 
   test("description 缺失或 frontmatter 损坏 → 落到 (无描述)", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-skills-"));
-    const skillsDir = branchSkillsDir(tempRoot, "main");
+    const skillsDir = branchSkillsDir(tempRoot);
     await writeSkill(skillsDir, "no-desc", "name: foo"); // 没有 description
     await writeSkill(skillsDir, "broken", "this: is\n  bad yaml: {[");
 
-    const skills = await listBranchSkills(tempRoot, "main");
+    const skills = await listBranchSkills(tempRoot);
     const noDesc = skills.find((s) => s.name === "no-desc");
     const broken = skills.find((s) => s.name === "broken");
     expect(noDesc?.description).toBe("(无描述)");
@@ -67,21 +67,21 @@ describe("listBranchSkills", () => {
 
   test("子目录无 SKILL.md → 跳过不计入", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-skills-"));
-    const skillsDir = branchSkillsDir(tempRoot, "main");
+    const skillsDir = branchSkillsDir(tempRoot);
     await mkdir(join(skillsDir, "incomplete"), { recursive: true }); // 没 SKILL.md
     await writeSkill(skillsDir, "good", "description: ok");
 
-    const skills = await listBranchSkills(tempRoot, "main");
+    const skills = await listBranchSkills(tempRoot);
     expect(skills.map((s) => s.name)).toEqual(["good"]);
   });
 
   test("点开头的子目录被忽略", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-skills-"));
-    const skillsDir = branchSkillsDir(tempRoot, "main");
+    const skillsDir = branchSkillsDir(tempRoot);
     await writeSkill(skillsDir, ".hidden", "description: hidden");
     await writeSkill(skillsDir, "visible", "description: visible");
 
-    const skills = await listBranchSkills(tempRoot, "main");
+    const skills = await listBranchSkills(tempRoot);
     expect(skills.map((s) => s.name)).toEqual(["visible"]);
   });
 });
@@ -117,20 +117,20 @@ describe("listObjectSkills", () => {
 describe("10s TTL 缓存", () => {
   test("重复调用走缓存（不重新 readdir）", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-skills-"));
-    const skillsDir = branchSkillsDir(tempRoot, "main");
+    const skillsDir = branchSkillsDir(tempRoot);
     await writeSkill(skillsDir, "first", "description: v1");
 
-    const first = await listBranchSkills(tempRoot, "main");
+    const first = await listBranchSkills(tempRoot);
     expect(first.length).toBe(1);
 
     // 写入新 skill；缓存仍是旧视图
     await writeSkill(skillsDir, "second", "description: v2");
-    const second = await listBranchSkills(tempRoot, "main");
+    const second = await listBranchSkills(tempRoot);
     expect(second.length).toBe(1); // 还是 1，缓存未过期
 
     // 显式清缓存后看到新视图
     clearStoneSkillsCache();
-    const third = await listBranchSkills(tempRoot, "main");
+    const third = await listBranchSkills(tempRoot);
     expect(third.length).toBe(2);
   });
 });

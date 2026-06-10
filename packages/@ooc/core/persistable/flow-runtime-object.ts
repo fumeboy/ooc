@@ -102,16 +102,3 @@ export async function deleteRuntimeObject(ref: FlowObjectRef): Promise<void> {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
 }
-
-/**
- * 创建 runtime object：写出 state.json（首次创建时使用）。
- *
- * 当前与 writeRuntimeObjectState 行为一致；保留独立 API 以便后续区分
- * 创建（应触发 .flow.json 等元数据）vs 更新（仅刷 state）的语义。
- */
-export async function createRuntimeObject(
-  ref: FlowObjectRef,
-  state: ContextWindow,
-): Promise<void> {
-  await writeRuntimeObjectState(ref, state);
-}

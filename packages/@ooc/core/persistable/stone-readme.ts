@@ -12,14 +12,6 @@ export function readableFile(ref: StoneObjectRef): string {
 }
 
 /**
- * stone 的 readable.ts 绝对路径（2026-05-28 ooc-6 新增）。
- * 动态上下文渲染函数，控制 Object 如何在 context 中以 XML 形式展示给 LLM。
- */
-export function readableTsFile(ref: StoneObjectRef): string {
-  return join(stoneDir(ref), "readable.ts");
-}
-
-/**
  * 读取 readable.md，不存在返回 undefined。
  * 迁移期双读：优先 readable.md，fallback 到 readme.md（legacy path）。
  */

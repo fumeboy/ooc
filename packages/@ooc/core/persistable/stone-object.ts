@@ -26,7 +26,7 @@ export function visibleDir(ref: StoneObjectRef): string {
 /**
  * stone 的 knowledge 目录（seed knowledge；进 git review）。
  *
- * 与 pool 的 sediment knowledge 二分（参考 meta/object.doc.ts `persistable.stone.children.seed_knowledge`）：
+ * 与 pool 的 sediment knowledge 二分：
  * - 这里是先天/设计层 seed：`packages/<self>/knowledge/<slug>.md`，由 Object 主动写入并经 git review
  * - pool 侧 sediment：`pools/objects/<self>/knowledge/memory|relations/...`，运行时积累，不进 git
  *
@@ -39,8 +39,7 @@ export function stoneKnowledgeDir(ref: StoneObjectRef): string {
 }
 
 /**
- * stone 的 children 目录（B-tree 协议，2026-05-26）。子 Agent 物理嵌套在
- * `<parent>/children/<child>/`。详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
+ * stone 的 children 目录（嵌套子对象协议）。子 Agent 物理嵌套在 `<parent>/children/<child>/`。
  */
 export function stoneChildrenDir(ref: StoneObjectRef): string {
   return join(stoneDir(ref), STONE_CHILDREN_SUBDIR);

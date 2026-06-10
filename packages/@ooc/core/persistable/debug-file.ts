@@ -142,10 +142,7 @@ export interface LlmLoopDebugMetaRecord {
   /**
    * 本轮调用 LLM 时刻 thread.contextWindows 的 hash 快照。
    *
-   * 设计依据: docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.2
-   * 文档锚点: meta/object.doc.ts:observable.children.debug_files.patches.windows_snapshot
-   *
-   * - 数据由 src/observable/window-hash.ts:buildWindowsSnapshot 计算
+   * - 数据由 observable/window-hash.ts:buildWindowsSnapshot 计算
    * - 前端 LoopTimeline 用相邻 loop 的 windowsSnapshot 在客户端算 diff
    *   (added / removed / changed / unchanged)
    * - optional：向后兼容旧 loop_NNNN.meta.json
@@ -188,52 +185,51 @@ export function loopMetaFile(ref: ThreadPersistenceRef, loopIndex: number): stri
   return join(debugDir(ref), `loop_${formatLoopIndex(loopIndex)}.meta.json`);
 }
 
-/** 写入最近一次 LLM 输入快照，覆盖旧文件。 */
-export async function writeDebugInput(
+/** 写 debug 文件：mkdir -p debug 目录 + 序列化 record 覆盖写。 */
+async function writeDebugFile(
   ref: ThreadPersistenceRef,
-  record: LlmInputDebugRecord
+  file: string,
+  record: unknown,
 ): Promise<void> {
   await mkdir(debugDir(ref), { recursive: true });
-  await writeFile(llmInputFile(ref), toJson(record), "utf8");
+  await writeFile(file, toJson(record), "utf8");
+}
+
+/** 写入最近一次 LLM 输入快照，覆盖旧文件。 */
+export function writeDebugInput(ref: ThreadPersistenceRef, record: LlmInputDebugRecord): Promise<void> {
+  return writeDebugFile(ref, llmInputFile(ref), record);
 }
 
 /** 写入最近一次 LLM 输出快照，覆盖旧文件。 */
-export async function writeDebugOutput(
-  ref: ThreadPersistenceRef,
-  record: LlmOutputDebugRecord
-): Promise<void> {
-  await mkdir(debugDir(ref), { recursive: true });
-  await writeFile(llmOutputFile(ref), toJson(record), "utf8");
+export function writeDebugOutput(ref: ThreadPersistenceRef, record: LlmOutputDebugRecord): Promise<void> {
+  return writeDebugFile(ref, llmOutputFile(ref), record);
 }
 
 /** 写入单轮 LLM 输入快照。 */
-export async function writeLoopDebugInput(
+export function writeLoopDebugInput(
   ref: ThreadPersistenceRef,
   loopIndex: number,
-  record: LlmInputDebugRecord
+  record: LlmInputDebugRecord,
 ): Promise<void> {
-  await mkdir(debugDir(ref), { recursive: true });
-  await writeFile(loopInputFile(ref, loopIndex), toJson(record), "utf8");
+  return writeDebugFile(ref, loopInputFile(ref, loopIndex), record);
 }
 
 /** 写入单轮 LLM 输出快照。 */
-export async function writeLoopDebugOutput(
+export function writeLoopDebugOutput(
   ref: ThreadPersistenceRef,
   loopIndex: number,
-  record: LlmOutputDebugRecord
+  record: LlmOutputDebugRecord,
 ): Promise<void> {
-  await mkdir(debugDir(ref), { recursive: true });
-  await writeFile(loopOutputFile(ref, loopIndex), toJson(record), "utf8");
+  return writeDebugFile(ref, loopOutputFile(ref, loopIndex), record);
 }
 
 /** 写入单轮 LLM 元数据。 */
-export async function writeLoopDebugMeta(
+export function writeLoopDebugMeta(
   ref: ThreadPersistenceRef,
   loopIndex: number,
-  record: LlmLoopDebugMetaRecord
+  record: LlmLoopDebugMetaRecord,
 ): Promise<void> {
-  await mkdir(debugDir(ref), { recursive: true });
-  await writeFile(loopMetaFile(ref, loopIndex), toJson(record), "utf8");
+  return writeDebugFile(ref, loopMetaFile(ref, loopIndex), record);
 }
 
 /**

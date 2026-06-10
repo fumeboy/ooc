@@ -87,20 +87,10 @@ export {
 } from "./stone-object";
 
 export {
-  flowRelationsDir,
-  flowRelationFile,
-  readFlowRelation,
-  writeFlowRelation,
-} from "./flow-relation";
-
-// 2026-06-01 ooc-6 Phase 5'.1: flat runtime object + thread context registry
-// 2026-06-02 ooc-6 Phase 5'.3: nested flow-context.ts removed; this is the only path
-export {
   runtimeObjectStateFile,
   writeRuntimeObjectState,
   readRuntimeObjectState,
   deleteRuntimeObject,
-  createRuntimeObject,
 } from "./flow-runtime-object";
 export {
   contextRegistryFile,
@@ -145,7 +135,6 @@ export { resolveBuiltinDir, resolveBuiltinReadDir } from "./builtin-dir";
 export {
   readReadable,
   readableFile,
-  readableTsFile,
   writeReadable,
 } from "./stone-readme";
 // stone-data 已删除（2026-05-23）：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
@@ -246,7 +235,7 @@ export {
   type EvolveSelfErr,
 } from "./stone-evolve-self.js";
 
-export { parseMentions } from "./mention";
+export { parseMentions } from "@ooc/core/_shared/utils/mention.js";
 
 export {
   flowClientPageFile,

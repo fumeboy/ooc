@@ -1,7 +1,7 @@
 /**
  * csv-based pool data —— Object 跨 session 累积的事实数据（一张表 = 一个 csv）。
  *
- * 约定（详见 meta/object.doc.ts persistable.pool.children.data_pool 节点）：
+ * 约定：
  * - 路径形态：`{baseDir}/pools/objects/{objectId}/data/{name}.csv`
  * - 首行为 header；值都是 string（数字 / 布尔由调用方自己 parse / format）
  * - csv 名 kebab-case（详见 pool-object.poolDataFile 的 CSV_NAME_RE）
