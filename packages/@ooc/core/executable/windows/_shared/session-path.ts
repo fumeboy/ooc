@@ -26,6 +26,7 @@ import { existsSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep, join } from "node:path";
 import type { ThreadContext } from "../../../thinkable/context";
 import { nestedObjectPath } from "../../../_shared/types/thread";
+import { readWorldConfigSync } from "../../../persistable/index.js";
 
 /**
  * 把 LLM 传入的路径解析为绝对路径：
@@ -51,9 +52,14 @@ export function resolveSessionPath(thread: ThreadContext | undefined, p: string)
   // `../` 相对逃逸 + world 外绝对路径一律拒绝；需 world 外操作请用 program(shell)（另设的 raw escape hatch，不走这里）。
   const rel = relative(baseDir, resolved);
   if (rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) {
-    throw new Error(
-      `路径 "${p}" 逃逸出 world 根（解析为 "${resolved}"）；data 原语只能在 world 目录内读写。`,
-    );
+    // .world.json 可显式豁免该拦截（allowEscapeWorldFilePathLimit=true）：用于把宿主仓库
+    // 当 world 操作的自举场景（如 .ooc-world-meta submodule 读写父仓库源码）。冷分支才读配置——
+    // 同步读盘（启动期 async 路径已填好 TTL 缓存，运行时几乎总命中）。
+    if (!readWorldConfigSync(baseDir).allowEscapeWorldFilePathLimit) {
+      throw new Error(
+        `路径 "${p}" 逃逸出 world 根（解析为 "${resolved}"）；data 原语只能在 world 目录内读写。`,
+      );
+    }
   }
   return resolved;
 }

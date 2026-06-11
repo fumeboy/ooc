@@ -279,5 +279,6 @@ export {
   DEFAULT_LARK_TENANT_HOST,
   WORLD_CONFIG_FILENAME,
   readWorldConfig,
+  readWorldConfigSync,
   clearWorldConfigCache,
 } from "./world-config";

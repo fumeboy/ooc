@@ -23,6 +23,7 @@
  */
 
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
@@ -81,6 +82,15 @@ export interface WorldConfig {
    * 缺省 false（更安全：默认要求人工确认）。非 boolean 值忽略并 console.warn。
    */
   prAutoMerge: boolean;
+  /**
+   * 豁免 data 原语（grep / glob / write_file / open_file / file_window.edit）的 world 根
+   * 边界拦截（resolveSessionPath，executable/windows/_shared/session-path.ts）。
+   *   - false（默认）→ `../` 相对逃逸 + world 外绝对路径一律拒绝（安全默认）。
+   *   - true → 允许解析到 world 目录之外。仅用于把整个宿主仓库当 world 操作的自举场景
+   *            （如 .ooc-world-meta submodule 需要读写父仓库源码）。
+   * 缺省 false。非 boolean 值忽略并 console.warn。
+   */
+  allowEscapeWorldFilePathLimit: boolean;
 }
 
 /** 原始 JSON 形态（解析前；字段全 optional + 大小写兼容写法）。 */
@@ -99,10 +109,15 @@ interface RawWorldConfig {
   WorkerMaxTicks?: unknown;
   prAutoMerge?: unknown;
   PrAutoMerge?: unknown;
+  allowEscapeWorldFilePathLimit?: unknown;
+  AllowEscapeWorldFilePathLimit?: unknown;
 }
 
 /** prAutoMerge 缺省值：false（默认要求人工确认更安全，见 WorldConfig.prAutoMerge）。 */
 const DEFAULT_PR_AUTO_MERGE = false;
+
+/** allowEscapeWorldFilePathLimit 缺省值：false（默认拦截 world 外读写，见 WorldConfig）。 */
+const DEFAULT_ALLOW_ESCAPE_WORLD_FILE_PATH_LIMIT = false;
 
 interface CachedEntry {
   fetchedAt: number;
@@ -233,13 +248,58 @@ export async function readWorldConfig(baseDir: string): Promise<WorldConfig> {
     raw = await readFile(filePath, "utf8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      const defaults: WorldConfig = { siteName: DEFAULT_SITE_NAME, larkTenantHost: DEFAULT_LARK_TENANT_HOST, prAutoMerge: DEFAULT_PR_AUTO_MERGE };
+      const defaults = defaultWorldConfig();
       cacheSet(baseDir, defaults);
       return defaults;
     }
     throw err;
   }
 
+  const config = parseWorldConfig(raw, filePath, baseDir);
+  cacheSet(baseDir, config);
+  return config;
+}
+
+/**
+ * readWorldConfig 的同步版本：供 sync 热路径（resolveSessionPath 的边界拦截分支）按需读取。
+ *
+ * 复用同一 TTL 缓存——server 启动期已通过 async 路径填好缓存，运行时这里几乎总是命中。
+ * 缓存未命中时同步读盘（仅 path 逃逸这一冷分支会触发），ENOENT / 解析失败回落默认值。
+ */
+export function readWorldConfigSync(baseDir: string): WorldConfig {
+  const cached = cacheGet(baseDir);
+  if (cached) return cached;
+
+  const filePath = join(baseDir, WORLD_CONFIG_FILENAME);
+  let raw: string;
+  try {
+    raw = readFileSync(filePath, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      const defaults = defaultWorldConfig();
+      cacheSet(baseDir, defaults);
+      return defaults;
+    }
+    throw err;
+  }
+
+  const config = parseWorldConfig(raw, filePath, baseDir);
+  cacheSet(baseDir, config);
+  return config;
+}
+
+/** 全默认 WorldConfig（文件缺失 / 解析失败 / 非对象时回落）。 */
+function defaultWorldConfig(): WorldConfig {
+  return {
+    siteName: DEFAULT_SITE_NAME,
+    larkTenantHost: DEFAULT_LARK_TENANT_HOST,
+    prAutoMerge: DEFAULT_PR_AUTO_MERGE,
+    allowEscapeWorldFilePathLimit: DEFAULT_ALLOW_ESCAPE_WORLD_FILE_PATH_LIMIT,
+  };
+}
+
+/** 把 `.world.json` 原文解析为 WorldConfig；解析失败 / 非对象回落默认值。纯函数（不读缓存/不读盘）。 */
+function parseWorldConfig(raw: string, filePath: string, baseDir: string): WorldConfig {
   let parsed: RawWorldConfig;
   try {
     parsed = JSON.parse(raw) as RawWorldConfig;
@@ -247,15 +307,11 @@ export async function readWorldConfig(baseDir: string): Promise<WorldConfig> {
     console.warn(
       `[world-config] ${filePath} JSON parse failed (${(err as Error).message}); falling back to defaults`,
     );
-    const defaults: WorldConfig = { siteName: DEFAULT_SITE_NAME, larkTenantHost: DEFAULT_LARK_TENANT_HOST, prAutoMerge: DEFAULT_PR_AUTO_MERGE };
-    cacheSet(baseDir, defaults);
-    return defaults;
+    return defaultWorldConfig();
   }
 
   if (!parsed || typeof parsed !== "object") {
-    const defaults: WorldConfig = { siteName: DEFAULT_SITE_NAME, larkTenantHost: DEFAULT_LARK_TENANT_HOST, prAutoMerge: DEFAULT_PR_AUTO_MERGE };
-    cacheSet(baseDir, defaults);
-    return defaults;
+    return defaultWorldConfig();
   }
 
   // 字段大小写兼容：user 指令里写的是 SiteName / ExternalSkillsDir / LarkTenantHost / LarkAppId / LarkAppSecret，
@@ -271,12 +327,18 @@ export async function readWorldConfig(baseDir: string): Promise<WorldConfig> {
   const larkAppSecret = pickString(parsed, "larkAppSecret", "LarkAppSecret");
   const workerMaxTicks = pickPositiveInt(parsed, filePath, "workerMaxTicks", "WorkerMaxTicks");
   const prAutoMerge = pickBoolean(parsed, filePath, DEFAULT_PR_AUTO_MERGE, "prAutoMerge", "PrAutoMerge");
+  const allowEscapeWorldFilePathLimit = pickBoolean(
+    parsed,
+    filePath,
+    DEFAULT_ALLOW_ESCAPE_WORLD_FILE_PATH_LIMIT,
+    "allowEscapeWorldFilePathLimit",
+    "AllowEscapeWorldFilePathLimit",
+  );
 
-  const config: WorldConfig = { siteName, larkTenantHost, prAutoMerge };
+  const config: WorldConfig = { siteName, larkTenantHost, prAutoMerge, allowEscapeWorldFilePathLimit };
   if (externalSkillsDir) config.externalSkillsDir = externalSkillsDir;
   if (larkAppId) config.larkAppId = larkAppId;
   if (larkAppSecret) config.larkAppSecret = larkAppSecret;
   if (workerMaxTicks !== undefined) config.workerMaxTicks = workerMaxTicks;
-  cacheSet(baseDir, config);
   return config;
 }
