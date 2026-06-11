@@ -13,7 +13,7 @@ OOC World 文件系统按四种持久性质分层。术语解释（stone-version
 | 层 | 性质 | 进 git？ | review 机制 |
 |---|---|---|---|
 | **Builtin** | 运行时自带定义：身份 + 源码 + schema + seed knowledge（随 OOC 代码发布） | ✓（OOC 源码仓） | 代码仓 PR review；Agent 不可改写 |
-| **Stone** | 用户/Agent 创建 Object 的设计层：身份 + 源码 + schema + seed knowledge | ✓（world stones git） | PR-Issue（跨自治区改动需 supervisor 审阅） |
+| **Stone** | 用户/Agent 创建 Object 的设计层：身份 + 源码 + schema + seed knowledge | ✓（world stones git） | feat 分支 PR（沉淀进 canonical 需 reviewer 审阅，supervisor 始终参与） |
 | **Pool**  | 事实：data csv + sediment knowledge + files | ✗ | 写就生效 |
 | **Flow**  | 运行：thread + session_data + 临时 relation | ✗ | 即用即弃 |
 
@@ -38,7 +38,8 @@ OOC World 文件系统按四种持久性质分层。术语解释（stone-version
 - `visible/index.tsx`：UI 页面
 - `knowledge/<slug>.md`：seed knowledge（人类设计的初始知识库；带 `activates_on` frontmatter）
 
-每次写入走 stone-versioning 流程（worktree → commit → ff merge 或 PR-Issue review）。
+沉淀进 canonical 走 stone-versioning 流程：业务 session 试验（worktree，永不合入 main）→ super flow
+feat 分支 PR（`new_feat_branch` → 编辑 → `evolve_self` commit + 开 PR → reviewer 审批 → 合入）。
 
 ## Pool（事实层，不进 git）
 
@@ -64,7 +65,7 @@ Pool **对 Builtin 和 Stone Object 都适用**：supervisor / user 的跨 sessi
 
 - **schema in builtin or stone, data in pool**：设计意图进 git，运行时事实不进 git
 - **Builtin 不可被 Agent 改写**：runtime 定义通过 OOC 发版升级
-- **Stone 改动经审计**：跨自治区改动必经 supervisor PR-Issue 评审
+- **Stone 改动经审计**：沉淀进 canonical 必经 feat 分支 PR 评审（reviewer 集随变更领地冒泡，supervisor 始终参与）
 - **事实层信任**：pool 写就生效，Object 自治
 - **运行层即用即弃**：flow 数据 session 结束可归档
 

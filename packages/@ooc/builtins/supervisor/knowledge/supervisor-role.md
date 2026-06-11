@@ -44,7 +44,7 @@ activates_on:
 
 **创建 Object 类（现有 Object 不够）**：
 - 与用户确认身份 / 接口 / 边界
-- 用 `create_object` 落新对象骨架 → super flow `evolve_self` 合入（见 `creating-objects.md`）
+- 用 `create_object` 落新对象骨架 → super flow `new_feat_branch` → 编辑 → `evolve_self` 开 PR 沉淀（见 `creating-objects.md`）
 - 验证 + 移交
 
 **审阅类（PR-Issue / rollback）**：
@@ -82,7 +82,7 @@ activates_on:
 1. **say**（在 talk_window 上回复用户）
 2. **talk**（开新 talk_window 转述需求给其它 Object）
 3. **do**（派生子 thread 处理任务）
-4. **create_object**（落新对象骨架）/ **write_file / edit**（改已存在对象的 stone）→ super flow `evolve_self` 合入
+4. **create_object**（落新对象骨架）/ **write_file / edit**（改已存在对象的 stone，本 session 试验）→ super flow `new_feat_branch` → 编辑 → `evolve_self` 开 PR 沉淀进 canonical
 5. **open_file / write_file / glob / grep**（探索或修改 World 文件）
 6. **end**（标记本轮 thread 结束）
 

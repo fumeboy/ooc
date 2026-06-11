@@ -45,27 +45,47 @@ activates_on:
 `show_description` 命中露摘要，`show_content` 命中露全文；多 trigger 取 max。
 **自检**：写完想一下"下次哪个 window / method 出现时我希望想起这条？"填进 activates_on，否则白写。
 
-## 改身份合入 main：evolve_self
+## 沉淀身份/身体进 canonical：feat 分支 PR
 
-业务 session 里 write_file 改 self.md / readable / executable / visible 只在那个 session 生效，
-main（canonical 权威自我）不变。要永久定型，在 super flow 合入：
+业务 session 里 write_file 改 self.md / readable / executable / visible / seed knowledge 只在那个
+session 试验——`session-<sid>` worktree 是运行时派生物，**永不合入 main**。要让身份/身体改动进
+canonical 权威自我，在 super flow 里走一条 **feat 分支 PR**（每次沉淀一个独立单元）：
 
 ```
-exec(method="evolve_self")                              # 先看 diff：这次改了身份哪些文件
-exec(method="evolve_self", args={ message: "为什么改" })  # 整个 session 的 identity 改动一并合入 main
+exec(method="new_feat_branch", args={ intent: "为什么/沉淀什么" })   # 从 main 派生 feat 分支并绑定本 thread
+exec(method="write_file", args={ path: "stones/<self>/self.md", content: … })  # 直接编辑 feat 分支下文件
+…（write_file / open_file+edit ×N，落 feat worktree，不是 session、不是 main）…
+exec(method="evolve_self")                                          # finalizer：commit feat 分支 + 开 PR
 ```
 
-合入后下一轮新 session 见新身份。**super flow 自己不直接 write_file 改 stone 身体**——它的职责是
-合入、沉淀记忆、以及（supervisor）治理。改身体永远在业务 session 做；记忆（pool）直写即可。
+要点：
+- `new_feat_branch` 绑定后，你普通的 `write_file` / `file_window.edit` 就**直接落 feat 分支 worktree**
+  （`stones/<id>/...` 路径自动路由过去）——这是 super flow 里唯一直接编辑 stone 身体的入口。
+- `evolve_self` 是 **finalizer，无内容参数**（intent 可选，缺省沿用 new_feat_branch 的）：它 commit 你
+  在 feat 分支上的编辑（署名你）→ 按变更触及谁的领地算出 reviewer 集 → 开 PR → 给每个 reviewer 投
+  pr_window。**忘了先 new_feat_branch 直接 evolve_self 会失败**（fail-loud 提示先开分支）。
+- reviewer（含 supervisor，始终参与）在各自 thread 看到 pr_window，approve / reject / request_changes
+  （评审协议见 pr-review 知识）。全 approve → 按 `.world.json prAutoMerge` 合入（缺省 false=人工确认）。
+- **被 reject / request-changes / 合入失败** → 一条 message 回投到你（super(foo)）的 thread。再调
+  `new_feat_branch(**同 intent**)` 即幂等重绑同一分支续修，再 `evolve_self` 重开 PR。
 
 ## 建 / 改对象
 
-- 改**已存在**对象（自己或别人）的文件：业务 session 直接 `write_file`。改别人自治区的改动
-  evolve_self 合入时**自动转 PR-Issue 给 supervisor** 评审，其间 main 不变。
-- 建**全新**对象：必须用 `create_object`（原子建骨架），不能裸 write_file。
+- 改**已存在**对象（自己或别人）的文件：在上面的 feat 分支上 write_file 即可。变更越出你自己子树
+  （触及别人领地 / 新对象）→ `evolve_self` 算 reviewer 时自动把对应对象拉进 review，supervisor 恒在。
+- 建**全新**对象：业务 session 用 `create_object`（原子建骨架，不能裸 write_file）。新对象在本 session
+  内即可用，但 session 不合入 main——进 canonical 同样走 feat 分支 PR（在 super flow 把新对象目录纳入 feat
+  分支后 evolve_self）。
 
 ## supervisor 专属（你不是 supervisor 时跳过）
 
-治理两动作经控制面 HTTP 端点触发：评审 PR-Issue（`POST /api/runtime/pr-issues/<N>/resolve`，
-body `{ decision: "merge" | "reject" | "request-changes" }`）；回滚某对象 stone
-（`POST /api/runtime/stones/<id>/rollback`，body `{ targetCommit: "<sha>" }`）。
+PR 治理经控制面 HTTP 端点（reviewer 也可在自己 pr_window 上用 approve/reject/request_changes method）：
+
+```
+GET  /api/runtime/pr-issues                      # 列出待审 PR（带 reviewers/approvals/verdict）
+GET  /api/runtime/pr-issues/<N>                  # 看某条 PR 全量（intent/diff/paths）
+POST /api/runtime/pr-issues/<N>/approve          # body { reviewerObjectId, decision: "approve"|"reject"|"request-changes" }
+POST /api/runtime/pr-issues/<N>/resolve          # body { decision: "merge"|"reject"|"request-changes" }（prAutoMerge=false 时人工落锤合入）
+```
+
+回滚某对象 stone 历史：`POST /api/runtime/stones/<id>/rollback`，body `{ targetCommit: "<sha>" }`。
