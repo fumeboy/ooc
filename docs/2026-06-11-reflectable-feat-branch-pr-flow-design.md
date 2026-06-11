@@ -84,3 +84,25 @@
 | 决议 | `resolvePrIssue` 单 supervisor merge/reject | **已升级（P3/P5）**：`approvePrIssue` 多 reviewer 聚合 + `.world.json prAutoMerge` 闸；合入仍复用 `resolvePrIssue`（聚合触发，未绕过） |
 | 呈现 | 无（G2） | list/get/approve 端点 + **pr_window context window + activates_on 评审 knowledge 已落（P4）** |
 | 失败 | request-changes 留 open，无 loop | **已落（P6）**：reject/request-changes/合入失败 → message→super(foo) 回修；resume 经 `new_feat_branch(同 intent)` 幂等重绑分支再 submit |
+
+## 5. 真实体验验证（2026-06-11，体验官真 LLM 端到端）
+
+全新 world + 新代码 + 新协议 knowledge，真 LLM 跑全闭环。**核心闭环真通**：
+- **S1c/S2/S3 全 Good**：`create_object(bar)` → `talk(super)` → super(foo) `new_feat_branch` →
+  在 feat 分支 `write_file`（绑定覆盖路由进 feat worktree）→ `evolve_self()`（**无参 finalizer，
+  LLM 照新协议正确走，没退回旧形态**）→ PR(reviewers=[bar,supervisor]、diff、branch=feat/bar-world、
+  **main 未变**) → bar 经 pr_window method approve + supervisor approve → ready-to-merge →
+  prAutoMerge 缺省 false 留 open（人工闸正确）→ 人工 `/resolve{merge}` → main 推进、bar canonical。
+  S3 cross-scope 改 bar 领地 → reviewers 正确冒泡 [bar,supervisor]（rule A）。
+
+**开放问题（体验官实证，待修）**：
+- **#1 CRITICAL（visibility-first）**：supervisor 的 `t_prreview_supervisor_<id>` thread 被投递
+  （含 pr_window + inbox 事件）但 **worker 永不给它 job**（同批 `t_prreview_bar_<id>` 拿到 job 跑完）
+  →「supervisor 始终参与 review」agent 侧形同虚设，只能 HTTP 代批。复现 2/2。
+- **#2 HIGH**：feat 绑定生效时 `write_file pools/...` 静默落 pool（不进 feat worktree）→
+  `evolve_self` NO_CHANGES、PR 开不出。pool 沉淀(write-through 不 PR) vs 身体沉淀(feat PR) 两通道
+  在知识里不够互斥，LLM 易选错。
+- **#3 MEDIUM**：supervisor 是 Builtin、world 内无 `stones/supervisor/` → self-scope 自沉淀对
+  supervisor 物理不可达（须用真 Stone Object 当 author）。
+- **#4 MEDIUM**：回修 resume 时 LLM 不照「new_feat_branch 同 intent 重绑」提示走，即兴 curl 空转
+  （叠加 521 端点抖动）。提示语需更强导向具体 method 动作。
