@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { HelpCircle, X } from "lucide-react";
 
 /**
@@ -61,7 +62,7 @@ export function GlossaryLink({ className }: { className?: string }) {
         title="OOC 术语速查"
       >
         <HelpCircle size={12} aria-hidden="true" />
-        这些词是什么？
+        向导
       </button>
       {open && <GlossaryDialog onClose={() => setOpen(false)} />}
     </>
@@ -69,7 +70,9 @@ export function GlossaryLink({ className }: { className?: string }) {
 }
 
 function GlossaryDialog({ onClose }: { onClose: () => void }) {
-  return (
+  // 经 portal 渲染到 document.body：modal-backdrop 是 position:fixed，若留在侧栏 DOM 子树内，
+  // 侧栏（窄屏抽屉）的 transform 会成为 fixed 的包含块，导致弹窗相对侧栏而非视口定位。
+  return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div
         className="modal-card glossary-dialog"
@@ -101,6 +104,7 @@ function GlossaryDialog({ onClose }: { onClose: () => void }) {
           ))}
         </dl>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
