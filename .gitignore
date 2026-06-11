@@ -5,12 +5,9 @@ node_modules/
 .ooc-world-test/
 .ooc-world/
 .ooc-world-*
-# .ooc-world-meta：作为 submodule 纳入（remote: fumeboy/ooc-0），仅 track stones/main 设计内容；
-# 运行时/内部物（flows / pools / stone bare 仓库）仍忽略。
-!.ooc-world-meta/
-.ooc-world-meta/flows/
-.ooc-world-meta/pools/
-.ooc-world-meta/stones/.stones_repo/
+# .ooc-world-meta：OOC 自举 world（设计权威 = github.com/fumeboy/ooc-0）。原以 submodule 纳入，
+# 现已解除——改为独立 clone 落 .ooc-world-meta/stones/main（避免 submodule 丢改动）；整目录忽略。
+# 新环境拉取方式见 AGENT.md「进入项目时必读」。
 .claude/
 .agent_context/
 goal.md

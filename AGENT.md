@@ -20,7 +20,7 @@ OOC Agent 由 9 个能力维度组合：thinkable / executable / collaborable / 
 
 ## 进入项目时必读
 
-**维度/模块设计的权威正在迁入 `.ooc-world-meta` 对象树**（OOC 自举 world，submodule → ooc-0）：
+**维度/模块设计的权威正在迁入 `.ooc-world-meta` 对象树**（OOC 自举 world = `github.com/fumeboy/ooc-0` 的独立 clone，已不再是 submodule，被父仓 gitignore）：
 `.ooc-world-meta/stones/main/objects/supervisor/`（大局观+核心哲学+harness 组织+测试策略，见其 knowledge/）
 及其 `children/<dim>/`（9 维度 thinkable/executable/collaborable/observable/reflectable/programmable/
 readable/visible/persistable + 横向 app/class）。每个对象 self.md 先陈述**核心设计**、含**名词解释** + knowledge。
@@ -72,7 +72,7 @@ packages/@ooc/
 ├── storybook/           # 能力测试框架（9 特性 story）
 └── tests/               # e2e / harness / integration
 .ooc-world               # 测试用 OOC world（运行时数据；勿污染仓库根）
-.ooc-world-meta          # OOC 自举 world（submodule → ooc-0）：维度/模块设计权威
+.ooc-world-meta          # OOC 自举 world（独立 clone → ooc-0，父仓 gitignore）：维度/模块设计权威
 ```
 
 > 维度 ≠ 目录一一对应：部分维度物理寄居在别处（collaborable 在 `executable/windows`、reflectable 在 `thinkable/`、programmable 在 `persistable/stone-*`〔git versioning + evolve-self 合入机制〕、能力入口在 `builtins/root` 的 evolve_self method、readable/visible 经注册分维）。「某维度怎么设计」一律以对象树为准。
@@ -80,7 +80,9 @@ packages/@ooc/
 ## 关键约束（违反会出问题）
 
 1. **app server 启动必须显式 `--world ./.ooc-world`**，否则 `config.ts` 回退到 `process.cwd()` 把仓库源码目录当 world——这会污染源码树。
-2. **对象树是 submodule（`.ooc-world-meta/stones/main` → ooc-0）**：改其文档要先在 submodule 内 commit，再回父仓库 `git add .ooc-world-meta/stones/main` bump 指针提交；只在父仓库看不到 submodule 内的文件改动，远端 pull 也可能 orphan 掉未推送的 submodule commit。
+2. **对象树是独立 git 仓**（`.ooc-world-meta/stones/main` = `github.com/fumeboy/ooc-0` 的 clone，**已不再是 submodule**——曾因 submodule 易 orphan 丢改动而解除），被父仓 `.gitignore` 忽略。
+   - **改其文档**：直接在 `.ooc-world-meta/stones/main` 内编辑 → `git commit` → `git push origin main` 推到 ooc-0。**不再需要父仓 bump 指针**（父仓完全不跟踪对象树内容）。
+   - **新工作环境**：父仓 clone 下来不含对象树，须手动 `git clone https://github.com/fumeboy/ooc-0.git .ooc-world-meta/stones/main`，并补回 world 配置 `.ooc-world-meta/.world.json`（内容 `{ "allowEscapeWorldFilePathLimit": true }`）。`.ooc-world-meta/{flows,pools,stones/.stones_repo}` 等运行时物由 app 自行生成。
 3. **文档断言要锚定真实代码**：叶节点写"代码里有 X"时用 `packages/@ooc/.../file.ts:行号` 形式锚定；高漂移处优先锚 `export const`/函数名。源代码与文档分歧时优先信任源代码。
 4. **不要直接修源代码绕开 review**：体验官（AgentOfExperience）发现的问题转 Issue + e2e 场景；具体维度的 AgentOfX 才动 `packages/@ooc/` 源码。当前由 Claude Code 主会话承担 Supervisor 角色，sub agent 承担各 AgentOfX 角色（角色/边界与 interim runtime 的权威定义见 supervisor `knowledge/engineering-harness.md`）。
 
