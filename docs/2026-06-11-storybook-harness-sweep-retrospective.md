@@ -77,7 +77,8 @@
 **残留（建后续小项）**：
 - `derivePeerObjectWindows` 的 hierarchical peer 发现（`discoverStoneHierarchicalPeers`）仍 main-anchored——session 内新建 **child** 对象不会自动作为 hierarchical peer 出现（talk 过的 peer 不受影响，走 talk_window 收集路径已 session-aware）。
 - 全局 `object-type-registrar`（startup）只扫 `stones/`，session 新对象靠渲染期惰性注册兜底；想进全局 registry 需另设计。
-- G2（PR-Issue 可见性）/ G4（executable canonical schema）未动，独立跟踪。
+- **G4（executable canonical schema）已修**（2026-06-11，commit 33148bc3）：`creating-objects.md` 补「executable/index.ts 唯一正确写法」子节（canonical `export const window`+`exec` 范例 + 错误写法清单 + 返回三形态），经 server-loader 加载测试验证范例真能注册+调用。
+- G2（PR-Issue 可见性）未动，独立跟踪。
 
 ## 卫生
 
