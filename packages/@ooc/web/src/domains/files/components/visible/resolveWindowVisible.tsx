@@ -8,8 +8,8 @@
  * 解析顺序（Review 修订，M3：object 自己的 visible 优先于继承的 builtin）：
  *  1. BUILTIN_VISIBLE[window.class]（**原始 type 直命中**，不经 effectiveVisibleType）→ 静态 builtin。
  *  2. 否则（user-defined type）→ dynamic：加载该 object 自己的 stone visible（objectId=window.class）。
- *  3. dynamic notFound（该 object 没写 visible）→ fallback BUILTIN_VISIBLE[effectiveVisibleType]（继承链）。
- *  4. 仍无 → JSON 兜底。
+ *  3. dynamic notFound（该 object 没写 visible）→ **readable 文本**（该 object 的 readable.md 对外自述）。
+ *  4. readable 缺失 → 继承链 BUILTIN_VISIBLE[effectiveVisibleType] → JSON 兜底。
  *
  * scope 恒为 stone：OOC object 的 visible 是其身份的一部分，写在 stone scope
  * `stones/<obj>/visible/index.tsx`；session（flow）是 stone 的 lazy worktree 分支，
@@ -177,12 +177,15 @@ export function WindowVisible({
     return <ReadableFallback window={window} />;
   }
 
-  // dynamic：先确定 fallback（继承链 builtin → readable → JSON），再动态加载 object 自己的
-  // visible；object 没写 visible（notFound）时落到这个 fallback。
+  // dynamic：先确定 fallback，再动态加载 object 自己的 visible；object 没写 visible（notFound）
+  // 时落到这个 fallback。回退顺序（用户拍板）：**readable 文本优先于继承链 builtin**——展示一个
+  // 没有自己 visible 组件的 OOC object 时，它的 readable.md（对外自述）比继承的通用 root 视图更
+  // 贴近「这个 object 是什么」。readable 缺失再退继承 builtin（如 effectiveVisibleType=root），
+  // 最后 JSON。即：own visible → readable → 继承 builtin → JSON。
   const inheritedKey = window.effectiveVisibleType;
   const InheritedFallback =
     inheritedKey && inheritedKey !== window.class ? BUILTIN_VISIBLE[inheritedKey] : undefined;
-  const Fallback: WindowComp = InheritedFallback ?? ReadableFallback;
+  const Fallback: WindowComp = makeReadableFallback(InheritedFallback ?? jsonFallback);
 
   const C = loadDynamic(kind.objectId, kind.sessionId, Fallback);
   return (
