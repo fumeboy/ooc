@@ -21,7 +21,7 @@
  * - setPermissionDecider(null) 在 afterEach 清理
  */
 
-import { afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -121,10 +121,16 @@ function writePoliciesJson(ref: ThreadPersistenceRef, raw: string): void {
 
 // ─────────────────────────── fixture: fake commands ───────────────────────────
 
-// 注册仅供测试用的 root commands: "_test_q0b_danger" (deny), "_test_q0b_safe" (无声明)
+// 注册仅供测试用的 root commands: "_test_q0b_danger" (deny), "_test_q0b_safe" (无声明)。
+// registerExecutable 对 methods 是整表替换——必须 merge 进现有 ROOT_METHODS（否则抹掉
+// talk/do/todo 等，污染全局 builtinRegistry，让后续测试文件的 resolveMethod("talk") 失败），
+// 并在 afterAll 还原，保证测试隔离。
+let originalRootMethods: Record<string, unknown>;
 beforeAll(() => {
+  originalRootMethods = builtinRegistry.getObjectDefinition("root").methods;
   builtinRegistry.registerExecutable("root", {
     methods: {
+      ...originalRootMethods,
       _test_q0b_danger: {
         description: "test deny method",
         intents: ["_test_q0b_danger"],
@@ -137,8 +143,12 @@ beforeAll(() => {
         // 缺省 permission → 默认 allow
         exec: () => ({ ok: true, result: "executed-safe" }),
       },
-    },
+    } as never,
   });
+});
+
+afterAll(() => {
+  builtinRegistry.registerExecutable("root", { methods: originalRootMethods as never });
 });
 
 // ─────────────────────────── housekeeping ─────────────────────────────────────

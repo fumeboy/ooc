@@ -8,7 +8,7 @@ import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
-import { builtinRegistry } from "@ooc/core/executable/windows/_shared/registry";
+import { createObjectRegistry } from "@ooc/core/executable/windows/_shared/registry";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types";
 
 let tempRoot: string | undefined;
@@ -42,10 +42,11 @@ describe("createProgramSelf", () => {
     const thread: ThreadContext = makeThread({ id: "t1" });
     // ooc-6 new design: window id = object id, window type = object id
     const objectId = "alice";
-    // Load and register the object window definition dynamically
+    // 局部 registry：不污染全局 builtinRegistry，也不依赖其他测试注册的同名 "alice"
+    const registry = createObjectRegistry();
     const objWin = await loadObjectWindow(ref);
-    if (!builtinRegistry.listRegisteredObjectTypes().includes(objectId as any) && objWin) {
-      builtinRegistry.registerNewObjectType(objectId as any, {
+    if (objWin) {
+      registry.registerNewObjectType(objectId as any, {
         methods: objWin.methods ?? {},
         readable: objWin.readable,
         onClose: objWin.onClose,
@@ -66,7 +67,7 @@ describe("createProgramSelf", () => {
       threadId: "t1",
     };
 
-    const self = createProgramSelf(ref, thread);
+    const self = createProgramSelf(ref, thread, registry);
     const result = await self.callMethod(objectId, "whoAmI", {});
     expect(typeof result).toBe("object");
     const outcome = result as { ok: boolean; result: string };
@@ -84,10 +85,11 @@ describe("createProgramSelf", () => {
     const thread: ThreadContext = makeThread({ id: "t1" });
     // ooc-6 new design: window id = object id, window type = object id
     const objectId = "alice";
-    // Load and register the object window definition dynamically
+    // 局部 registry：同上，避免全局 registry 跨测试污染
+    const registry = createObjectRegistry();
     const objWin = await loadObjectWindow(ref);
-    if (!builtinRegistry.listRegisteredObjectTypes().includes(objectId as any) && objWin) {
-      builtinRegistry.registerNewObjectType(objectId as any, {
+    if (objWin) {
+      registry.registerNewObjectType(objectId as any, {
         methods: objWin.methods ?? {},
         readable: objWin.readable,
         onClose: objWin.onClose,
@@ -107,7 +109,7 @@ describe("createProgramSelf", () => {
       objectId: "alice",
       threadId: "t1",
     };
-    const self = createProgramSelf(ref, thread);
+    const self = createProgramSelf(ref, thread, registry);
     await expect(self.callMethod(objectId, "nope", {})).rejects.toThrow(/不存在/);
   });
 

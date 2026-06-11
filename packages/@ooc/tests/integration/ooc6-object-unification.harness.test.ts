@@ -195,9 +195,9 @@ describe("ooc-6 Object Unification harness cycle", () => {
     // objectId type is no longer a separate builtin type (ooc-6); objects self-register
     // edit_relation method is now available on dynamically-registered object types
 
-    // Todo has no LLM-callable commands (correct per design: only close action)
+    // Todo 只有自身的 constructor 方法 `todo`（ooc-6 constructor 模式：创建 todo 走 exec(method="todo")）
     const todoDef = builtinRegistry.getObjectDefinition("todo");
-    expect(Object.keys(todoDef.methods).length).toBe(0);
+    expect(Object.keys(todoDef.methods)).toEqual(["todo"]);
 
     // File should have edit/reload/set_range commands
     const fileDef = builtinRegistry.getObjectDefinition("file");
@@ -467,9 +467,9 @@ describe("ooc-6 Object Unification harness cycle", () => {
     // Render XML
     const xml = await renderContextXml({ thread, contextWindows: thread.contextWindows });
 
-    // Should contain do (creator), custom (self), todo, and peer objects
+    // Should contain do (creator), self, todo, and peer objects
     expect(xml).toContain("w_creator_t_main"); // creator do window
-    expect(xml).toContain("custom:test_agent"); // self custom window
+    expect(xml).toContain('type="test_agent"'); // self window（ooc-6：id=class=objectId，custom: 前缀已移除）
     expect(xml).toContain('type="todo"'); // todo object
     expect(xml).toContain("Test Todo"); // todo content
     expect(xml).toContain("peer_agent"); // peer from stone hierarchy

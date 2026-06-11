@@ -17,7 +17,7 @@
  *  - 不污染 .ooc-world (走自己 tmp baseDir)
  */
 
-import { afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -127,16 +127,25 @@ function ts(): string {
 
 // ─────────────────────────── fixture: fake commands ───────────────────────────
 
+// registerExecutable 对 methods 整表替换——merge 进现有 ROOT_METHODS 并 afterAll 还原，
+// 避免抹掉 talk/do/todo 污染全局 builtinRegistry（详见 q0b 注释）。
+let originalRootMethods: Record<string, unknown>;
 beforeAll(() => {
+  originalRootMethods = builtinRegistry.getObjectDefinition("root").methods;
   builtinRegistry.registerExecutable("root", {
     methods: {
+      ...originalRootMethods,
       _test_q0c_safe: {
         description: "test q0c safe method",
         intents: ["_test_q0c_safe"],
         exec: () => ({ ok: true, result: "executed-q0c-safe" }),
       },
-    },
+    } as never,
   });
+});
+
+afterAll(() => {
+  builtinRegistry.registerExecutable("root", { methods: originalRootMethods as never });
 });
 
 afterEach(() => {
