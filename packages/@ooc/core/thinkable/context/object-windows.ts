@@ -19,6 +19,7 @@ import {
   discoverStoneHierarchicalPeers,
   readReadable,
   readStoneClass,
+  resolveStoneIdentityRef,
 } from "../../persistable/index.js";
 import type { ThreadContext } from "./index.js";
 import type { ObjectRegistry, ObjectDefinition } from "../../executable/windows/_shared/registry.js";
@@ -79,7 +80,13 @@ export async function ensureSelfObjectTypeRegistered(
   const selfId = thread.persistence?.objectId;
   if (!selfId || selfId === "user") return;
   if (registry.listRegisteredObjectTypes().includes(selfId as any)) return;
-  const stoneRef = { baseDir: thread.persistence!.baseDir, objectId: selfId };
+  // session-aware：business session 内的 self 可能是本 session 新建对象（落 worktree，
+  // 未合 main）——经 resolveStoneIdentityRef(read) 路由到 worktree 读其 executable/index.ts，
+  // 否则 startup registrar（只扫 stones/）注册不到它，render 取不到 methods/readable。
+  const stoneRef = await resolveStoneIdentityRef(
+    { baseDir: thread.persistence!.baseDir, sessionId: thread.persistence!.sessionId, objectId: selfId },
+    "read",
+  );
   try {
     const objWin = await loadObjectWindow(stoneRef);
     await registerStoneObjectType(registry, selfId, objWin, stoneRef);
@@ -103,7 +110,7 @@ export async function derivePeerObjectWindows(
   registry: ObjectRegistry = builtinRegistry,
 ): Promise<ContextWindow[]> {
   if (!thread.persistence) return [];
-  const { baseDir, objectId: selfId } = thread.persistence;
+  const { baseDir, objectId: selfId, sessionId } = thread.persistence;
 
   // 1) From talk_window
   const talkWindows = (thread.contextWindows ?? []).filter(
@@ -140,7 +147,10 @@ export async function derivePeerObjectWindows(
   for (const [peerId, createdAt] of peerEarliest) {
     let title = `peer: ${peerId}`;
     try {
-      const peerStoneRef = { baseDir, objectId: peerId };
+      // session-aware：peer 可能是本 session 新建对象（含本 thread 刚 talk 过的新对象，
+      // 落 worktree 未合 main）——经 worktree ref 读它的 readable / executable，否则
+      // readReadable/loadObjectWindow 落 main 找不到 → peer 类型注册不到 → 不可 talk。
+      const peerStoneRef = await resolveStoneIdentityRef({ baseDir, sessionId, objectId: peerId }, "read");
       const readme = await readReadable(peerStoneRef);
       if (readme) {
         const frontmatterMatch = readme.match(/^---\n([\s\S]*?)\n---/);

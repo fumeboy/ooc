@@ -36,7 +36,7 @@ import { builtinRegistry } from "../../../executable/windows/index.js";
 import { extractBasicDescription, conciseDescription } from "../../../executable/windows/_shared/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { loadObjectWindow } from "../../../runtime/server-loader.js";
-import { readReadable, type StoneObjectRef } from "../../../persistable/index.js";
+import { readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "../../../persistable/index.js";
 import {
   appendNode,
   optionalElement,
@@ -132,7 +132,7 @@ async function resolveReadableForType(
   window: ContextWindow,
   renderCtx: RenderContext,
   _thread: ThreadContext,
-  persistence: { baseDir: string } | undefined,
+  persistence: { baseDir: string; sessionId?: string } | undefined,
   registry: ObjectRegistry,
 ): Promise<XmlNode[] | undefined> {
   // Step 1: registry.readable (builtin types)
@@ -147,7 +147,13 @@ async function resolveReadableForType(
 
   if (!persistence) return undefined;
 
-  const stoneRef: StoneObjectRef = { baseDir: persistence.baseDir, objectId: classType };
+  // session-aware：classType 可能是本 session 新建对象（落 worktree 未合 main）——经
+  // resolveStoneIdentityRef(read) 路由到 worktree 读其 readable / executable window，
+  // 否则裸 main ref 取不到 → 渲染落 placeholder。super / 无 session / 未建 worktree → main。
+  const stoneRef: StoneObjectRef = await resolveStoneIdentityRef(
+    { baseDir: persistence.baseDir, sessionId: persistence.sessionId, objectId: classType },
+    "read",
+  );
 
   // Step 2: stone `export const window`.readable（loader 已把独立 readable.ts 合并进此字段）
   try {

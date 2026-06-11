@@ -13,7 +13,7 @@ import { builtinRegistry, type OnCloseContext, type RenderContext } from "../_sh
 import type { ObjectMethod } from "../_shared/method-types.js";
 import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import { stat } from "node:fs/promises";
-import { stoneDir } from "../../../persistable/index.js";
+import { stoneDir, resolveStoneIdentityRef } from "../../../persistable/index.js";
 import { SUPER_ALIAS_TARGET } from "@ooc/core/_shared/types/constants.js";
 import {
   ROOT_WINDOW_ID,
@@ -202,7 +202,7 @@ function deriveTalkTitle(raw: string, max = 60): string {
  *
  * 不在此处发消息（首条消息走 talk_window.say）。
  */
-const talkConstructor: ObjectMethod = {
+export const talkConstructor: ObjectMethod = {
   kind: "constructor",
   description: "Open a persistent talk_window to another flow object (or user).",
   intents: ["talk"],
@@ -232,7 +232,19 @@ const talkConstructor: ObjectMethod = {
     if (!title) return { ok: false, error: "[talk] 缺少 title 参数。" };
 
     if (target !== SUPER_ALIAS_TARGET && thread.persistence?.baseDir) {
-      const dir = stoneDir({ baseDir: thread.persistence.baseDir, objectId: target });
+      // session-aware 解析：business session 内的 target 可能是本 session 新建对象
+      // （落 flows/<sid>/objects/<target>，未合 main）。经 resolveStoneIdentityRef(read)
+      // 路由——已建 worktree 读 worktree 完整副本（含 main 继承 + 本 session 新建），
+      // super / 无 session / 未建 worktree 透传 main canonical（行为不变）。
+      const stoneRef = await resolveStoneIdentityRef(
+        {
+          baseDir: thread.persistence.baseDir,
+          sessionId: thread.persistence.sessionId,
+          objectId: target,
+        },
+        "read",
+      );
+      const dir = stoneDir(stoneRef);
       let exists = false;
       try {
         const info = await stat(dir);
@@ -243,7 +255,7 @@ const talkConstructor: ObjectMethod = {
       if (!exists) {
         return {
           ok: false,
-          error: `[talk] target \`${target}\` 不存在(stones/${target}/ 目录未找到)。请检查 target 拼写是否正确;若是新对象,先创建 stone object 再 open talk_window。`,
+          error: `[talk] target \`${target}\` 不存在(本 session worktree 与 main canonical 均未找到该对象目录)。请检查 target 拼写是否正确;若是新对象,先 create_object 再 open talk_window。`,
         };
       }
     }
