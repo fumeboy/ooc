@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from "bun:test";
 
-import "../index.js"; // 触发 registerObjectType side-effect import
+import "../index.js"; // 触发 registerExecutable side-effect import
 
 import { builtinRegistry } from "../_shared/registry.js";
 import {

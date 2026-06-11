@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from "bun:test";
 
-import "@ooc/builtins/program"; // 触发 registerObjectType side-effect import
+import "@ooc/builtins/program"; // 触发 registerExecutable side-effect import
 
 import { builtinRegistry } from "../_shared/registry.js";
 import {

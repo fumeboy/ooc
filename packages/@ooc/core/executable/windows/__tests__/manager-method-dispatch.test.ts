@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "bun:test";
 
-import "../index.js"; // registerObjectType side-effects
+import "../index.js"; // registerExecutable side-effects
 
 import { WindowManager } from "../_shared/manager";
 import { builtinRegistry } from "../_shared/registry";

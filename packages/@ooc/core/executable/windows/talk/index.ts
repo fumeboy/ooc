@@ -107,7 +107,7 @@ function renderTalkWindow(ctx: RenderContext): XmlNode[] {
 /**
  * talk_window 的 type-level basicKnowledge。
  *
- * 通过 registerObjectType 注入；只要 thread.contextWindows 里出现至少一个 talk_window，
+ * 通过 registerExecutable 注入；只要 thread.contextWindows 里出现至少一个 talk_window，
  * 全局基础知识合成阶段就会把这段文本作为一个 protocol KnowledgeWindow 注入到 context，
  * 让 LLM 在还没 open 任何 say/wait form 时就知道 talk_window 的命令面与典型用法。
  */

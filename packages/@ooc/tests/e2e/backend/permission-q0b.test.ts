@@ -9,7 +9,7 @@
  *
  * 不走真 LLM: 直接调 think() 并 mock LlmClient 模拟 LLM 行为, 完整覆盖:
  *   A. Allow 默认 — command 未声明 permission → dispatchToolCall 正常触发
- *   B. Deny via ObjectMethod — registerObjectType 注册 permission="deny" 的 fake command
+ *   B. Deny via ObjectMethod — registerExecutable 注册 permission="deny" 的 fake command
  *   C. Deny via policies.json — stones/<branch>/objects/<id>/config/policies.json
  *   D. PermissionDecider 注入 — setPermissionDecider 覆盖前两者
  *   E. Ask 占位 — policies.json "ask" → permission_ask event + thread.status="paused"

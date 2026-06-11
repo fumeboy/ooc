@@ -8,7 +8,7 @@
  */
 import { describe, expect, it, beforeAll } from "bun:test";
 
-import "../index.js"; // 触发 registerObjectType 的 side-effect import
+import "../index.js"; // 触发 registerExecutable 的 side-effect import
 
 import { builtinRegistry } from "../_shared/registry.js";
 import {

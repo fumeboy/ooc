@@ -54,8 +54,7 @@ import {
   type TranscriptEntry,
 } from "../context-snapshot";
 import { subscribeNavigateToWindow } from "../navigation-events";
-import { MarkdownContent } from "../../../shared/ui/MarkdownContent";
-import { useDisplayName, useObjectTypes } from "../../objects";
+import { useDisplayName } from "../../objects";
 import {
   formatJson,
   previewText,
@@ -330,38 +329,6 @@ function InlineTalkComposer({
   );
 }
 
-/**
- * Window 上可用的 command 清单(chips)。catalog 来自 `/api/objects/_shared/types`,缓存在
- * useObjectTypes 内,不随 thread polling 重拉。空数组(如 todo)隐藏整段;catalog
- * 还没到位先不渲染,避免 "0 commands" 闪烁。
- *
- * Hover chip 时弹一个 markdown tooltip 展示 command 描述(取自后端 *_BASIC 路径,
- * 通常 200~1500 字符)。无 description 的 chip 退化成只显示名字。
- */
-function WindowCommandsChips({ type }: { type: string }) {
-  const catalog = useObjectTypes();
-  const entry = catalog?.[type];
-  if (!entry || entry.methods.length === 0) return null;
-  // 历史上这里有一行 hint："commands open(parent_window_id=..., command=..., args={...})"
-  // 用户反馈：对真实使用是噪声（chips 已自带名字，hover 看 description 即可）。去掉。
-  return (
-    <div className="llm-input-commands">
-      <div className="llm-input-commands-chips">
-        {entry.methods.map((cmd) => (
-          <span key={cmd.name} className="llm-input-command-chip" tabIndex={0}>
-            {cmd.name}
-            {cmd.description && (
-              <span className="llm-input-command-tip" role="tooltip">
-                <MarkdownContent content={cmd.description} />
-              </span>
-            )}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /** Window 详情：按 type narrow 渲染特定字段；通用字段（id/title/status）始终渲染。 */
 /** 未知 / 无 visible 的 window 兜底：整个对象按 JSON 只读显示。
  *  从原 WindowDetail 内联 JSON 块抽出，作为 WindowVisible 的 jsonFallback。 */
@@ -408,7 +375,6 @@ function WindowDetail({
           <div className="llm-input-detail-meta">{window.id}</div>
         </div>
       </div>
-            <WindowCommandsChips type={window.class} />
       <div className="llm-input-attrs">
         {rows.map(([k, v]) => (
           <div key={k} className="llm-input-attr-row">

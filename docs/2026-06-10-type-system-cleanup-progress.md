@@ -70,12 +70,16 @@
 
 ## 🔶 进行到一半 / 本轮新引入的待清理尾巴
 
-### A. 前端 window-types catalog（后端 API 已删，前端未清）
-后端 `/api/objects/_shared/types` 已删，但前端仍有消费链：
-- `web/src/domains/objects/window-types.ts` —— `useObjectTypes` / `getObjectTypeMethods`，fetch 已删的 API（运行时会 404，fail-soft 不崩但 command chips 不显示）。`ObjectTypeCatalogEntry.basicKnowledgeSummary` 字段也已无后端来源。
-- `web/src/domains/objects/index.ts` —— re-export。
-- `web/src/domains/files/components/ContextSnapshotViewer.tsx` —— 用 catalog 渲染 window 上的 command chips。
-**待办**：删整条前端 catalog 链，或确认 command chips 是否还需要（若需要，换数据源）。
+### A. ✅ 前端 window-types catalog 死链删除（2026-06-11）
+后端 `/api/objects/_shared/types` 已删 + tooltip 描述源 basicKnowledge 也已删（待办 7）→ 整个 command-chips
+是双删死功能（catalog 永空 → `WindowCommandsChips` 永 return null）。整条链删除：
+- 删 `web/src/domains/objects/window-types.ts`（73 行：useObjectTypes / getObjectTypeMethods /
+  ObjectTypeCatalogEntry / fetchObjectTypes）+ `objects/index.ts` re-export。
+- `ContextSnapshotViewer.tsx`：删 `WindowCommandsChips` 组件 + 渲染点 + 孤儿 `useObjectTypes`/`MarkdownContent` import。
+- `styles.css`：删 14 行死规则（`.llm-input-command*`）。
+- 顺带：陈旧 API 名 `registerObjectType`（已不存在的符号）在注释/测试 side-effect 注释里统一改 `registerExecutable`
+  （保留 windows/index.ts:11 与 object-registry.ts:7 两处**历史删除记录**）；lark/index.ts header 去 `src/` 旧路径
+  + 已删 `meta/case.feishu` doc 引用。
 
 ### B. type 级协议知识迁移（见已完成 7 的行为后果）
 被删的 7+ 段 basicKnowledge const 应迁入 knowledge 维度。**这是功能性缺口**，不是纯清理——LLM 当前失去了 form 推进 / talk / search 等协议指引。优先级建议：**高**（影响 LLM 行为）。
