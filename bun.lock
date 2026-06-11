@@ -35,13 +35,6 @@
       "name": "@ooc/builtins/_shared",
       "version": "0.1.0",
     },
-    "packages/@ooc/builtins/custom": {
-      "name": "@ooc/builtins/custom",
-      "version": "0.1.0",
-      "dependencies": {
-        "react": "^19.0.0",
-      },
-    },
     "packages/@ooc/builtins/file": {
       "name": "@ooc/builtins/file",
       "version": "0.1.0",
@@ -361,8 +354,6 @@
     "@marijn/find-cluster-break": ["@marijn/find-cluster-break@1.0.2", "", {}, "sha512-l0h88YhZFyKdXIFNfSWpyjStDjGHwZ/U7iobcK1cQQD8sejsONdQtTVU+1wVN1PBw40PiiHB1vA5S7VTfQiP9g=="],
 
     "@ooc/builtins/_shared": ["@ooc/builtins/_shared@workspace:packages/@ooc/builtins/_shared"],
-
-    "@ooc/builtins/custom": ["@ooc/builtins/custom@workspace:packages/@ooc/builtins/custom"],
 
     "@ooc/builtins/file": ["@ooc/builtins/file@workspace:packages/@ooc/builtins/file"],
 

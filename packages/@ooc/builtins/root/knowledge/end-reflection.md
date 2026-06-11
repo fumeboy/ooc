@@ -14,8 +14,7 @@ activates_on:
 
 如果有，**不要只留在 endSummary 里**——endSummary 不进入下一轮你的 context，等于没沉淀。
 真正的长期记忆走 super flow：`exec(method="talk", args={ target: "super", title: "<反思主题>" })`，
-再通过该 talk_window `say` 出具体沉淀请求（越具体越容易形成单条 memory），super 分身会写一个
-`memory/<slug>.md` 并回复你。看到回复后 close talk_window，重开 end 结束。
+再通过该 talk_window `say` 出具体沉淀请求。
 
 什么时候不必：简单查询 / 读一个文件 / 一次性 utility（没有可沉淀的）；本次认知已有对应 memory；
 caller 明确说不必反思。
