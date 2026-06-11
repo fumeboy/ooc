@@ -789,6 +789,12 @@ export function createFlowsService(deps: {
       }
       const payload = {
         ...thread,
+        // `llm_interaction.call_started` 是 thinkloop 给崩溃恢复的磁盘锚点（recovery.ts /
+        // worker 经 readThread 直读 thread.json，不走本端点），对用户/前端无意义、且每轮一条
+        // 造成 trace 噪声 notice。从前端响应过滤——thread.json 原样保留，恢复链路不受影响。
+        events: (thread.events ?? []).filter(
+          (e) => !(e.category === "llm_interaction" && e.kind === "call_started"),
+        ),
         contextWindows: enrichContextWindows(thread.contextWindows as ContextWindow[]),
       };
       return { ...payload, hash: hashJson(stripVolatileForHash(payload)) };
