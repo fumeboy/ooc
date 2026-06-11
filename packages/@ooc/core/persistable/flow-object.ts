@@ -23,7 +23,7 @@ export interface FlowObjectMetadata {
   /** 与 ref 同步的 objectId 副本。 */
   objectId: string;
   /**
-   * P6.§7 (2026-06-02): 实例所属的 Class（也是一个 string id；必须在 object registry 注册过）。
+   * 实例所属的 Class（也是一个 string id；必须在 object registry 注册过）。
    *
    * Class 是方法继承链的载体——method 解析按「实例 self.class → class definition.methods →
    * parentClass.methods → … → root.methods」沿父类链向上回退。`registerExecutable` 与
@@ -36,7 +36,7 @@ export interface FlowObjectMetadata {
 }
 
 /**
- * P6.§7 (2026-06-02): createFlowObject 接受到不存在的 class 时抛出此错误。
+ * createFlowObject 接受到不存在的 class 时抛出此错误。
  *
  * `code === "CLASS_NOT_FOUND"` 用于服务层 / migration 工具识别此具体错误，区别于其他
  * 文件系统失败。`classId` 字段携带未注册的 class 名，便于错误日志直接显示。
@@ -69,7 +69,7 @@ export function sessionMetadataFile(baseDir: string, sessionId: string): string 
 /**
  * 创建 flow session 根目录并写入 `.session.json`。
  *
- * 方案 A（2026-06-09）：business session 的 `flows/<sid>` 由调用方先经
+ * business session 的 `flows/<sid>` 由调用方先经
  * `ensureSessionWorktree` eager 建成 git worktree（空目录要求），本函数的 `mkdir recursive`
  * 此时对已存在的 worktree 目录幂等 no-op，只补写 `.session.json`（运行时数据，被 .gitignore
  * 排除）。super / 无 worktree 的 session 走普通 mkdir。
@@ -86,7 +86,7 @@ export async function createFlowSession(baseDir: string, sessionId: string, titl
 
 /** 创建 flow object 目录结构并写入 `.flow.json` 元数据。
  *
- * P6.§7 (2026-06-02): 接受可选 `opts.class`，若提供则写入 `.flow.json:class`。
+ * 接受可选 `opts.class`，若提供则写入 `.flow.json:class`。
  * 当 opts.class 指向 object registry 中未注册的 type 时抛 `ClassNotFoundError`
  * （fail-loud：避免 `.flow.json:class` 引到悬空 class，导致 method 解析时静默 miss）。
  *

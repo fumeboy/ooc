@@ -1,7 +1,6 @@
 /**
  * LoopEventBadge — 把 ProcessEvent 中的"关键"事件渲染成一枚 chip。
  *
- * R0c (Agent-loop Visualizer plan §6.4 / event_badge_taxonomy patch):
  * - 严格 type-dispatch 风格: 新增 event 类型时只加 case, 不动调用方。
  * - 非关键事件 (普通 text / reasoning / 普通 tool_use 等) 不进 badge — 减噪音原则。
  * - 颜色与 tooltip 必须有信息密度: tooltip 含触发原因 / windowIds / decided 时间等,

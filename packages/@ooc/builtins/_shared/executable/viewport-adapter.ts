@@ -1,7 +1,7 @@
 /**
  * Shared transcript-style viewport adapter for builtin windows.
  *
- * Batch B4 (2026-06-04): program/history-viewport.ts and search/results-viewport.ts
+ * program/history-viewport.ts and search/results-viewport.ts
  * were byte-identical apart from three parameters — the LLM-facing field prefix
  * (`history_` vs `matches_`), the window field that stores the viewport
  * (`historyViewport` vs `resultsViewport`), and the error-message label. Both

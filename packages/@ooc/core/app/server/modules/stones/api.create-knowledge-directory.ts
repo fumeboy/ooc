@@ -5,7 +5,7 @@ import type { createStonesService } from "./service";
 /**
  * POST /api/stones/:objectId/knowledge/directories
  *
- * 根因 #3 (2026-05-24)：deprecated；改用 POST /api/pools/:objectId/knowledge/directories。
+ * deprecated；改用 POST /api/pools/:objectId/knowledge/directories。
  */
 export function createKnowledgeDirectoryApi(service: ReturnType<typeof createStonesService>) {
   return new Elysia({ name: "ooc.stones.api.create-knowledge-directory" }).post(

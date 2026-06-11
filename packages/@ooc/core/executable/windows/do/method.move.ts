@@ -71,7 +71,7 @@ function resolvePeerThread(
 async function executeMove(ctx: MethodExecutionContext): Promise<string | undefined> {
   const self = ctx.thread;
   if (!self) return "[do_window.move] 缺少 thread context。";
-  // P6.§3: manager 在 dispatch 阶段已保证 self.class === "do"，method 体不再 re-check。
+  // manager 在 dispatch 阶段已保证 self.class === "do"，method 体不再 re-check。
   const doWindow = ctx.self as DoWindow;
   if (doWindow.status !== "running") {
     return `[do_window.move] do_window ${doWindow.id} 状态为 ${doWindow.status}（非 running），不能再分享 window。`;
@@ -93,7 +93,7 @@ async function executeMove(ctx: MethodExecutionContext): Promise<string | undefi
   if (sourceIdx < 0) {
     return `[do_window.move] window "${window_id}" 不在当前 thread 的 contextWindows 里。`;
   }
-  // batch C narrowing(N4): contextWindows 元素契约层是 base；narrow 回 union ContextWindow
+  // 窄化：contextWindows 元素契约层是 base；narrow 回 union ContextWindow
   // 以传入 makeSnapshot / 构造 ref/lent_out 副本（runtime 即 union 实例）。
   const source = selfWindows[sourceIdx]! as ContextWindow;
   if (source.sharing) {
@@ -144,7 +144,7 @@ async function executeMove(ctx: MethodExecutionContext): Promise<string | undefi
       peerWindows[peerSameIdIdx] = returned;
       // 移除 self 的 owner 副本（同时通过 mgr 同步以避免被 toData() 复原）
       self.contextWindows = selfWindows.filter((_, i) => i !== sourceIdx);
-      // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager。
+      // 窄化：ctx.manager 契约层是 unknown，narrow 回 WindowManager。
       (ctx.manager as WindowManager | undefined)?.removeWindowSilent(window_id);
       peer.contextWindows = peerWindows;
       return `[do_window.move] 已归还 window "${window_id}" 给 thread "${peer.id}"（其 owner 状态已恢复）。`;
@@ -167,7 +167,7 @@ async function executeMove(ctx: MethodExecutionContext): Promise<string | undefi
   selfWindows[sourceIdx] = lentOut;
   self.contextWindows = selfWindows;
   // 同步 mgr 状态（避免后续 toData() 把它恢复为旧 owner）
-  // batch C narrowing(N2): ctx.manager 契约层是 unknown，narrow 回 WindowManager。
+  // 窄化：ctx.manager 契约层是 unknown，narrow 回 WindowManager。
   (ctx.manager as WindowManager | undefined)?.upsertWindow(lentOut, ctx.thread);
   // peer 获得完整 owner 副本（不带 sharing）
   const ownerCopy: ContextWindow = { ...source };

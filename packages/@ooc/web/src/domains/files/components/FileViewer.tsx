@@ -64,7 +64,7 @@ export function FileViewer({
 }: {
   file?: FileContent;
   /**
-   * H-2 (Round 5): 用户进入 `/files/<path>` 时即使 backend 404, 也应该把"用户原本
+   * 用户进入 `/files/<path>` 时即使 backend 404, 也应该把"用户原本
    * 要看哪个 path"+ "为什么没看到" 透传出来; 否则只显示通用 "Select a file" 占位
    * 让用户误以为 URL 路径参数没起作用 (实际是文件不存在 / 不在 world 内)。
    */

@@ -2,7 +2,7 @@
  * stone-versioning —— 高层编排，把 worktree commit / scope 评估 / merge /
  * PR-Issue / rollback / GC 收口在 persistable 层之上。
  *
- * 地基不变量（用户拍板，2026-06-11）：`session-<sid>` worktree 是纯运行时派生物，**永不合入
+ * 地基不变量（用户拍板）：`session-<sid>` worktree 是纯运行时派生物，**永不合入
  * main**——session→main 合入语义（旧 tryMergeSelf self-scope ff / cross-scope→PR 二元闸 +
  * evolve_self）已退役。沉淀进 canonical 走 reflectable feat-branch PR 路径（见 stone-feat-branch.ts）。
  *
@@ -405,7 +405,7 @@ export interface RollbackInput {
   /** 目标 commit sha（必须在 main 历史上）。 */
   targetCommit: string;
   /**
-   * Supervisor 身份；R4 例外允许其它 Object 实例化不动时 Supervisor 代签 commit。
+   * Supervisor 身份；例外允许其它 Object 实例化不动时 Supervisor 代签 commit。
    * 缺省强制 SUPERVISOR_OBJECT_ID。
    */
   supervisorAuthor?: string;

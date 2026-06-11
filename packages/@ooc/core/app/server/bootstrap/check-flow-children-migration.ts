@@ -1,5 +1,5 @@
 /**
- * Bootstrap migration: flow 子 object 物理布局从 flat 嵌套迁移到 children/ marker（2026-05-27）。
+ * Bootstrap migration: flow 子 object 物理布局从 flat 嵌套迁移到 children/ marker。
  *
  * 历史上 `objectDir()` 直接 `join(... ref.objectId)`，objectId 中的 "/" 被 path.join
  * 解释为目录分隔符，sub-object 落在 `<sid>/<a>/<b>/`，与 stone 的 `packages/<a>/children/<b>/`
@@ -51,7 +51,7 @@ async function migrateUnderObjectDir(parentObjectDir: string): Promise<number> {
 }
 
 async function migrateSession(sessionDir: string): Promise<number> {
-  // 方案 A 续（2026-06-09）：top-level flow object 落 `flows/<sid>/objects/<id>`，扫描入口
+  // 方案 A：top-level flow object 落 `flows/<sid>/objects/<id>`，扫描入口
   // 下沉一层到 objects/。
   const objectsDir = join(sessionDir, "objects");
   let entries;

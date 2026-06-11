@@ -4,7 +4,7 @@ import { stoneDir, type StoneObjectRef } from "./common";
 import { parseKnowledgeFile } from "../thinkable/knowledge/parser";
 
 /**
- * stone skills 目录扫描（plan §skills 支持）。
+ * stone skills 目录扫描。
  *
  * 双层 skills 目录：
  * - Workspace 级: `{baseDir}/stones/@ooc/skills/<skill-name>/SKILL.md`
@@ -21,7 +21,7 @@ import { parseKnowledgeFile } from "../thinkable/knowledge/parser";
  * - clearStoneSkillsCache() 测试钩子
  */
 
-/** 单个 skill 索引项（plan §skills 支持的 SkillEntry）。 */
+/** 单个 skill 索引项（SkillEntry）。 */
 export interface SkillEntry {
   /** skill 名（目录名）。 */
   name: string;

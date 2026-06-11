@@ -1,10 +1,10 @@
 /**
- * LoopDiffView — Round 9 E3 主区 + Round 10 F3 type-dispatch diff renderer。
+ * LoopDiffView — 主区 + type-dispatch diff renderer。
  *
  * 折叠态：windowsSnapshot vs previous windowsSnapshot 算成 4 态 diff 表，
  * 渲染为 WindowDiffRow 列表。
  *
- * 展开态（Round 10 F3 改造）：
+ * 展开态：
  *   - 不再统一嵌 LLMInputJsonViewer 看全文
  *   - 按 window type 派发到 window-diff-renderers/<Type>WindowDiff
  *   - file_window：从 currentEntry.fileDiff 直接拿 prev/cur 内容 → CodeMirror Merge unified
@@ -44,10 +44,10 @@ export interface LoopDiffViewProps {
 type LoopFullDetails = { input: unknown; output: unknown; meta: unknown };
 
 /**
- * Round 14 H1 修复 — fetch-loop-inputs 纯函数 helper（可单测）。
+ * fetch-loop-inputs 纯函数 helper（可单测）。
  *
  * 把 LoopDiffView useEffect 内部 "拉 current + previous loop input.json" 的协作逻辑
- * 抽出来，便于 bun:test 真异步覆盖（防 Round 10 单测 mock 同步返回掩盖 self-cancelling
+ * 抽出来，便于 bun:test 真异步覆盖（防单测 mock 同步返回掩盖 self-cancelling
  * bug 这种回归）。
  *
  * 行为契约：
@@ -154,7 +154,7 @@ export function LoopDiffView({
   const [previousInputState, setPreviousInputState] = useState<unknown>(undefined);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState<string | undefined>(undefined);
-  // Round 14 H1: inFlightRef 防重入。ref 不进 deps array → effect 不会因为 detailsLoading
+  // inFlightRef 防重入。ref 不进 deps array → effect 不会因为 detailsLoading
   // 自己 set 自己而 self-cancel（旧 bug: cleanup 设 cancelled=true 后 finally 不再写
   // setDetailsLoading(false), UI 永远 stuck on "Loading…"）。
   const inFlightRef = useRef(false);
@@ -195,7 +195,7 @@ export function LoopDiffView({
   );
 
   // 展开某 window 时，按 type 判断是否需要 fetch input.json
-  // Round 14 H1: 用 inFlightRef 防重入；从 deps array 删除 detailsLoading 避免 self-cancel；
+  // 用 inFlightRef 防重入；从 deps array 删除 detailsLoading 避免 self-cancel；
   // 即便组件 unmount / loop 切换 (cancelled=true), 也保证 inFlightRef 清零，下次 effect
   // 触发能继续工作。setDetailsLoading(false) 同样无条件执行 —— 避免 stuck on loading。
   useEffect(() => {

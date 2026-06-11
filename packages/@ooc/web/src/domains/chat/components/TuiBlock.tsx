@@ -131,7 +131,7 @@ function ToolCardShell({ line, children, liveWindowIds }: {
   children?: React.ReactNode;
   liveWindowIds?: Set<string>;
 }) {
-  // Issue #3 A5 fix: failed tool card 默认展开 + output 面板默认打开,
+  // failed tool card 默认展开 + output 面板默认打开,
   // 让用户立即看到 error 文本而不是孤立的 `failed` 状态。仍可点击折叠回去。
   const isFailed = !line.pending && !line.ok;
   const [expanded, setExpanded] = useState(isFailed);
@@ -158,7 +158,7 @@ function ToolCardShell({ line, children, liveWindowIds }: {
             <span className="tui-label">{line.toolName}</span>
             {line.title && <div className="tui-tool-title-main">{line.title}</div>}
             <div className="tui-tool-head-actions">
-              {/* 把 link 按钮放在 head 行, 折叠时也能用 (用户反馈 2026-05-20). */}
+              {/* 把 link 按钮放在 head 行, 折叠时也能用 (用户反馈). */}
               <WindowLinkInline line={line} liveWindowIds={liveWindowIds} />
               <span
                 className={`tui-tool-status${line.pending ? " is-pending" : line.ok ? " is-success" : " is-fail"}`}

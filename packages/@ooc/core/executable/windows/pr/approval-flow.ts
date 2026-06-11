@@ -134,7 +134,7 @@ export async function applyPrApproval(
     if (config.prAutoMerge) {
       const r = await resolvePrIssue({ baseDir, issueId, decision: "merge" });
       if (!r.ok) {
-        // 合入失败也是 P6 回修触发：把 git 错误回投给 super(foo) 让其修。
+        // 合入失败也是回修触发：把 git 错误回投给 super(foo) 让其修。
         const errText = resolveErrorText(r);
         const repairRouted = await routeRepair(
           baseDir,

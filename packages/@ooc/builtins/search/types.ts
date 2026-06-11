@@ -2,7 +2,7 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
 import type { TranscriptViewport } from "@ooc/core/extendable/_shared/transcript-viewport.js";
 
 /**
- * search_window 的 matches 渲染视口（R1b: 复用 TranscriptViewport 的 tail/range 协议）。
+ * search_window 的 matches 渲染视口（复用 TranscriptViewport 的 tail/range 协议）。
  *
  * - 默认 { tail: 50 } —— 仅渲染末 50 个 match
  * - LLM 通过 set_results_window 命令切换：matches_tail / matches_start + matches_end

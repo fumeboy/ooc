@@ -51,6 +51,7 @@ ALLOW_LIST=(
   "packages/@ooc/core/executable/windows/_shared/command-types.ts"  # 历史变更说明注释
   "packages/@ooc/builtins/supervisor/knowledge/creating-objects.md"  # 建对象 knowledge 教「别写 llm_methods」需引用该字面量
   "scripts/check-no-deprecated-symbols.sh"
+  "scripts/check-doc-deprecated-drift.sh"  # 文档漂移检查的 FORBIDDEN_PATTERNS 列了这些废弃符号字面量
 )
 
 EXCLUDE_DIRS=(

@@ -1,5 +1,5 @@
 /**
- * HTTP stone-write helper —— 控制面写 → **直接 commit main**（去 metaprog，2026-06-09）。
+ * HTTP stone-write helper —— 控制面写 → **直接 commit main**（去 metaprog）。
  *
  * 人类经 HTTP 控制面的编辑（PUT self/readable/server-source、createStone）即「已决策/
  * 已评审」操作：所见即所得，不需 session worktree 隔离与 super flow 评审。本 helper 把写

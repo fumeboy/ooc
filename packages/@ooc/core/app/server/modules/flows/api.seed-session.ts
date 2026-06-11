@@ -5,7 +5,7 @@ import { seedSessionBody } from "./model";
 /**
  * POST /api/sessions
  *
- * collaborable § cross-object talk（spec 2026-05-15）：一次性 seed 一个 web session：
+ * collaborable § cross-object talk：一次性 seed 一个 web session：
  * - 建 session 与 user flow object
  * - user.root.contextWindows 上挂一个指向 targetObjectId 的 talk_window
  * - 调 talk-delivery 在 target 下创建 callee thread + 写双方消息

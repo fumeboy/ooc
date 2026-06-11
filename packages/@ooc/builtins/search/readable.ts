@@ -94,7 +94,7 @@ const setResultsWindowCommandForSearch: WindowMethod = {
 };
 
 /**
- * search_window 的 compressView hook（design §4.1）。
+ * search_window 的 compressView hook。
  * - Level 1 (folded):  kind + query + matches.count + 前 3 条 match 预览(仅 path + line)
  * - Level 2 (snapshot): kind + query + matches.count
  */

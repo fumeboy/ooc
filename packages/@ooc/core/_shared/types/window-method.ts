@@ -30,7 +30,7 @@ export type WindowMethodOutcome =
  * Window method 定义 —— 控制 window 展示（viewport 等），归 readable 维度。
  * 与 ObjectMethod（控制 object 业务数据，归 executable）物理分离、函数签名不同。
  *
- * 2026-06-10: 同步 ObjectMethod API 重构 —— 新增 description、paths→intents、
+ * 同步 ObjectMethod API 重构 —— 新增 description、paths→intents、
  * intent() 合并到 onFormChange 返回 MethodExecuteForm。
  */
 export interface WindowMethod {

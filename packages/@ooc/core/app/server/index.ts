@@ -60,9 +60,9 @@ function extractAllowedConsts(schema: unknown): string[] | undefined {
 
 /**
  * Elysia ValidationError.all 项压缩：每条只保留 {path, expected (schema 类型), message}。
- * 避免 R2 #8 的 >2KB 噪音（原始项嵌套整个 schema JSON）。
+ * 避免 >2KB 噪音（原始项嵌套整个 schema JSON）。
  *
- * R7-3（2026-05-25）：若 schema 是 union of literals，message 改为
+ * 若 schema 是 union of literals，message 改为
  * "should be one of: <const list>"，让 typebox union 错误真正可读。
  */
 function compressValidationItem(item: unknown): { path?: string; expected?: string; message?: string } {
@@ -84,13 +84,13 @@ function compressValidationItem(item: unknown): { path?: string; expected?: stri
 }
 
 /**
- * 根因 #8（2026-05-24）：错误模型统一。所有错误来源经此归一为
+ * 错误模型统一。所有错误来源经此归一为
  * `{error:{code,message,details}}` 包络。
  *
  * - `elysiaCode === "NOT_FOUND"`（Elysia 默认未匹配路由）→ NOT_FOUND 404 +
- *   details.{path,method}（修 R5 #38 /health 500、R6 #49 code+message 自相矛盾）
+ *   details.{path,method}（修 /health 500、code+message 自相矛盾）
  * - `elysiaCode === "VALIDATION"` 或 error.code === "VALIDATION" → 422，details
- *   压缩为 [{path,expected,message}]，message 用 summary（修 R2 #8 >2KB 嘈杂）
+ *   压缩为 [{path,expected,message}]，message 用 summary（修 >2KB 嘈杂）
  * - `AppServerError` → 走 ERROR_HTTP_STATUS 映射
  * - 裸 fs ENOENT/EISDIR → NOT_FOUND 404
  * - 其它 unknown → INTERNAL_ERROR 500
@@ -112,7 +112,7 @@ function normalizeErrorToJson(
     };
   }
   // Elysia 默认未匹配路由：onError 收到 code="NOT_FOUND" 且 error 是 NotFoundError。
-  // 修 R5 #38 /health 500、R6 #49 code+message 自相矛盾（之前落到 INTERNAL_ERROR 500
+  // 修 /health 500、code+message 自相矛盾（之前落到 INTERNAL_ERROR 500
   // + message="NOT_FOUND" 兜底分支）。
   if (elysiaCode === "NOT_FOUND") {
     return {
@@ -172,9 +172,8 @@ function normalizeErrorToJson(
 }
 
 export function buildServer(config: ServerConfig) {
-  // M1 (2026-06-02): 每个 buildServer 创建一个独立的 WorldRuntime 实例，
-  // 封装 object registry / observable state / serial queue / server loader。
-  // M2 (2026-06-03): 追加 stoneRegistry。
+  // 每个 buildServer 创建一个独立的 WorldRuntime 实例，
+  // 封装 object registry / observable state / serial queue / server loader / stoneRegistry。
   // 目前挂到 Elysia state 上，后续阶段把对默认 module-level 实例的引用逐步迁移到 runtime。
   const runtime: WorldRuntime = createWorldRuntime({
     worldPath: config.baseDir,
@@ -185,12 +184,12 @@ export function buildServer(config: ServerConfig) {
     const sessionId = thread.persistence?.sessionId;
     return config.pauseStore.isGlobalPauseEnabled() || (sessionId ? config.pauseStore.isSessionPaused(sessionId) : false);
   });
-  // 根因 #5（2026-05-24）：worker 事件驱动改造。事件源（talk-delivery /
+  // worker 事件驱动改造。事件源（talk-delivery /
   // do_window.continue / end auto-reply）写完对端 inbox 后
   // 调 notifyThreadActivated → 这里把它转成 jobManager.createRunThreadJob。
   // 不再依赖 worker 周期扫 fs 兜底入队。
   //
-  // 2026-05-25：新增 lark event-relay 反向钩子 — 当 lark-chat-* session 的 user.root
+  // lark event-relay 反向钩子 — 当 lark-chat-* session 的 user.root
   // 被激活（说明 supervisor 给 user 发了消息），透传到飞书 chat。
   setThreadActivationNotifier((ref) => {
     // user 是被动 flow object（控制面驱动）—— 不入 worker 队列，避免被 LLM tick。
@@ -204,10 +203,10 @@ export function buildServer(config: ServerConfig) {
   });
 
   const app = new Elysia({ name: "ooc.app.server" })
-    // 根因 #8（2026-05-24）：统一所有错误为 { error: { code, message, details } } shape。
+    // 统一所有错误为 { error: { code, message, details } } shape。
     // Elysia 的 `code` 参数区分内置错误类型（NOT_FOUND / VALIDATION / PARSE /
     // INTERNAL_SERVER_ERROR / UNKNOWN），透传给 normalizeErrorToJson 以避免
-    // Elysia 默认 not-found 被兜底成 INTERNAL_ERROR(R6 #49 / R5 #38 根因)。
+    // Elysia 默认 not-found 被兜底成 INTERNAL_ERROR。
     .state("runtime", runtime)
     .onError(({ error, code, set, request, path }) => {
       const reqInfo = { path: path ?? (request ? new URL(request.url).pathname : undefined), method: request?.method };
@@ -224,7 +223,7 @@ export function buildServer(config: ServerConfig) {
     .use(worldConfigModule(config));
 
   if (config.workerEnabled) {
-    // 根因 #5：启动期把磁盘上 running/waiting 的 thread 入队一次（bootstrap-only，
+    // 启动期把磁盘上 running/waiting 的 thread 入队一次（bootstrap-only，
     // 替代旧的"周期扫 fs 兜底"路径）。然后 worker 只跑队列，不再周期扫。
     // fire-and-forget：不阻塞 buildServer 同步返回。
     void enqueueRunningThreadsAtBootstrap(config).catch((err) => {
@@ -233,7 +232,7 @@ export function buildServer(config: ServerConfig) {
       );
     });
     const worker = startJobWorker(config);
-    // 2026-05-25 lark event-relay：若 .world.json 配了 LarkAppId/Secret，启动 ws 长连接
+    // lark event-relay：若 .world.json 配了 LarkAppId/Secret，启动 ws 长连接
     // 接收 im.message.receive_v1，反向触发 OOC session（fire-and-forget；缺凭证时 noop）。
     let stopLarkRelay: () => Promise<void> = async () => {};
     void startLarkEventRelay(config)
@@ -260,7 +259,7 @@ export function buildServer(config: ServerConfig) {
 if (import.meta.main) {
   const config = await readServerConfig();
 
-  // 2026-05-20: stones/ git repo bootstrap — init bare repo + main worktree,
+  // stones/ git repo bootstrap — init bare repo + main worktree,
   // migrate old flat layout if needed. Must come before any stone write.
   try {
     const repo = await ensureStoneRepo({ baseDir: config.baseDir });
@@ -275,7 +274,7 @@ if (import.meta.main) {
     throw e;
   }
 
-  // 2026-06-02: Builtin Object（supervisor / user）的 pool 骨架 idempotent 预创。
+  // Builtin Object（supervisor / user）的 pool 骨架 idempotent 预创。
   // Builtin 的 stone/definition 随 OOC 代码仓发布（packages/@ooc/builtins/），不写 world；
   // 但 pool 是 world 内的跨 session 沉淀层，仍然需要 pools/<id>/ 目录存在。
   for (const objectId of BUILTIN_OBJECT_IDS) {
@@ -289,7 +288,7 @@ if (import.meta.main) {
     }
   }
 
-  // 2026-06-07: 把带 ooc.instantiate_with_new_world 的框架 builtin class（supervisor）
+  // 把带 ooc.instantiate_with_new_world 的框架 builtin class（supervisor）
   // 幂等实例化为 objects/<id> 可交互 object（拷贝 self.md + ooc.class=_builtin/<id>）。
   // 让全新 world 自动拥有 supervisor object——不再靠 listStones 特殊逻辑合入。
   try {
@@ -313,7 +312,7 @@ if (import.meta.main) {
         `[ooc-app-server] recovery-check: ${recovery.broken.length} broken stone(s) — ` +
           `${recovery.newIssues.length} new PR-Issue(s) opened in super session`,
       );
-      // R5 #37:dump 每个 broken stone 的 objectId + reason,让运维不用翻 super
+      // dump 每个 broken stone 的 objectId + reason,让运维不用翻 super
       // session 也能看到 root cause
       for (const b of recovery.broken) {
         console.log(`[ooc-app-server] recovery-check broken: objectId=${b.objectId} reason=${b.reason}`);
@@ -323,15 +322,15 @@ if (import.meta.main) {
     console.warn(`[ooc-app-server] recovery-check failed (non-fatal): ${e instanceof Error ? e.message : e}`);
   }
 
-  // 2026-06-07：移除两项一次性迁移 advisory（checkStoneToPoolMigration / checkStaleDatabaseDir）——
+  // 移除两项一次性迁移 advisory（checkStoneToPoolMigration / checkStaleDatabaseDir）——
   // 它们扫描 deprecated `<world>/packages/<id>/` 布局，该布局已随 packages/ 兼容层一并删除，永远空返回。
 
-  // 2026-05-27: flow 子 object 物理布局迁移到 children/ marker（与 stone 对称）。
+  // flow 子 object 物理布局迁移到 children/ marker（与 stone 对称）。
   // 幂等：已是 children/ 形态的不动。必须在 worker bootstrap 入队前跑（worker.scanRunningThreads
   // 期望 children/ 布局）。
   await checkFlowChildrenMigration(config.baseDir);
 
-  // 2026-06-02 (ooc-6 P6.§6): split state (object dim) vs context (thread dim).
+  // split state (object dim) vs context (thread dim).
   // 把遗留的 talk/do/method_exec 独立目录与 state.json 中错置的 contextWindows 字段
   // 一次性归位。幂等。
   await checkStateContextSplit(config.baseDir);

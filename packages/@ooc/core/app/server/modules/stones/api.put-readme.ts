@@ -5,7 +5,7 @@ import { objectIdParams, textBody } from "./model";
 /**
  * PUT /api/stones/:objectId/readme
  *
- * Issue #6 Bad #4: 覆盖性写入护栏。已存在的 readme.md 要覆盖必须带 header
+ * 覆盖性写入护栏。已存在的 readme.md 要覆盖必须带 header
  * `X-Overwrite-Confirm: true`,否则抛 OVERWRITE_REQUIRES_CONFIRM(409)。
  */
 export function putReadmeApi(service: ReturnType<typeof createStonesService>) {

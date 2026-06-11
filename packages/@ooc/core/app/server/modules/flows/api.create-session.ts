@@ -4,7 +4,7 @@ import type { createFlowsService } from "./service";
 /**
  * `/api/flows` + `/api/sessions` 协议层 alias 注册。
  *
- * Issue #6 Bad #3: URL 命名分裂 — `GET /api/flows`(列表) vs `POST /api/sessions`
+ * URL 命名分裂 — `GET /api/flows`(列表) vs `POST /api/sessions`
  * (创建,在 api.seed-session.ts) 是同一资源(session/flow)在两个名词下,第三方
  * 读路由表会困惑。
  *

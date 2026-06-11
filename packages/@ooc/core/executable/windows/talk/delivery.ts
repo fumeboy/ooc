@@ -144,7 +144,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
       contextWindows: [],
       creatorThreadId: callerThread.id,
       creatorObjectId: callerRef.objectId,
-      // C5（2026-05-25）：cross-session 派送时记录 caller 的 sessionId，
+      // cross-session 派送时记录 caller 的 sessionId，
       // 让后续 end({result}) auto-reply 知道把通知派回原 session
       // （super-alias 场景下 callee.persistence.sessionId === "super"，但 caller
       // 在 user session；缺这字段 notify 会找错 session）。
@@ -162,7 +162,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
     });
     await injectPeerWindowsIfObjectThread(calleeThread);
 
-    // 早些时候（6fd12e3）这里还 spawn 过一条 "回复创建者" todo 用作 Bug 2 文本 nudge。
+    // 早些时候这里还 spawn 过一条 "回复创建者" todo 用作文本 nudge。
     // 现在结构性约束（wait 要求 on=合法 IO 来源 window）已接管它的作用——
     // LLM 不 say 就 wait 会直接 reject。todo 撤除以避免"双保险"带来的冗余。
     // 详见 docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md §6。

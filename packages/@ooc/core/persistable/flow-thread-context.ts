@@ -1,5 +1,5 @@
 /**
- * Flow-layer thread context IO —— ooc-6 P6.§6 (2026-06-02).
+ * Flow-layer thread context IO。
  *
  * 把每个 thread 的 contextWindows 数组持久化到独立文件:
  *   `{baseDir}/flows/{sessionId}/{objectId}/threads/{threadId}/thread-context.json`
@@ -11,10 +11,10 @@
  *       · 独立 flow object (plan/program/file/...) 仅放 ref `{ id, type, _ref: true, refObjectId }`
  *
  * 与同目录的 `context.json`（legacy contextRegistry，flow-context-registry.ts）共存：
- *   `context.json`        — legacy `{ version, members[] }` 视角参数注册表（P5'.1）
- *   `thread-context.json` — P6.§6 真正的 thread contextWindows 落盘（state ≠ context 实施点）
+ *   `context.json`        — legacy `{ version, members[] }` 视角参数注册表
+ *   `thread-context.json` — 真正的 thread contextWindows 落盘（state ≠ context 实施点）
  *
- * 两者会在 §10 cleanup 阶段合并/裁剪；§6 阶段保持双写互不干扰。
+ * 两者会在 cleanup 阶段合并/裁剪；当前阶段保持双写互不干扰。
  *
  * 写盘通过 enqueueSessionWrite 串行化，per-(objectId, threadId) 一个 key，
  * 避免同 thread 多路并发写互相覆盖。同 stone-object / flow-context / flow-runtime-object
@@ -49,7 +49,7 @@ export interface ThreadContextFile {
 
 /**
  * buildThreadContextEntries —— 把一组内存里的 contextWindows 序列化成 thread-context.json
- * 的 entry 数组（**唯一**生成规则来源，§10 收敛）。
+ * 的 entry 数组（**唯一**生成规则来源）。
  *
  * registry 以参数注入（最小结构 `{ isBuiltinFeatureType }`），避免 persistable ↔ runtime
  * 循环 import。两处调用方共用本函数，保证 writeThread 单点刷与 WindowManager.snapshot

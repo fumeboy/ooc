@@ -61,7 +61,7 @@ function runGit(args: string[], cwd?: string): GitRun {
 }
 
 /**
- * main 分支根的 .gitignore 内容（方案 A 续，2026-06-09）。
+ * main 分支根的 .gitignore 内容。
  *
  * session worktree（`flows/<sid>`）从 main checkout 时继承它。tracked stone 身份文件与运行时
  * 数据同落 `objects/<id>/`，故白名单 `objects/` 后再用黑名单排除运行时特征文件：
@@ -96,7 +96,7 @@ function safeIsDir(p: string): boolean {
 }
 
 /**
- * 扁平 → main 布局迁移（2026-05-20 Round 3 U1.1）。
+ * 扁平 → main 布局迁移。
  *
  * 旧布局：`stones/<objectId>/` 直接在 stones/ 下。新布局：`stones/main/objects/<objectId>/`。
  * 幂等：检测到旧形态目录才迁移，且迁移后删除旧目录、避免下次再迁。
@@ -147,7 +147,7 @@ async function createBareRepoWithMainWorktree(opts: {
     throw new Error(`git clone failed: ${clone.stderr}`);
   }
 
-  // 写 main 根 .gitignore（方案 A）：session worktree 从 main checkout 继承它，排除 flows/<sid>
+  // 写 main 根 .gitignore：session worktree 从 main checkout 继承它，排除 flows/<sid>
   // 下运行时产物，只 track objects/。它本身白名单（`!/.gitignore`）即初始 commit 的内容载体，
   // 无需额外 .gitkeep（`.gitkeep` 会被 `/*` 规则忽略，git add 反而失败）。
   await Bun.write(join(scratchDir, ".gitignore"), STONE_MAIN_GITIGNORE);
@@ -184,7 +184,7 @@ async function createBareRepoWithMainWorktree(opts: {
 }
 
 /**
- * 幂等确保 main 分支根 .gitignore 内容与期望（STONE_MAIN_GITIGNORE）一致（方案 A 续 2026-06-09）。
+ * 幂等确保 main 分支根 .gitignore 内容与期望（STONE_MAIN_GITIGNORE）一致。
  *
  * 缺失或内容陈旧 → 覆盖更新并 commit 到 main，让已 bootstrap 的旧 world 升级；内容已一致 → no-op。
  * best-effort：读/写/commit 失败不抛（不阻塞启动），但 warn 让运维知情。
@@ -283,7 +283,7 @@ export async function ensureStoneRepo(opts: { baseDir: string }): Promise<Ensure
   const mainGitExists = existsSync(mainGitPath);
   const mainGitIsDir = mainGitExists ? safeIsDir(mainGitPath) : false;
 
-  // 兼容老式非 bare：stones/main/.git 是 *目录*（U1 早期写法）
+  // 兼容老式非 bare：stones/main/.git 是 *目录*（早期写法）
   if (mainGitIsDir && !bareExists) {
     const migrated = needsMigration ? await migrateFlatToMain(stonesDir) : false;
     return ensureLegacyEmbedded(mainDir, migrated);

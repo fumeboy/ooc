@@ -1,5 +1,5 @@
 /**
- * @mention 解析 —— canonical 源（batch C3 从 `persistable/mention.ts` 迁入）。
+ * @mention 解析 —— canonical 源（从 `persistable/mention.ts` 迁入）。
  *
  * 纯字符串处理，不查 stones 目录（存在性校验是 service 层职责）。
  *

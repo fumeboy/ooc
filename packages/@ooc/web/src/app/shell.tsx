@@ -66,7 +66,7 @@ export function AppShell() {
   // URL 派生导航维度 —— 下游只读这几个变量，不再读 state.scope / state.active* 的导航字段
   const scope: TreeScope = scopeOf(route);
   const activeSessionId = (() => {
-    // 2026-05-27 路由重构：sessionId 从 path 移到 query；flowsView 直接读 route.sessionId
+    // 路由重构：sessionId 从 path 移到 query；flowsView 直接读 route.sessionId
     if (route.kind === "flowsView" || route.kind === "flowPage") {
       return route.sessionId;
     }
@@ -82,8 +82,8 @@ export function AppShell() {
     }
     return undefined;
   })();
-  // 2026-05 重构：thread 上下文在 query string；flowsView / file 路由都可携带
-  // 2026-05-27：缺省**不**自动补 "user" / "root"，只有 query 显式带才视为有 thread 上下文
+  // 重构：thread 上下文在 query string；flowsView / file 路由都可携带
+  // 缺省**不**自动补 "user" / "root"，只有 query 显式带才视为有 thread 上下文
   const activeObjectId = (() => {
     if (route.kind === "flowsView") return route.objectId;
     if (route.kind === "stoneClient" && route.thread) return route.thread.objectId;
@@ -105,7 +105,7 @@ export function AppShell() {
 
   const activeFlow = state.flows.find((flow) => flow.sessionId === activeSessionId);
   const isSessionPaused = Boolean(activeFlow?.paused);
-  // Issue #5 Bad #2 fix: 让 MainPanel 能 cheap 判 session 存在性
+  // 让 MainPanel 能 cheap 判 session 存在性
   const knownSessionIds = useMemo(() => new Set(state.flows.map((f) => f.sessionId)), [state.flows]);
 
   const patch = useCallback((next: Partial<AppState>) => setState((prev) => ({ ...prev, ...next })), []);
@@ -265,7 +265,7 @@ export function AppShell() {
 
   // FileTree 点击 → navigate
   function handleNode(node: FileTreeNode) {
-    if (node.type !== "file") return; // 目录只展开，不导航（plan-003 D2）
+    if (node.type !== "file") return; // 目录只展开，不导航
     // 保留 thread 上下文：当前在 session 内查看文件时，URL 带上 ?sessionId=&objectId=&threadId=
     // 让右侧 chat panel 跨文件查看持续显示。
     const thread =
@@ -304,7 +304,7 @@ export function AppShell() {
   async function handleCreate(input: { sessionId: string; targetObjectId: string; initialMessage: string }) {
     patch({ loading: true, error: undefined });
     try {
-      // Issue #3 A6 fix + displayName spec: 派生友好 title 给后端 (后端 schema 已支持 title 可选),
+      // displayName spec: 派生友好 title 给后端 (后端 schema 已支持 title 可选),
       // 避免 sidebar 列表显示 `web-1779214834923` 字面值。规则:
       //   `<displayName | targetObjectId>: <initialMessage 首行截 40 字>`
       // displayName 从 target 的 self.md 第一行派生(spec: visible.display_name_from_self_md);
@@ -480,7 +480,7 @@ function derivePathFromRoute(route: RouteState): string | undefined {
     case "file":
       return route.path;
     case "stoneClient":
-      // canonical flat layout + visible/ (M2 ooc-6 rename). Shared helper guarantees
+      // canonical flat layout + visible/ rename. Shared helper guarantees
       // routing.ts normalizeClientFilePath and this derivation stay in sync.
       return deriveClientPath({ scope: "stone", objectId: route.objectId });
     case "flowPage":

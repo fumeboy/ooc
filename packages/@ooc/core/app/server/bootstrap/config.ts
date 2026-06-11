@@ -41,7 +41,7 @@ export async function readServerConfig(source: ConfigSource = {}): Promise<Serve
   const env = source.env ?? process.env;
   const argv = source.argv ?? process.argv;
   const explicitBaseDir = readFlagValue(argv, ["--world", "--world-dir", "--base-dir"]);
-  // baseDir 归一为绝对路径（root-cause #1）：下游 stoneDir()/objectDir()/client-source-url
+  // baseDir 归一为绝对路径：下游 stoneDir()/objectDir()/client-source-url
   // 的 `/@fs${absPath}` 要求绝对路径；相对 `--world ./.ooc-world` 启动若不归一会产出
   // 坏的 `/@fs.ooc-world/...` 让浏览器 import client page 失败。process.cwd() 默认值
   // 已是绝对，path.resolve 对其幂等。

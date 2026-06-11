@@ -1,7 +1,7 @@
 /**
  * Shared root-method delegator factory.
  *
- * Batch B3 (2026-06-04): the 10 root.* method files (grep/glob/open_file/
+ * The 10 root.* method files (grep/glob/open_file/
  * write_file/plan/todo/talk/program/do/open_knowledge) each carried a
  * near-identical thin delegator: look up the target constructor via the
  * registry, fail-loud if unregistered, optionally inject a form shim, then
@@ -49,7 +49,7 @@ export function makeRootDelegator(
   spec: RootDelegatorSpec,
 ): (ctx: MethodExecutionContext) => Promise<MethodOutcome | string | undefined> {
   return async (ctx) => {
-    // batch C 集成：ctx.manager 在零依赖层是 unknown；narrow 到带 registry 的结构类型
+    // ctx.manager 在零依赖层是 unknown；narrow 到带 registry 的结构类型
     // （runtime 注入的 WindowManager 保证 registry 存在），缺省回退 builtinRegistry。
     const manager = ctx.manager as { registry?: typeof builtinRegistry } | undefined;
     const ctor = (manager?.registry ?? builtinRegistry).lookupConstructor(spec.constructorKind);

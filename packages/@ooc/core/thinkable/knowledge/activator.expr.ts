@@ -1,8 +1,7 @@
 /**
  * Trigger 表达式解析与求值。
  *
- * 2026-05-28 起 knowledge frontmatter 的 `activates_on` 由"path list 双桶"切换
- * 为 trigger map。本模块提供：
+ * knowledge frontmatter 的 `activates_on` 是 trigger map。本模块提供：
  *
  * 1. 四类 trigger 语法的解析与校验（`parseTrigger`）：
  *    - `object::<type>` —— 任意 open 的该类 object 出现时命中
@@ -30,7 +29,7 @@ import type { MethodExecWindow, ContextWindow } from "../../executable/windows/_
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 
 /** trigger 抽象语法树——parse 一次，evaluate 多次。
- *  2026-05-28 ooc-6: 旧的 `window` kind 在 parse 时自动归一化为
+ *  旧的 `window` kind 在 parse 时自动归一化为
  *  `object` / `method`，AST 中只保留新 kind 名。
  */
 export type Trigger =
@@ -91,7 +90,7 @@ export function parseTrigger(expr: string): Trigger {
     return { kind: "method", objectType, method };
   }
 
-  // P5e: New intent::<name> format — matches when any active form has an intent matching <name>.
+  // intent::<name> format — matches when any active form has an intent matching <name>.
   if (expr.startsWith("intent::")) {
     const intentName = expr.slice("intent::".length);
     if (intentName.length === 0 || intentName.includes("::")) {
@@ -171,7 +170,7 @@ export function parseActivatesOn(
  *
  * 不读取 thread 之外任何状态——纯函数；可用于测试与 activator 内部循环。
  *
- * 2026-05-28 ooc-6: AST 只包含新 kind 名（object/method/objectId/super）,
+ * AST 只包含新 kind 名（object/method/objectId/super）,
  * 旧的 window/command 在 parseTrigger 阶段已归一化。
  */
 export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolean {
@@ -185,7 +184,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       // 若按下方扫 contextWindows 匹配 type==="root" 则**永不命中** → 沉淀的 memory 永不激活、召回闭环
       // 静默断。特判 root 为 always-on，坐实契约。
       if (trigger.objectType === "root") return true;
-      const list = (thread.contextWindows ?? []) as ContextWindow[]; // batch C narrowing(N4): base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
+      const list = (thread.contextWindows ?? []) as ContextWindow[]; // narrow base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
       for (const w of list) {
         if (w.class !== trigger.objectType) continue;
         if (isOpen(w)) return true;
@@ -194,7 +193,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
     }
 
     case "objectId": {
-      const list = (thread.contextWindows ?? []) as ContextWindow[]; // batch C narrowing(N4): base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
+      const list = (thread.contextWindows ?? []) as ContextWindow[]; // narrow base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
       for (const w of list) {
         // ooc-6 Object Unification: window.id = objectId for custom objects
         if (w.id !== trigger.objectId) continue;
@@ -204,7 +203,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
     }
 
     case "method": {
-      const list = (thread.contextWindows ?? []) as ContextWindow[]; // batch C narrowing(N4): base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
+      const list = (thread.contextWindows ?? []) as ContextWindow[]; // narrow base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
       // 先做一次按 id 的 parent 索引，避免 O(n²)；通常 windows 量级小，O(n) 也无妨。
       const byId = new Map<string, ContextWindow>();
       for (const w of list) byId.set(w.id, w);
@@ -222,7 +221,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
     }
 
     case "intent": {
-      // P5e: Check intentCache for any form whose intents match the pattern.
+      // Check intentCache for any form whose intents match the pattern.
       const cache = thread.intentCache;
       if (!cache) return false;
       for (const entry of cache.values()) {
@@ -259,7 +258,7 @@ function parentTypeOf(
 }
 
 /**
- * P5e: Check if an intent name matches a pattern. Supports:
+ * Check if an intent name matches a pattern. Supports:
  * - exact match: "program" matches "program"
  * - wildcard suffix: "program.*" matches "program" and "program.shell"
  */

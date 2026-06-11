@@ -1,5 +1,5 @@
 /**
- * Knowledge frontmatter 与索引类型 —— canonical 源（batch C4 从
+ * Knowledge frontmatter 与索引类型 —— canonical 源（从
  * `thinkable/knowledge/types.ts` 迁入）。零依赖纯类型。
  *
  * activates_on 是 **trigger map**（trigger 表达式 → 激活级别）。
@@ -31,7 +31,7 @@ export interface KnowledgeFrontmatter {
   /** 激活规则：trigger 表达式 → 激活级别。详见 ActivatesOn。 */
   activates_on?: ActivatesOn;
   /**
-   * 是否允许被子 Agent 继承（B-tree 协议，2026-05-26）。
+   * 是否允许被子 Agent 继承（B-tree 协议）。
    *
    * - `true`：父 Agent 的这篇 knowledge 会被子 Agent 的 loadKnowledgeIndex 自动纳入索引；
    *   子 Agent 自己 knowledge 目录下同 idPath 的 knowledge 仍然胜出（override）。

@@ -1,11 +1,11 @@
 /**
- * window-diff.helpers — Round 9 E3 Loop Time Machine.
+ * window-diff.helpers — Loop Time Machine.
  *
  * 把"当前 loop 的 windowsSnapshot"vs"上一 loop 的 windowsSnapshot"算成一份带 status 的
- * diff 表，供 LoopDiffView 渲染。Hash 由后端 E2 写入 `loop_NNNN.meta.json` 的
+ * diff 表，供 LoopDiffView 渲染。Hash 由后端写入 `loop_NNNN.meta.json` 的
  * `windowsSnapshot[*].contentHash`；前端只做集合 diff，不重新计算 hash。
  *
- * 4 态语义（与 design §1.3 对齐）：
+ * 4 态语义：
  *   - added      : 在 current 出现、previous 没有 → 新窗口
  *   - removed    : 在 previous 有、current 没了   → 已 close
  *   - changed    : 同 id + hash 不同              → 内容变更
@@ -17,21 +17,21 @@
  *   - 两边都 undefined → 空数组
  *
  * 不做的事：
- *   - 不解析 / 关心 hash 算法（design §B：Bun.hash + stripVolatile 是后端职责）
- *   - 不做 deep field-level diff（design §C：内容变了就是 changed，不再细分哪个字段）
+ *   - 不解析 / 关心 hash 算法（Bun.hash + stripVolatile 是后端职责）
+ *   - 不做 deep field-level diff（内容变了就是 changed，不再细分哪个字段）
  *   - 不依赖排序：返回结果按"current 中出现的顺序"+ removed 追加在末尾（稳定可读）
  */
 
 /**
  * WindowSnapshotEntry — 与后端 `LlmLoopDebugMetaRecord.windowsSnapshot[*]` 的形态镜像
- * （前端重声明避免 cross-package 依赖；与 design §3.2 / E2 sub agent 的实现对齐）。
+ * （前端重声明避免 cross-package 依赖）。
  *
- * E2 数据未到时：snapshot 字段不存在 → computeWindowDiff 直接走 undefined 分支 → UI 显示
+ * 数据未到时：snapshot 字段不存在 → computeWindowDiff 直接走 undefined 分支 → UI 显示
  * "no snapshot data"，不会炸。
  */
 /**
- * Round 10 F3 — type-dispatch window diff renderer 协议扩展：
- * file_window 的 prev/current 内容由 backend F2 直接附在 snapshot entry 上，
+ * type-dispatch window diff renderer 协议扩展：
+ * file_window 的 prev/current 内容由 backend 直接附在 snapshot entry 上，
  * 避免前端跨 loop 重新 fetch input.json + 拼装。
  *
  * F2 未到位时（fileDiff 字段缺失）→ FileWindowDiff 软退化：显示 path link 提示
@@ -57,7 +57,7 @@ export interface WindowSnapshotEntry {
   /** 后端可能附 summary 供 UI 显示，避免 expand 才知道 window 在讲什么。 */
   summary?: string;
   /**
-   * Round 10 F3：file_window 类型专属。
+   * file_window 类型专属。
    * 与 backend F2 sub agent 实现的 shape 对齐；F2 未到位时 undefined → FileWindowDiff 软退化。
    */
   fileDiff?: FileDiffData;
@@ -152,7 +152,7 @@ export function computeWindowDiff(
 /**
  * UI 辅助：把 status 映射成视觉 token —— icon / label / className 后缀。
  *
- * 颜色编码与 design §5 对齐：
+ * 颜色编码：
  *  - added     → 绿色 (added)
  *  - changed   → 橙色 (changed)
  *  - removed   → 灰化 + strike-through

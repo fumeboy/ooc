@@ -102,7 +102,7 @@ export {
   type ContextParams,
 } from "./flow-context-registry";
 
-// 2026-06-02 ooc-6 P6.§6: thread context.json (state vs context split)
+// thread context.json (state vs context split)
 export {
   threadContextFile,
   writeThreadContext,
@@ -137,7 +137,7 @@ export {
   readableFile,
   writeReadable,
 } from "./stone-readme";
-// stone-data 已删除（2026-05-23）：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
+// stone-data 已删除：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
 export {
   readExecutableSource,
   executableIndexFile,
@@ -145,7 +145,7 @@ export {
 } from "./stone-server";
 
 export {
-  // PR-Issue（stone-versioning 决策协议；issue 看板已 2026-05-26 移除）
+  // PR-Issue（stone-versioning 决策协议；issue 看板已移除）
   PR_ISSUE_SESSION_ID,
   createPrIssue,
   createRecoveryIssue,
@@ -172,7 +172,7 @@ export { enqueueSessionWrite, __resetSerialQueueForTests } from "../runtime/seri
 // STONES_MAIN_BRANCH canonical 源已迁入 ./common（打破 pr-issue → bootstrap 反向依赖）。
 export { STONES_MAIN_BRANCH } from "./common";
 
-// super-flow actor 冒泡（reflectable 新对象自沉淀 bootstrap，#3）：super-alias 的 callee
+// super-flow actor 冒泡（reflectable 新对象自沉淀 bootstrap）：super-alias 的 callee
 // 解析——canonical caller 透明、新对象冒泡到最近 canonical 祖先、顶层兜底 supervisor。
 export {
   resolveSuperActor,
@@ -188,7 +188,7 @@ export {
 } from "./stone-bootstrap.js";
 
 export {
-  // U3: git CLI 薄包装（仅供 versioning 等高层编排使用）
+  // git CLI 薄包装（仅供 versioning 等高层编排使用）
   isValidBranchName,
   gitInit,
   gitCurrentBranch,
@@ -218,9 +218,9 @@ export {
 } from "./stone-git.js";
 
 export {
-  // U4: 高层 versioning 编排（治理 rollback + 控制面直写 main + PR-Issue interim 合入）。
+  // 高层 versioning 编排（治理 rollback + 控制面直写 main + PR-Issue interim 合入）。
   // session→main 合入语义（tryMergeSelf/classifyWorktreeBranch/requestPrIssueReview）已退役
-  // （2026-06-11 地基不变量）；沉淀走 stone-feat-branch（createFeatBranchWorktree + commitAndOpenPr）。
+  // （地基不变量）；沉淀走 stone-feat-branch（createFeatBranchWorktree + commitAndOpenPr）。
   commitWorktree,
   resolvePrIssue,
   rollback,
@@ -238,7 +238,7 @@ export {
 
 export {
   // stone-feat-branch: reflectable 沉淀的 feat-branch PR 路径（取代退役的 session→main 合入）。
-  // 2026-06-11 改写：createFeatBranchWorktree（开分支不写文件）+ commitAndOpenPr（finalizer）
+  // 改写：createFeatBranchWorktree（开分支不写文件）+ commitAndOpenPr（finalizer）
   // 由 super(foo) thread 的 feat 分支绑定串起来；编辑走普通 write_file / file_window.edit。
   computeReviewerSet,
   createFeatBranchWorktree,

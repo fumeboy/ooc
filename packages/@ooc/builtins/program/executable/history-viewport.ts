@@ -1,5 +1,5 @@
 /**
- * program_window 的 exec history viewport 协议（R1c）。
+ * program_window 的 exec history viewport 协议。
  *
  * 设计：
  * - 复用 _shared/executable/viewport-adapter.ts 的 makeTranscriptViewportAdapter

@@ -25,7 +25,7 @@ import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import { poolDataFile, type PoolObjectRef } from "./pool-object.js";
 import { parseCsv, stringifyCsvRow } from "../_shared/utils/csv.js";
 
-// csv 编解码（RFC 4180 子集）已于 batch C3 迁入 `@ooc/core/_shared/utils/csv.ts`。
+// csv 编解码（RFC 4180 子集）已迁入 `@ooc/core/_shared/utils/csv.ts`。
 // 此处 re-export 供下游沿用，本文件保留带 IO 的 readCsv/writeCsv/appendRow。
 export { parseCsv, stringifyCsvRow } from "../_shared/utils/csv.js";
 

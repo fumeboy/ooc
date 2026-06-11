@@ -1,5 +1,5 @@
 /**
- * @deprecated (M1 2026-06-02) 直接使用的位置请逐步迁移到
+ * @deprecated 直接使用的位置请逐步迁移到
  *   `import { createObservableStore, ObservableStore } from "@ooc/core/runtime/observable-store"`
  *   或通过 `WorldRuntime.observable` 访问 per-world 实例。
  *
@@ -195,7 +195,7 @@ export async function finishLlmLoop(
     // to persisted contextWindows when no render happened this loop (e.g. mocked path).
     const snapshotWindows = (thread._renderedWindows ?? thread.contextWindows ?? []) as ContextWindow[];
     const windowsSnapshot = await buildWindowsSnapshot(
-      // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 传入 buildWindowsSnapshot。
+      // contextWindows 契约层是 base[]；narrow 回 union[] 传入 buildWindowsSnapshot。
       snapshotWindows,
       previousSnapshot,
     );

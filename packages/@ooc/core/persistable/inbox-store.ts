@@ -1,5 +1,5 @@
 /**
- * Inbox 独立存储（2026-06-06，collaborable 并发回报竞态根治）。
+ * Inbox 独立存储（collaborable 并发回报竞态根治）。
  *
  * 问题：inbox 此前随 thread.json 整体 read-modify-write。worker 持 caller in-memory
  * 跑很久（含 LLM），期间外部 deliverTalkMessage / syncCrossObjectCalleeEnds 对 caller.inbox

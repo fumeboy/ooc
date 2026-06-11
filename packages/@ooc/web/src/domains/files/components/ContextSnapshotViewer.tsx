@@ -155,7 +155,7 @@ function TreeNodeImpl({
         aria-selected={isSelected}
         onClick={() => {
           onSelect(node.id);
-          // 点击行也切换展开 — 用户反馈 2026-05-20:
+          // 点击行也切换展开 — 用户反馈:
           // 此前只能点 chevron 才能折叠/展开, 误点行只 select 不 toggle 让用户以为"展开后无法收起"
           if (hasChildren) onToggle(node.id);
         }}
@@ -224,7 +224,7 @@ function TreeNodeImpl({
 /**
  * TreeNode 的 memo wrapper。
  *
- * 关键约束(2026-05-21 修复后):memo 不能"只看本行 expanded.has(self.id)" —— 因为如果父
+ * 关键约束:memo 不能"只看本行 expanded.has(self.id)" —— 因为如果父
  * 节点 memo 跳过 re-render,React 会重用整棵子树的旧 element,descendant memo 根本不会跑。
  * 用户在深层 window 行触发 toggle 时,中间的 section 节点 expanded 位没变,会被旧逻辑误判
  * 为"等同 → skip",于是被切换那一行永远拿不到新的 expanded 集 —— 视觉上表现为"无法折叠"。

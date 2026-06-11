@@ -9,7 +9,7 @@ import { Select } from "../../../shared/ui/select";
 import { Textarea } from "../../../shared/ui/textarea";
 
 /**
- * SessionCreator — collaborable § cross-object talk（spec 2026-05-15）下的 session 创建表单。
+ * SessionCreator — collaborable § cross-object talk 下的 session 创建表单。
  *
  * targetObjectId（"对方 object"）与 initialMessage（"第一句话"）现在都必填——
  * 创建 session 等价于 user 对该 target 发起初次 talk。
@@ -22,7 +22,7 @@ export function SessionCreator({
   stones: Stone[];
   onCreate: (input: { sessionId: string; targetObjectId: string; initialMessage: string }) => Promise<void>;
   /**
-   * H-3 (Round 5): 当用户从 UserThreadHome 的"Seed via welcome"按钮跳来时,
+   * 当用户从 UserThreadHome 的"Seed via welcome"按钮跳来时,
    * 预填这个 sessionId(已被裸创建过的空 session),避免用户复制 / 错填。
    */
   initialSessionId?: string;
@@ -37,7 +37,7 @@ export function SessionCreator({
   }, [targetObjectId, stones]);
 
   const canSubmit = !busy && sessionId.trim() && targetObjectId.trim() && initialMessage.trim();
-  // Issue #3 A8 fix: 创建期间整个表单 freeze, 避免用户重复编辑 / 重复提交。
+  // 创建期间整个表单 freeze, 避免用户重复编辑 / 重复提交。
   const inputsDisabled = busy;
   // displayName 派生(spec):option label 显示语义化名,value 仍是 objectId
   const names = useDisplayNames(stones.map((s) => s.objectId));

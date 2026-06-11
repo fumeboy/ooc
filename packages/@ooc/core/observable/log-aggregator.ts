@@ -1,7 +1,7 @@
 /**
  * log-aggregator —— observable 维度的轻量「日志去重 + 限流 + 计数」原语。
  *
- * 动机（2026-06-06 harness 暴露）：programmable 维度体验官超时，服务端日志 370/370 行
+ * 动机（harness 暴露）：programmable 维度体验官超时，服务端日志 370/370 行
  * 全是同一条 `[readThread] ... references missing object ... skipping`——无界重复把真信号
  * 淹没，且超时只能事后 tail 才诊断。observability 反模式：同一警告无聚合/限流。
  *

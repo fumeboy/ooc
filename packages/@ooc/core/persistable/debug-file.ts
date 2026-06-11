@@ -44,9 +44,9 @@ export function captureContextSnapshot(
   thread: ThreadContext,
   registry: ObjectRegistry = builtinRegistry,
 ): ContextSnapshot {
-  // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 ContextSnapshot.contextWindows。
+  // contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 ContextSnapshot.contextWindows。
   const contextWindows = ((thread.contextWindows ?? []) as ContextWindow[]).map((w) => {
-    // P6.§7: enrichment effectiveVisibleType（沿 parentClass 继承链回退到可渲染 type）。
+    // enrichment effectiveVisibleType（沿 parentClass 继承链回退到可渲染 type）。
     const effVis = registry.resolveEffectiveVisibleType(w.class as any);
     if (effVis && effVis !== w.class) {
       return { ...w, effectiveVisibleType: effVis };
@@ -235,7 +235,7 @@ export function writeLoopDebugMeta(
 /**
  * 读取单轮 LLM 元数据；文件不存在 / 解析失败时返回 undefined（不抛）。
  *
- * Round 10 F2 引入：finishLlmLoop 在写 loop_NNNN.meta.json 前先读 loop_NNNN-1.meta.json
+ * finishLlmLoop 在写 loop_NNNN.meta.json 前先读 loop_NNNN-1.meta.json
  * 拿 prev snapshot，给 buildWindowsSnapshot 算 file_window 的 previousContent。
  *
  * 失败退化语义（首次出现 / 文件被外部删 / JSON 损坏）→ undefined →

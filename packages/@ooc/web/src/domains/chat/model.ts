@@ -1,5 +1,5 @@
 /**
- * 前端 chat 模型 — 与后端 ContextWindow Step 1 (spec 2026-05-14) 对齐。
+ * 前端 chat 模型 — 与后端 ContextWindow 对齐。
  *
  * 注意：后端 ThreadContext 的 contextWindows 是必填的；前端用 optional 是为了兼容
  * 老 thread.json 反序列化路径（虽然后端会迁移补齐 creator window，但前端不依赖）。

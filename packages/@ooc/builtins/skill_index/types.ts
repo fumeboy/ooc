@@ -15,7 +15,7 @@ import type { SkillEntry } from "@ooc/core/persistable/stone-skills.js";
  * skills 来源（双层）：
  * - branch 级 `stones/<branch>/skills/<name>/SKILL.md`（跨 Object 共享）
  * - object 级 `stones/<branch>/objects/<self>/skills/<name>/SKILL.md`（仅 self）
- * 同名 skill object 级优先（plan §D1）。
+ * 同名 skill object 级优先。
  */
 export interface SkillIndexWindow extends BaseContextWindow {
   class: "skill_index";

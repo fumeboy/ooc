@@ -4,7 +4,7 @@ import { stoneDir, type StoneObjectRef } from "./common";
 import { resolveBuiltinReadDir } from "./builtin-dir";
 
 /**
- * stone 的 readable.md 绝对路径（原 readme.md 重命名，2026-05-28 ooc-6）。
+ * stone 的 readable.md 绝对路径（原 readme.md 重命名）。
  * 静态展示文本，供外部 Object 或 user 理解该 Object。
  */
 export function readableFile(ref: StoneObjectRef): string {

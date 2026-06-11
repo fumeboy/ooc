@@ -1,7 +1,7 @@
 /**
  * HotReloadWatcher — dev 模式下的 stone 文件变更监听。
  *
- * M3 (2026-06-03): 监听 World 内 stones （含 deprecated packages/ fallback）的源码变更，
+ * 监听 World 内 stones （含 deprecated packages/ fallback）的源码变更，
  * 去抖聚类后通过 StoneRegistry 派发 `stone:changed` 事件。
  *
  * 设计要点：

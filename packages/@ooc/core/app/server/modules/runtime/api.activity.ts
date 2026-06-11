@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import type { RuntimeService } from "./service";
 
 /**
- * GET /api/runtime/activity —— 系统活动快照（observable 诊断端点，2026-06-06）。
+ * GET /api/runtime/activity —— 系统活动快照（observable 诊断端点）。
  *
  * 一次读出服务端此刻全貌，把「长跑卡住只能盲等到超时再 tail 日志」变成「随时一读即诊断」：
  * - `jobs`：在跑/排队/最近结束的 job，running 带 `ageMs`（跑了多久 → 定位卡住）+

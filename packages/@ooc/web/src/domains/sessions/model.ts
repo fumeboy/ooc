@@ -1,5 +1,5 @@
 /**
- * collaborable § cross-object talk（spec 2026-05-15）：
+ * collaborable § cross-object talk：
  * 创建 session 现在等价于 user 对 target object 的初次 talk。
  *
  * - sessionId / title：session 元信息

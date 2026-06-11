@@ -5,7 +5,7 @@ import type { createStonesService } from "./service";
 /**
  * POST /api/stones/:objectId/knowledge/files
  *
- * 根因 #3 (2026-05-24)：knowledge 实际写入位置是 pool 层（`pools/objects/<id>/knowledge/`），
+ * knowledge 实际写入位置是 pool 层（`pools/objects/<id>/knowledge/`），
  * 不在 stones/ 下；旧 `/api/stones/.../knowledge/...` 路径保留兼容，标记 deprecation。
  * 新代码请改用对称的 `POST /api/pools/:objectId/knowledge/files`（见 ../pools/）。
  */

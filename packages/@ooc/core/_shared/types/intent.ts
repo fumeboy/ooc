@@ -1,5 +1,5 @@
 /**
- * Intent = "what this form is currently doing" —— canonical 源（batch C4 从
+ * Intent = "what this form is currently doing" —— canonical 源（从
  * `thinkable/context/intent.ts` 迁入）。零依赖纯类型 + 纯函数。
  *
  * method name itself is always an implicit intent ("program", "open_file").

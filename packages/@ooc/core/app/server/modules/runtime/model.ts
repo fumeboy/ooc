@@ -15,7 +15,7 @@ export const loopDebugParams = t.Object({
 });
 
 /**
- * R0b: list-loops endpoint response shape.
+ * list-loops endpoint response shape.
  *
  * LoopMeta 复用 persistable 落盘类型 LlmLoopDebugMetaRecord; 不复制定义避免漂移。
  * 前端组件可 import { LoopMeta } from runtime model 用同一份类型。

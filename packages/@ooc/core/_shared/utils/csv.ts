@@ -1,5 +1,5 @@
 /**
- * csv 编解码纯函数 —— canonical 源（batch C3 从 `persistable/csv-pool.ts` 迁入）。
+ * csv 编解码纯函数 —— canonical 源（从 `persistable/csv-pool.ts` 迁入）。
  *
  * RFC 4180 子集：字段含 `,` / `"` / `\n` / `\r` 时整字段用 `"` 包裹，内部 `"` → `""`。
  * 选择手写而非依赖第三方库：OOC csv 是标准格式（无嵌套表），避免 supply chain 风险，

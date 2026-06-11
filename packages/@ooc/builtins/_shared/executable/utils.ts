@@ -1,10 +1,10 @@
 /**
  * Shared low-level helpers for builtin object methods.
  *
- * Batch B2 (2026-06-04): extracted the byte-identical micro-helpers that were
+ * Extracted the byte-identical micro-helpers that were
  * copy-pasted across builtins/{root,plan,file,knowledge,...}/executable/.
  *
- * 2026-06-10: removed `emptyIntent` (the intent(args) method was deleted from ObjectMethod;
+ * Removed `emptyIntent` (the intent(args) method was deleted from ObjectMethod;
  * intents now come from onFormChange's returned MethodExecuteForm).
  */
 

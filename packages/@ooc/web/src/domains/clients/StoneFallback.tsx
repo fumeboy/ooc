@@ -33,7 +33,7 @@ interface StoneFallbackProps {
 type FlowSummary = { sessionId: string; title?: string; updatedAt?: number };
 
 /**
- * Issue #5 Bad #2 fix: 上一轮 StoneFallback 在 stone 不存在(`/stones/nonexistent_xyz`)时
+ * 上一轮 StoneFallback 在 stone 不存在(`/stones/nonexistent_xyz`)时
  * 仍然渲染完整 self/readme/knowledge 模板,让用户误以为 stone 存在。
  *
  * 修复策略: mount 时先 `GET /api/stones` 拉 list,根据 objectId 是否在列表里区分:
@@ -220,7 +220,7 @@ function KnowledgeSummary({
   return (
     <CollapsibleSection
       label="Knowledge / 持续记忆"
-      // 根因 #3 (2026-05-24)：knowledge 在 pool 层，路径 pools/objects/<id>/knowledge/。
+      // knowledge 在 pool 层，路径 pools/objects/<id>/knowledge/。
       sourceHint={`pools/objects/${objectId}/knowledge/`}
       defaultOpen
       loading={state.loading}
@@ -347,7 +347,7 @@ function useKnowledgeTree(objectId: string): KnowledgeState {
   useEffect(() => {
     let cancelled = false;
     setState({ dirs: [], loading: true });
-    // 根因 #3 (2026-05-24): knowledge 在 pool 层，路径 pools/objects/<id>/knowledge/；
+    // knowledge 在 pool 层，路径 pools/objects/<id>/knowledge/；
     // ui.tree 的 scopes 是 world|flows|stones，pools 走 world scope + path。
     fetchTree("world", `pools/objects/${objectId}/knowledge`)
       .then((node) => {

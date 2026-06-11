@@ -133,7 +133,7 @@ export function classifyPackagesPath(
   } = {},
 ): PackagesPathClass {
   if (!baseDir) return { kind: "non-package" };
-  // P1 收口（2026-06-05）：canonical 对象根 = stones/main/objects/（main worktree），取代旧 packages/ 根。
+  // canonical 对象根 = stones/main/objects/（main worktree），取代旧 packages/ 根。
   // relInPackages 语义不变（相对对象根的路径，如 agent_of_x/self.md）——消费方 join(wt.path,"objects",relInPackages) 不受影响。
   const objectsRoot = resolve(baseDir, "stones", "main", "objects");
   const relObjects = relative(objectsRoot, resolve(absPath));

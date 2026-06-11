@@ -4,7 +4,7 @@ import { executableDir, stoneDir } from "./stone-object";
 import type { StoneObjectRef } from "./common";
 
 /**
- * stone 的 executable/index.ts 绝对路径（原 server/index.ts 重命名，2026-05-28 ooc-6）。
+ * stone 的 executable/index.ts 绝对路径（原 server/index.ts 重命名）。
  * 存放 Object 的 methods 实现。
  */
 export function executableIndexFile(ref: StoneObjectRef): string {

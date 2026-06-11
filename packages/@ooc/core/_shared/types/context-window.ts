@@ -1,10 +1,10 @@
 /**
- * ContextWindow 家族的 base 类型 —— canonical 源（batch C6 从
+ * ContextWindow 家族的 base 类型 —— canonical 源（从
  * `executable/windows/_shared/types.ts` 迁入 base 部分）。
  *
  * 设计依据：docs/superpowers/specs/2026-05-14-context-window-unification-design.md
  *
- * **分层说明（batch C 关键决策）：**
+ * **分层说明：**
  * 完整的 `ContextWindow` discriminated union（`RootWindow | MethodExecWindow | …`）
  * 依赖 builtins 各包的具体 window 类型，**无法**放进零依赖的 `_shared`。因此：
  * - 本文件只导出 base：`ContextWindow = BaseContextWindow & { [k]: unknown }`，
@@ -97,7 +97,7 @@ export interface BaseContextWindow {
    */
   compressLevel?: 0 | 1 | 2;
   /**
-   * P6.§7 (2026-06-02): 该 window 的"有效可见渲染类型"——沿 parentClass 继承链回退后
+   * 该 window 的"有效可见渲染类型"——沿 parentClass 继承链回退后
    * 首个能被前端 ContextSnapshotViewer 渲染的 type。
    *
    * undefined = 未计算或回退到原始 type。
@@ -149,7 +149,7 @@ export type SharingState =
     };
 
 /**
- * ContextWindow —— **base 版**（batch C6 分层决策，2026-06-10 正名为 ContextWindow）。
+ * ContextWindow —— **base 版**（正名为 ContextWindow）。
  *
  * 零依赖层只能表达"所有 window 至少有 BaseContextWindow 字段 + 任意扩展字段"。
  * 完整 discriminated union 在 `executable/windows/_shared/types.ts` 覆盖此 export。

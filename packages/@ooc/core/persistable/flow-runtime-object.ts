@@ -1,5 +1,5 @@
 /**
- * Flow-layer runtime object state IO —— ooc-6 Object Unification Phase 5'.1.
+ * Flow-layer runtime object state IO —— ooc-6 Object Unification。
  *
  * runtime-created object 在 flow 中的状态文件：
  *   `{baseDir}/flows/{sessionId}/{objectId}/state.json`
@@ -11,8 +11,8 @@
  * 不进 state.json（由 writeRuntimeObjectState 的 stripContextWindowsField + manager 的
  * isBuiltinFeature 分流保证）。
  *
- * 双写期（P5'.1）：与 flow-context.ts 的嵌套 context/<id>/window.json 并存。
- * 切读路径（P5'.2）后即可逐步移除嵌套写。
+ * 双写期：与 flow-context.ts 的嵌套 context/<id>/window.json 并存。
+ * 切读路径后即可逐步移除嵌套写。
  */
 
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
@@ -33,7 +33,7 @@ export function runtimeObjectStateFile(ref: FlowObjectRef): string {
  * - 自动 mkdir -p；
  * - 使用 toJson(2-space + 末尾换行) 保持仓库格式一致。
  *
- * P6.§6 (2026-06-02): contextWindows 已搬迁到 `<oid>/threads/<tid>/context.json`
+ * contextWindows 已搬迁到 `<oid>/threads/<tid>/context.json`
  * （flow-thread-context.ts）。本写盘函数会主动剥离传入 state 中可能残留的
  * `contextWindows` 字段，确保 state.json 只存 object 自身字段（object 维度），
  * 与 thread 维度的 context.json 严格分文件——这是 state ≠ context 不变量的写盘端实施点。
@@ -43,7 +43,7 @@ export async function writeRuntimeObjectState(
   state: ContextWindow,
 ): Promise<void> {
   const file = runtimeObjectStateFile(ref);
-  // P6.§6: strip contextWindows — 写 state.json 只保留 object 自身字段。
+  // strip contextWindows — 写 state.json 只保留 object 自身字段。
   const stateForDisk = stripContextWindowsField(state);
   const key = `flow-runtime-object:${ref.baseDir}:${ref.sessionId}:${ref.objectId}`;
   await enqueueSessionWrite(key, async () => {
@@ -53,7 +53,7 @@ export async function writeRuntimeObjectState(
 }
 
 /**
- * P6.§6: 把 ContextWindow / Object 中的 `contextWindows` 字段剥离掉，
+ * 把 ContextWindow / Object 中的 `contextWindows` 字段剥离掉，
  * 防止它流入 state.json。返回浅 clone（不修改入参）。
  *
  * 早期实现把 thread 的 contextWindows 数组放在 state.json 同一文件，

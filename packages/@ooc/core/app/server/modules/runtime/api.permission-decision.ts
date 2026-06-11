@@ -3,9 +3,9 @@ import type { RuntimeService } from "./service";
 import { threadDebugParams } from "./model";
 
 /**
- * Q0c: HITL approve / reject 入口 (AgentOfExecutable + AgentOfVisible)。
+ * HITL approve / reject 入口 (AgentOfExecutable + AgentOfVisible)。
  *
- * Design: docs/2026-05-25-permission-model-design.md §原则F + Q0c
+ * Design: docs/2026-05-25-permission-model-design.md §原则F
  * Meta:   meta/object.doc.ts:executable.children.permission.patches.approve_reject_path
  *
  * POST /api/runtime/flows/:sessionId/:objectId/threads/:threadId/permission

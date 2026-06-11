@@ -166,7 +166,7 @@ function compressTalkWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
 /** talk_window 的 onClose hook：creator talk_window 不可关闭。 */
 function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
   if (ctx.window.class !== "talk") return;
-  // batch C narrowing(N1): ctx.window 契约层是 base ContextWindow；type==="talk" 守卫后 narrow 回 TalkWindow 读 isCreatorWindow。
+  // 窄化：ctx.window 契约层是 base ContextWindow；type==="talk" 守卫后 narrow 回 TalkWindow 读 isCreatorWindow。
   const w = ctx.window as TalkWindow;
   if (w.isCreatorWindow) {
     ctx.thread.events.push({
@@ -181,7 +181,7 @@ function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
   return true;
 }
 
-// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+// ─────────────────────────── constructor ──────────────────────────
 
 const TALK_CONSTRUCTOR_TIP = `talk 开启一个对外的持续会话 talk_window（同一 target 复用同一 talk_window）。
 参数：target（必填，目标 objectId，"user" 也是）、title（必填，会话主题）。`;
@@ -283,7 +283,7 @@ builtinRegistry.registerExecutable("talk", {
     close: closeMethod,
     talk: talkConstructor,
   },
-  // P6.§6: talk_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
+  // talk_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
   isBuiltinFeature: true,
 });
 builtinRegistry.registerReadable("talk", {

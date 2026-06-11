@@ -4,15 +4,14 @@
  * 地基不变量（用户拍板）：`session-<sid>` worktree 是纯运行时派生物，**永不合入 main**。
  * 沉淀知识/功能进 canonical 要走「另起 feat 分支 → 直接编辑 → commit → PR → review → merge」。
  *
- * 2026-06-11 改写（用户拍板：不封装 edits 参数）：evolve_self 是沉淀**第三步（finalizer）**，
- * **不再吃 edits 参数**。完整序列：
+ * evolve_self 是沉淀**第三步（finalizer）**，**不再吃 edits 参数**。完整序列：
  *   1. new_feat_branch(intent)  —— 开 feat 分支并绑定本 thread。
  *   2. write_file / file_window.edit ×N —— 直接编辑 feat worktree 下文件（绑定覆盖优先路由）。
  *   3. evolve_self —— 读 thread 的 feat 绑定 → commit 该 feat worktree（署名 foo）→ 冒泡 reviewer
  *      → createPrIssue 开 PR → **清除绑定**。
  *
- * interim 合入（P1+P2 阶段）：PR 仍由 supervisor 经既有 resolvePrIssue 单点 merge/reject；
- * reviewers 集只存储不强制执行（P3 多 reviewer 审批待建）。
+ * interim 合入：PR 仍由 supervisor 经既有 resolvePrIssue 单点 merge/reject；
+ * reviewers 集只存储不强制执行（多 reviewer 审批待建）。
  */
 
 import type {
@@ -82,7 +81,7 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
     branch: stonesBranch,
     authorObjectId: objectId,
     intent,
-    // P6 回修定位：本 super(foo) thread 即发起沉淀者，reject/合入失败时 message 回投到这里。
+    // 回修定位：本 super(foo) thread 即发起沉淀者，reject/合入失败时 message 回投到这里。
     authorThreadId: thread.id,
   });
   if (!r.ok) {
@@ -90,7 +89,7 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
     return `[evolve_self:${r.code}] ${r.message}`;
   }
 
-  // P4：给每个 reviewer 的 super-session thread 投递一条 pr_window（reviewer 在 thinkloop
+  // 给每个 reviewer 的 super-session thread 投递一条 pr_window（reviewer 在 thinkloop
   // 里通过 approve/reject/request_changes 亲手批；root knowledge pr-review.md 经 object::pr 激活）。
   await deliverPrWindowToReviewers({
     baseDir,

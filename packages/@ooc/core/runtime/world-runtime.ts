@@ -1,8 +1,8 @@
 /**
  * WorldRuntime — per-world 运行时状态聚合。
  *
- * M1 (2026-06-02): 把原 module-level singleton 集中封装到一个 WorldRuntime 实例里。
- * M2 (2026-06-03): 追加 stoneRegistry（stones/ 扫描与元数据解析）。
+ * 把原 module-level singleton 集中封装到一个 WorldRuntime 实例里。
+ * 含 stoneRegistry（stones/ 扫描与元数据解析）。
  */
 import {
   builtinRegistry,
@@ -88,7 +88,7 @@ export function createWorldRuntime(config: WorldRuntimeConfig): WorldRuntime {
     loader: serverLoader,
     stones: stoneRegistry,
   });
-  // P1: kick off background registration of stone-backed types.
+  // kick off background registration of stone-backed types.
   // Callers who want to block can await runtime.typeRegistration.
   const typeRegistration = registrar.start();
 

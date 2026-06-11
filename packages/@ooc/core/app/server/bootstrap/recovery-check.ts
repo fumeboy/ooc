@@ -13,8 +13,8 @@
  *
  * 枚举走 StoneRegistry（canonical `stones/main/objects/` + versioning worktree，含 children/
  * 嵌套），只看 kind="stone"（用户/实例对象——builtin class 是框架代码，不受自我编程腐化）。
- * 2026-06-07：扫描目标从 deprecated `<world>/packages/` 改回 canonical，并随 packages/ 兼容层移除
- * 修正文件名 `server/index.ts → executable/index.ts`（2026-05-28 已重命名）。
+ * 扫描目标从 deprecated `<world>/packages/` 改回 canonical，并随 packages/ 兼容层移除
+ * 修正文件名 `server/index.ts → executable/index.ts`（已重命名）。
  */
 
 import {

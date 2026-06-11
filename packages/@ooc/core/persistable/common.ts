@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { readdir } from "node:fs/promises";
 
 /**
- * flow/stone 引用类型 + 纯路径函数的 canonical 源已于 batch C5 迁入
+ * flow/stone 引用类型 + 纯路径函数的 canonical 源已迁入
  * `@ooc/core/_shared/types/thread.ts`（零依赖层，打破 thinkable ↔ persistable 类型耦合）。
  * 此处 re-export 保持旧 import 路径 (`persistable/common`) 可用。
  *
@@ -48,7 +48,7 @@ export const STONES_BARE_REPO_DIR = ".stones_repo";
 export const SESSION_BRANCH_PREFIX = "session-";
 
 /**
- * 计算 flow object 目录绝对路径（方案 A 续，2026-06-09）。
+ * 计算 flow object 目录绝对路径。
  *
  * 落点统一为 `flows/<sid>/objects/<nestedObjectPath>` —— 与 stoneDir 的 session worktree
  * 分支（`flows/<sid>/objects/<id>`）同落点：一个 `objects/<id>/` 目录同时容纳该对象的
@@ -74,7 +74,7 @@ export function threadDir(ref: ThreadPersistenceRef): string {
 }
 
 /**
- * 计算 object stone 目录绝对路径（canonical，M2 2026-06-03）。
+ * 计算 object stone 目录绝对路径（canonical）。
  *
  * Routing priority:
  * 1. `_stonesBranch` set → versioning worktree: `stones/{_stonesBranch}/objects/{nestedPath}`
@@ -86,7 +86,7 @@ export function threadDir(ref: ThreadPersistenceRef): string {
  */
 export function stoneDir(ref: StoneObjectRef): string {
   if (ref._stonesBranch != null) {
-    // session worktree（branch `session-<sid>`）物理落 `flows/<sid>`（方案 A，2026-06-09）——
+    // session worktree（branch `session-<sid>`）物理落 `flows/<sid>`——
     // 与 sessionWorktreePath 对齐。tracked stone 与运行时数据现在**同落 `objects/<id>/`**
     // （objectDir 续案：flows/<sid>/objects/<id>），由 main 根 .gitignore 黑名单区分
     // tracked（self.md/…）vs untracked（.flow.json/threads//state.json）。
@@ -116,9 +116,9 @@ export function stoneDir(ref: StoneObjectRef): string {
     const builtinType = ref.objectId.slice("_builtin/".length);
     return join(ref.baseDir, "packages", "@ooc", "builtins", builtinType);
   }
-  // canonical = main 分支 worktree（P1 收口，2026-06-05；用户拍板：保留 stone git 分支设计，
+  // canonical = main 分支 worktree（用户拍板：保留 stone git 分支设计，
   // main = canonical）。等价 _stonesBranch="main"；对象 bootstrap 即落 stones/main/objects/。
-  // 取代旧的扁平 stones/<id>/ 默认（M2 声明但 bootstrap 未落实，三套布局分叉的根之一）。
+  // 取代旧的扁平 stones/<id>/ 默认（声明但 bootstrap 未落实，三套布局分叉的根之一）。
   return join(
     ref.baseDir,
     "stones",
@@ -129,7 +129,7 @@ export function stoneDir(ref: StoneObjectRef): string {
 }
 
 /**
- * Resolve an existing stone directory（M2 2026-06-03；2026-06-07 移除 deprecated packages/ 第3路）。
+ * Resolve an existing stone directory（移除 deprecated packages/ 第3路）。
  *
  * Priority:
  *   1. Canonical:   stones/main/objects/<id>/         (canonical / flat)
@@ -178,6 +178,6 @@ export async function resolveStoneDir(
     }
   }
 
-  // deprecated `<world>/packages/<id>/` layout fallback 已于 2026-06-07 移除（该布局无活跃使用）。
+  // deprecated `<world>/packages/<id>/` layout fallback 已移除（该布局无活跃使用）。
   return canonical;
 }

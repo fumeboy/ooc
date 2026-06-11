@@ -1,12 +1,10 @@
 /**
  * 路由表 — react-router v7（library mode）。
  *
- * 所有 path 都渲染同一个 AppShell（plan-003 §4 step 3 实施变体）：
+ * 所有 path 都渲染同一个 AppShell：
  * AppShell 内通过 useRouteState() 从 URL 派生 RouteState，根据 kind 决定
  * 取数据 / 渲染哪个主视图。这样不需要把 AppShell 拆成多个 Page 文件 ——
- * 既兑现"URL 是导航源"，又控制 step 3 改造范围。
- *
- * 路径设计见 plan-003 §3.3。
+ * 既兑现"URL 是导航源"，又控制改造范围。
  */
 import { createBrowserRouter } from "react-router";
 import { AppShell } from "./shell";
@@ -20,13 +18,13 @@ export const router = createBrowserRouter([
   { path: "/files/*", ...shell },
   { path: "/stones", ...shell },
   { path: "/stones/:objectId", ...shell },
-  // R6 #45:sidebar "World" tab 之前导航到 /world 触发 Unknown route; 这里补齐
+  // sidebar "World" tab 之前导航到 /world 触发 Unknown route; 这里补齐
   // (parseRoute + scopeOf 早就支持 world scope,只是 route table 缺了一行)
   { path: "/world", ...shell },
-  // R7-4 (2026-05-25): pools 是 2026-05-23 三分一等公民, sidebar 加 Pools tab
+  // pools 是三分一等公民, sidebar 加 Pools tab
   { path: "/pools", ...shell },
   { path: "/flows", ...shell },
-  // 2026-05-27 路由重构：path = view，sessionId 进 query
+  // 路由重构：path = view，sessionId 进 query
   { path: "/flows/index", ...shell },
   { path: "/flows/thread_context", ...shell },
   // Legacy 兼容：旧形态 /flows/:sessionId 与 /flows/:sessionId/threads/...

@@ -6,7 +6,7 @@
  * - Flow ：<dir>/client/pages/{page}.tsx（多页）
  * - 组件 default export，props {{ sessionId?, objectName?, callMethod? }}
  *
- * 失败处理（plan §3 末尾决策）：
+ * 失败处理：
  * - 404 / Failed to fetch → "信息待产出..."
  * - 其它加载错       → 红色块带堆栈与文件绝对路径
  * - 渲染时抛错       → ErrorBoundary 红色块，仅 console.error，**不发任何请求**
@@ -26,10 +26,10 @@ import { requestJson } from "../../transport/http";
 import { StoneFallback } from "./StoneFallback";
 
 /**
- * 根因 #3 (2026-05-24)：frontend 不再硬编码 `${WORLD_ROOT}/stones/${id}/client/index.tsx`。
+ * frontend 不再硬编码 `${WORLD_ROOT}/stones/${id}/client/index.tsx`。
  * 走 backend `/api/objects/:scope/:objectId/client-source-url` 拿权威 absPath + fsUrl。
  *
- * 旧实现见 git history（依赖 WORLD_ROOT + path-prefix 拼接）；2026-05-21 stones
+ * 旧实现见 git history（依赖 WORLD_ROOT + path-prefix 拼接）；stones
  * 重组（加 `<branch>/objects/`）后硬编码漂移，本次彻底删掉。
  */
 
@@ -88,7 +88,7 @@ function callMethodFor(target: ClientTarget) {
         ? endpoints.stoneCallMethod(target.objectId)
         : endpoints.flowCallMethod(target.sessionId, target.objectId);
     const body = JSON.stringify({ method, args });
-    // 2026-06-11 废 ui_methods 维度后，call_method 响应即标准 MethodOutcome：
+    // 废 ui_methods 维度后，call_method 响应即标准 MethodOutcome：
     // 结构化数据走 data、消息文本走 result，!ok 抛 error。
     const response = await requestJson<{ ok: boolean; data?: unknown; result?: string; error?: string }>(url, {
       method: "POST",
@@ -146,7 +146,7 @@ class ClientRenderErrorBoundary extends Component<
 
   componentDidCatch(error: Error) {
     // 显式失败：仅 console.error，不发请求、不投递 talk。
-    // plan §3 末尾 D1：渲染层不耦合 transport。
+    // 渲染层不耦合 transport。
     console.error("[ObjectClientRenderer] render error:", error);
   }
 

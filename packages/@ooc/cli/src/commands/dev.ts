@@ -34,7 +34,7 @@ Options:
 /**
  * ooc dev — start the OOC dev stack.
  *
- * M0 implementation: thin wrapper that spawns two child processes.
+ * Thin wrapper that spawns two child processes.
  * - Backend: bun run packages/@ooc/core/app/server/index.ts --world <world>
  * - Frontend: bunx vite inside packages/@ooc/web with OOC_WORLD_DIR forwarded
  *

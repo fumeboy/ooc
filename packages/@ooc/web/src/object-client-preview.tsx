@@ -1,5 +1,5 @@
 /**
- * Object Client 预览页（plan §4 层 4 接入点）。
+ * Object Client 预览页。
  *
  * 用法（Playwright e2e + 手工 demo 共用）：
  *

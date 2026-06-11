@@ -47,7 +47,7 @@ function writeShowTestSessions(value: boolean): void {
   } catch {
     // ignore: 隐私模式 / quota 满都不该阻断 UI
   }
-  // Round 15 L1: 通知 sidebar calendar 月份 chip 联动隐藏计数显示。
+  // 通知 sidebar calendar 月份 chip 联动隐藏计数显示。
   // 同标签页 localStorage 不会触发 'storage' 事件, 用自定义事件桥接。
   try {
     window.dispatchEvent(new CustomEvent("ooc:show-test-sessions-changed"));
@@ -98,7 +98,7 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
     const label = flowTitle(flow);
     const test = isTestSession(flow.sessionId);
     const isPinned = pinnedSet.has(flow.sessionId);
-    // R6 #47:session 列表项改 `<a href>` 让浏览器中键 / 复制链接 /
+    // session 列表项改 `<a href>` 让浏览器中键 / 复制链接 /
     // 返回键生效;click 仍走 onSelect 触发 react-router SPA 导航
     const href = `/flows/${encodeURIComponent(flow.sessionId)}`;
     return (

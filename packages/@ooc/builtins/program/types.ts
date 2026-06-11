@@ -2,7 +2,7 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
 import type { TranscriptViewport } from "@ooc/core/extendable/_shared/transcript-viewport.js";
 
 /**
- * program_window 的 history 渲染视口（R1c: 复用 TranscriptViewport 的 tail/range 协议）。
+ * program_window 的 history 渲染视口（复用 TranscriptViewport 的 tail/range 协议）。
  *
  * - 默认 { tail: 10 } —— 仅渲染末 10 次 exec
  * - LLM 通过 set_history_window 命令切换：history_tail / history_start + history_end

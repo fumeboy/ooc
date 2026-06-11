@@ -3,7 +3,7 @@ import type { FlowSession } from "./model";
 /**
  * sidebar / list 显示用的 session 标题。
  *
- * Issue #3 A6 fix: 当 title === sessionId（旧 session 或前端未派生 title 时的退化态）, 这种字面
+ * 当 title === sessionId（旧 session 或前端未派生 title 时的退化态）, 这种字面
  * 值（如 `web-1779214834923`）对用户毫无信息量。本函数在 UI 边界做表层 humanize:
  *   - title 不存在 / 等于 sessionId / 为空 → 退回 `Session · <创建时间相对>`
  *   - 否则原样返回 title

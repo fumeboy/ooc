@@ -1,4 +1,4 @@
-/** R7-4 同 backend：补 "pools"。 */
+/** 同 backend：补 "pools"。 */
 export type TreeScope = "world" | "flows" | "stones" | "pools";
 
 export type FileTreeNode = {

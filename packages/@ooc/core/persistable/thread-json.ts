@@ -20,7 +20,7 @@ import { observeWarn } from "../observable/log-aggregator";
 /**
  * thread.json 的最小读写。
  *
- * Step 3（spec 2026-05-14 § 迁移节奏 Step 3）：移除 Step 1 的 LegacyThreadJson 兼容层。
+ * 移除早期的 LegacyThreadJson 兼容层。
  * 反序列化后只做一件兜底：若 contextWindows 缺 creator do_window，自动补一个
  * （历史数据可能缺，新数据 init 时一定有）。
  */
@@ -35,11 +35,11 @@ export function threadFile(ref: ThreadPersistenceRef): string {
  *
  * 当前规则:
  * - inbox / intentCache → 独立目录或纯内存，不进 thread.json。
- * - **contextWindows 字段已退役**（§10 收敛，2026-06-09）：thread-context.json 是
+ * - **contextWindows 字段已退役**：thread-context.json 是
  *   唯一完整权威，thread.json 不再携带 contextWindows。避免两文件双写漂移，
  *   也删除了掩盖不同步 bug 的 hydrate legacy fallback。
  *
- * P0f note: ProcessEvent._foldedBy 等线程内字段仍随 thread.json 持久化（thread.json
+ * note: ProcessEvent._foldedBy 等线程内字段仍随 thread.json 持久化（thread.json
  *   仍是 thread 元数据的权威；只有 contextWindows 这一个字段被迁出）。
  */
 function stripVolatileForPersist(thread: ThreadContext): Omit<ThreadContext, "contextWindows"> {
@@ -58,7 +58,7 @@ function stripVolatileForPersist(thread: ThreadContext): Omit<ThreadContext, "co
 /**
  * 把线程上下文持久化到 `thread.json`；线程未携带 persistence ref 时静默跳过。
  *
- * §10 单点刷（2026-06-09）：writeThread 是**唯一**持久化入口，因此让它单点刷
+ * 单点刷：writeThread 是**唯一**持久化入口，因此让它单点刷
  * thread-context.json，自动覆盖所有写路径——包括绕过 WindowManager 直接改
  * thread.contextWindows 的路径（delivery / thinkloop reconcilePeerWindows /
  * scheduler / service seedSession·addUserTalkWindow / worker）。entries 用与
@@ -87,7 +87,7 @@ export async function readThread(
   try {
     const raw = await readFile(threadFile(persistence), "utf8");
     const parsed = JSON.parse(raw) as ThreadContext;
-    // feat 分支绑定（2026-06-11，reflectable 沉淀直接编辑路径）随 thread.json 持久化在
+    // feat 分支绑定（reflectable 沉淀直接编辑路径）随 thread.json 持久化在
     // parsed.persistence；caller 传的 ref 只含 {baseDir,sessionId,objectId}，恢复时把绑定
     // 从磁盘读回挂上，使其跨 exec tick 存活（缺省即不挂，行为不变）。
     if (parsed.persistence?.stonesBranch) {
@@ -96,7 +96,7 @@ export async function readThread(
         persistence.sedimentIntent = parsed.persistence.sedimentIntent;
       }
     }
-    // §10 退役（2026-06-09）：thread.json 不再携带 contextWindows——它由独立的
+    // contextWindows 退役：thread.json 不再携带 contextWindows——它由独立的
     // thread-context.json 单独权威落盘。这里把 contextWindows 起始为空数组，
     // 完全交给下方 thread-context.json hydrate + init 注入填充；不再以
     // thread.json.contextWindows 为来源（旧数据若仍含该字段，一律忽略）。
@@ -115,9 +115,9 @@ export async function readThread(
       ...dirInbox,
       ...((parsed.inbox ?? []).filter((m) => !seenInbox.has(m.id))),
     ];
-    // 2026-06-02 ooc-6 P6.§6: 新读路径 —— `<oid>/threads/<tid>/thread-context.json`
-    // 优先级：thread-context.json (P6.§6 权威) > legacy contextRegistry (P5'.1)
-    //         > thread.contextWindows[] (pre-P5'.1 legacy)
+    // 新读路径 —— `<oid>/threads/<tid>/thread-context.json`
+    // 优先级：thread-context.json (权威) > legacy contextRegistry
+    //         > thread.contextWindows[] (legacy)
     //
     // thread-context.json 的 entry 形态：
     //   - inline ContextWindow (builtin feature: talk/do/todo/method_exec)
@@ -129,8 +129,8 @@ export async function readThread(
     let hydratedFromThreadContext = false;
     try {
       const threadCtx = await readThreadContext(persistence);
-      // §10：writeThread 现在恒写 thread-context.json（含空数组）。**非空**才视为权威；
-      // 空 thread-context.json 视同「无完整 context」，回落到 P5'.1 context.json registry
+      // writeThread 现在恒写 thread-context.json（含空数组）。**非空**才视为权威；
+      // 空 thread-context.json 视同「无完整 context」，回落到 context.json registry
       // / init 注入（保留 registry 路径可达性）。
       if (
         threadCtx &&
@@ -180,13 +180,13 @@ export async function readThread(
             //   （旧布局残留），打 warn 不阻塞 —— state ≠ context 不变量靠新写盘端守门，
             //   读端只警告。
             if (registry.isBuiltinFeatureType(win.class)) {
-              // 没有强校验副作用；保留 warn hook 以便后续 §10 cleanup 时定位。
+              // 没有强校验副作用；保留 warn hook 以便后续 cleanup 时定位。
               // 注意：不主动 readRuntimeObjectState 探测（噪音太多）。
             }
             merged.push(win);
           }
         }
-        // §10 退役：thread-context.json 是唯一完整权威——不再把 thread.json.contextWindows
+        // 退役：thread-context.json 是唯一完整权威——不再把 thread.json.contextWindows
         // 多余 window 补回（旧 fallback 掩盖了绕过 WindowManager 的写路径与 thread-context.json
         // 不同步的 bug；writeThread 单点刷已根治不同步，fallback 删除）。
         restored.contextWindows = merged;
@@ -198,10 +198,10 @@ export async function readThread(
         `[readThread] 读取 thread-context.json 失败（不阻塞，将回落到 contextRegistry）: ${(e as Error).message}`,
       );
     }
-    // 2026-06-02 ooc-6 Phase 5'.2/.3: 从 thread context.json registry 读（P5'.1 路径，§10 保留）。
-    // P5'.3 起：嵌套 context/<id>/window.json 路径已下线。
-    // P6.§6 起：thread-context.json 命中后跳过此分支（避免双源冲突）。
-    // §10 起：删除 thread.json.contextWindows legacy fallback（该字段已退役，恒为空）。
+    // 从 thread context.json registry 读（保留）。
+    // 嵌套 context/<id>/window.json 路径已下线。
+    // thread-context.json 命中后跳过此分支（避免双源冲突）。
+    // 删除 thread.json.contextWindows legacy fallback（该字段已退役，恒为空）。
     if (!hydratedFromThreadContext) try {
       const ctxRegistry = await readContextRegistry(persistence);
       if (ctxRegistry.members.length > 0) {

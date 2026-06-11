@@ -2,7 +2,7 @@
 /**
  * ooc CLI entry point.
  *
- * In the interim (pre-M5, pre-npm publish) this is a thin dispatcher.
+ * In the interim (pre-npm publish) this is a thin dispatcher.
  * Long-term this will be the single entry point for users to interact with
  * OOC Core — init, dev, build, start.
  */

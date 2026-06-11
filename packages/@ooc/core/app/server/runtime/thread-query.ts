@@ -40,7 +40,7 @@ export async function scanRunningThreads(
  * 递归扫 flows/{sessionId}/objects/ 下任意深度的 flow object 目录，按 thread.json
  * 的 status 过滤。
  *
- * 子 object 嵌套布局（方案 A 续 2026-06-09——object 落 objects/，与 stone 对齐 `children/` marker）：
+ * 子 object 嵌套布局（方案 A——object 落 objects/，与 stone 对齐 `children/` marker）：
  *   flows/<sid>/objects/<a>/threads/<t1>                          → objectId="a"
  *   flows/<sid>/objects/<a>/children/<b>/threads/<t2>             → objectId="a/b"
  *   flows/<sid>/objects/<a>/children/<b>/children/<c>/threads/<t3>→ objectId="a/b/c"

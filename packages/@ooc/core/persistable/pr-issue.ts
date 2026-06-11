@@ -2,7 +2,7 @@
  * PR-Issue 持久化 —— stone-versioning 决议链路专用。
  *
  * 与已移除的 "issue 看板" 是**不同概念**：
- * - issue 看板（已 2026-05-26 移除）：session 级共享议题，含订阅 / @mention / comment 流
+ * - issue 看板（已移除）：session 级共享议题，含订阅 / @mention / comment 流
  * - PR-Issue（本模块）：stone-versioning 中跨自治区改动的评审 token，仅 supervisor 决议
  *
  * 文件布局（沿用历史路径以便老 world 兼容）：
@@ -49,9 +49,9 @@ export interface PrIssuePayload {
   /** 触发 PR 时的 main HEAD sha（Supervisor 决议时验证 base 未飘）。 */
   baseSha: string;
   /**
-   * 发起沉淀的 super(foo) threadId（P6 回修，2026-06-11）：reject / request-changes /
+   * 发起沉淀的 super(foo) threadId：reject / request-changes /
    * 合入失败时把反馈 inbox 回投到这条 thread，让 super(foo) resume 修复。缺省（旧 record /
-   * 测试直造）则 P6 路由不可达，由 caller fail-loud。
+   * 测试直造）则回修路由不可达，由 caller fail-loud。
    */
   authorThreadId?: string;
 }
@@ -77,13 +77,13 @@ export interface PrIssueRecord {
   /** PR-Issue 才有的 payload；recovery-needed 类 issue 留空。 */
   prPayload?: PrIssuePayload;
   /**
-   * 该 PR 的 reviewer 集（objectId 列表，P2 决策A 冒泡算出 + supervisor 恒含）。
-   * **应批集合**：P3 审批聚合判定 ready-to-merge 时要求每个 reviewer 都已 approve。
+   * 该 PR 的 reviewer 集（objectId 列表，冒泡算出 + supervisor 恒含）。
+   * **应批集合**：审批聚合判定 ready-to-merge 时要求每个 reviewer 都已 approve。
    * feat-branch PR 必带；旧 record / recovery-needed 留空。
    */
   reviewers?: string[];
   /**
-   * 每个 reviewer 的审批决议（P3，2026-06-11）。**已批状态**（与 reviewers 应批集合对应）。
+   * 每个 reviewer 的审批决议。**已批状态**（与 reviewers 应批集合对应）。
    *   - "approved"          — 该 reviewer 同意合入
    *   - "rejected"          — 该 reviewer 拒绝（任一拒绝即整 PR 可 reject）
    *   - "changes-requested" — 要求 super(foo) 修改（留 open 等回修）
@@ -92,12 +92,12 @@ export interface PrIssueRecord {
   approvals?: Record<string, PrApprovalDecision>;
 }
 
-/** 单个 reviewer 的审批决议（approvals map 的 value，P3）。 */
+/** 单个 reviewer 的审批决议（approvals map 的 value）。 */
 export type PrApprovalDecision = "approved" | "rejected" | "changes-requested";
 
 /**
- * 审批聚合结论（P3，纯逻辑）：
- *   - "ready-to-merge"     — 所有 reviewer 都 approved → 可合入（合入闸由 P5 .world.json 决定）
+ * 审批聚合结论（纯逻辑）：
+ *   - "ready-to-merge"     — 所有 reviewer 都 approved → 可合入（合入闸由 .world.json 决定）
  *   - "rejected"           — 任一 reviewer rejected → 可 archive 拒绝
  *   - "changes-requested"  — 无 reject、但有 reviewer 要求修改 → 留 open 等 super(foo) 回修
  *   - "pending"            — 仍有 reviewer 未批 → 等待
@@ -285,14 +285,14 @@ export interface CreatePrIssueInput {
   /** PR-Issue payload：diff、worktree branch、intent、baseSha、paths 列表。 */
   prPayload: PrIssuePayload;
   /**
-   * reviewer 集（objectId 列表，P2 冒泡结果）。feat-branch PR 传入；缺省视为 []。
-   * 仅存储——P1+P2 不据此强制审批（interim 合入走 resolvePrIssue）。
+   * reviewer 集（objectId 列表，冒泡结果）。feat-branch PR 传入；缺省视为 []。
+   * 仅存储——不据此强制审批（interim 合入走 resolvePrIssue）。
    */
   reviewers?: string[];
 }
 
 /**
- * U5: 创建 PR-Issue —— 落在 super session（`flows/super/issues/`），由 Supervisor
+ * 创建 PR-Issue —— 落在 super session（`flows/super/issues/`），由 Supervisor
  * 在自己的 super flow 中读到并评审。
  *
  * - 标题自动加 `[PR]` 前缀（若未带）
@@ -413,7 +413,7 @@ export async function closePrIssue(input: {
 }
 
 /* ---------------------------------------------------------------- *
- * approvePrIssue（P3 — 多 reviewer 审批写入 + 聚合）
+ * approvePrIssue（多 reviewer 审批写入 + 聚合）
  * ---------------------------------------------------------------- */
 
 /** approve 端点入参的 reviewer 决议动作（HTTP body 用，映射到 PrApprovalDecision）。 */
@@ -441,9 +441,9 @@ export type ApprovePrIssueResult =
   | { ok: false; code: "NOT_A_REVIEWER"; message: string };
 
 /**
- * P3：某 reviewer 对 PR 行使审批。校验 reviewerObjectId ∈ record.reviewers（非 reviewer
+ * 某 reviewer 对 PR 行使审批。校验 reviewerObjectId ∈ record.reviewers（非 reviewer
  * 拒 NOT_A_REVIEWER）；写入 approvals[reviewerObjectId]；返回聚合 verdict 供 caller
- * （service 层）按 P5 闸决定是否触发合入/拒绝。
+ * （service 层）按合入闸决定是否触发合入/拒绝。
  *
  * 串行化走 enqueueSessionWrite("super")（与 createPrIssue / closePrIssue 同队列），防并发
  * 写 approvals 丢失。已 closed 的 PR 拒 INVALID_STATE（不可再批）。

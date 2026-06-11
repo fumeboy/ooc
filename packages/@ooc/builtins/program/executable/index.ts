@@ -90,7 +90,7 @@ export async function executeProgramWindowExec(
   return undefined;
 }
 
-// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+// ─────────────────────────── constructor ──────────────────────────
 
 const PROGRAM_TIP = `program 执行一段 shell/ts/js 代码，返回 program_window（首次 exec 已跑完，结果进 history）。
 参数：language（shell/ts/js，必填）、code（字符串，必填）。

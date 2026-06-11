@@ -5,7 +5,7 @@
  * 要让改动成为 canonical，走「另起 feat 分支 → 在分支 worktree 下**直接编辑** → commit → PR
  * → review → merge」。
  *
- * 2026-06-11 改写（用户拍板：不封装 edits 参数）：沉淀拆成两步，由 super(foo) thread 携
+ * 改写（用户拍板：不封装 edits 参数）：沉淀拆成两步，由 super(foo) thread 携
  * **feat 分支绑定**（thread.persistence.stonesBranch）串起来：
  *   1. `createFeatBranchWorktree`：从 main 派生 feat 分支 worktree（落 `stones/<branch>/`），
  *      只建空白副本、返回分支名——**不写任何文件**。super(foo) 随后用普通 write_file /
@@ -14,8 +14,8 @@
  *      冒泡算 reviewer、`createPrIssue` 落 `flows/super/issues/`（prPayload.branch=feat 分支、
  *      record.reviewers=冒泡结果）。
  *
- * `computeReviewerSet` 纯函数保留（P2，决策 A：逐路径拥有者）。reviewer 集只计算+存储，
- * P1+P2 阶段**不强制执行**——interim 合入仍走既有 `resolvePrIssue`（单 supervisor merge/reject）。
+ * `computeReviewerSet` 纯函数保留（决策 A：逐路径拥有者）。reviewer 集只计算+存储，
+ * 当前阶段**不强制执行**——interim 合入仍走既有 `resolvePrIssue`（单 supervisor merge/reject）。
  *
  * 与 session 合入闸（已退役）的本质区别：分支是**沉淀单元**而非运行时派生物；source 是
  * super(foo) 在 feat worktree 下的直接编辑，不读任何 session worktree。
@@ -44,7 +44,7 @@ import {
 export const SUPERVISOR_OBJECT_ID = "supervisor";
 
 /* ================================================================ *
- * computeReviewerSet（P2 纯函数）
+ * computeReviewerSet（纯函数）
  * ================================================================ */
 
 /**
@@ -78,7 +78,7 @@ function authorSubtreePrefix(authorObjectId: string): string {
 }
 
 /**
- * scope 冒泡算 reviewer 集（P2，决策 A）。
+ * scope 冒泡算 reviewer 集（决策 A）。
  *
  * reviewer 集 = {落在 author 子树外的、每个被触及路径的拥有对象} ∪ {supervisor}。
  *   - author（foo）自己**不**作 reviewer（决策3）；改自己子树（含 children）→ {supervisor}。
@@ -209,7 +209,7 @@ export interface CommitAndOpenPrInput {
   /** 可选 PR 描述。 */
   description?: string;
   /**
-   * 发起沉淀的 super(foo) threadId（P6 回修，2026-06-11）：随 prPayload 持久化，reject /
+   * 发起沉淀的 super(foo) threadId：随 prPayload 持久化，reject /
    * request-changes / 合入失败时把反馈回投到这条 thread 让 super(foo) resume 修复。
    */
   authorThreadId?: string;
@@ -300,7 +300,7 @@ export async function commitAndOpenPr(
       return { ok: false, code: "GIT", message: `diff patch failed: ${patch.stderr}` } as const;
     }
 
-    // 4. reviewer 集（P2 冒泡）+ createPrIssue（branch=feat 分支、reviewers=冒泡结果）
+    // 4. reviewer 集（冒泡）+ createPrIssue（branch=feat 分支、reviewers=冒泡结果）
     const reviewers = computeReviewerSet(names.value, authorObjectId);
     const title = (input.title ?? intent).slice(0, 80);
     try {

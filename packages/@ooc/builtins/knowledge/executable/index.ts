@@ -30,7 +30,7 @@ const closeMethod: ObjectMethod = {
   exec: () => undefined,
 };
 
-// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+// ─────────────────────────── constructor ──────────────────────────
 
 const OPEN_KNOWLEDGE_TIP = `open_knowledge 显式打开一个 knowledge doc，作为 knowledge_window 持续可见（等价于 pinnedKnowledge）。
 参数：path（必填，knowledge 索引中的路径，不带 .md，如 "build-tools/file-ops"）。`;

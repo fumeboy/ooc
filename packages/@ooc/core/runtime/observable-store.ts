@@ -1,7 +1,7 @@
 /**
  * ObservableStore — per-world 观测与运行时注入状态。
  *
- * M1 (2026-06-02): 从 observable/index.ts 抽出为可实例化类。
+ * 从 observable/index.ts 抽出为可实例化类。
  * 原有 module-level 导出保留为对 `defaultObservableStore` 的 thin wrapper。
  */
 import type { ThreadContext } from "../thinkable/context.js";
@@ -294,7 +294,7 @@ export class ObservableStore {
       // to persisted contextWindows when no render happened this loop.
       const snapshotWindows = (thread._renderedWindows ?? thread.contextWindows ?? []) as ContextWindow[];
       const windowsSnapshot = await buildWindowsSnapshot(
-        // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 传入 buildWindowsSnapshot。
+        // contextWindows 契约层是 base[]；narrow 回 union[] 传入 buildWindowsSnapshot。
         snapshotWindows,
         previousSnapshot,
       );

@@ -6,7 +6,7 @@
  *
  * 设计原则：
  * - 与 LoopMeta 一样 web 端复声明,不跨 src/ 边界 import,避免编译耦合。
- * - 字段除 `objectId` / `threadId` 外**全部 optional** — D2 sub agent
+ * - 字段除 `objectId` / `threadId` 外**全部 optional** — sub agent
  *   并行扩展 API 期间,后端可能仍返回 minimal shape `{objectId,threadId}`；
  *   web 端识别这种情况,优雅退化为"仅 thread 列表无 status/关系"。
  * - 类型只反映"可能存在的字段",运行时仍需 narrowing。

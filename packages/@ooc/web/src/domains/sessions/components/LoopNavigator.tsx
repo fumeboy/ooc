@@ -1,5 +1,5 @@
 /**
- * LoopNavigator — Round 9 E3 Loop Time Machine 导航 bar。
+ * LoopNavigator — Loop Time Machine 导航 bar。
  *
  * 显示当前 loop 编号 + 元信息（时间 / latency / message count）+ 三个按钮：
  *   [← Prev] Loop #NNNN of M [Next →]   [⏭ Latest]

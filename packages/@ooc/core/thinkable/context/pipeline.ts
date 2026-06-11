@@ -43,7 +43,7 @@ export class ContextPipeline {
       }
     }
 
-    // Phase 4: BudgetManager.allocate
+    // BudgetManager.allocate
     const budget = new BudgetManager();
     const thresholds = loadBudgetThresholds(thread);
     const { visible, overflow } = budget.allocate(ctx.windows, thresholds.hard);

@@ -1,7 +1,7 @@
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 /**
- * Step 1（spec 2026-05-14）：thread 状态简化
+ * thread 状态简化
  * - 取消 waitingType / awaitingChildren 字段
  * - waiting 状态唯一含义 = "等待 inbox 新消息"
  * - resume / inject 都把 status 翻回 running，并清空 inboxSnapshotAtWait

@@ -9,7 +9,7 @@ import { useDisplayNames } from "../../domains/objects";
 import { SessionList } from "../../domains/sessions/components/SessionList";
 
 /**
- * Round 15 L1: user home calendar 月份 chip 加 "(N 隐藏)" 微标签——sidebar 列表默认隐藏
+ * user home calendar 月份 chip 加 "(N 隐藏)" 微标签——sidebar 列表默认隐藏
  * `_test_` 前缀的 session 时，"X sessions" 总数与可见列表不直观联动，初看有困惑。
  * 这里读取 `ooc.showTestSessions` localStorage（与 SessionList 同源）并在 hidden > 0
  * 时显示一个紧凑的隐藏计数。
@@ -172,7 +172,7 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
   const tabs: Array<{ scope: TreeScope; label: string; icon: ReactNode }> = [
     { scope: "flows", label: "Flows", icon: <Zap size={13} /> },
     { scope: "stones", label: "Stones", icon: <Box size={13} /> },
-    // R7-4（2026-05-25）：pools 是 2026-05-23 三分一等公民，应作为 sidebar tab 显式呈现
+    // pools 是三分一等公民，应作为 sidebar tab 显式呈现
     { scope: "pools", label: "Pools", icon: <Database size={13} /> },
     { scope: "world", label: "World", icon: <Globe2 size={13} /> },
   ];
@@ -183,7 +183,7 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
   const stonesTreeDisplay = scope === "stones" ? applyDisplayNameToTree(tree, names) : tree;
   const flowTreeDisplay = scope === "flows" ? applyDisplayNameToTree(flowTree, names) : flowTree;
 
-  // Round 15 L1: calendar 月份 chip 联动 _test_ 隐藏计数
+  // calendar 月份 chip 联动 _test_ 隐藏计数
   const showTestSessions = useShowTestSessions();
   const hiddenTestCount = showTestSessions
     ? 0

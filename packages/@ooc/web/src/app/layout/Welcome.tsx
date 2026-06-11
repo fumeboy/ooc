@@ -11,7 +11,7 @@ export function Welcome({
   stones: Stone[];
   onCreateSession?: (input: { sessionId: string; targetObjectId: string; initialMessage: string }) => Promise<void>;
 }) {
-  // H-3 (Round 5): 来自 UserThreadHome 的"Seed via welcome"按钮会带 `?session=<sid>`
+  // 来自 UserThreadHome 的"Seed via welcome"按钮会带 `?session=<sid>`
   // query;读出来透给 SessionCreator 预填,用户不必复制粘贴 sessionId。
   const location = useLocation();
   const prefillSessionId = (() => {

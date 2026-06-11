@@ -74,7 +74,7 @@ function buildToolSummaryFields(toolName: string, argumentsValue: unknown): Tool
   if (!isRecord(argumentsValue)) return undefined;
   const fields: ToolSummaryField[] = [];
   if (toolName === "open") {
-    // ContextWindow 协议（spec 2026-05-14）：parent_window_id + method + args
+    // ContextWindow 协议：parent_window_id + method + args
     const parent = asDisplayText(argumentsValue.parent_window_id);
     if (parent) fields.push({ label: "parent", value: parent });
     const command = asDisplayText(argumentsValue.method ?? argumentsValue.method);

@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import type { RuntimeService } from "./service";
 
 /**
- * P3 多 reviewer 审批端点（2026-06-11）。
+ * 多 reviewer 审批端点。
  *
  * POST /api/runtime/pr-issues/:issueId/approve
  * Body: { reviewerObjectId: string, decision: "approve" | "reject" | "request-changes" }

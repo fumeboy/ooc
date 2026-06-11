@@ -14,7 +14,7 @@ import { visibleDir, stoneDir } from "./stone-object";
  */
 
 /**
- * Stone 的 visible/index.tsx 绝对路径（原 client/index.tsx 重命名，2026-05-28 ooc-6）。
+ * Stone 的 visible/index.tsx 绝对路径（原 client/index.tsx 重命名）。
  * 存放 Object 的 UI 组件实现。
  */
 export function visibleIndexFile(ref: StoneObjectRef): string {

@@ -1,5 +1,5 @@
 /**
- * Object Method 相关类型 —— canonical 源（batch C7 从
+ * Object Method 相关类型 —— canonical 源（从
  * `executable/windows/_shared/method-types.ts` 迁入）。
  *
  * - ObjectMethod：单个 method 的完整定义（description / intents / schema / exec + 可见性标记）
@@ -7,7 +7,7 @@
  * - MethodOutcome：method.exec 的显式返回结果
  * - MethodExecuteForm：onFormChange 返回的结构化 form 状态（tip + intents + quick_exec_submit）
  *
- * **零依赖层替换（batch C7 关键决策）**：原文件引用的 executable/thinkable 具体类型在此
+ * **零依赖层替换**：原文件引用的 executable/thinkable 具体类型在此
  * 用 `_shared` 内的中立类型替代——
  * - `MethodExecWindow`（具体 form window）→ base `ContextWindow`（discriminant narrowing 留 runtime 层）
  * - `WindowManager`（含大量 runtime 逻辑）→ `unknown`（executable 层 cast 回具体类型）
@@ -33,7 +33,7 @@ export interface MethodExecuteForm {
 }
 
 /**
- * Method exec 的显式返回结果（2026-06-10 平铺单形状，取代旧三态 union）。
+ * Method exec 的显式返回结果（平铺单形状，取代旧三态 union）。
  *
  * exec 也可以返回 undefined（成功）或裸 string（成功 + result 文本），
  * runtime（WindowManager.submit / execDirect / HTTP callMethod）统一规范化为本形状。
@@ -64,7 +64,7 @@ export function normalizeMethodOutcome(raw: unknown): MethodOutcome {
  *
  * 包含执行 / 表单 / 路径派生 / 权限等核心字段，并附 `public` / `for_ui_access` 可见性标记。
  *
- * 2026-06-10 ooc-6 ObjectMethod API 重构：
+ * ObjectMethod API 重构：
  * - 新增 required `description`（LLM 面向的方法描述）
  * - `paths` 重命名为 `intents?`（静态 sub-intent 目录，仅用于反向索引/文档）
  * - 删除 `intent(args)`；动态 intents 改由 `onFormChange` 返回的 `MethodExecuteForm.intents` 提供
@@ -72,7 +72,7 @@ export function normalizeMethodOutcome(raw: unknown): MethodOutcome {
  * - 未声明 `onFormChange` 的 method 直接 exec，不创建 form
  */
 export interface ObjectMethod {
-  /** P6 (ooc-6): Marks this method as the constructor of the Object class.
+  /** Marks this method as the constructor of the Object class.
    *  Constructor methods SHOULD return MethodOutcome of the form `{ ok: true, window: ContextWindow }`. */
   kind?: "constructor" | "method";
   /** LLM-facing short description of what this method does. Required. */
@@ -149,15 +149,15 @@ export interface MethodExecutionContext<TSelf extends ContextWindow = ContextWin
   form?: ContextWindow;
   /** The ContextWindow receiver of this method (OOP `self`). */
   self?: TSelf;
-  /** batch C7: WindowManager 含大量 runtime 逻辑，零依赖层声明为 unknown；executable 层 cast。 */
+  /** WindowManager 含大量 runtime 逻辑，零依赖层声明为 unknown；executable 层 cast。 */
   manager?: unknown;
   args: Record<string, unknown>;
   /**
-   * P6.§8 (2026-06-02): Set when the method runs on an independent flow object.
+   * Set when the method runs on an independent flow object.
    */
   ownerFlowObjectRef?: FlowObjectRef;
   /**
-   * P6.§8 (2026-06-02): Set whenever the method runs in a real persisted thread.
+   * Set whenever the method runs in a real persisted thread.
    */
   ownerThreadRef?: ThreadPersistenceRef;
   reportStateEdit?: () => Promise<void>;

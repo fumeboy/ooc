@@ -1,8 +1,8 @@
 /**
  * ObjectRegistry — per-world Object 类型注册表。
  *
- * M1 (2026-06-02): 从 executable/windows/_shared/registry.ts 抽出。
- * 2026-06-03 ooc-6 cleanup Phase A：
+ * 从 executable/windows/_shared/registry.ts 抽出。
+ * cleanup：
  *   - 已删除 string / ObjectTypeDefinition / ObjectMethod 类型引用
  *   - 已删除 deprecated 方法：registerObjectType / getObjectDefinition /
  *     listRegisteredObjectTypes / assertAllObjectDefinitionsRegistered

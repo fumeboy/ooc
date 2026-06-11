@@ -132,7 +132,7 @@ function compressWindowsClean(
   }
 
   const oldLevels = new Map<string, 0 | 1 | 2>();
-  // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 next 的 union 元素类型。
+  // 窄化：contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 next 的 union 元素类型。
   const next: ContextWindow[] = ((thread.contextWindows ?? []) as ContextWindow[]).map((window) => {
     if (!idSet.has(window.id)) return window;
     const current = (window.compressLevel ?? 0) as 0 | 1 | 2;

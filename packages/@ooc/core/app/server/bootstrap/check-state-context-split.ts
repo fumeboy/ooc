@@ -1,11 +1,11 @@
 /**
- * Bootstrap migration: state (object dim) vs context (thread dim) split — P6.§6.
+ * Bootstrap migration: state (object dim) vs context (thread dim) split.
  *
- * Pre-P6, ContextWindow features (talk/do/method_exec/todo) were
+ * Previously, ContextWindow features (talk/do/method_exec/todo) were
  * sometimes persisted as their own `flows/<sid>/<wid>/state.json` directories,
  * and some real flow-object state.json files carried a `contextWindows` field
  * that conflated state (object dim, cross-thread) with context (thread dim,
- * per-thread). The plan §6 split moves both back into their proper homes.
+ * per-thread). This split moves both back into their proper homes.
  *
  * This bootstrap step runs the migration idempotently on every server start.
  * It is safe to run on already-clean worlds (which is the steady state after

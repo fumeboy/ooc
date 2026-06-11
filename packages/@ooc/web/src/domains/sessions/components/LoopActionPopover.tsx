@@ -1,5 +1,5 @@
 /**
- * LoopActionPopover — R0d 内 timeline 交互弹层。
+ * LoopActionPopover — timeline 交互弹层。
  *
  * 两种使用形态 (由 `mode` 区分, 共用同款 backdrop + card 样式, 避免引入第二种 UI 语言):
  * - "permission" : 显示 permission_ask 详情 + Approve / Reject 按钮 (+ 可选 reason)。
@@ -10,7 +10,7 @@
  * 设计取舍:
  * - 用 modal-backdrop / compact-modal 现有 token, 不引入新 popover 容器系统;
  *   功能上更接近 lightweight modal (centered card), 视觉与现有 talk modal 一致。
- * - 不引用 @radix-ui/react-dialog: R0d plan 要求 "最小自写", 且 modal-backdrop 已是
+ * - 不引用 @radix-ui/react-dialog: 要求 "最小自写", 且 modal-backdrop 已是
  *   项目内通行模式 (见 styles.css L404-409 NewChatModal 用法)。
  * - 没把 fetch 写进本组件: 改用 onConfirm 回调注入, 让 LoopTimeline 拥有 fetcher (与单测
  *   注入路径一致)。本组件只关心 form state + 错误显示。

@@ -1,5 +1,5 @@
 /**
- * RelationOverlay — D4: 选中某 thread 时画出与其它 thread 的关系连线。
+ * RelationOverlay — 选中某 thread 时画出与其它 thread 的关系连线。
  *
  * 设计参考: docs/2026-05-26-session-threads-index-design.md §5.4。
  *
@@ -15,7 +15,7 @@
  *   - 未选中时返回 null —— 不画任何线（避免视觉杂乱）
  *   - 节点不存在（target 跨 session / 还没渲染）时静默跳过
  *
- * MVP 边界（design §5.4 末段）:
+ * MVP 边界:
  *   - 不做动画 / 不优化交叉避让
  *   - resize 监听 + 节点 mount/unmount 触发的 recompute 用一个 trigger state 配 polling
  */

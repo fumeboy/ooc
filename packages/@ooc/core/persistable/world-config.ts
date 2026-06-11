@@ -1,7 +1,7 @@
 /**
  * world-config — `<baseDir>/.world.json` 配置读取。
  *
- * 设计动机（2026-05-25 user 指令）：
+ * 设计动机：
  *   World 级配置文件，承载需要在 server 与前端之间共享、但又不属于 ServerConfig
  *   命令行 / 环境变量层的轻量字段。
  *
@@ -75,7 +75,7 @@ export interface WorldConfig {
    */
   workerMaxTicks?: number;
   /**
-   * feat-branch PR 合入闸（P5，2026-06-11）：所有 reviewer approve 后是否自动合入。
+   * feat-branch PR 合入闸：所有 reviewer approve 后是否自动合入。
    *   - true  → ready-to-merge 时立即合入 main（无人工介入）。
    *   - false → ready-to-merge 时 PR 留 open 标 approved，等人工经
    *             `POST /api/runtime/pr-issues/:id/resolve {decision:"merge"}` 落锤（human-in-the-loop）。

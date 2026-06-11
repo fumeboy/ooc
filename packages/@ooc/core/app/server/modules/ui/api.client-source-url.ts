@@ -1,11 +1,11 @@
 /**
  * GET /api/objects/:scope/:objectId/client-source-url
  *
- * 根因 #3 (2026-05-24)：frontend 不再自拼 client/index.tsx 路径。
+ * frontend 不再自拼 client/index.tsx 路径。
  *
  * 旧实现 `web/src/domains/clients/ObjectClientRenderer.tsx` 硬编码：
  *   `${WORLD_ROOT}/stones/${id}/client/index.tsx`
- * 2026-05-21 stones 重组后路径变成 `stones/main/objects/<id>/client/...`，硬编码漂移。
+ * stones 重组后路径变成 `stones/main/objects/<id>/client/...`，硬编码漂移。
  *
  * 新契约：frontend 调本 endpoint，backend 用 `stoneDir()` / `objectDir()` 权威给出
  * 绝对路径 + vite `/@fs` URL；frontend 直接 dynamic import。
@@ -64,7 +64,7 @@ export function clientSourceUrlApi(config: Pick<ServerConfig, "baseDir">) {
           // diff 路径：只解析 visible/diff.tsx；无文件直接走 stat 失败 → 404（无 legacy 回退）
           absPath = join(visibleDir(stoneRef), "diff.tsx");
         } else {
-          // M2 ooc-6: canonical is visible/index.tsx; legacy client/index.tsx supported as fallback
+          // canonical is visible/index.tsx; legacy client/index.tsx supported as fallback
           absPath = join(visibleDir(stoneRef), "index.tsx");
           try {
             if (!(await stat(absPath)).isFile()) {

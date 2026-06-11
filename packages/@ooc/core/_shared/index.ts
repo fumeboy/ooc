@@ -1,5 +1,5 @@
 /**
- * `@ooc/core/_shared` — 中立共享类型层（batch C, ooc-6）。
+ * `@ooc/core/_shared` — 中立共享类型层（ooc-6）。
  *
  * 我是谁：所有"跨包被引用的纯类型 + 无副作用纯函数"的 canonical 源。终结
  * `thinkable` ↔ `executable` 的类型反向耦合——五个一级子包（thinkable /
@@ -14,7 +14,7 @@
  *
  * 详见 docs/refactor_0604/shared-types.md。
  *
- * barrel 按 batch C 子步骤（C2→C8）逐步填充；每加一个 types/utils 文件就在此 re-export。
+ * barrel：每加一个 types/utils 文件就在此 re-export。
  */
 
 export * from "./types/constants.js";

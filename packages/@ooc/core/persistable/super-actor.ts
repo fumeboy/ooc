@@ -1,5 +1,5 @@
 /**
- * super-flow actor 冒泡（reflectable 新对象自沉淀 bootstrap，2026-06-11 用户拍板 #3）。
+ * super-flow actor 冒泡（reflectable 新对象自沉淀 bootstrap，用户拍板）。
  *
  * 背景：新对象只在 flow session worktree 存在、未进 `stones/main`（不 canonical）。
  * 它自己不能当 super(self) 的 super-flow actor / PR author——会撞 `pr-issue.ts`

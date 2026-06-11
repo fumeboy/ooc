@@ -296,7 +296,7 @@ const closeMethod: ObjectMethod = {
   exec: () => undefined,
 };
 
-// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+// ─────────────────────────── constructor ──────────────────────────
 
 const PLAN_TIP = `plan 把当前任务拆成可执行步骤，以 plan_window 挂在 context。
 参数（任一即可）：plan（简单文本）、title/description、steps（数组）。`;

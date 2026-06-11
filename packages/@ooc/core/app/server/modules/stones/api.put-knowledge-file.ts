@@ -5,11 +5,11 @@ import type { createStonesService } from "./service";
 /**
  * PUT /api/stones/:objectId/knowledge/files
  *
- * Issue #6 Bad #4: 覆盖性写入护栏。已存在的 knowledge file 要覆盖必须带 header
+ * 覆盖性写入护栏。已存在的 knowledge file 要覆盖必须带 header
  * `X-Overwrite-Confirm: true`,否则抛 OVERWRITE_REQUIRES_CONFIRM(409)。
  * 新建文件请用 POST(create-knowledge-file)路径。
  *
- * 根因 #3 (2026-05-24)：deprecated；改用 PUT /api/pools/:objectId/knowledge/files。
+ * deprecated；改用 PUT /api/pools/:objectId/knowledge/files。
  */
 export function putKnowledgeFileApi(service: ReturnType<typeof createStonesService>) {
   return new Elysia({ name: "ooc.stones.api.put-knowledge-file" }).put(

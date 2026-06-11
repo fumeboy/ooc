@@ -1,7 +1,7 @@
 /**
- * ObjectColumn — Session Threads Index 的单 object 卡片（2026-05-27 美化版）。
+ * ObjectColumn — Session Threads Index 的单 object 卡片。
  *
- * 视觉契约（design §6.1 + 美化重构）:
+ * 视觉契约:
  *   header: avatar(initial) + displayName + 状态 chips（active/done/...）
  *   body  : threadTree（按 parentThreadId 缩进, root 顶层）
  *   footer: super flow 折叠区（isSuperFlow=true 单独列）

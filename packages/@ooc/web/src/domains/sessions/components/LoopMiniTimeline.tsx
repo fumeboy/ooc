@@ -1,10 +1,10 @@
 /**
- * LoopMiniTimeline — Round 9 E3 顶部横向 mini strip。
+ * LoopMiniTimeline — 顶部横向 mini strip。
  *
  * 每个 loop 一个圆点；当前 loop 高亮；有关键 event 的 loop 加色块角标。
  * 单击圆点 → onSelectLoop(loopIndex)。
  *
- * 视觉（design §5）：
+ * 视觉：
  *   ◯─◯─●─◯─◯─◯─◯─◯─◯─◯ ...
  *           ^
  *

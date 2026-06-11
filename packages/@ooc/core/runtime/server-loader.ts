@@ -1,7 +1,7 @@
 /**
  * ServerLoader — 动态加载 stone 的 executable / readable 模块。
  *
- * M1 (2026-06-02): 从 executable/server/loader.ts 抽出为可实例化类。
+ * 从 executable/server/loader.ts 抽出为可实例化类。
  * 原有 module-level 导出保留作为对 `defaultServerLoader` 的 thin wrapper。
  */
 import { stat } from "node:fs/promises";
@@ -15,7 +15,7 @@ import type { ReadableFn, ObjectDefinition } from "../executable/windows/_shared
  *
  * `window` 即 stone 的 `export const window`（Partial<ObjectDefinition>），其 `readable`
  * 已合并独立 `readable.ts` 的导出——两者同属 ObjectDefinition.readable，不再拆成两个字段。
- * HTTP call_method 走 `window.methods` 里 `for_ui_access` 的方法（2026-06-11 废 ui_methods 维度）。
+ * HTTP call_method 走 `window.methods` 里 `for_ui_access` 的方法（废 ui_methods 维度）。
  */
 interface LoaderCacheEntry {
   mtime: number;

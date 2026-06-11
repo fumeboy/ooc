@@ -16,12 +16,12 @@ export function readable(ctx: RenderContext): XmlNode[] {
   appendNode(children, renderPathList("method_paths", form.intentPaths));
   appendNode(children, renderPathList("loaded_knowledge", form.loadedKnowledgePaths));
   appendNode(children, renderPathList("method_knowledge_paths", form.methodKnowledgePaths));
-  // Round 13: 仅 failed 状态保留 result 渲染 (success 已自动移除; open/executing 无 result)
+  // 仅 failed 状态保留 result 渲染 (success 已自动移除; open/executing 无 result)
   if (form.status === "failed" && form.result) {
     children.push(xmlElement("result", {}, [xmlText(form.result)]));
   }
 
-  // ── P4: structured schema / fill_state / next_steps rendering ──
+  // ── structured schema / fill_state / next_steps rendering ──
   if (form.schema) {
     // <schema>
     children.push({
@@ -76,7 +76,7 @@ export function readable(ctx: RenderContext): XmlNode[] {
       });
     }
   }
-  // ── End P4 structured rendering ──
+  // ── End structured rendering ──
 
   return children;
 }

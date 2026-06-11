@@ -1,7 +1,7 @@
 /**
  * Per-key SerialQueue —— 按 key (常为 sessionId) 串行执行 async task。
  *
- * M1 (2026-06-02): 从 persistable/serial-queue.ts 抽出为可实例化类。
+ * 从 persistable/serial-queue.ts 抽出为可实例化类。
  * 原有 module-level 导出保留，作为对 `defaultQueue` 的 thin wrapper，零调用点修改。
  *
  * 让多个写入路径 (HTTP / LLM 命令 / worker tick) 在同 session 内按入队顺序

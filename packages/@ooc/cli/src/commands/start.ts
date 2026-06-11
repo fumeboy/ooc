@@ -39,7 +39,7 @@ Options:
 /**
  * ooc start — production mode.
  *
- * M4 first pass: starts the backend server without Vite and without hot-reload
+ * Starts the backend server without Vite and without hot-reload
  * (OOC_DEV is not set). Static frontend assets are expected to be present at
  * `.ooc-dist/web/` (produced by `ooc build`) or served separately by a reverse
  * proxy.

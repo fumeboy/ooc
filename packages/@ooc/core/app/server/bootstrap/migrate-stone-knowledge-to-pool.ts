@@ -1,6 +1,6 @@
 /**
  * 一次性迁移命令 —— 把存量 `stones/<branch>/objects/<id>/{knowledge,files}` 迁到
- * `pools/objects/<id>/{knowledge,files}`（2026-05-23 三分重组）。
+ * `pools/objects/<id>/{knowledge,files}`（三分重组）。
  *
  * 设计原则（meta/object.doc.ts persistable.stone.todo / persistable.pool.todo）:
  * - 不在 server 启动时自动跑（CLAUDE.md "不悄悄做"）。
@@ -8,8 +8,8 @@
  * - 旧 stone 层 data.json 不迁（语义已变为 session-scoped；跨 session stone 级载体不再存在）。
  * - 报告每个 object 的 source / target 大小 + 是否成功，便于人工核对。
  *
- * **2026-05-24 注意事项（重要）**:
- * 自 2026-05-24 起 knowledge 改为 **seed / sediment 二分**（详见
+ * **注意事项（重要）**:
+ * knowledge 现为 **seed / sediment 二分**（详见
  * meta/object.doc.ts persistable.stone.children.seed_knowledge 与
  * persistable.pool.children.knowledge_pool）：
  * - seed knowledge 留在 `stones/<self>/knowledge/`，进 git review，是 Object 先天能力基底。
@@ -21,7 +21,7 @@
  *   内 `git rm` 并以 stone 形态的新 seed 版本提交）。
  * - 哪些条目确实是 **sediment**（运行时沉淀、记忆、关系认知）→ 保留在 pool 即可。
  *
- * 这一 CLI 的存在仅为支撑 2026-05-23 那一波旧 world 升级；新建 world 不应触发它。
+ * 这一 CLI 的存在仅为支撑那一波旧 world 升级；新建 world 不应触发它。
  *
  * 调用方式（接到 CLI 后通过 `bun run` 入口转发）：
  *

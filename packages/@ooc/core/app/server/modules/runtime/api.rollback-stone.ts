@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import type { RuntimeService } from "./service";
 
 /**
- * Governance：回滚某 Object 的 stone 到先前 commit（去固化 metaprog method 后，2026-06-09）。
+ * Governance：回滚某 Object 的 stone 到先前 commit（去固化 metaprog method 后）。
  *
  * POST /api/runtime/stones/:objectId/rollback
  * Body: { targetCommit: string }

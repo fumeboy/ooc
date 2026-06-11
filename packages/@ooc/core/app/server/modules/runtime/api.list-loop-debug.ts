@@ -3,7 +3,6 @@ import type { RuntimeService } from "./service";
 import { threadDebugParams } from "./model";
 
 /**
- * R0b (Agent-loop Visualizer plan §5.1):
  *   GET /api/runtime/flows/:sessionId/:objectId/threads/:threadId/debug/loops
  *
  * 列出指定 thread 下所有 loop_NNNN.{input,output,meta}.json 文件, 按 loopIndex 升序

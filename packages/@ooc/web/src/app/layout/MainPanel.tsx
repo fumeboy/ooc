@@ -84,7 +84,7 @@ export function MainPanel({
   const scopeEmpty =
     route.kind === "scope" && !isFlowsLanding ? scopeEmptyState(route.scope) : undefined;
 
-  // 2026-05-27 路由重构：path = view，sessionId 进 query。
+  // 路由重构：path = view，sessionId 进 query。
   // user-home（SessionThreadsIndex）= /flows/index 路径；要求 sessionId 已设置才渲染主体，
   // 否则展示 "Pick a session" empty state（与 /flows scope 空态对齐）。
   const isUserHomeView =
@@ -244,7 +244,7 @@ export function MainPanel({
 }
 
 /**
- * Issue #5 Bad #2 fix: session 不存在时的 first-class 错误卡, 替换原来
+ * session 不存在时的 first-class 错误卡, 替换原来
  * FileViewer "Select a file" 的歧义提示。
  */
 function SessionNotFound({ sessionId }: { sessionId: string }) {
@@ -296,7 +296,7 @@ function sessionIdFromRouteHelper(route: RouteState): string | undefined {
 /**
  * 由当前路由派生 breadcrumb 段(结构化数组)。
  *
- * 2026-05-27 路由重构：flowsView 替代旧 session；sessionId 段链向 /flows/index?sessionId=...
+ * 路由重构：flowsView 替代旧 session；sessionId 段链向 /flows/index?sessionId=...
  * 而非旧 /flows/<sid>。
  */
 interface BreadcrumbSeg { label: string; href?: string; fullText?: string }

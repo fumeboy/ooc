@@ -3,7 +3,7 @@
  *
  * 设计依据:
  *   - docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.1-3.3
- *   - docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1 (Round 10 F2: fileDiff)
+ *   - docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1 (fileDiff)
  * 文档锚点:
  *   - meta/object.doc.ts:observable.children.debug_files.patches.windows_snapshot
  *   - meta/object.doc.ts:visible.children.loop_timeline.patches.windows_snapshot_data_source

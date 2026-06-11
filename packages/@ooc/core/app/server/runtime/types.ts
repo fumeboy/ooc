@@ -12,7 +12,7 @@ export interface RuntimeJob extends RuntimeJobInput {
   finishedAt?: number;
   error?: string;
   /**
-   * 结构化失败原因（observability 根因 #4，2026-05-27）。
+   * 结构化失败原因（observability）。
    *
    * 区分两类失败：
    * - "runner_error"：runner 抛异常（job 调度本身失败）

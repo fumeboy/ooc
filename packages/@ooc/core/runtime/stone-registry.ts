@@ -1,7 +1,7 @@
 /**
  * StoneRegistry — 统一的 stone 发现与元数据解析。
  *
- * M2 (2026-06-03): 扫 World 内的用户 stones 与 builtins，解析 package.json#ooc 元数据，
+ * 扫 World 内的用户 stones 与 builtins，解析 package.json#ooc 元数据，
  * 对外提供统一的查询、列举、失效、变更事件订阅。
  *
  * 扫描根:
@@ -168,7 +168,7 @@ export function createStoneRegistry(
     //   1. Flat layout stones/<id>       (canonical, highest priority)
     //   2. Versioning stones/<branch>/objects/<id>  (git worktree mirrors)
     //   3. Builtins node_modules/@ooc/builtins/<id>
-    // （deprecated `<world>/packages/<id>/` 扫描已于 2026-06-07 移除——该布局无活跃使用。）
+    // （deprecated `<world>/packages/<id>/` 扫描已移除——该布局无活跃使用。）
     await scanTree(join(worldPath, "stones"), "stone", stones);
     try {
       const stonesEntries = await readdir(join(worldPath, "stones"), { withFileTypes: true });

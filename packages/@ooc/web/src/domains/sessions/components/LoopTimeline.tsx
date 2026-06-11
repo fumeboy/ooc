@@ -1,7 +1,7 @@
 /**
- * LoopTimeline — Loop Time Machine 主组件 (Round 9 E3 重构).
+ * LoopTimeline — Loop Time Machine 主组件.
  *
- * 从 Round 3 的"纵向 N 个 LoopEntry"升级为时光机式"单 loop 视图 + 左右切换 + Window Diff"：
+ * 从旧的"纵向 N 个 LoopEntry"升级为时光机式"单 loop 视图 + 左右切换 + Window Diff"：
  *
  *   ┌────────────────────────────────────────────────────────────────┐
  *   │ Loop Time Machine                                       Refresh│
@@ -73,7 +73,7 @@ interface EnableDebugResponse {
 /**
  * partitionEventsByLoop —— 把 thread.events 按时间戳启发地分配到 loops。
  *
- * R0c 的简单等分实现保留：events 没有 createdAt 字段，只能按数组顺序在 loops 间等分。
+ * 简单等分实现：events 没有 createdAt 字段，只能按数组顺序在 loops 间等分。
  * 单测覆盖 4 个 case。
  */
 export function partitionEventsByLoop(
@@ -101,7 +101,7 @@ export function partitionEventsByLoop(
 }
 
 /**
- * R0d: 单击 badge → 决定下一步动作（permission popover / summary popover / scroll）。
+ * 单击 badge → 决定下一步动作（permission popover / summary popover / scroll）。
  * 时光机模式下 "scroll" 退化为 "切到该 loop"（如果还知道该 event 属于哪个 loop）。
  */
 export type BadgeClickAction =
@@ -122,10 +122,10 @@ export function planBadgeClickAction(event: LoopEvent): BadgeClickAction {
 }
 
 /**
- * R0d: 给单个 ProcessEvent 派生稳定 anchor id。
+ * 给单个 ProcessEvent 派生稳定 anchor id。
  *
  * 优先级：event.id → toolCallId → loop_idx fallback。本函数原在 LoopEntry.tsx 内，
- * Round 9 E3 LoopEntry 已废弃 → 搬到 LoopTimeline 让既有测试仍可 import（test 文件改为
+ * LoopEntry 已废弃 → 搬到 LoopTimeline 让既有测试仍可 import（test 文件改为
  * 从 ./LoopTimeline import）。
  */
 export function loopEventAnchorId(
@@ -543,7 +543,7 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
   );
 }
 
-/** 退化模式 / unassigned 区的事件单行 — 与 R0c 版本一致。 */
+/** 退化模式 / unassigned 区的事件单行。 */
 function EventRow({
   index,
   event,

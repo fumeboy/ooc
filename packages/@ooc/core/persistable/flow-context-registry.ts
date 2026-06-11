@@ -1,12 +1,12 @@
 /**
- * Flow-layer thread context registry IO —— ooc-6 Object Unification Phase 5'.1.
+ * Flow-layer thread context registry IO —— ooc-6 Object Unification。
  *
  * 每个 thread 持有一份 context.json，记录该 thread context 中 hold 的 objects 与
  * thread-level 视角参数（compressLevel / order / decayMeta / parentObjectId）。
  *
  * 路径：`{threadDir(ref)}/context.json`
  *
- * 与 thread.json.contextWindows[] 并存（双写期）；P5'.4 后 contextWindows[] 字段
+ * 与 thread.json.contextWindows[] 并存（双写期）；后续 contextWindows[] 字段
  * 退役，仅留 registry。
  *
  * **多视角共享**：同一 objectId 可同时被多个 thread 的 context.json 引用，view
@@ -39,7 +39,7 @@ export interface ContextMember {
 export interface ContextParams {
   /** 压缩级别（替代 ContextWindow.compressLevel）。 */
   compressLevel?: number;
-  /** 自然衰减运行时计数（legacy 兼容；P6 BudgetManager 不再使用）。 */
+  /** 自然衰减运行时计数（legacy 兼容；BudgetManager 不再使用）。 */
   decayMeta?: { lastTouchedAt: number; idleRounds: number } | null;
   /** 在 context 中的展示顺序（取代 contextWindows[] 数组下标）。 */
   order?: number;

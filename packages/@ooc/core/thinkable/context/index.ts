@@ -380,7 +380,7 @@ export async function buildInputItems(
   // never persisted. See _shared/types/thread.ts:_renderedWindows.
   thread._renderedWindows = snapshot.windows;
 
-  // P0f: fold _foldedBy events; events_summary renders as its own placeholder
+  // fold _foldedBy events; events_summary renders as its own placeholder
   const transcript = thread.events.flatMap((event) =>
     event._foldedBy ? [] : processEventToItems(thread, event),
   );
@@ -431,7 +431,7 @@ async function buildPathsItem(thread: ThreadContext): Promise<LlmInputItem | und
   const ref = thread.persistence;
   if (!ref) return undefined;
   // worktree 模型：object_stone_dir 与 program shell $OOC_SELF_DIR 同源——business
-  // session 命中 worktree（已建）时显示 flows/<sid>/objects/<id>/（方案 A），否则 main。
+  // session 命中 worktree（已建）时显示 flows/<sid>/objects/<id>/，否则 main。
   // 用 "read" 模式：被动每轮注入不应主动建 worktree（惰性，仅首次 identity 写才建）。
   const stoneRef = await resolveStoneIdentityRef(
     { baseDir: ref.baseDir, sessionId: ref.sessionId, objectId: ref.objectId },

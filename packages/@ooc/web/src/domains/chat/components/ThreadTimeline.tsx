@@ -17,7 +17,7 @@ export function ThreadTimeline({
   // 当前 thread.contextWindows 里仍存在的 window id 集合.
   // ChatPanel 用它判断 tool card 上的 link-btn 是否指向"仍可见"的 window —
   // form 在 submit 后会被 auto_removed, 此时 link 跳转会 fallback 到无关节点,
-  // 用户体感"没反应" (用户反馈 2026-05-20). 让 TuiBlock 据此 disable / hide link.
+  // 用户体感"没反应" (用户反馈). 让 TuiBlock 据此 disable / hide link.
   const liveWindowIds = useMemo(() => {
     const set = new Set<string>();
     for (const w of thread?.contextWindows ?? []) {

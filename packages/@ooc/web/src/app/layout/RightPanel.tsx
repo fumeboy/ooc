@@ -9,7 +9,7 @@ import { LoaderCircle, Network, Pause, Play } from "lucide-react";
  *
  * Header (top): 对话对象 displayName + actions (Network / LayoutModeToggle)
  * Body  (mid): ChatPanel = ThreadTimeline + 可选 ChatComposer
- * Footer (bot, 2026-05-27 新增): thread status pill + session-pause 按钮。
+ * Footer (bot): thread status pill + session-pause 按钮。
  *   - status pill: 反映 **thread.status** (running/paused HITL/waiting/done/failed)
  *   - pause 按钮: 反映并 toggle **session 级** paused (POST /flows/.../pause)
  *   - footer 始终展示, composer 隐藏时仍可看到 thread 状态与 session pause 入口

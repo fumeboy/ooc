@@ -4,7 +4,7 @@ import { BUILTIN_OBJECT_IDS } from "../_shared/types/thread.js";
 /**
  * 解析 builtin 五件套所在的**框架包**目录（运行进程的 `@ooc/builtins/<id>`）。
  *
- * 根因（2026-06-07）：旧 `stoneDir(builtinRef)` 把 builtin 解析到
+ * 根因：旧 `stoneDir(builtinRef)` 把 builtin 解析到
  * `<world>/packages/@ooc/builtins/<id>`（`common.ts:86`），而任何 world 该目录都为空
  * —— builtin 的 self.md / readable / knowledge 磁盘读永远落空，supervisor 一直靠 LLM
  * 即兴演角色。builtin 定义随框架代码发布，应从**运行进程**按包名解析，与 world 目录无关。

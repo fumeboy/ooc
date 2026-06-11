@@ -161,7 +161,7 @@ function compressDoWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
 
 function onCloseDoWindow(ctx: OnCloseContext): boolean | void {
   if (ctx.window.class !== "do") return;
-  // batch C narrowing(N1): ctx.window 契约层是 base ContextWindow；type==="do" 守卫后
+  // 窄化：ctx.window 契约层是 base ContextWindow；type==="do" 守卫后
   // narrow 回 DoWindow 以读 isCreatorWindow 并传给 archiveDoWindowChild。
   const window = ctx.window as DoWindow;
   if (window.isCreatorWindow) {
@@ -177,7 +177,7 @@ function onCloseDoWindow(ctx: OnCloseContext): boolean | void {
   archiveDoWindowChild(ctx.thread, window);
 }
 
-// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+// ─────────────────────────── constructor ──────────────────────────
 
 const DO_CONSTRUCTOR_TIP = `do 在当前对象内派生子线程，父线程下挂 do_window。
 参数：msg（必填，子线程初始消息）、wait（可选，true 时父线程等待子线程回写）、share_windows（可选，初始分享的 windows）。`;
@@ -456,7 +456,7 @@ builtinRegistry.registerExecutable("do", {
     move: moveMethod,
     do: doConstructor,
   },
-  // P6.§6: do_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
+  // do_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
   isBuiltinFeature: true,
 });
 builtinRegistry.registerReadable("do", {

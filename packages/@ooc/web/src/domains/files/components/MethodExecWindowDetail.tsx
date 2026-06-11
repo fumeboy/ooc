@@ -1,7 +1,7 @@
 /**
  * MethodExecWindowDetail — UI for the method_exec form.
  *
- * P6.§10 cleanup (2026-06-02): moved here from `@ooc/builtins/command_exec/visible/index.tsx`.
+ * Moved here from `@ooc/builtins/command_exec/visible/index.tsx`.
  * The command_exec package is being deleted because form is an Object built-in feature
  * managed in core, not a stand-alone builtin object.
  */

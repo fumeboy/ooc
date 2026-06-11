@@ -123,7 +123,7 @@ export interface RuntimeService {
   listJobs(): { items: RuntimeJob[] };
   getJob(jobId: string): RuntimeJob | undefined;
   /**
-   * 系统活动快照（observable 诊断原语，2026-06-06）：一次读出服务端此刻全貌——
+   * 系统活动快照（observable 诊断原语）：一次读出服务端此刻全貌——
    * 在跑/排队的 job（含 ageMs，定位「卡住多久」）+ 主导日志模式（来自 log-aggregator，
    * 定位「被什么重复事件刷屏」）。供 /api/runtime/activity 端点 / harness 超时快照消费，
    * 把「盲等到超时」变成「超时即可诊断」。
@@ -132,7 +132,7 @@ export interface RuntimeService {
   enableGlobalPause(): { enabled: true };
   /**
    * 解除全局 pause：翻 flag + **扫所有 session 的 paused thread 入队 resume-thread job**
-   * （2026-06-05 修 pause 单向陷阱）。此前只翻内存 flag，已 paused 的 thread 永久搁浅。
+   * （修 pause 单向陷阱）。此前只翻内存 flag，已 paused 的 thread 永久搁浅。
    *
    * 返回 resumedThreadIds（`${objectId}/${threadId}`）/ jobIds 供控制面观测——但 HTTP 层
    * 仍只暴露 { enabled: false }（保持 RuntimeModel.globalPauseResponse 契约 + 前端不破）。
@@ -181,7 +181,7 @@ export interface RuntimeService {
     newStatus: "running";
   }>;
   /**
-   * 治理（去固化 metaprog method 后，2026-06-09）：经控制面以 supervisor 治理身份
+   * 治理（去固化 metaprog method 后）：经控制面以 supervisor 治理身份
    * 标 PR-Issue 决议。底层走 persistable 的 resolvePrIssue（保留不动）。失败转 AppServerError：
    * NOT_FOUND / INVALID_STATE → 4xx，git/issue-service 失败 → 5xx。
    */
@@ -190,9 +190,9 @@ export interface RuntimeService {
     decision: PrIssueDecision;
   }): Promise<Record<string, unknown>>;
   /**
-   * P3 多 reviewer 审批（2026-06-11）：某 reviewer 对 PR 行使 approve/reject/request-changes。
+   * 多 reviewer 审批：某 reviewer 对 PR 行使 approve/reject/request-changes。
    * 校验 reviewerObjectId ∈ record.reviewers（非 reviewer → CONFLICT 409）；写 approvals；
-   * 按聚合 verdict + P5 `.world.json` prAutoMerge 闸决定后续：
+   * 按聚合 verdict + `.world.json` prAutoMerge 闸决定后续：
    *   - rejected         → 调 resolvePrIssue(reject) archive 分支 + close
    *   - ready-to-merge   → prAutoMerge=true 立即 resolvePrIssue(merge)；false 留 open（待人工 resolve）
    *   - changes-requested / pending → 仅记录，留 open
@@ -213,17 +213,17 @@ export interface RuntimeService {
     archivedRef?: string;
   }>;
   /**
-   * P4 可观测：列出所有 PR-Issue（读 index.json + 逐条 reviewers/approvals 摘要）。
-   * 补体验官实证 404 的 G2 缺口。
+   * 可观测：列出所有 PR-Issue（读 index.json + 逐条 reviewers/approvals 摘要）。
+   * 补体验官实证 404 的缺口。
    */
   listPrIssues(): Promise<{ items: PrIssueSummaryView[] }>;
   /**
-   * P4 可观测：单条 PR-Issue 全量（intent/diff/paths/branch/reviewers/approvals/status/verdict）。
+   * 可观测：单条 PR-Issue 全量（intent/diff/paths/branch/reviewers/approvals/status/verdict）。
    * 未知 issue → NOT_FOUND 404。
    */
   getPrIssue(issueId: number): Promise<PrIssueDetailView>;
   /**
-   * 治理（去固化 metaprog method 后，2026-06-09）：经控制面以 supervisor 治理身份
+   * 治理（去固化 metaprog method 后）：经控制面以 supervisor 治理身份
    * 回滚某 Object 的 stone 到先前 commit。底层走 persistable 的 rollback（保留不动），
    * supervisorAuthor 固定 SUPERVISOR_OBJECT_ID。失败转 AppServerError：INVALID_INPUT /
    * FORBIDDEN → 4xx，git 失败 → 5xx。
@@ -521,9 +521,9 @@ export function createRuntimeService(deps: {
       reviewerObjectId: string;
       action: PrApproveAction;
     }) {
-      // P3 聚合 + P5 合入闸 + P6 回修编排统一走 applyPrApproval（与 pr_window method 同源，
+      // 聚合 + 合入闸 + 回修编排统一走 applyPrApproval（与 pr_window method 同源，
       // 不两处漂移）。verdict=rejected/changes-requested/合入失败时其内部把回修 message 回投
-      // super(foo)（P6）。
+      // super(foo)。
       const r = await applyPrApproval({
         baseDir: deps.baseDir,
         issueId,
@@ -596,7 +596,7 @@ export function createRuntimeService(deps: {
         threadId: ref.threadId,
         loopIndex,
       };
-      // Round 8 B5: label 与磁盘 zero-pad 4 位文件名对齐（loop_0001.*.json），
+      // label 与磁盘 zero-pad 4 位文件名对齐（loop_0001.*.json），
       // 而不是用裸 loopIndex（如 loop_1）——后者让错误信息无法直接指向文件。
       const padded = String(loopIndex).padStart(4, "0");
       return {

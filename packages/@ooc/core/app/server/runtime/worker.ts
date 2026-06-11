@@ -14,7 +14,7 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 /**
- * runner 返回的 thread 终态对账结果（observability 根因 #4，2026-05-27）。
+ * runner 返回的 thread 终态对账结果（observability）。
  *
  * thinkloop 把 LLM 超时/异常**内部消化**（标 thread.status="failed" + 写 statusReason），
  * 不向 runner 抛 → runner 正常返回。若不对账，processQueuedJobs 会把 job 裸标 "done"，
@@ -35,7 +35,7 @@ export type RuntimeJobRunner = (job: RuntimeJob, config: ServerConfig) => Promis
  * 约定值：user 是 web session 中的特殊 flow object，由控制面（人类）驱动；
  * worker 跳过它，让任何针对 user object 的 thread 都不被 LLM 调度。
  *
- * collaborable § cross-object talk（spec 2026-05-15）。
+ * collaborable § cross-object talk。
  */
 const USER_OBJECT_ID = "user";
 
@@ -94,7 +94,7 @@ export async function runJob(
     await writeThread(rootThread);
   }
 
-  // 根因 #4: scheduler 原地推进 rootThread 并落盘；返回其终态供 processQueuedJobs 对账。
+  // scheduler 原地推进 rootThread 并落盘；返回其终态供 processQueuedJobs 对账。
   // thinkloop 把 LLM 超时/异常消化成 status="failed"（不抛），不对账就会被裸标 done。
   return {
     threadStatus: rootThread.status,
@@ -107,7 +107,7 @@ export async function processQueuedJobs(
   config: ServerConfig,
   runner: RuntimeJobRunner = runJob
 ): Promise<void> {
-  // 根因 #5（worker 事件驱动改造，2026-05-24）：worker 不再周期扫 fs 兜底入队。
+  // worker 事件驱动改造：worker 不再周期扫 fs 兜底入队。
   // 状态翻转（talk-delivery / do_window.continue / issue appendComment / resume /
   // end auto-reply）由事件源在写完目标 inbox 后直接调 notifyThreadActivated
   // → jobManager.createRunThreadJob。worker 只跑队列。
@@ -115,7 +115,7 @@ export async function processQueuedJobs(
   // 启动期兜底（捕获上次未跑完的 running thread）已迁到 bootstrap (enqueueRunningThreadsAtBootstrap)。
   const jobs = config.jobManager.listJobs().filter((job) => job.status === "queued");
 
-  // **并行处理本批 queued jobs** (2026-05-20 修): 此前是 for-await 串行, 当 caller
+  // **并行处理本批 queued jobs**: 此前是 for-await 串行, 当 caller
   // 在 thinkloop 内 await 跨 object talk 派生的 callee 回复时, callee 永远拿不到
   // schedule (因为 caller job 占着 worker, processing guard 阻止下一 tick 进入)。
   // 并行化让 caller / callee 同时跑 — LLM 调用是 IO bound, jobManager 用 atomic claim
@@ -128,7 +128,7 @@ export async function processQueuedJobs(
 
       try {
         const result = await runner(claimed, config);
-        // 根因 #4: thread 以 failed 收场时 job 不裸标 done — thinkloop 内部消化
+        // thread 以 failed 收场时 job 不裸标 done — thinkloop 内部消化
         // LLM 超时/异常（不向 runner 抛），裸标 done 会造成"job done 但 thread failed"
         // 的假成功。对账 thread 终态：failed → job 标 failed + 带 statusReason。
         if (result?.threadStatus === "failed") {
@@ -171,7 +171,7 @@ export async function processQueuedJobs(
  * Bootstrap-only：server 启动时调一次，把磁盘上 running/waiting 的 thread 入队。
  *
  * 用于：上次 server crash 留下的 orphan thread；workerEnabled=true 的 buildServer
- * 启动后第一次扫一遍。**不**周期扫——周期扫已在根因 #5 中删除。
+ * 启动后第一次扫一遍。**不**周期扫——周期扫已删除。
  *
  * 失败不抛，保证 server 启动不被磁盘异常拖垮。
  */
@@ -264,7 +264,7 @@ async function syncCrossObjectCalleeEnds(
 ): Promise<void> {
   if (!caller.persistence) return;
   const talkWindows = (caller.contextWindows ?? []).filter(
-    // batch C narrowing(N1): contextWindows 元素契约层是 base；type==="talk" 后 narrow 回 TalkWindow 读 targetThreadId。
+    // narrowing: contextWindows 元素契约层是 base；type==="talk" 后 narrow 回 TalkWindow 读 targetThreadId。
     (w): w is TalkWindow => w.class === "talk" && Boolean((w as TalkWindow).targetThreadId),
   );
   if (talkWindows.length === 0) return;
@@ -336,7 +336,7 @@ async function syncCrossObjectCalleeEnds(
 }
 
 export function startJobWorker(config: ServerConfig): { stop(): void } {
-  // **每个 tick 独立并行进入** (2026-05-20 修): 此前 `if (processing) return` guard 让
+  // **每个 tick 独立并行进入**: 此前 `if (processing) return` guard 让
   // 当一个 tick 内 caller thinkloop 跑很久 (workerMaxTicks 默认 15 * LLM ~30s/tick) 时,
   // 后续所有 tick 全部 skip, 跨 object talk 派生的 super callee 永远等不到 schedule。
   // 改为允许多 tick 并发, jobManager.tryClaimQueuedJob 用 atomic claim 保证不重复处理.

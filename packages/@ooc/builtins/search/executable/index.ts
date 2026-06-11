@@ -114,7 +114,7 @@ builtinRegistry.registerExecutable("search", {
   },
 });
 
-// ─────────────────────────── constructor (P6.§4-§5) ──────────────────────────
+// ─────────────────────────── constructor ──────────────────────────
 
 const SEARCH_TIP = `glob/grep 搜索：
 - glob: args={ pattern: "<glob>", cwd? } — 按文件名通配符搜索

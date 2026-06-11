@@ -41,7 +41,7 @@ import { join } from "node:path";
 const USER_OBJECT_ID = "user";
 
 /**
- * 受保护的 super sessionId（spec 2026-05-18 super-flow-channel）：用户通过
+ * 受保护的 super sessionId（super-flow-channel）：用户通过
  * HTTP API 创建 / seed 必须 reject；只由 talk-delivery 内部按需创建（系统路径）。
  */
 function assertNotSuperSessionId(sessionId: string): void {
@@ -84,7 +84,7 @@ function appendInboxMessage(thread: ThreadContext, text: string, replyToWindowId
 /**
  * 把已 paused / waiting 的 thread 翻回 running。
  *
- * Step 1（spec 2026-05-14）：取消 waitingType / awaitingChildren；wait 状态本身就是
+ * 取消 waitingType / awaitingChildren；wait 状态本身就是
  * "等 inbox 新消息"，写入新消息后把 status 翻回 running 即可。
  */
 function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
@@ -109,7 +109,7 @@ function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
  * createdAt=Date.now() 每次都新，否则 hash 永远翻动。skills 数组本身是稳定排序的
  * 内容字段，参与 hash。
  *
- * 历史：2026-05-26 移除 IssueWindow strip 分支（issue 看板已整体下线）。
+ * 历史：移除 IssueWindow strip 分支（issue 看板已整体下线）。
  */
 function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
   if (!payload.contextWindows) return payload;
@@ -271,7 +271,7 @@ export function createFlowsService(deps: {
   jobManager: ReturnType<typeof createJobManager>;
 }) {
   /**
-   * Issue #6 Bad #1: session 存在性前置校验。所有 per-session 读 / 写接口
+   * session 存在性前置校验。所有 per-session 读 / 写接口
    * (getThread/listThreads/getFlowObject/pause/resume/continue) 之前调用,
    * 不存在 → 抛 NOT_FOUND。listFlows 自身不调本函数(父目录 flows/ 不存在
    * 时返回 [] 是合理的)。
@@ -291,7 +291,7 @@ export function createFlowsService(deps: {
     }
   }
 
-  /** Issue #6 Bad #1: flow object 存在性前置校验。 */
+  /** flow object 存在性前置校验。 */
   async function ensureFlowObjectExists(sessionId: string, objectId: string): Promise<void> {
     await ensureSessionExists(sessionId);
     const oDir = objectDir({ baseDir: deps.baseDir, sessionId, objectId });
@@ -310,8 +310,8 @@ export function createFlowsService(deps: {
 
   /**
    * business session 创建入口：eager 建 session worktree（`flows/<sid>` = 从 main 派生的
-   * git worktree，方案 A 2026-06-09）。**必须在写任何运行时数据（.session.json / threads/）
-   * 前调用**——`git worktree add` 要求目标空目录。失败 → fail-loud（决策 4），不静默回退。
+   * git worktree，方案 A）。**必须在写任何运行时数据（.session.json / threads/）
+   * 前调用**——`git worktree add` 要求目标空目录。失败 → fail-loud，不静默回退。
    */
   async function eagerEnsureSessionWorktree(sessionId: string): Promise<void> {
     const ok = await ensureSessionWorktree(deps.baseDir, sessionId);
@@ -365,7 +365,7 @@ export function createFlowsService(deps: {
     /**
      * 一次性 seed 一个 session：建 session + user flow object + 让 user 对 target 发起 talk。
      *
-     * collaborable § cross-object talk（spec 2026-05-15）：web 用户创建 session 的入口，
+     * collaborable § cross-object talk：web 用户创建 session 的入口，
      * 等价于 user 这个 flow object 用 talk method 调起对 target 的会话。
      *
      * 流程：
@@ -482,7 +482,7 @@ export function createFlowsService(deps: {
      * - 同 target 已有非 creator talk_window 时**幂等**复用既有那一条，不重复创建窗口
      * - initialMessage 可选：缺省时只挂 talk_window 不派送、不入 callee job；提供时
      *   走 deliverTalkMessage（与 seedSession 一致），创建 callee thread + 双写消息 + 入队
-     * - 根因 #5（2026-05-27）：幂等命中既有窗口时**仍要投递 initialMessage**——
+     * - 幂等命中既有窗口时**仍要投递 initialMessage**——
      *   带消息无论窗口新建/复用都必须送达 + 触发 thinkloop，不得静默丢；返回里
      *   created 区分新建(true)/复用(false)，jobId 表示消息确实入队
      */
@@ -544,7 +544,7 @@ export function createFlowsService(deps: {
             created: false,
           };
         }
-        // 根因 #5：带了 initialMessage 时不得静默丢弃。复用既有 talk_window，
+        // 带了 initialMessage 时不得静默丢弃。复用既有 talk_window，
         // 但仍走 deliverTalkMessage 投递 + run-thread 入队（与 continueThread / 新建分支一致），
         // 返回真 jobId；created:false 表示复用了既有窗口。
         const delivered = await deliverTalkMessage({
@@ -675,7 +675,7 @@ export function createFlowsService(deps: {
     /**
      * 列出 session 下所有 (objectId, threadId) + thread metadata + 4 种关系字段。
      *
-     * Round 8 D2 扩展（design: docs/2026-05-26-session-threads-index-design.md §4.1）：
+     * design: docs/2026-05-26-session-threads-index-design.md §4.1：
      * 在原 `{ objectId, threadId }` 基础上增加 status / createdAt / parent / creator /
      * childThreadIds / talkPeers / shares / isSuperFlow，让前端 SessionThreadsIndex
      * 能据此画分栏 + 关系，不再需要拉每个 thread 详情。
@@ -692,7 +692,7 @@ export function createFlowsService(deps: {
      */
     async listThreads({ sessionId }: { sessionId: string }): Promise<ListThreadsResponse> {
       await ensureSessionExists(sessionId);
-      // 方案 A 续（2026-06-09）：flow object 落 `flows/<sid>/objects/<nestedObjectPath>`
+      // 方案 A：flow object 落 `flows/<sid>/objects/<nestedObjectPath>`
       //（objectDir = flows/<sid>/objects/<id>），与 stone identity 同落点。扫描起点是
       // `flows/<sid>/objects/` 的直接子目录（找 .flow.json 判 flow object，递归仍下 children/）。
       const sessionRoot = join(deps.baseDir, "flows", sessionId, "objects");
@@ -802,7 +802,7 @@ export function createFlowsService(deps: {
     /**
      * 控制面"用户回复"通道。
      *
-     * collaborable § cross-object talk（spec 2026-05-15）：等价于 user 这个 flow object
+     * collaborable § cross-object talk：等价于 user 这个 flow object
      * 在它的 root thread 上调 talk_window.say —— 通过 talk-delivery 把消息派送到 callee。
      *
      * 入参：
@@ -878,7 +878,7 @@ export function createFlowsService(deps: {
       deps.pauseStore.resumeSession(sessionId);
       // 扫 paused threads 并各入队一个 resume-thread job。
       // 编排抽到 runtime/resume-orchestration，与 global-pause/disable 共用同一恢复路径
-      // （2026-06-05 修 pause 单向陷阱）。
+      // （修 pause 单向陷阱）。
       const resumed = await resumePausedThreadsInSession(
         { baseDir: deps.baseDir, jobManager: deps.jobManager },
         sessionId,

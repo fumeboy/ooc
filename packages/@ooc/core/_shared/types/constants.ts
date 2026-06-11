@@ -1,5 +1,5 @@
 /**
- * Super flow 约定常量 —— canonical 源（batch C2 从
+ * Super flow 约定常量 —— canonical 源（从
  * `executable/windows/_shared/super-constants.ts` 迁入）。
  *
  * 任何需要 "super" 字面量的代码都从 `@ooc/core/_shared` 取；旧路径

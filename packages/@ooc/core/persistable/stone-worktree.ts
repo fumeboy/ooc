@@ -1,5 +1,5 @@
 /**
- * Stone identity 的 session-worktree 访问层（2026-06-06，worktree 统一模型核心原语）。
+ * Stone identity 的 session-worktree 访问层（worktree 统一模型核心原语）。
  *
  * 设计见 docs/2026-06-09-remove-metaprog-unify-session-worktree-design.md §1bis（方案 A）：
  * - business flow session = 从 main 派生的 git worktree 分支 `session-<sid>`，物理落
@@ -37,7 +37,7 @@ function stonesBareRepoDir(baseDir: string): string {
 }
 
 /**
- * session worktree 在磁盘的路径：`<baseDir>/flows/<sid>`（方案 A，2026-06-09）。
+ * session worktree 在磁盘的路径：`<baseDir>/flows/<sid>`。
  *
  * `flows/<sid>` 目录本身即从 `stones/main` 派生的 git worktree（branch 名仍是
  * `session-<sid>`，与物理路径解耦）。运行时数据（.session.json / .flow.json /
@@ -69,7 +69,7 @@ async function pathExists(p: string): Promise<boolean> {
 /**
  * 该 `flows/<sid>` 目录是否已是一个 git worktree（含 worktree link 文件 `.git`）。
  *
- * 方案 A 下 `flows/<sid>` 与运行时数据共存：单纯 pathExists 不足以判定 worktree 已建
+ * `flows/<sid>` 与运行时数据共存：单纯 pathExists 不足以判定 worktree 已建
  * （可能只是 createFlowSession 先 mkdir 出的空目录）。判 `.git` 才是真 worktree 信号。
  */
 async function isSessionWorktree(wtPath: string): Promise<boolean> {
@@ -78,7 +78,7 @@ async function isSessionWorktree(wtPath: string): Promise<boolean> {
 
 /**
  * 建 session worktree（从 main HEAD 派生 `session-<sid>` 分支的完整 checkout，物理落
- * `flows/<sid>`）。方案 A（2026-06-09）改 eager：session 创建入口先调本函数再写运行时数据。
+ * `flows/<sid>`）。改 eager：session 创建入口先调本函数再写运行时数据。
  *
  * 幂等：已是 worktree（含并发 WORKTREE_EXISTS）视为成功。
  *
@@ -173,7 +173,7 @@ export async function resolveStoneIdentityRef(
   const { baseDir, sessionId, objectId, stonesBranch } = ref;
   const mainRef: StoneObjectRef = { baseDir, objectId };
 
-  // feat 分支绑定优先（2026-06-11，reflectable 沉淀直接编辑路径）：放在 sessionId 路由**最前面**。
+  // feat 分支绑定优先（reflectable 沉淀直接编辑路径）：放在 sessionId 路由**最前面**。
   // 绑定缺省（绝大多数 thread）→ 整段跳过，下方 session 解析逐字节不变（回归不变量）。
   // 绑定存在 → super(foo) 读写自然落 feat worktree（无视 sessionId 是 super 还是 business）。
   if (stonesBranch) {
@@ -186,7 +186,7 @@ export async function resolveStoneIdentityRef(
   if (!sessionUsesWorktree(sessionId)) return mainRef;
 
   const wtPath = sessionWorktreePath(baseDir, sessionId!);
-  // 方案 A 下 `flows/<sid>` 与运行时数据共存——必须判 `.git`（真 worktree 信号），不能只判
+  // `flows/<sid>` 与运行时数据共存——必须判 `.git`（真 worktree 信号），不能只判
   // 目录存在（可能只是 createFlowSession 先 mkdir 的空目录 / 纯运行时目录）。
   let ready = await isSessionWorktree(wtPath);
   if (!ready) {

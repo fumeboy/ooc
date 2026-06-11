@@ -1,7 +1,7 @@
 /**
- * 路由错误兜底：未知 URL / loader 抛错时显示。plan-003 D7。
+ * 路由错误兜底：未知 URL / loader 抛错时显示。
  *
- * Round 15 L3 (体验官 Round 14): 旧形态路径 `/sessions/xxx` 不再 redirect 到新
+ * 旧形态路径 `/sessions/xxx` 不再 redirect 到新
  * `/flows/xxx`，用户访问后只看到 "页面无法显示 / 回首页"，不知道正确路径在哪里。
  * 这里加几个 fallback 链接，并在 URL pattern 形如 `/sessions/<sid>` 时智能提示
  * 对应的 `/flows/<sid>`。
@@ -10,7 +10,7 @@ import { Link, useLocation, useRouteError } from "react-router";
 
 /**
  * 从当前路径推测用户想去的路径。当前规则（保持最简）：
- * - `/sessions/<sid>` (旧形态) → `/flows/<sid>` (Round 7 新形态)
+ * - `/sessions/<sid>` (旧形态) → `/flows/<sid>` (新形态)
  * - 其它 → undefined
  */
 function guessIntendedPath(pathname: string): string | undefined {

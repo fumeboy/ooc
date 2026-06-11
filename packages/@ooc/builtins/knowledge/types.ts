@@ -4,7 +4,7 @@ import type { Viewport } from "@ooc/core/extendable/_shared/viewport.js";
 /**
  * Knowledge window — 一段 knowledge 文本作为 window 出现在 context 中。
  *
- * 四种 source（spec 2026-05-14 + 后续统一 + 2026-05-18 relation）：
+ * 四种 source：
  * - explicit  ：LLM 通过 \`open(method="open_knowledge", path)\` 显式 pin；
  *               持久化到 thread.contextWindows；可被 LLM \`close\` 释放。
  *               render 时从 stone knowledge loader 取正文。
@@ -20,7 +20,7 @@ import type { Viewport } from "@ooc/core/extendable/_shared/viewport.js";
  *               合成占位 body 提示 LLM 写入)。同样不持久化、不可 close;由
  *               src/thinkable/knowledge/synthesizer.ts:deriveRelationKnowledge 派生。
  *
- * 历史：2026-05-26 移除 source="issue"（issue 看板整体下线）。
+ * 历史：移除 source="issue"（issue 看板整体下线）。
  *
  * 合成的 KnowledgeWindow 自带 \`body\`，render 层不再需要回调 loader。
  * activator 来源走总数 20 项 + 单篇 8KB 截断。

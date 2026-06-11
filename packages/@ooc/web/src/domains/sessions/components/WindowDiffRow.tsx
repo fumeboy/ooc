@@ -1,10 +1,10 @@
 /**
  * WindowDiffRow — 单个 window 在当前 loop vs 上一 loop 的 diff 行。
  *
- * Round 9 E3：折叠态显示 icon + type + summary + diff status；
+ * 折叠态显示 icon + type + summary + diff status；
  * 点击 → 触发 onToggleExpand，由父级 LoopDiffView 展开嵌入 LLMInputJsonViewer 看完整内容。
  *
- * 视觉编码（design §5）：
+ * 视觉编码：
  *   - added → 绿色背景
  *   - changed → 橙色边框
  *   - removed → 灰化 + strike-through（rule: previous 有，所以仍列出但用 disabled 视觉）

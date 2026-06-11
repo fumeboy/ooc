@@ -10,7 +10,7 @@ export function createLlmClient(): LlmClient {
     // generate 先按 provider 分发，保持代码路径直接清晰。
     // 外层包 withLlmTimeout 兜底: 任何 provider hang 都会在超时后抛 LlmTimeoutError,
     // 避免 scheduler tick 永远卡住 (见 src/thinkable/llm/timeout.ts)。
-    // 超时取值优先级 (根因 #1): params.timeoutMs (任务级) > OOC_LLM_TIMEOUT_MS > 120s 默认。
+    // 超时取值优先级: params.timeoutMs (任务级) > OOC_LLM_TIMEOUT_MS > 120s 默认。
     async generate(params) {
       const config = readLlmEnv();
       const provider = params.provider ?? config.provider;

@@ -47,7 +47,7 @@ function ensureInside(root: string, target: string, details: Record<string, unkn
 }
 
 /**
- * 写入 knowledge 后的「活不活」体检（thinkable 维度，2026-06-05 harness sweep #1）。
+ * 写入 knowledge 后的「活不活」体检（thinkable 维度）。
  *
  * pool knowledge（sediment）只被 activator 来源消费：computeActivations 逐篇 evaluate
  * 其 frontmatter.activates_on triggers。若一篇 knowledge **没有 activates_on**（或 map 为空），
@@ -105,7 +105,7 @@ export function createStonesService({
   const dir = (objectId: string) => stoneDir(ref(objectId));
 
   /**
-   * 根因 #2：把 wrapHttpWriteInWorktree 的失败结果转 AppServerError。
+   * 把 wrapHttpWriteInWorktree 的失败结果转 AppServerError。
    * 成功结果原样返回（caller 在外层拼到 response body）。
    */
   async function runVersioned(
@@ -130,7 +130,7 @@ export function createStonesService({
   }
 
   /**
-   * Issue #6 Bad #1: 资源存在性前置校验。
+   * 资源存在性前置校验。
    *
    * 在每个 GET/PUT/PATCH 单个 stone 资源前调用;不存在 → 抛 NOT_FOUND,避免
    * 读接口返回 200 + 空内容、写接口对不存在 objectId 静默创建文件。
@@ -152,14 +152,14 @@ export function createStonesService({
   }
 
   /**
-   * Issue #6 Bad #4: 覆盖性写入前置校验。
+   * 覆盖性写入前置校验。
    *
    * 若目标文件已存在**且非空**,要求 caller 显式带 confirm=true 才允许覆盖;否则抛
    * OVERWRITE_REQUIRES_CONFIRM(409)。confirm=false 时若文件不存在或为空占位,允许首次写入。
    *
    * 校验由 route 层从 `X-Overwrite-Confirm: true` header 派生 boolean 传入。
    *
-   * 空文件等价于"未写过"（2026-05-24）：createStoneObject 现在预创 self.md / readme.md 空文件
+   * 空文件等价于"未写过"：createStoneObject 现在预创 self.md / readme.md 空文件
    * 作为 visibility-first 占位；这里把 size===0 视为等价 ENOENT 放行，对应 protection 的初衷
    * （避免覆盖用户已经写过的内容，空占位不算内容）。
    */
@@ -261,7 +261,7 @@ export function createStonesService({
       // pool 骨架在 stones/ 之外（pools/objects/<id>/），与 git versioning 无关；
       // 提前建好，避免 worktree write 之后还要等 commit。
       await createPoolObject({ baseDir, objectId });
-      // 根因 #2：stone 目录 + self.md + readme.md 全部经 worktree → commit → ff merge。
+      // stone 目录 + self.md + readme.md 全部经 worktree → commit → ff merge。
       // 同一个 commit 涵盖 createStoneObject + 可选的 self/readme overwrite，避免拆分多个 commit。
       const versioned = await runVersioned(objectId, `http:createStone ${objectId}`, async (branch) => {
         const wtRef = { baseDir, objectId, _stonesBranch: branch };
@@ -335,7 +335,7 @@ export function createStonesService({
     },
     async createKnowledgeDirectory({ objectId, path }: { objectId: string; path: string }) {
       await ensureStoneExists(objectId);
-      // 2026-05-23: knowledge 已迁到 pool 层；HTTP 仍由 stones API 入口 expose 但落点改了。
+      // knowledge 已迁到 pool 层；HTTP 仍由 stones API 入口 expose 但落点改了。
       const root = poolKnowledgeDir({ baseDir, objectId });
       const safePath = safeKnowledgePath(path);
       const target = ensureInside(root, join(root, safePath), { objectId, path });

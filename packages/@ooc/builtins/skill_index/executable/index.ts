@@ -1,7 +1,7 @@
 /**
  * skill_index object —— stones 上 skills 目录的索引视图（plan §skills 支持）。
  *
- * 2026-05-28 ooc-6 Object Unification: 从 builtin window 迁移为 builtin object。
+ * Object Unification: 从 builtin window 迁移为 builtin object。
  *
  * 形态决策：
  * - **完全由 synthesizer 派生**：每轮渲染时按 thread.persistence 推导 stoneRef，

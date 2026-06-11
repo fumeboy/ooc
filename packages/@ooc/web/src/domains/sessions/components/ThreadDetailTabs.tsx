@@ -1,12 +1,12 @@
 /**
- * ThreadDetailTabs — R0c 接入容器, 在 thread context tree 与 Loop Timeline 之间切换。
+ * ThreadDetailTabs — 接入容器, 在 thread context tree 与 Loop Timeline 之间切换。
  *
  * 使用场景: MainPanel 在 `route.kind === "session"` + objectId !== "user" + 无 file
  * 时把原本直接 render 的 FileViewer (内嵌 ContextSnapshotViewer) 替换为本容器。
  *
  * 默认 tab: "context" — 与改造前的视觉一致, 避免一进页面就 fetch loops。
  * Loop Timeline tab lazy: 用户点击时才 mount, 触发 list-loops + thread fetch。
- * 这是 plan §6.3 的 "默认不打开 (避免一进页面就 fetch)" 约束的实现。
+ * 这是 "默认不打开 (避免一进页面就 fetch)" 约束的实现。
  *
  * 不重构现有 FileViewer: context tab 继续走 FileViewer (传 thread, 无 file), 其内部
  * 会渲染 ContextSnapshotViewer。

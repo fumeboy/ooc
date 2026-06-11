@@ -24,7 +24,7 @@ export function readLlmTimeoutMs(): number {
 }
 
 /**
- * 解析本次 generate 实际生效的超时 ms（根因 #1，2026-05-27）。
+ * 解析本次 generate 实际生效的超时 ms。
  *
  * 优先级：任务级 override（合法正数）> 全局默认（readLlmTimeoutMs）。
  * override 非法（undefined / 非有限 / <=0）时回落全局默认 — 不静默吞掉非法值，

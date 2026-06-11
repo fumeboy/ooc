@@ -1,5 +1,5 @@
 /**
- * pools 模块（2026-05-24，根因 #3）。
+ * pools 模块。
  *
  * 把 knowledge HTTP 路径从 `/api/stones/.../knowledge/...` 迁移到对称的
  * `/api/pools/.../knowledge/...`——backend 实际写入位置是 pool 层

@@ -3,7 +3,7 @@ import { requestJson } from "../../transport/http";
 import type { DisplayName } from "./model";
 
 /**
- * M-3 (Round 5 体验报告) — UI 高频对 `user` / `main` / 等非 stone object id 请求
+ * UI 高频对 `user` / `main` / 等非 stone object id 请求
  * `/api/stones/<id>/self`, 后端 404 充斥 network 面板, 干扰 debug。
  *
  * 这些 id **结构上**不是 stone object:
@@ -18,7 +18,7 @@ const NON_STONE_OBJECT_IDS = new Set<string>(["user", "main"]);
 const warnedNonStoneIds = new Set<string>();
 
 /**
- * Round 15 L2 (体验官 Round 14 报告): vite dev console 在每次刷新 / HMR 重载 module
+ * vite dev console 在每次刷新 / HMR 重载 module
  * 时会重置 module-scope `warnedNonStoneIds`，导致 "skip stones/self lookup for non-stone
  * object id" warning spam。改用 sessionStorage 持久化首次 warn 标记，让 dedup 在整个
  * 浏览器 session 内有效（HMR / hard refresh 不再重复 warn）。

@@ -273,7 +273,7 @@ export function gitWorktreeRemove(repoDir: string, path: string, force: boolean 
 }
 
 /**
- * 解除 worktree 注册但**保留目录与文件内容**（方案 A：session worktree 物理合一专用 GC）。
+ * 解除 worktree 注册但**保留目录与文件内容**（session worktree 物理合一专用 GC）。
  *
  * session worktree 物理就是 `flows/<sid>/`，与运行时数据（threads / .session.json / .flow.json）
  * 共存。合入后若用 `gitWorktreeRemove --force` 会连运行时对话历史一并删 → session 在前端凭空消失。
@@ -373,7 +373,7 @@ export function gitCheckout(repoDir: string, ref: string): GitResult {
   return { ok: true };
 }
 
-/* ---------- archive (R8 reject 时的 branch 存档) ---------- */
+/* ---------- archive (reject 时的 branch 存档) ---------- */
 
 /**
  * 把 branch 移到 `refs/ooc/rejected/{branch}` 并删除原 branch ref。

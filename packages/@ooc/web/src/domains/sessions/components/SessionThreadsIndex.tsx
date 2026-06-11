@@ -1,5 +1,5 @@
 /**
- * SessionThreadsIndex — 2026-05-27 v4：永远走 StaffView（五线谱）布局。
+ * SessionThreadsIndex — 永远走 StaffView（五线谱）布局。
  *
  *   ┌─ user ──┬─ supervisor ─┬─ assistant ─┐
  *t0│  ●root  │              │             │
@@ -13,7 +13,7 @@
  *   **filtered**（选中某 thread）：items = 通过 BFS 上下游算出的 relatedItems，列也只
  *     保留有相关 thread 的 object —— 视觉只是"行被裁过"，**不**切换组件形态，避免抖动
  *
- * 路由（沿用 2026-05-27 路由模型）：
+ * 路由：
  *   - 列表项点击 → navigate `/flows/index?sessionId=&objectId=&threadId=`
  *   - user.root 节点 disabled，不可切换查看
  *   - 右侧 "→" 按钮跳 thread_context view，保留 query

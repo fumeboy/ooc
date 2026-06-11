@@ -1,5 +1,5 @@
 /**
- * test-utils — Round 10 F3.
+ * test-utils.
  *
  * Web 工程未装 React Testing Library / DOM env；这些 helpers 把 React element
  * 树深扫描，并把"自定义 component element"按函数 component 调用展开到 host-level

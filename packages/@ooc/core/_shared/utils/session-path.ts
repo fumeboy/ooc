@@ -1,5 +1,5 @@
 /**
- * Session-aware path 的**纯字符串操作部分** —— canonical 源（batch C8 从
+ * Session-aware path 的**纯字符串操作部分** —— canonical 源（从
  * `executable/windows/_shared/session-path.ts` 迁入）。
  *
  * **留在 executable**（依赖 `existsSync` / `process.cwd()`，违反零 IO 原则）：
@@ -43,7 +43,7 @@ export function rewritePackagesPath(p: string): string {
 
 /**
  * 形如 `pools/<id>/...` 的路径在 bun workspace 迁移后直接使用，不再需要
- * 注入 `objects/` 中间层（2026-06-01）。pools 不挂 branch（事实层单向累积，
+ * 注入 `objects/` 中间层。pools 不挂 branch（事实层单向累积，
  * 不跟着 metaprog branch 切换；详见 meta/object.doc.ts persistable.pool.no_branch patch）。
  *
  * 保留此函数作为 no-op 以便调用方保持统一接口。纯字符串操作。

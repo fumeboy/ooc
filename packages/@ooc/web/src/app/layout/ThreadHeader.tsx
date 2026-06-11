@@ -10,10 +10,10 @@ import { humanizeThreadId } from "./threadDisplay";
  * - 无 avatar，整体高度小，能内联进 MainPanel breadcrumb-bar 同一行
  * - 不携带 chat 行为（只是显示与切换），方便在 RightPanel 被隐藏（如 user.root）时仍可见
  *
- * 2026-05-27: thread.status pill 已搬至 RightPanel.right-footer (与 session-pause
+ * thread.status pill 已搬至 RightPanel.right-footer (与 session-pause
  * 按钮同栏展示, 避免 "顶部 chip running / 底部 composer 已暂停" 的语义矛盾)。
  *
- * 2026-05-28 (F5 fix): 单 thread 或 user.root 视角下也渲染 wrapper，但以静态 label 代替
+ * 单 thread 或 user.root 视角下也渲染 wrapper，但以静态 label 代替
  * select（避免 select.value 不在 options 的 React warning，并保证 breadcrumb 始终有
  * thread 上下文 —— `deriveHeaderTitle` 在带 thread 上下文时让位给 ThreadHeader）。
  */
@@ -30,7 +30,7 @@ export function ThreadHeader({
   onSelectThread?: (sel: SessionThread) => void;
 }) {
   if (!objectId) return null;
-  // 2026-05-27: thread-switcher 隐藏 user.root —— 它是 session 主入口，不通过 switcher
+  // thread-switcher 隐藏 user.root —— 它是 session 主入口，不通过 switcher
   // 切换查看（路由 path 决定 view，user.root 不再是右栏可选 thread）。
   const threads = (sessionThreads ?? []).filter(
     (t) => !(t.objectId === "user" && t.threadId === "root"),

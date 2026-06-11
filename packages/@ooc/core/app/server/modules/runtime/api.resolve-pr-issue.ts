@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import type { RuntimeService } from "./service";
 
 /**
- * Governance：标 PR-Issue 决议（去固化 metaprog method 后，2026-06-09）。
+ * Governance：标 PR-Issue 决议（去固化 metaprog method 后）。
  *
  * POST /api/runtime/pr-issues/:issueId/resolve
  * Body: { decision: "merge" | "reject" | "request-changes" }

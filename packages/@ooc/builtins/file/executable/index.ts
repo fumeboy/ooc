@@ -237,7 +237,7 @@ export async function executeFileWindowEdit(
   return undefined;
 }
 
-// ─────────────────────────── constructor (P6.§4) ────────────────────────────
+// ─────────────────────────── constructor ────────────────────────────
 
 const FILE_CONSTRUCTOR_TIP_OPEN = `open_file: 提供 path（相对 session baseDir），可选 lines/columns 指定视口。`;
 const FILE_CONSTRUCTOR_TIP_WRITE = `write_file: 提供 path（相对 session baseDir）和 content（字符串，可为空）。`;
@@ -393,7 +393,7 @@ const fileConstructor: ObjectMethod = {
         } catch (err) {
           return { ok: false, error: `[write_file] 写入 ${path} 失败：${(err as Error).message}` };
         }
-        // reflectable #2（2026-06-11）：feat 分支绑定生效时，落在 stone 自治区**之外**
+        // feat 分支绑定生效时，落在 stone 自治区**之外**
         // 的写（典型 pools/ 知识/记忆路径）是 write-through——立即生效、**不进本 PR**、
         // 不在 feat worktree。此前静默无提示 → 随后 evolve_self 发现 feat 分支无 stone
         // 改动报 NO_CHANGES，LLM 不知为何。这里显式点破两通道，消除静默 + 困惑。

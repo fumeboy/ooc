@@ -208,7 +208,7 @@ type _ContextWindowUnion =
     }
   | {
       /**
-       * Plan window (2026-05-26 R7 B5):
+       * Plan window:
        * - 由 src/executable/windows/plan/types.ts 的 PlanWindow 在前端做最小镜像
        * - 支持 sub plan 嵌套：parentPlanWindowId + parentStepId 反向链；step.subPlanWindowId 正向链
        */
@@ -230,13 +230,13 @@ type _ContextWindowUnion =
     };
 
 /**
- * P6.§7 (2026-06-02): ContextWindow 增加可选 enrichment 字段 effectiveVisibleType。
+ * ContextWindow 增加可选 enrichment 字段 effectiveVisibleType。
  *
  * 当 window.class 自身不在前端可渲染的 HANDLED_WINDOW_TYPES 集合中时，后端会沿
  * parentClass 继承链回退，把首个可渲染的 ancestor type 填到 effectiveVisibleType。
  * 前端渲染 switch 用 effectiveVisibleType ?? type 作为渲染 key。
  *
- * P6 Context+Knowledge (2026-06-03): 增加 provenance / relevance / boundFormId
+ * 增加 provenance / relevance / boundFormId
  * enrichment 字段，用于 budget 管理、intent 驱动的自动卸载和调试 trace。
  */
 export type ContextWindow = _ContextWindowUnion & {
@@ -359,7 +359,7 @@ function windowBadge(window: ContextWindow): string {
       const doneN = window.steps.filter((s) => s.status === "done").length;
       return `PLAN ${doneN}/${total}`;
     }
-    // batch C 后 ContextWindow union 加宽，穷尽性不再封闭：未知类型给兜底 badge。
+    // ContextWindow union 加宽，穷尽性不再封闭：未知类型给兜底 badge。
     default:
       return String((window as { type: string }).type).toUpperCase().slice(0, 6);
   }
@@ -394,7 +394,7 @@ function windowSummary(window: ContextWindow): string {
     case "plan":
       // 一行摘要：plan title；description 留给详情面板渲染避免左树太宽。
       return window.title;
-    // batch C 后 ContextWindow union 加宽，穷尽性不再封闭：未知类型回退到 title。
+    // ContextWindow union 加宽，穷尽性不再封闭：未知类型回退到 title。
     default:
       return (window as { title?: string }).title ?? "";
   }

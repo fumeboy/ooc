@@ -8,7 +8,7 @@ import { resolveBuiltinReadDir } from "./builtin-dir";
 export { stoneDir };
 
 /**
- * stone 的 executable 目录（原 server/ 重命名，2026-05-28 ooc-6）。
+ * stone 的 executable 目录（原 server/ 重命名）。
  * 存放 Object 的 methods 实现。
  */
 export function executableDir(ref: StoneObjectRef): string {
@@ -16,7 +16,7 @@ export function executableDir(ref: StoneObjectRef): string {
 }
 
 /**
- * stone 的 visible 目录（原 client/ 重命名，2026-05-28 ooc-6）。
+ * stone 的 visible 目录（原 client/ 重命名）。
  * 存放 Object 的 UI 组件实现。
  */
 export function visibleDir(ref: StoneObjectRef): string {
@@ -133,7 +133,7 @@ export async function discoverStoneHierarchicalPeers(ref: StoneObjectRef): Promi
 /**
  * 创建 stone 的最小可见骨架：`package.json` + `self.md` + `readable.md`（**空文件占位**）。
  *
- * 创建的初始文件（2026-06-01 bun workspace 修订）:
+ * 创建的初始文件:
  * - `package.json`：bun workspace package metadata (ooc.objectId, ooc.kind="object")
  * - `self.md`：**空文件**——`ls stoneDir` 可见；readSelf 返回 ""；
  *   `loadSelfInstructions` 视 empty 等价 undefined，故不会注入空 instructions。
@@ -145,8 +145,8 @@ export async function discoverStoneHierarchicalPeers(ref: StoneObjectRef): Promi
  * - visible/（原 client/） ← 写第一个 visible 入口时自动 mkdir
  * - knowledge/ ← seed knowledge 完全可选；首次 write_file 时 lazy mkdir
  *
- * **不再创建** files/（2026-05-23 起迁到 pool；详见 createPoolObject）。
- * **不再创建** database/（2026-05-24 起删除；csv 替代 sql；详见 persistable.pool.children.data_pool）。
+ * **不再创建** files/（已迁到 pool；详见 createPoolObject）。
+ * **不再创建** database/（已删除；csv 替代 sql；详见 persistable.pool.children.data_pool）。
  */
 export async function createStoneObject(
   ref: StoneObjectRef,
@@ -177,7 +177,7 @@ export async function createStoneObject(
   return ref;
 }
 
-// 已迁出的函数（2026-05-23 三分重组）：
+// 已迁出的函数：
 // - knowledgeDir / memoryDir / relationsDir / relationFile / readRelation
 //   → src/persistable/pool-object.ts 的 poolKnowledgeDir / poolKnowledgeMemoryDir /
 //     poolKnowledgeRelationsDir / poolKnowledgeRelationFile / readPoolRelation

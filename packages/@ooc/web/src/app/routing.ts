@@ -58,7 +58,7 @@ export type RouteState =
       objectId?: string;
       threadId?: string;
       /**
-       * 2026-05-26 Round 7：左栏选中 chat / thread 也写进 URL；当前 SessionThreadsIndex
+       * 左栏选中 chat / thread 也写进 URL；当前 SessionThreadsIndex
        * 已改为通过 objectId+threadId 切右栏，selected 字段保留只为旧链接兼容；新代码
        * 不再产出（toPath 仍然支持写出，确保 round-trip 测试通过）。
        */
@@ -66,7 +66,7 @@ export type RouteState =
         | { kind: "chat"; windowId: string }
         | { kind: "thread"; objectId: string; threadId: string };
       /**
-       * Round 9 E3 (2026-05-26): Loop Time Machine 当前查看的 loopIndex。
+       * Loop Time Machine 当前查看的 loopIndex。
        * - 仅在 thread 详情页（Loop Timeline tab）有意义；其它视图忽略。
        * - 不传 → 显示 Latest。
        * - 切 loop 不重新 navigate 整个页面；用 navigate + replace 微调 query 即可。
@@ -75,7 +75,7 @@ export type RouteState =
     };
 
 /**
- * 把 RouteState 反向转成 URL；shortcut 路径优先（plan-003 §3.3）。
+ * 把 RouteState 反向转成 URL；shortcut 路径优先。
  */
 export function toPath(state: RouteState): string {
   switch (state.kind) {
@@ -321,7 +321,7 @@ export function parsePathname(
 /**
  * 解析 `?loop=<N>` → 非负整数；非法值（负数 / NaN / 非数字）→ undefined 静默丢。
  *
- * Round 9 E3：Loop Time Machine 当前查看 loopIndex；不传 = Latest。
+ * Loop Time Machine 当前查看 loopIndex；不传 = Latest。
  */
 function parseLoopQuery(raw: string | null): number | undefined {
   if (raw === null || raw === "") return undefined;

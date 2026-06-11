@@ -1,5 +1,5 @@
 /**
- * thread id 表层 humanize（Issue #3 A2 / A3 fix）。
+ * thread id 表层 humanize。
  *
  * 设计原则（Supervisor 哲学层约束）:
  *   - 这一轮不引入跨模块的 displayName 字段（task #19 未决）。

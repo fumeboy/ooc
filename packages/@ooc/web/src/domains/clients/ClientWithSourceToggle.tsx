@@ -1,12 +1,12 @@
 /**
  * ClientWithSourceToggle — [已渲染 | 源码] 两 tab 切换。
  *
- * 设计要点（plan-003 §3.2）：
- * - 仅在路径命中 §3.1（stone client/index.tsx 或 flow client/pages/{name}.tsx）时挂
+ * 设计要点：
+ * - 仅在路径命中（stone client/index.tsx 或 flow client/pages/{name}.tsx）时挂
  * - 默认 "已渲染"；切 "源码" 走 FileViewer
  * - CSS `display:none` 切换两个子视图，**不卸载** —— 保住 ObjectClientRenderer
  *   内部 React state（按钮 click 计数不丢；调试 friendly）
- * - tab 选择不入 URL（plan-003 D1）；纯 transient
+ * - tab 选择不入 URL；纯 transient
  */
 import { useEffect, useRef, useState } from "react";
 import {
@@ -48,7 +48,7 @@ async function fetchClientSource(target: ClientTarget): Promise<FileContent> {
 
 export interface ClientWithSourceToggleProps {
   target: ClientTarget;
-  /** 命中 §3.1 模式时对应的源 tsx 路径，例如 `stones/alan/client/index.tsx`。 */
+  /** 命中模式时对应的源 tsx 路径，例如 `stones/alan/client/index.tsx`。 */
   sourcePath: string;
 }
 

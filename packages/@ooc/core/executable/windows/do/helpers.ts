@@ -79,7 +79,7 @@ export function findThreadInScope(self: ThreadContext, targetId: string): Thread
  * 多层嵌套：本函数只在被 archive 的那一层做归还；更深层结构由各自层处理。
  */
 function returnBorrowedOwnersFromChild(parent: ThreadContext, child: ThreadContext): void {
-  // batch C narrowing(N4): contextWindows 契约层是 base[]；narrow 回 union[] 以构造 union 副本
+  // 窄化：contextWindows 契约层是 base[]；narrow 回 union[] 以构造 union 副本
   // 并推入 union 数组（runtime 即 union 实例）。
   const childWindows = (child.contextWindows ?? []) as ContextWindow[];
   const parentWindows = (parent.contextWindows ?? []) as ContextWindow[];

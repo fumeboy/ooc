@@ -87,7 +87,7 @@ import "./talk/index.js";
 // pr_window —— reflectable 沉淀的 reviewer 评审窗口（collaborable 家族）。
 import "./pr/index.js";
 
-// P6.§9 (2026-06-02): method_exec form 是 method 调用过程的临时载体（Object 内置特性）。
+// method_exec form 是 method 调用过程的临时载体（Object 内置特性）。
 import "./method_exec/index.js";
 
 

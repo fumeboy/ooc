@@ -1,5 +1,5 @@
 /**
- * XML 节点的共享数据结构与工具 —— canonical 源（batch C3 从
+ * XML 节点的共享数据结构与工具 —— canonical 源（从
  * `thinkable/context/xml.ts` 迁入）。供 render 调度器与各 window type 的
  * renderXml hook 共享。
  *

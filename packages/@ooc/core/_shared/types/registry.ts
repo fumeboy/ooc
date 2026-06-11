@@ -1,6 +1,6 @@
 /**
  * ObjectRegistry 相关类型 + filterMethodsByVisibility 纯函数 —— canonical 源
- * （batch C7 从 `executable/windows/_shared/registry.ts` 迁入类型部分）。
+ * （从 `executable/windows/_shared/registry.ts` 迁入类型部分）。
  *
  * **留在 runtime / executable**（含可变状态，不可下沉 `_shared`）：
  * - `ObjectRegistry` class、`builtinRegistry` singleton、`createObjectRegistry()` 工厂
@@ -48,9 +48,9 @@ export type ConsumedMessageIdsHook = (
 ) => Iterable<{ id: string }>;
 
 /**
- * Object 类型定义（canonical，2026-06-03 ooc-6 cleanup Phase A：原 ObjectTypeDefinition 重命名）。
+ * Object 类型定义（canonical，原 ObjectTypeDefinition 重命名）。
  *
- * 已删除字段（2026-06-10 cleanup）：
+ * 已删除字段：
  * - 旧 `commands` → `methods`；`prototype` → `parentClass`
  * - `type` —— registry Map key 即 type，字段冗余（string 类型本身也在逐步退役）
  * - `renderXml` → `readable`（签名一致的标准替代）
@@ -86,7 +86,7 @@ export type MethodVisibilityContext =
   | { kind: "ui" };
 
 /**
- * 按可见性档位过滤 method 表。纯函数，canonical 源（batch C7 从 runtime/object-registry.ts 迁入）。
+ * 按可见性档位过滤 method 表。纯函数，canonical 源（从 runtime/object-registry.ts 迁入）。
  *
  * - self → 全部可见
  * - peer → 仅 public=true

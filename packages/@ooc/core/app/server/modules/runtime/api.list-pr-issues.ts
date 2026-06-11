@@ -2,7 +2,7 @@ import { Elysia } from "elysia";
 import type { RuntimeService } from "./service";
 
 /**
- * P4 可观测：列出所有 PR-Issue（补体验官实证 404 的 G2 缺口，2026-06-11）。
+ * 可观测：列出所有 PR-Issue（补体验官实证 404 的缺口）。
  *
  * GET /api/runtime/pr-issues → { items: PrIssueSummaryView[] }
  *

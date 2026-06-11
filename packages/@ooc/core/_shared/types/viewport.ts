@@ -1,5 +1,5 @@
 /**
- * viewport 协议纯类型 + 纯函数 —— canonical 源（batch C2 从
+ * viewport 协议纯类型 + 纯函数 —— canonical 源（从
  * `executable/windows/_shared/viewport.ts` + `transcript-viewport.ts` 迁入）。
  *
  * 两套互补的"窗口节流"机制：

@@ -1,6 +1,6 @@
 /**
  * Thread 运行时上下文类型 + flow/stone 引用类型 + 纯路径函数 —— canonical 源
- * （batch C5 从 `thinkable/context/index.ts` 与 `persistable/common.ts` 迁入）。
+ * （从 `thinkable/context/index.ts` 与 `persistable/common.ts` 迁入）。
  *
  * 只含**纯类型**与**纯函数**：ThreadContext 的运行时构造（buildContext /
  * buildInputItems / processEventToItems / loadSelfInstructions）留在 thinkable；
@@ -16,7 +16,7 @@ import type { IntentCache } from "./intent.js";
 /**
  * 标识磁盘上的单个 flow object 目录。
  *
- * 路径形态（2026-06-01 bun workspace 迁移，移除 objects/ 中间层）：
+ * 路径形态（bun workspace 迁移，移除 objects/ 中间层）：
  *   objectId="a"       → `{baseDir}/flows/{sessionId}/a`
  *   objectId="a/b"     → `{baseDir}/flows/{sessionId}/a/children/b`
  *   objectId="a/b/c"   → `{baseDir}/flows/{sessionId}/a/children/b/children/c`
@@ -39,7 +39,7 @@ export interface ThreadPersistenceRef extends FlowObjectRef {
   /** `threads/` 下的线程目录名。 */
   threadId: string;
   /**
-   * reflectable 沉淀的 **feat 分支绑定**（2026-06-11，super(foo) 直接编辑路径）。
+   * reflectable 沉淀的 **feat 分支绑定**（super(foo) 直接编辑路径）。
    *
    * super(foo) 调 `new_feat_branch` 开 feat 分支后，把分支名（`feat/<slug>`）绑到本 thread
    * 的 persistence 上并随 thread.json 持久化——使绑定跨 exec tick 存活（开分支后多次
@@ -128,17 +128,17 @@ export function deriveStoneFromThread(threadRef: ThreadPersistenceRef): StoneObj
 /**
  * ProcessEvent 共享的可选字段;所有 variants 都可承载它们。
  *
- * - `id` (P0f): events_summary 必须可被 _foldedBy 引用,所以引入稳定 event id 概念。
+ * - `id`: events_summary 必须可被 _foldedBy 引用,所以引入稳定 event id 概念。
  *   其他类型的 event 也可选地携带 id (用于 compress(scope=events, target_event_ids) 指定);
  *   旧 thread.json 没有 id 字段属于正常情况,渲染层会按数组下标 fallback。
- * - `_foldedBy` (P0f): 该事件已被某条 events_summary 折叠;渲染时跳过,实际数据仍在
+ * - `_foldedBy`: 该事件已被某条 events_summary 折叠;渲染时跳过,实际数据仍在
  *   thread.events 中保留。下划线前缀但**保留**进 thread.json,
- *   因为它是 fold 状态的唯一持久化锚点。design §4.2 + 任务 F2/F3。
+ *   因为它是 fold 状态的唯一持久化锚点。design §4.2。
  */
 export type ProcessEventCommon = {
-  /** 事件稳定标识 (P0f 引入); events_summary 必填,其他 variants 可选。 */
+  /** 事件稳定标识; events_summary 必填,其他 variants 可选。 */
   id?: string;
-  /** P0f: 该事件已被指定 events_summary event id 折叠,渲染层跳过,持久化保留。 */
+  /** 该事件已被指定 events_summary event id 折叠,渲染层跳过,持久化保留。 */
   _foldedBy?: string;
 };
 
@@ -301,8 +301,8 @@ export type ProcessEvent = ProcessEventCommon & (
        * 事件来源：events 流中段折叠后形成的摘要节点。
        *
        * Design: docs/2026-05-25-context-compression-design.md §4.2 / §4.4
-       * P0f 任务 F1: 由 LLM 在 compress(scope=events, summary=...) 调用中主动提供摘要文本。
-       * 未来 P0e emergency guard 也可触发本 event (scope="auto") — 那时 summary 是占位文本。
+       * 由 LLM 在 compress(scope=events, summary=...) 调用中主动提供摘要文本。
+       * 未来 emergency guard 也可触发本 event (scope="auto") — 那时 summary 是占位文本。
        *
        * 渲染策略 (processEventToItems): events_summary 渲染为一条 system message,
        * 内含 count + summary,LLM 视野中替换被 _foldedBy 标记的原 events 序列。
@@ -318,7 +318,7 @@ export type ProcessEvent = ProcessEventCommon & (
       latestEventId?: string;
       /** 摘要正文; LLM 在 compress(scope=events) 调用中提供。 */
       summary: string;
-      /** 摘要质量提示 (LLM 自评 / P0e auto 时为 "rough")。 */
+      /** 摘要质量提示 (LLM 自评 / auto 时为 "rough")。 */
       qualityHint?: "rough" | "curated";
       /** 谁触发本次 fold: user=LLM 主动 compress, auto=未来 emergency_guard 自动触发。 */
       scope?: "user" | "auto";
@@ -430,7 +430,7 @@ export type ThreadMessage = {
 
 /**
  * 线程调度状态。status="waiting" 表示等待 inbox 新消息（不再有 waitingType 细分）。
- * batch C5 显式提取为具名 type，便于复用。
+ * 显式提取为具名 type，便于复用。
  */
 export type ThreadStatus = "running" | "waiting" | "done" | "failed" | "paused";
 
@@ -439,7 +439,7 @@ export type ThreadStatus = "running" | "waiting" | "done" | "failed" | "paused";
  *
  * 这是 buildContext / think / scheduler 共享的最小结构，不等同于完整持久化模型。
  *
- * Step 1 重构（spec 2026-05-14）：
+ * 重构：
  * - 删除 activeForms / windows / pinnedKnowledge / waitingType / awaitingChildren
  * - 新增 contextWindows（统一抽象）+ threadLocalData（program_window step 2 使用，先占位）
  * - status="waiting" 单独表达"等待 inbox 新消息"，不再细分 waitingType（spec § 等待语义的简化）
@@ -465,7 +465,7 @@ export type ThreadContext = {
    */
   creatorObjectId?: string;
   /**
-   * 创建本线程的 session id（C5：cross-session notify 修复，2026-05-25）。
+   * 创建本线程的 session id（cross-session notify 修复）。
    *
    * 大多数 thread 的 creator 与自己在同一 session，此时该字段与 persistence.sessionId 相等，
    * 通常缺省。**关键场景**：super-alias 派送时 callee thread 在 "super" session，
@@ -501,8 +501,8 @@ export type ThreadContext = {
    */
   contextWindows: ContextWindow[];
   /**
-   * thread-local 共享数据；Step 2 program_window 的 ts/js exec 之间通过这里传值
-   * （spec § program_window 的"跨 exec 数据传递"段）。Step 1 仅占位、不读不写。
+   * thread-local 共享数据；program_window 的 ts/js exec 之间通过这里传值
+   * （spec § program_window 的"跨 exec 数据传递"段）。当前仅占位、不读不写。
    */
   threadLocalData?: Record<string, unknown>;
   /** end method 写入的结束原因。 */
@@ -510,7 +510,7 @@ export type ThreadContext = {
   /** end method 写入的最终摘要。 */
   endSummary?: string;
   /**
-   * 结构化失败原因（observability 根因 #4，2026-05-27）。
+   * 结构化失败原因。
    *
    * 当 status="failed" 由 thinkloop catch 块写入时，给出机读的失败分类，让控制面 /
    * GET .../threads/:id 不必去 events 里扒文本：
@@ -520,10 +520,10 @@ export type ThreadContext = {
    * 仅失败终态写入；done/running/waiting/paused 不带此字段。
    */
   statusReason?: string;
-  /** 失败时的人读错误消息（与 statusReason 配套；observability 根因 #4）。 */
+  /** 失败时的人读错误消息（与 statusReason 配套）。 */
   lastError?: string;
   /**
-   * 任务级 LLM 超时覆盖（ms；observability 根因 #1，2026-05-27）。
+   * 任务级 LLM 超时覆盖（ms）。
    *
    * 缺省时 think → llmClient.generate 回落全局默认（120s，由 OOC_LLM_TIMEOUT_MS 覆写）。
    * 设置后本 thread 的每轮 generate 用此值兜底超时，让"已知慢任务"能申请更长超时，
@@ -540,13 +540,13 @@ export type ThreadContext = {
   inboxSnapshotAtWait?: number;
   /**
    * status="waiting" 时由 wait tool 写入：本次 wait 引用的 IO 来源 window id。
-   * 唤醒后由 scheduler 清空。observability/debug 用，Phase 1 不参与 wakeup 决策
-   * （任何 inbox 新消息都唤醒）；Phase 2 可能据此做精确路由。
+   * 唤醒后由 scheduler 清空。observability/debug 用，不参与 wakeup 决策
+   * （任何 inbox 新消息都唤醒）；未来可能据此做精确路由。
    * 见 docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md。
    */
   waitingOn?: string;
   /**
-   * P5: Intent cache keyed by formId. Populated by WindowManager write path
+   * Intent cache keyed by formId. Populated by WindowManager write path
    * (openMethodExec / refine / submit) and read by ContextPipeline processors.
    * Stored on ThreadContext as a runtime-only field; not persisted to disk.
    */

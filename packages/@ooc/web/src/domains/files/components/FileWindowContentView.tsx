@@ -1,7 +1,7 @@
 /**
  * FileWindowContentView —— file_window 详情面板中"按 LLM 视角预览文件内容"的子视图。
  *
- * 2026-05-25 重构：按扩展名 dispatch 专用 viewer。先 fetch 内容，再交给：
+ * 按扩展名 dispatch 专用 viewer。先 fetch 内容，再交给：
  *   - `.md` / `.markdown` → MarkdownContent
  *   - `.json` → JsonTreeView（解析失败回退 CodeMirror）
  *   - `.csv` / `.tsv` → CsvTableView

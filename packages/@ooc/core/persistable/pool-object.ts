@@ -118,7 +118,7 @@ export function poolDataFile(ref: PoolObjectRef, name: string): string {
 /**
  * 读取 pool 对某 peer 的 relation 文件，不存在（ENOENT）返回 undefined。
  *
- * 与 stone-object 时代的 readRelation 同形态，只是基底改为 pool（2026-05-23 起 knowledge
+ * 与 stone-object 时代的 readRelation 同形态，只是基底改为 pool（knowledge
  * 从 stone 迁出到 pool）。其它 IO 错误向上抛。
  */
 export async function readPoolRelation(

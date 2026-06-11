@@ -43,10 +43,10 @@ function scopePrefix(scope: TreeScope) {
 }
 
 /**
- * 根因 #3：marker 元数据化（2026-05-24）。
+ * marker 元数据化。
  *
  * 旧实现按 path-prefix 启发式判 marker（`stones/<id>` length===2 → stone）；
- * 2026-05-21 stones 重组（加 `<branch>/objects/` 中间层）后 4 段路径下启发式失效。
+ * stones 重组（加 `<branch>/objects/` 中间层）后 4 段路径下启发式失效。
  *
  * 新实现：基于 backend 元数据文件判 marker——目录下含
  *   - `package.json`(ooc.kind="object") → marker="stone"（ooc-6 起 stone=bun workspace package，不再写 .stone.json）

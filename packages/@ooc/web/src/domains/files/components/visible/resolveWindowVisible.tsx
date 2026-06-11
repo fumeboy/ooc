@@ -5,7 +5,7 @@
  * 组件渲染：builtin 走静态注册表（BUILTIN_VISIBLE），user-defined object 走运行时动态加载
  * （client-source-url → /@fs dynamic import）。无 per-type switch、无 HANDLED_WINDOW_TYPES。
  *
- * 解析顺序（Review 修订，M3：object 自己的 visible 优先于继承的 builtin）：
+ * 解析顺序（object 自己的 visible 优先于继承的 builtin）：
  *  1. BUILTIN_VISIBLE[window.class]（**原始 type 直命中**，不经 effectiveVisibleType）→ 静态 builtin。
  *  2. 否则（user-defined type）→ dynamic：加载该 object 自己的 stone visible（objectId=window.class）。
  *  3. dynamic notFound（该 object 没写 visible）→ **readable 文本**（该 object 的 readable.md 对外自述）。
@@ -40,7 +40,7 @@ export type WindowVisibleKind =
  * 纯函数：决定一个 window 的初步渲染策略（静态 / 动态 / JSON）。
  *
  * 用**原始 window.class** 直命中 builtin（不是 effectiveVisibleType），否则继承会抢在 object
- * 自己的 visible 前面（M3）。user-defined type 一律走 dynamic（objectId=type, scope=stone）；
+ * 自己的 visible 前面。user-defined type 一律走 dynamic（objectId=type, scope=stone）；
  * 动态加载内部 notFound 时再回退 effectiveVisibleType builtin / JSON。
  */
 export function resolveWindowVisibleKind(

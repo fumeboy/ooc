@@ -119,7 +119,7 @@ const setViewportMethod: WindowMethod = {
 /** 拒绝 close 非 explicit 来源的 knowledge_object（合成 window 不可关闭）。 */
 function onCloseKnowledgeWindow(ctx: OnCloseContext): boolean | void {
   if (ctx.window.class !== "knowledge") return;
-  // batch C narrowing(N1): ctx.window 契约层是 base ContextWindow；type==="knowledge" 守卫后
+  // narrowing: ctx.window 契约层是 base ContextWindow；type==="knowledge" 守卫后
   // narrow 回 KnowledgeWindow 以读 source/path（runtime 保证此 window 即 knowledge 实例）。
   const w = ctx.window as KnowledgeWindow;
   // 历史 window 没有 source 字段时按 explicit 处理（向后兼容）

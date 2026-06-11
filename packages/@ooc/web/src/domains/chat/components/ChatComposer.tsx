@@ -29,7 +29,7 @@ export function ChatComposer({
 
   const cannotSend = disabled || paused || busy || !text.trim();
 
-  // Issue #5 Bad #1 fix: placeholder / button hint 都标 `(⌘↵ to send)` 却没挂任何
+  // placeholder / button hint 都标 `(⌘↵ to send)` 却没挂任何
   // keyboard handler — 是 false advertising。这里实装:
   // - Mac: Cmd+Enter; Win/Linux: Ctrl+Enter (统一 `e.metaKey || e.ctrlKey`)
   // - 普通 Enter 保留 textarea 原生换行
@@ -51,11 +51,11 @@ export function ChatComposer({
     if (cannotSend) return;
     void trySend();
   }
-  // Issue #3 A4 fix: 原写死 'Continue root thread...' 与 callee thread 现实脱节。
+  // 原写死 'Continue root thread...' 与 callee thread 现实脱节。
   // 改为从 peer 派生 `Reply to <name>...`(优先 displayName,缺省回退 objectId);缺 peer 时退回通用 `Continue thread...`。
   const peerLabel = peerDisplayName || peerObjectId;
   const idlePlaceholder = peerLabel ? `回复 ${peerLabel}…` : "继续这个 thread…";
-  // Issue #3 A7 fix: composer send 通道只支持 ⌘↵, 在 placeholder 末尾增加 hint, 与 send button title 共同消除
+  // composer send 通道只支持 ⌘↵, 在 placeholder 末尾增加 hint, 与 send button title 共同消除
   // "新用户找不到发送方式" 的体验问题。
   const placeholder = paused ? "thread 等待审批中，先在上方决议卡处理…" : `${idlePlaceholder}（⌘↵ 发送）`;
 

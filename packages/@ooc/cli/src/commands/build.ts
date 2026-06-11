@@ -6,7 +6,6 @@ import { spawn } from "node:child_process";
 /**
  * ooc build — precompile stones for production.
  *
- * M4 first pass:
  *   1. Compile each stone's `executable/index.ts` (or legacy `server/index.ts`) to a plain
  *      JS module under `.ooc-dist/stones/<id>/executable/index.js` so the runtime can
  *      load it without bun transpilation overhead.

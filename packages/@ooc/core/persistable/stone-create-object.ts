@@ -2,7 +2,7 @@
  * createObjectInSession —— 在业务 session worktree 里原子地建**新对象骨架**
  * （package.json + self.md + readable.md [+ knowledge/]），落 `flows/<sid>/objects/<newId>/`。
  *
- * 背景（2026-06-09）：去 metaprog 后 supervisorCreateObject 被删，但 write_file 只能
+ * 背景：去 metaprog 后 supervisorCreateObject 被删，但 write_file 只能
  * 「改已存在对象的文件」——它靠 package.json 命中判 object 边界，新对象还没 package.json
  * → 被 classifyPackagesPath 判 workspace-level 资源拒写。于是「建新对象」这条原语断了。
  *
@@ -10,7 +10,7 @@
  * 复用 createStoneObject 建骨架（package.json + 空 self + 空 readable）→ writeSelf /
  * writeReadable 填内容 + 写 knowledge/<file>.md。**不 commit**。
  *
- * 地基不变量（2026-06-11）：session worktree 是纯运行时派生物，**永不合入 main**——
+ * 地基不变量：session worktree 是纯运行时派生物，**永不合入 main**——
  * 新对象本 session 内即可用（session-aware 读已支持），进 canonical 走独立 feat-branch PR
  * （super flow new_feat_branch → 直接编辑 → evolve_self）。本函数只负责落盘骨架到 worktree（fail-loud，不静默吞）。
  */

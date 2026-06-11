@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import type { RuntimeService } from "./service";
 
 /**
- * P4 可观测：单条 PR-Issue 全量（intent/diff/paths/branch/reviewers/approvals/status/verdict）。
+ * 可观测：单条 PR-Issue 全量（intent/diff/paths/branch/reviewers/approvals/status/verdict）。
  *
  * GET /api/runtime/pr-issues/:issueId → PrIssueDetailView
  *
