@@ -1,36 +1,42 @@
 /**
- * SessionThreadsIndex — 永远走 StaffView（五线谱）布局。
+ * SessionThreadsIndex — session 下所有 thread 的**树形视图**。
  *
- *   ┌─ user ──┬─ supervisor ─┬─ assistant ─┐
- *t0│  ●root  │              │             │
- *t1│         │  ●user-talk  │             │
- *t2│         │              │  ●fork-1    │
- *t3│         │  ✓done       │             │
- *   └─────────┴──────────────┴─────────────┘
+ *   ▾ user · root                       [session entry]
+ *     ▾ supervisor · plan               t·1
+ *         worker · extract              ✓
+ *       supervisor · review            ◐
  *
- * 两种 items 输入：
- *   **default**（无选中）：items = 全量 listThreads，所有 thread 按 createdAt 升序占行
- *   **filtered**（选中某 thread）：items = 通过 BFS 上下游算出的 relatedItems，列也只
- *     保留有相关 thread 的 object —— 视觉只是"行被裁过"，**不**切换组件形态，避免抖动
+ * 跨 object 的森林：父子边吃两类来源 —— 同 object 的 parentThreadId、跨 object 的
+ * creator 链（creatorObjectId/creatorThreadId）。`user/root` 通常是唯一真根。
+ *
+ * filter：
+ *   - 按 object 下拉筛选（只看某个 object 的 thread，祖先链保留以维持树形）
+ *   - 按 thread id / title 文本搜索
+ *   命中节点高亮、强制展开；仅作祖先占位的节点淡化。
  *
  * 路由：
- *   - 列表项点击 → navigate `/flows/index?sessionId=&objectId=&threadId=`
+ *   - 行点击 → navigate `/flows/index?sessionId=&objectId=&threadId=`（选中高亮，不切 view）
  *   - user.root 节点 disabled，不可切换查看
- *   - 右侧 "→" 按钮跳 thread_context view，保留 query
+ *   - 行右侧 "→" 按钮跳 thread_context view，保留 query
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowRight, MessageSquare, Plus, Layers } from "lucide-react";
+import { ArrowRight, MessageSquare, Plus, Layers, ListTree, X } from "lucide-react";
 import type { ContextWindow, ThreadContext } from "../../chat";
 import { fetchSessionThreadsFull } from "../../chat";
 import { addUserTalkWindow } from "../query";
 import { toPath, useRouteState } from "../../../app/routing";
-import { useDisplayName, useDisplayNames } from "../../objects";
+import { useDisplayNames } from "../../objects";
 import { messageFromError } from "../../../transport/errors";
 import type { ListThreadsItem } from "../types";
-import { ThreadNode } from "./ThreadNode";
-import { groupByObject } from "./session-threads-index.helpers";
+import { ThreadTreeView } from "./ThreadTreeView";
+import {
+  buildSessionThreadTree,
+  pruneTree,
+  collectMatchedKeys,
+  listObjectIds,
+} from "./thread-tree.helpers";
 
 const POLL_INTERVAL_MS = 4000;
 
@@ -51,6 +57,10 @@ export function SessionThreadsIndex({
   const [loadError, setLoadError] = useState<string | undefined>();
   const [degraded, setDegraded] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
+
+  // filter 状态
+  const [objectFilter, setObjectFilter] = useState<string>("");
+  const [queryFilter, setQueryFilter] = useState<string>("");
 
   const route = useRouteState();
   const selectedObjectId = route.kind === "flowsView" ? route.objectId : undefined;
@@ -81,34 +91,24 @@ export function SessionThreadsIndex({
     };
   }, [sessionId]);
 
-  // 命中 staff mode 的条件：query 带 objectId+threadId，且该 thread 在 items 列表里
-  // （未在的话回 default，避免选中状态指向不存在的 thread）
-  const selectionExistsInItems =
-    !!selectedObjectId &&
-    !!selectedThreadId &&
-    items.some(
-      (i) => i.objectId === selectedObjectId && i.threadId === selectedThreadId,
-    );
-
-  const relatedItems = useMemo(() => {
-    if (!selectionExistsInItems) return undefined;
-    return collectRelated(items, selectedObjectId!, selectedThreadId!);
-  }, [items, selectedObjectId, selectedThreadId, selectionExistsInItems]);
-
-  // default 模式分组（全量）
-  const groupedAll = useMemo(() => groupByObject(items), [items]);
-  // staff 模式分组（仅相关 items；保留 groupedAll 的列序与权重）
-  const groupedStaff = useMemo(() => {
-    if (!relatedItems) return undefined;
-    return groupByObject(relatedItems);
-  }, [relatedItems]);
-
-  const visibleColumns = groupedStaff ?? groupedAll;
-  const objectIds = useMemo(
-    () => visibleColumns.map((g) => g.objectId),
-    [visibleColumns],
-  );
+  const objectIds = useMemo(() => listObjectIds(items), [items]);
   useDisplayNames(objectIds);
+
+  // object filter 指向的对象若已不在 items 里（thread 流转后消失），自动失效
+  const effectiveObjectFilter =
+    objectFilter && objectIds.includes(objectFilter) ? objectFilter : "";
+  const filter = useMemo(
+    () => ({ objectId: effectiveObjectFilter || undefined, query: queryFilter }),
+    [effectiveObjectFilter, queryFilter],
+  );
+  const filterActive = !!filter.objectId || !!filter.query?.trim();
+
+  const tree = useMemo(() => buildSessionThreadTree(items), [items]);
+  const visibleTree = useMemo(() => pruneTree(tree, filter), [tree, filter]);
+  const matchedKeys = useMemo(
+    () => collectMatchedKeys(items, filter),
+    [items, filter],
+  );
 
   const talkWindows = useMemo(
     () =>
@@ -128,6 +128,11 @@ export function SessionThreadsIndex({
     );
   };
 
+  const clearFilter = () => {
+    setObjectFilter("");
+    setQueryFilter("");
+  };
+
   const isEmptySession = talkWindows.length === 0 && items.length === 0;
   const totalTalks = items.reduce((sum, i) => sum + (i.talkPeers?.length ?? 0), 0);
 
@@ -138,7 +143,7 @@ export function SessionThreadsIndex({
           <Layers size={14} className="muted" />
           <h2 className="session-threads-index-title">session threads</h2>
           <span className="muted small session-threads-index-stats">
-            {groupedAll.length} 个 object
+            {objectIds.length} 个 object
             {" · "}
             {items.length} 个 thread
             {totalTalks > 0 && (
@@ -147,29 +152,17 @@ export function SessionThreadsIndex({
                 {totalTalks} 条 talk 链路
               </>
             )}
-            {relatedItems && (
+            {filterActive && (
               <>
                 {" · "}
                 <span className="session-threads-index-mode-pill">
-                  五线谱视图（{relatedItems.length} 个相关）
+                  过滤命中 {matchedKeys.size}
                 </span>
               </>
             )}
           </span>
         </div>
         <div className="session-threads-index-header-actions">
-          {relatedItems && (
-            <button
-              type="button"
-              className="btn small"
-              onClick={() =>
-                navigate(toPath({ kind: "flowsView", view: "index", sessionId }))
-              }
-              title="清除选中，回到全量视图"
-            >
-              清除筛选
-            </button>
-          )}
           <button
             type="button"
             className="btn primary session-threads-index-new-chat"
@@ -181,6 +174,47 @@ export function SessionThreadsIndex({
           </button>
         </div>
       </header>
+
+      {!isEmptySession && items.length > 0 && (
+        <div className="session-threads-index-filter">
+          <ListTree size={13} className="muted" aria-hidden />
+          <label className="session-threads-index-filter-field">
+            <span className="muted small">object</span>
+            <select
+              className="session-threads-index-filter-select"
+              value={effectiveObjectFilter}
+              onChange={(e) => setObjectFilter(e.target.value)}
+              aria-label="按 object 筛选 thread"
+            >
+              <option value="">全部 object</option>
+              {objectIds.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <input
+            className="session-threads-index-filter-search"
+            type="search"
+            placeholder="搜索 thread id / 标题…"
+            value={queryFilter}
+            onChange={(e) => setQueryFilter(e.target.value)}
+            aria-label="按文本搜索 thread"
+          />
+          {filterActive && (
+            <button
+              type="button"
+              className="btn small session-threads-index-filter-clear"
+              onClick={clearFilter}
+              title="清除筛选"
+            >
+              <X size={11} style={{ marginRight: 2 }} />
+              清除
+            </button>
+          )}
+        </div>
+      )}
 
       {loadError && (
         <div className="session-threads-index-banner error small" role="alert">
@@ -196,20 +230,25 @@ export function SessionThreadsIndex({
       <div className="session-threads-index-body">
         {isEmptySession ? (
           <EmptySession sessionId={sessionId} />
-        ) : visibleColumns.length === 0 ? (
+        ) : items.length === 0 ? (
           <div className="session-threads-index-empty muted small">
             还没有 thread —— 开启一段对话，这个 session 就会成形。
           </div>
+        ) : visibleTree.length === 0 ? (
+          <div className="session-threads-index-empty muted small">
+            没有匹配当前筛选的 thread。
+            <button type="button" className="btn small" onClick={clearFilter} style={{ marginLeft: 8 }}>
+              清除筛选
+            </button>
+          </div>
         ) : (
-          // 无选中 → 用全量 items；选中 → 用 relatedItems。统一走 StaffView 避免两套
-          // 不一致的 UI 形态（早期版本 default 走 ObjectColumn 横向树，selected 走 staff
-          // grid，视觉跳变明显）。default 模式下"列时间排序"也是合理的全局视图。
-          <StaffView
+          <ThreadTreeView
             sessionId={sessionId}
-            columns={visibleColumns}
-            items={relatedItems ?? items}
+            roots={visibleTree}
             selectedObjectId={selectedObjectId}
             selectedThreadId={selectedThreadId}
+            matchedKeys={matchedKeys}
+            filterActive={filterActive}
             onSelectThread={onSelectThread}
           />
         )}
@@ -220,175 +259,6 @@ export function SessionThreadsIndex({
       )}
     </div>
   );
-}
-
-/**
- * StaffView — 五线谱布局：
- * - column 数 = visibleColumns.length；每列对应一个 object
- * - 每个 thread 占一整行；行索引由 createdAt 升序决定
- * - 同一行内只有一个 cell 渲染 ThreadNode（其它列对应的 cell 为空 spacer）
- * - 横线在每行底部画淡淡分隔，强化"五线谱"视觉
- */
-function StaffView({
-  sessionId,
-  columns,
-  items,
-  selectedObjectId,
-  selectedThreadId,
-  onSelectThread,
-}: {
-  sessionId: string;
-  columns: ReturnType<typeof groupByObject>;
-  items: ListThreadsItem[];
-  selectedObjectId?: string;
-  selectedThreadId?: string;
-  onSelectThread: (objectId: string, threadId: string) => void;
-}) {
-  const colIndexOf = useMemo(() => {
-    const m = new Map<string, number>();
-    columns.forEach((c, i) => m.set(c.objectId, i));
-    return m;
-  }, [columns]);
-  const sortedItems = useMemo(
-    () => items.slice().sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0)),
-    [items],
-  );
-
-  return (
-    <div
-      className="threads-staff"
-      style={{ "--staff-cols": columns.length } as React.CSSProperties}
-    >
-      {/* Header row */}
-      {columns.map((g, i) => (
-        <StaffHeader key={g.objectId} objectId={g.objectId} colIndex={i} />
-      ))}
-      {/* Time-aligned thread rows */}
-      {sortedItems.map((item, rowIdx) => {
-        const col = (colIndexOf.get(item.objectId) ?? 0) + 1;
-        const active =
-          selectedObjectId === item.objectId && selectedThreadId === item.threadId;
-        const disabled = item.objectId === "user" && item.threadId === "root";
-        return (
-          <div
-            key={`${item.objectId}/${item.threadId}`}
-            className="threads-staff-cell"
-            style={{ gridRow: rowIdx + 2, gridColumn: col }}
-          >
-            <ThreadNode
-              sessionId={sessionId}
-              item={item}
-              level={0}
-              active={active}
-              disabled={disabled}
-              onSelect={() => onSelectThread(item.objectId, item.threadId)}
-            />
-          </div>
-        );
-      })}
-      {/* Staff line: 每行底部画一条淡淡的横线（包括 header 下方）；
-          用 ::after spacer 不容易跨整行，改用 grid 上的 background row 实现 —
-          见 .threads-staff::before / 背景 layered rules in styles.css */}
-    </div>
-  );
-}
-
-function StaffHeader({ objectId, colIndex }: { objectId: string; colIndex: number }) {
-  const { displayName } = useDisplayName(objectId);
-  const initial = (displayName || objectId || "?").trim().slice(0, 1).toUpperCase();
-  const accent = pickAccentForObject(objectId);
-  return (
-    <div
-      className="threads-staff-header"
-      style={
-        {
-          gridRow: 1,
-          gridColumn: colIndex + 1,
-          "--object-accent": accent,
-        } as React.CSSProperties
-      }
-    >
-      <span className="threads-staff-header-avatar" aria-hidden>
-        {initial}
-      </span>
-      <div className="threads-staff-header-title-block">
-        <span className="threads-staff-header-title" title={objectId}>
-          {displayName}
-        </span>
-        <span className="threads-staff-header-id muted" title={objectId}>
-          {objectId}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function pickAccentForObject(objectId: string): string {
-  let h = 0;
-  for (let i = 0; i < objectId.length; i++) {
-    h = (h * 31 + objectId.charCodeAt(i)) % 360;
-  }
-  if (objectId === "user") return "hsl(220, 12%, 60%)";
-  return `hsl(${h}, 55%, 55%)`;
-}
-
-/**
- * BFS 出与 (seedObjectId, seedThreadId) 上下游相关的所有 thread。
- *
- * 关系边：
- *   - talk_peers 双向：A.talk → B 视作 A↔B
- *   - parent / child（同 object 内）
- *   - creator 链（child.creatorObjectId/creatorThreadId → parent thread）
- *
- * 性能：N×O(N) BFS；session 规模 < 50 threads 完全够用。
- */
-function collectRelated(
-  items: ListThreadsItem[],
-  seedObjectId: string,
-  seedThreadId: string,
-): ListThreadsItem[] {
-  const key = (o: string, t: string) => `${o}/${t}`;
-  const byKey = new Map(
-    items.map((i) => [key(i.objectId, i.threadId), i] as const),
-  );
-  const visited = new Set<string>();
-  const queue: string[] = [key(seedObjectId, seedThreadId)];
-  while (queue.length > 0) {
-    const k = queue.shift()!;
-    if (visited.has(k)) continue;
-    visited.add(k);
-    const item = byKey.get(k);
-    if (!item) continue;
-    // 出边：talk peers
-    for (const p of item.talkPeers ?? []) {
-      if (p.targetThreadId) queue.push(key(p.targetObjectId, p.targetThreadId));
-    }
-    // 同 object 内的 parent / child
-    if (item.parentThreadId) queue.push(key(item.objectId, item.parentThreadId));
-    for (const cid of item.childThreadIds ?? []) {
-      queue.push(key(item.objectId, cid));
-    }
-    // 跨 object 的 creator 链
-    if (item.creatorObjectId && item.creatorThreadId) {
-      queue.push(key(item.creatorObjectId, item.creatorThreadId));
-    }
-    // 入边：扫描其它 item，谁 talk 到我 / 谁 creator 是我
-    for (const other of items) {
-      if (other === item) continue;
-      const otherTalksToMe = (other.talkPeers ?? []).some(
-        (p) =>
-          p.targetObjectId === item.objectId && p.targetThreadId === item.threadId,
-      );
-      if (otherTalksToMe) queue.push(key(other.objectId, other.threadId));
-      if (
-        other.creatorObjectId === item.objectId &&
-        other.creatorThreadId === item.threadId
-      ) {
-        queue.push(key(other.objectId, other.threadId));
-      }
-    }
-  }
-  return items.filter((i) => visited.has(key(i.objectId, i.threadId)));
 }
 
 function EmptySession({ sessionId }: { sessionId: string }) {

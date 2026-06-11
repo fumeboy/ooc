@@ -827,61 +827,33 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .threads-object-card-super-head:hover { color: var(--foreground); }
 .threads-object-card-super-icon { color: #6726c2; }
 
-/* --- Staff View（选中后）：CSS Grid，列 = object，行 = 时间槽 --- */
-.threads-staff {
-  display: grid;
-  grid-template-columns: repeat(var(--staff-cols, 1), minmax(220px, 1fr));
-  /* header 占第 1 行(auto)；thread 行(grid-row >= 2)走 grid-auto-rows，
-     用 minmax(行高, 1fr) 让它们均分容器剩余高度 → 节点纵向铺满画布，
-     不再挤在顶部一条而下方大片空白（UI-8）。 */
-  grid-template-rows: auto;
-  grid-auto-rows: minmax(44px, 1fr);
-  gap: 0;
-  align-items: stretch;
-  background: var(--card);
-  padding: 0;
-  /* min-height:100% 让 grid 填满 .session-threads-index-body 的可用高度；
-     内容超高时正常溢出滚动（body overflow:auto）。 */
-  min-height: 100%;
-  overflow: hidden;
-  /* 五线谱质感：每行底部一根淡色横线（用 grid-row 占位的 cell border 实现，
-     这里 staff 容器自身仅给 column 之间画 1px 分隔线） */
-}
-.threads-staff-header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: linear-gradient(180deg, var(--card), rgba(252, 252, 250, .9));
-  border-bottom: 2px solid var(--object-accent, var(--border));
-  border-right: 1px solid var(--border);
-}
-.threads-staff-header:last-child { border-right: 0; }
-.threads-staff-header-avatar {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; border-radius: 50%;
-  background: var(--object-accent, var(--muted)); color: #fff;
-  font-size: 11px; font-weight: 700; flex: 0 0 auto; user-select: none;
-}
-.threads-staff-header-title-block { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
-.threads-staff-header-title { font-size: 12.5px; font-weight: 700; color: var(--foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.threads-staff-header-id { font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* --- Filter bar：按 object 下拉 + 文本搜索 --- */
+.session-threads-index-filter { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; flex: 0 0 auto; flex-wrap: wrap; }
+.session-threads-index-filter-field { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.session-threads-index-filter-select { font-size: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--foreground); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 220px; }
+.session-threads-index-filter-search { flex: 1 1 160px; min-width: 120px; font-size: 12px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--foreground); }
+.session-threads-index-filter-search:focus-visible { outline: 2px solid rgba(70, 96, 220, .35); outline-offset: -1px; }
+.session-threads-index-filter-clear { flex: 0 0 auto; display: inline-flex; align-items: center; }
 
-.threads-staff-cell {
-  padding: 6px 8px;
-  border-top: 1px dashed rgba(94, 106, 86, 0.2);
-  border-right: 1px solid var(--border);
-  /* row 现为 1fr 高，cell 内容纵向居中显示，节点均匀分布于画布而非贴行顶 */
-  display: flex;
-  align-items: center;
-  /* 让占据本行的 cell 在自己列里显示，未被占据的列在该行视觉上是空的 spacer */
-}
-/* 最右一列不画右边竖线 */
-.threads-staff-cell:nth-child(var(--staff-cols)) { border-right: 0; }
-/* 五线谱整体留 8px inner padding via row 1 gap：用 header 的 padding 实现 */
+/* --- Tree View：跨 object 的会话线程森林（取代旧五线谱 StaffView） --- */
+.threads-tree { display: flex; flex-direction: column; min-height: 100%; background: var(--card); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.threads-tree-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: linear-gradient(180deg, var(--card), rgba(252, 252, 250, .9)); position: sticky; top: 0; z-index: 2; flex: 0 0 auto; }
+.threads-tree-toolbar-btn { font-size: 11px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); color: var(--muted-foreground); cursor: pointer; transition: background .12s ease, color .12s ease; }
+.threads-tree-toolbar-btn:hover:not(:disabled) { background: rgba(232, 240, 254, .5); color: var(--foreground); }
+.threads-tree-toolbar-btn:disabled { opacity: .45; cursor: default; }
+.threads-tree-toolbar-sep { color: var(--border); }
+.threads-tree-toolbar-hint { margin-left: auto; }
+.threads-tree-list { list-style: none; margin: 0; padding: 0; }
+.threads-tree-item { position: relative; }
+.threads-tree-row { display: flex; align-items: center; gap: 6px; padding-right: 8px; border-bottom: 1px solid rgba(94, 106, 86, 0.08); transition: background .12s ease; }
+.threads-tree-row.is-match { background: rgba(70, 96, 220, .06); }
+.threads-tree-row.is-passthrough { opacity: .5; }
+.threads-tree-twisty { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); cursor: pointer; padding: 0; transition: background .12s ease, color .12s ease; }
+.threads-tree-twisty:hover:not(:disabled) { background: rgba(70, 96, 220, .12); color: #2f49c8; }
+.threads-tree-twisty:disabled { cursor: default; opacity: .4; }
+.threads-tree-twisty-leaf { cursor: default; }
+.threads-tree-avatar { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--object-accent, var(--muted)); color: #fff; font-size: 10px; font-weight: 700; user-select: none; }
+.threads-tree-row .thread-node { flex: 1 1 auto; width: auto; min-width: 0; }
 
 /* --- Thread Node 行（default + staff 共用） --- */
 .thread-node { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; text-align: left; font: inherit; transition: background .12s ease; outline: none; }
