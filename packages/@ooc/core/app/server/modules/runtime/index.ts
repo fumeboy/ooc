@@ -17,6 +17,9 @@ import { activityApi } from "./api.activity";
 import { listLoopDebugApi } from "./api.list-loop-debug";
 import { permissionDecisionApi } from "./api.permission-decision";
 import { resolvePrIssueApi } from "./api.resolve-pr-issue";
+import { approvePrIssueApi } from "./api.approve-pr-issue";
+import { listPrIssuesApi } from "./api.list-pr-issues";
+import { getPrIssueApi } from "./api.get-pr-issue";
 import { rollbackStoneApi } from "./api.rollback-stone";
 import { createRuntimeService } from "./service";
 
@@ -51,5 +54,8 @@ export function runtimeModule(config: RuntimeModuleConfig) {
     .use(listLoopDebugApi(service, config.baseDir))
     .use(permissionDecisionApi(service, config.baseDir))
     .use(resolvePrIssueApi(service))
+    .use(approvePrIssueApi(service))
+    .use(listPrIssuesApi(service))
+    .use(getPrIssueApi(service))
     .use(rollbackStoneApi(service));
 }

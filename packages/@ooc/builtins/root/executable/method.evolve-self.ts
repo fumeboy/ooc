@@ -20,6 +20,7 @@ import type {
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/method-types.js";
 import { commitAndOpenPr } from "@ooc/core/persistable/index.js";
+import { deliverPrWindowToReviewers } from "@ooc/core/executable/windows/pr/delivery.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 
 const EVOLVE_SELF_TIP = `evolve_self 是 super flow 沉淀的 finalizer（feat 分支 → commit → PR）。
@@ -81,11 +82,24 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
     branch: stonesBranch,
     authorObjectId: objectId,
     intent,
+    // P6 回修定位：本 super(foo) thread 即发起沉淀者，reject/合入失败时 message 回投到这里。
+    authorThreadId: thread.id,
   });
   if (!r.ok) {
     // NO_CHANGES（还没编辑就 finalize）等错误保留绑定，让 super(foo) 继续编辑后重试。
     return `[evolve_self:${r.code}] ${r.message}`;
   }
+
+  // P4：给每个 reviewer 的 super-session thread 投递一条 pr_window（reviewer 在 thinkloop
+  // 里通过 approve/reject/request_changes 亲手批；root knowledge pr-review.md 经 object::pr 激活）。
+  await deliverPrWindowToReviewers({
+    baseDir,
+    issueId: r.issueId,
+    reviewers: r.reviewers,
+    authorObjectId: objectId,
+    authorThreadId: thread.id,
+    title: intent.slice(0, 80),
+  });
 
   // 成功开 PR → 清除绑定（沉淀单元已交付；后续编辑回落普通 session/main 路由）。
   thread.persistence.stonesBranch = undefined;
@@ -98,6 +112,6 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
     branch: r.branch,
     reviewers: r.reviewers,
     paths: r.paths,
-    note: "已开 feat 分支 PR 交 review；reviewers 集已记录，supervisor resolve 合入。绑定已清除。",
+    note: "已开 feat 分支 PR 交 review；已给每个 reviewer 投递 pr_window，他们 approve/reject/request_changes。绑定已清除。",
   });
 }

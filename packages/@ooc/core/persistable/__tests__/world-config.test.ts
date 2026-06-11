@@ -106,3 +106,54 @@ describe("readWorldConfig: workerMaxTicks", () => {
     expect(cfg.workerMaxTicks).toBeUndefined();
   });
 });
+
+describe("readWorldConfig: prAutoMerge (P5 合入闸)", () => {
+  test("缺字段时缺省 false（人工确认更安全）", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-wcfg-"));
+    await writeWorldJson(tempRoot, { siteName: "X" });
+    clearWorldConfigCache();
+    const cfg = await readWorldConfig(tempRoot);
+    expect(cfg.prAutoMerge).toBe(false);
+  });
+
+  test(".world.json 不存在时缺省 false", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-wcfg-"));
+    clearWorldConfigCache();
+    const cfg = await readWorldConfig(tempRoot);
+    expect(cfg.prAutoMerge).toBe(false);
+  });
+
+  test("boolean true 被采纳", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-wcfg-"));
+    await writeWorldJson(tempRoot, { prAutoMerge: true });
+    clearWorldConfigCache();
+    const cfg = await readWorldConfig(tempRoot);
+    expect(cfg.prAutoMerge).toBe(true);
+  });
+
+  test("PascalCase PrAutoMerge 也识别", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-wcfg-"));
+    await writeWorldJson(tempRoot, { PrAutoMerge: true });
+    clearWorldConfigCache();
+    const cfg = await readWorldConfig(tempRoot);
+    expect(cfg.prAutoMerge).toBe(true);
+  });
+
+  test("string 'true'/'false' 被解析", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-wcfg-"));
+    await writeWorldJson(tempRoot, { prAutoMerge: "true" });
+    clearWorldConfigCache();
+    expect((await readWorldConfig(tempRoot)).prAutoMerge).toBe(true);
+    await writeWorldJson(tempRoot, { prAutoMerge: "false" });
+    clearWorldConfigCache();
+    expect((await readWorldConfig(tempRoot)).prAutoMerge).toBe(false);
+  });
+
+  test("非法值 fallback false + warn", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-wcfg-"));
+    await writeWorldJson(tempRoot, { prAutoMerge: 123 });
+    clearWorldConfigCache();
+    const cfg = await readWorldConfig(tempRoot);
+    expect(cfg.prAutoMerge).toBe(false);
+  });
+});

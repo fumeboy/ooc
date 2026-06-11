@@ -48,6 +48,12 @@ export interface PrIssuePayload {
   paths: string[];
   /** 触发 PR 时的 main HEAD sha（Supervisor 决议时验证 base 未飘）。 */
   baseSha: string;
+  /**
+   * 发起沉淀的 super(foo) threadId（P6 回修，2026-06-11）：reject / request-changes /
+   * 合入失败时把反馈 inbox 回投到这条 thread，让 super(foo) resume 修复。缺省（旧 record /
+   * 测试直造）则 P6 路由不可达，由 caller fail-loud。
+   */
+  authorThreadId?: string;
 }
 
 /**
@@ -72,10 +78,64 @@ export interface PrIssueRecord {
   prPayload?: PrIssuePayload;
   /**
    * 该 PR 的 reviewer 集（objectId 列表，P2 决策A 冒泡算出 + supervisor 恒含）。
-   * P1+P2 阶段**只存储、不强制执行**（interim 合入仍走 resolvePrIssue 单 supervisor）；
-   * P3 多 reviewer 审批聚合据此推进。feat-branch PR 必带；旧 record / recovery-needed 留空。
+   * **应批集合**：P3 审批聚合判定 ready-to-merge 时要求每个 reviewer 都已 approve。
+   * feat-branch PR 必带；旧 record / recovery-needed 留空。
    */
   reviewers?: string[];
+  /**
+   * 每个 reviewer 的审批决议（P3，2026-06-11）。**已批状态**（与 reviewers 应批集合对应）。
+   *   - "approved"          — 该 reviewer 同意合入
+   *   - "rejected"          — 该 reviewer 拒绝（任一拒绝即整 PR 可 reject）
+   *   - "changes-requested" — 要求 super(foo) 修改（留 open 等回修）
+   * key ∈ reviewers；approvePrIssue 写入前校验。缺省（未批）= 该 reviewer 不在此 map。
+   */
+  approvals?: Record<string, PrApprovalDecision>;
+}
+
+/** 单个 reviewer 的审批决议（approvals map 的 value，P3）。 */
+export type PrApprovalDecision = "approved" | "rejected" | "changes-requested";
+
+/**
+ * 审批聚合结论（P3，纯逻辑）：
+ *   - "ready-to-merge"     — 所有 reviewer 都 approved → 可合入（合入闸由 P5 .world.json 决定）
+ *   - "rejected"           — 任一 reviewer rejected → 可 archive 拒绝
+ *   - "changes-requested"  — 无 reject、但有 reviewer 要求修改 → 留 open 等 super(foo) 回修
+ *   - "pending"            — 仍有 reviewer 未批 → 等待
+ *
+ * reject 优先级最高（一票否决），其次 changes-requested，其次 pending，全 approve 才 ready。
+ */
+export type PrApprovalVerdict =
+  | "ready-to-merge"
+  | "rejected"
+  | "changes-requested"
+  | "pending";
+
+/**
+ * 纯函数：根据应批集合 reviewers + 已批状态 approvals 聚合出结论。
+ *
+ * reviewers 为空（无 reviewer，理论上不该发生——supervisor 恒含）→ "pending"（fail-safe，
+ * 不自动放行）。仅统计 reviewers 内的决议；approvals 里的越界 key 不影响判定（防御）。
+ */
+export function aggregatePrApproval(
+  reviewers: string[] | undefined,
+  approvals: Record<string, PrApprovalDecision> | undefined,
+): PrApprovalVerdict {
+  const set = reviewers ?? [];
+  if (set.length === 0) return "pending";
+  const map = approvals ?? {};
+  let hasReject = false;
+  let hasChangesRequested = false;
+  let allApproved = true;
+  for (const r of set) {
+    const d = map[r];
+    if (d === "rejected") hasReject = true;
+    else if (d === "changes-requested") hasChangesRequested = true;
+    if (d !== "approved") allApproved = false;
+  }
+  if (hasReject) return "rejected";
+  if (hasChangesRequested) return "changes-requested";
+  if (allApproved) return "ready-to-merge";
+  return "pending";
 }
 
 /** index.json 内对单条 PR-Issue 的摘要条目。 */
@@ -349,5 +409,97 @@ export async function closePrIssue(input: {
       ),
     });
     return { issue: closed, noop: false };
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * approvePrIssue（P3 — 多 reviewer 审批写入 + 聚合）
+ * ---------------------------------------------------------------- */
+
+/** approve 端点入参的 reviewer 决议动作（HTTP body 用，映射到 PrApprovalDecision）。 */
+export type PrApproveAction = "approve" | "reject" | "request-changes";
+
+const APPROVE_ACTION_TO_DECISION: Record<PrApproveAction, PrApprovalDecision> = {
+  approve: "approved",
+  reject: "rejected",
+  "request-changes": "changes-requested",
+};
+
+export interface ApprovePrIssueInput {
+  baseDir: string;
+  issueId: number;
+  /** 行使审批的 reviewer objectId；必须 ∈ record.reviewers。 */
+  reviewerObjectId: string;
+  /** 审批动作。 */
+  action: PrApproveAction;
+}
+
+export type ApprovePrIssueResult =
+  | { ok: true; issue: PrIssueRecord; verdict: PrApprovalVerdict }
+  | { ok: false; code: "NOT_FOUND"; message: string }
+  | { ok: false; code: "INVALID_STATE"; message: string }
+  | { ok: false; code: "NOT_A_REVIEWER"; message: string };
+
+/**
+ * P3：某 reviewer 对 PR 行使审批。校验 reviewerObjectId ∈ record.reviewers（非 reviewer
+ * 拒 NOT_A_REVIEWER）；写入 approvals[reviewerObjectId]；返回聚合 verdict 供 caller
+ * （service 层）按 P5 闸决定是否触发合入/拒绝。
+ *
+ * 串行化走 enqueueSessionWrite("super")（与 createPrIssue / closePrIssue 同队列），防并发
+ * 写 approvals 丢失。已 closed 的 PR 拒 INVALID_STATE（不可再批）。
+ */
+export async function approvePrIssue(
+  input: ApprovePrIssueInput,
+): Promise<ApprovePrIssueResult> {
+  const { baseDir, issueId, reviewerObjectId, action } = input;
+  if (!reviewerObjectId || !reviewerObjectId.trim()) {
+    return { ok: false, code: "NOT_A_REVIEWER", message: "reviewerObjectId required" };
+  }
+  return enqueueSessionWrite(PR_ISSUE_SESSION_ID, async () => {
+    const issue = await readPrIssue(baseDir, issueId);
+    if (!issue) {
+      return { ok: false, code: "NOT_FOUND", message: `PR-Issue #${issueId} not found` } as const;
+    }
+    if (!issue.prPayload) {
+      return {
+        ok: false,
+        code: "INVALID_STATE",
+        message: `Issue #${issueId} is not a PR-Issue (missing prPayload)`,
+      } as const;
+    }
+    if (issue.status !== "open") {
+      return {
+        ok: false,
+        code: "INVALID_STATE",
+        message: `PR-Issue #${issueId} already ${issue.status}`,
+      } as const;
+    }
+    const reviewers = issue.reviewers ?? [];
+    if (!reviewers.includes(reviewerObjectId)) {
+      return {
+        ok: false,
+        code: "NOT_A_REVIEWER",
+        message: `'${reviewerObjectId}' is not a reviewer of PR-Issue #${issueId} (reviewers=[${reviewers.join(", ")}])`,
+      } as const;
+    }
+    const decision = APPROVE_ACTION_TO_DECISION[action];
+    const updated: PrIssueRecord = {
+      ...issue,
+      approvals: { ...(issue.approvals ?? {}), [reviewerObjectId]: decision },
+      lastUpdatedAt: Date.now(),
+    };
+    await writePrIssue(baseDir, updated);
+    const index = await readPrIssueIndex(baseDir);
+    await writePrIssueIndex(baseDir, {
+      ...index,
+      issues: index.issues.map((entry) =>
+        entry.id === issueId ? { ...entry, lastUpdatedAt: updated.lastUpdatedAt } : entry,
+      ),
+    });
+    return {
+      ok: true,
+      issue: updated,
+      verdict: aggregatePrApproval(updated.reviewers, updated.approvals),
+    } as const;
   });
 }

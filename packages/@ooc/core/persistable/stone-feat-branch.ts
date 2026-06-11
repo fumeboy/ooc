@@ -208,6 +208,11 @@ export interface CommitAndOpenPrInput {
   title?: string;
   /** 可选 PR 描述。 */
   description?: string;
+  /**
+   * 发起沉淀的 super(foo) threadId（P6 回修，2026-06-11）：随 prPayload 持久化，reject /
+   * request-changes / 合入失败时把反馈回投到这条 thread 让 super(foo) resume 修复。
+   */
+  authorThreadId?: string;
 }
 
 export type CommitAndOpenPrResult =
@@ -308,6 +313,7 @@ export async function commitAndOpenPr(
           diff: patch.value,
           paths: names.value,
           baseSha: head.value,
+          ...(input.authorThreadId ? { authorThreadId: input.authorThreadId } : {}),
         },
       });
       return {

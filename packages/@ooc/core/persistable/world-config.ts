@@ -73,6 +73,14 @@ export interface WorldConfig {
    * 本字段是项目级配置基线（运维默认）。详见 src/app/server/bootstrap/config.ts。
    */
   workerMaxTicks?: number;
+  /**
+   * feat-branch PR 合入闸（P5，2026-06-11）：所有 reviewer approve 后是否自动合入。
+   *   - true  → ready-to-merge 时立即合入 main（无人工介入）。
+   *   - false → ready-to-merge 时 PR 留 open 标 approved，等人工经
+   *             `POST /api/runtime/pr-issues/:id/resolve {decision:"merge"}` 落锤（human-in-the-loop）。
+   * 缺省 false（更安全：默认要求人工确认）。非 boolean 值忽略并 console.warn。
+   */
+  prAutoMerge: boolean;
 }
 
 /** 原始 JSON 形态（解析前；字段全 optional + 大小写兼容写法）。 */
@@ -89,7 +97,12 @@ interface RawWorldConfig {
   LarkAppSecret?: unknown;
   workerMaxTicks?: unknown;
   WorkerMaxTicks?: unknown;
+  prAutoMerge?: unknown;
+  PrAutoMerge?: unknown;
 }
+
+/** prAutoMerge 缺省值：false（默认要求人工确认更安全，见 WorldConfig.prAutoMerge）。 */
+const DEFAULT_PR_AUTO_MERGE = false;
 
 interface CachedEntry {
   fetchedAt: number;
@@ -179,6 +192,33 @@ function pickPositiveInt(
 }
 
 /**
+ * 解析 boolean 字段：接受 boolean，或 "true"/"false"（大小写不敏感）字符串。
+ * 缺省（字段不存在）返回 fallback；非法值返回 fallback 并 console.warn。
+ */
+function pickBoolean(
+  raw: RawWorldConfig,
+  filePath: string,
+  fallback: boolean,
+  ...keys: (keyof RawWorldConfig)[]
+): boolean {
+  for (const k of keys) {
+    const v = raw[k];
+    if (v === undefined) continue;
+    if (typeof v === "boolean") return v;
+    if (typeof v === "string") {
+      const t = v.trim().toLowerCase();
+      if (t === "true") return true;
+      if (t === "false") return false;
+    }
+    console.warn(
+      `[world-config] ${filePath} field '${String(k)}' = ${JSON.stringify(v)} is not a boolean; using ${fallback}`,
+    );
+    return fallback;
+  }
+  return fallback;
+}
+
+/**
  * 读取 `<baseDir>/.world.json`，返回解析 + 默认值填充后的 WorldConfig。
  *
  * 永不抛错（除非 fs 出现非 ENOENT 的硬故障，那应该让 server 异常感知）。
@@ -193,7 +233,7 @@ export async function readWorldConfig(baseDir: string): Promise<WorldConfig> {
     raw = await readFile(filePath, "utf8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") {
-      const defaults: WorldConfig = { siteName: DEFAULT_SITE_NAME, larkTenantHost: DEFAULT_LARK_TENANT_HOST };
+      const defaults: WorldConfig = { siteName: DEFAULT_SITE_NAME, larkTenantHost: DEFAULT_LARK_TENANT_HOST, prAutoMerge: DEFAULT_PR_AUTO_MERGE };
       cacheSet(baseDir, defaults);
       return defaults;
     }
@@ -207,13 +247,13 @@ export async function readWorldConfig(baseDir: string): Promise<WorldConfig> {
     console.warn(
       `[world-config] ${filePath} JSON parse failed (${(err as Error).message}); falling back to defaults`,
     );
-    const defaults: WorldConfig = { siteName: DEFAULT_SITE_NAME, larkTenantHost: DEFAULT_LARK_TENANT_HOST };
+    const defaults: WorldConfig = { siteName: DEFAULT_SITE_NAME, larkTenantHost: DEFAULT_LARK_TENANT_HOST, prAutoMerge: DEFAULT_PR_AUTO_MERGE };
     cacheSet(baseDir, defaults);
     return defaults;
   }
 
   if (!parsed || typeof parsed !== "object") {
-    const defaults: WorldConfig = { siteName: DEFAULT_SITE_NAME, larkTenantHost: DEFAULT_LARK_TENANT_HOST };
+    const defaults: WorldConfig = { siteName: DEFAULT_SITE_NAME, larkTenantHost: DEFAULT_LARK_TENANT_HOST, prAutoMerge: DEFAULT_PR_AUTO_MERGE };
     cacheSet(baseDir, defaults);
     return defaults;
   }
@@ -230,8 +270,9 @@ export async function readWorldConfig(baseDir: string): Promise<WorldConfig> {
   const larkAppId = pickString(parsed, "larkAppId", "LarkAppId");
   const larkAppSecret = pickString(parsed, "larkAppSecret", "LarkAppSecret");
   const workerMaxTicks = pickPositiveInt(parsed, filePath, "workerMaxTicks", "WorkerMaxTicks");
+  const prAutoMerge = pickBoolean(parsed, filePath, DEFAULT_PR_AUTO_MERGE, "prAutoMerge", "PrAutoMerge");
 
-  const config: WorldConfig = { siteName, larkTenantHost };
+  const config: WorldConfig = { siteName, larkTenantHost, prAutoMerge };
   if (externalSkillsDir) config.externalSkillsDir = externalSkillsDir;
   if (larkAppId) config.larkAppId = larkAppId;
   if (larkAppSecret) config.larkAppSecret = larkAppSecret;

@@ -8,20 +8,27 @@ import {
 } from "@ooc/core/observable";
 import { logPatternSnapshot, type LogPattern } from "@ooc/core/observable/log-aggregator";
 import {
+  aggregatePrApproval,
   llmInputFile,
   llmOutputFile,
   loopInputFile,
   loopMetaFile,
   loopOutputFile,
+  readPrIssue,
+  readPrIssueIndex,
   readThread,
   resolvePrIssue,
   rollback,
   SUPERVISOR_OBJECT_ID,
   threadDir,
   writeThread,
+  type PrApproveAction,
+  type PrApprovalVerdict,
   type PrIssueDecision,
+  type PrIssueRecord,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
+import { applyPrApproval } from "@ooc/core/executable/windows/pr/approval-flow";
 import type { ListLoopsResponse, LoopListEntry, LoopMeta } from "./model";
 import { readLlmEnv } from "@ooc/core/thinkable/llm/env";
 import type { PauseStore } from "../../runtime/pause-store";
@@ -76,6 +83,31 @@ export interface RuntimeActivitySnapshot {
   runningCount: number;
   /** 主导日志模式（按次数降序 top-K），定位刷屏/重复事件。 */
   logPatterns: LogPattern[];
+}
+
+/** P4 list view：单条 PR-Issue 摘要（reviewers/approvals/verdict 概览）。 */
+export interface PrIssueSummaryView {
+  id: number;
+  title: string;
+  status: "open" | "closed";
+  createdByObjectId: string;
+  createdAt: number;
+  lastUpdatedAt: number;
+  /** feat-branch PR 才有；非 PR record（recovery-needed）为 false。 */
+  isPr: boolean;
+  branch?: string;
+  reviewers: string[];
+  approvals: Record<string, string>;
+  verdict: PrApprovalVerdict;
+}
+
+/** P4 get view：单条 PR-Issue 全量（含 diff/intent/paths）。 */
+export interface PrIssueDetailView extends PrIssueSummaryView {
+  description?: string;
+  intent?: string;
+  diff?: string;
+  paths: string[];
+  baseSha?: string;
 }
 
 export interface RuntimeService {
@@ -156,6 +188,39 @@ export interface RuntimeService {
     decision: PrIssueDecision;
   }): Promise<Record<string, unknown>>;
   /**
+   * P3 多 reviewer 审批（2026-06-11）：某 reviewer 对 PR 行使 approve/reject/request-changes。
+   * 校验 reviewerObjectId ∈ record.reviewers（非 reviewer → CONFLICT 409）；写 approvals；
+   * 按聚合 verdict + P5 `.world.json` prAutoMerge 闸决定后续：
+   *   - rejected         → 调 resolvePrIssue(reject) archive 分支 + close
+   *   - ready-to-merge   → prAutoMerge=true 立即 resolvePrIssue(merge)；false 留 open（待人工 resolve）
+   *   - changes-requested / pending → 仅记录，留 open
+   * 失败转 AppServerError：NOT_FOUND → 404 / INVALID_STATE → 409 / NOT_A_REVIEWER → 409。
+   */
+  approvePrIssue(args: {
+    issueId: number;
+    reviewerObjectId: string;
+    action: PrApproveAction;
+  }): Promise<{
+    ok: true;
+    verdict: PrApprovalVerdict;
+    /** ready-to-merge 时由 prAutoMerge 决定：true=已合入 / false=待人工确认。 */
+    merged?: boolean;
+    /** verdict=rejected 时：已 archive 分支。 */
+    rejected?: boolean;
+    commitSha?: string;
+    archivedRef?: string;
+  }>;
+  /**
+   * P4 可观测：列出所有 PR-Issue（读 index.json + 逐条 reviewers/approvals 摘要）。
+   * 补体验官实证 404 的 G2 缺口。
+   */
+  listPrIssues(): Promise<{ items: PrIssueSummaryView[] }>;
+  /**
+   * P4 可观测：单条 PR-Issue 全量（intent/diff/paths/branch/reviewers/approvals/status/verdict）。
+   * 未知 issue → NOT_FOUND 404。
+   */
+  getPrIssue(issueId: number): Promise<PrIssueDetailView>;
+  /**
    * 治理（去固化 metaprog method 后，2026-06-09）：经控制面以 supervisor 治理身份
    * 回滚某 Object 的 stone 到先前 commit。底层走 persistable 的 rollback（保留不动），
    * supervisorAuthor 固定 SUPERVISOR_OBJECT_ID。失败转 AppServerError：INVALID_INPUT /
@@ -165,6 +230,59 @@ export interface RuntimeService {
     objectId: string;
     targetCommit: string;
   }): Promise<{ ok: true; commitSha: string }>;
+}
+
+/** PrIssueRecord → P4 list 摘要视图。 */
+function toPrIssueSummaryView(issue: PrIssueRecord): PrIssueSummaryView {
+  const reviewers = issue.reviewers ?? [];
+  const approvals = issue.approvals ?? {};
+  return {
+    id: issue.id,
+    title: issue.title,
+    status: issue.status,
+    createdByObjectId: issue.createdByObjectId,
+    createdAt: issue.createdAt,
+    lastUpdatedAt: issue.lastUpdatedAt,
+    isPr: issue.prPayload != null,
+    ...(issue.prPayload ? { branch: issue.prPayload.branch } : {}),
+    reviewers,
+    approvals,
+    verdict: aggregatePrApproval(reviewers, issue.approvals),
+  };
+}
+
+/** PrIssueRecord → P4 get 全量视图（含 diff/intent/paths）。 */
+function toPrIssueDetailView(issue: PrIssueRecord): PrIssueDetailView {
+  return {
+    ...toPrIssueSummaryView(issue),
+    ...(issue.description !== undefined ? { description: issue.description } : {}),
+    ...(issue.prPayload
+      ? {
+          intent: issue.prPayload.intent,
+          diff: issue.prPayload.diff,
+          baseSha: issue.prPayload.baseSha,
+          paths: issue.prPayload.paths,
+        }
+      : { paths: [] }),
+  };
+}
+
+/** index entry → 摘要 fallback（record 文件读不到时；理论不该发生，fail-safe 不抛）。 */
+function entrySummaryFallback(entry: {
+  id: number;
+  title: string;
+  status: "open" | "closed";
+  createdByObjectId: string;
+  createdAt: number;
+  lastUpdatedAt: number;
+}): PrIssueSummaryView {
+  return {
+    ...entry,
+    isPr: false,
+    reviewers: [],
+    approvals: {},
+    verdict: "pending",
+  };
 }
 
 export function createRuntimeService(deps: {
@@ -388,6 +506,60 @@ export function createRuntimeService(deps: {
         ...("commitSha" in r ? { commitSha: r.commitSha } : {}),
         ...("archivedRef" in r ? { archivedRef: r.archivedRef } : {}),
       };
+    },
+    async approvePrIssue({
+      issueId,
+      reviewerObjectId,
+      action,
+    }: {
+      issueId: number;
+      reviewerObjectId: string;
+      action: PrApproveAction;
+    }) {
+      // P3 聚合 + P5 合入闸 + P6 回修编排统一走 applyPrApproval（与 pr_window method 同源，
+      // 不两处漂移）。verdict=rejected/changes-requested/合入失败时其内部把回修 message 回投
+      // super(foo)（P6）。
+      const r = await applyPrApproval({
+        baseDir: deps.baseDir,
+        issueId,
+        reviewerObjectId,
+        action,
+      });
+      if (!r.ok) {
+        if (r.code === "NOT_FOUND") {
+          throw new AppServerError("NOT_FOUND", r.message, { issueId, reviewerObjectId, action });
+        }
+        if (r.code === "GIT") {
+          throw new AppServerError("INTERNAL_ERROR", r.message, { issueId, reviewerObjectId, action });
+        }
+        // INVALID_STATE / NOT_A_REVIEWER → 409 CONFLICT
+        throw new AppServerError("CONFLICT", r.message, { issueId, reviewerObjectId, action });
+      }
+      return {
+        ok: true as const,
+        verdict: r.verdict,
+        ...(r.merged !== undefined ? { merged: r.merged } : {}),
+        ...(r.rejected !== undefined ? { rejected: r.rejected } : {}),
+        ...(r.commitSha ? { commitSha: r.commitSha } : {}),
+        ...(r.archivedRef ? { archivedRef: r.archivedRef } : {}),
+      };
+    },
+    async listPrIssues() {
+      const index = await readPrIssueIndex(deps.baseDir);
+      const items = await Promise.all(
+        index.issues.map(async (entry) => {
+          const issue = await readPrIssue(deps.baseDir, entry.id);
+          return issue ? toPrIssueSummaryView(issue) : entrySummaryFallback(entry);
+        }),
+      );
+      return { items };
+    },
+    async getPrIssue(issueId: number) {
+      const issue = await readPrIssue(deps.baseDir, issueId);
+      if (!issue) {
+        throw new AppServerError("NOT_FOUND", `PR-Issue #${issueId} not found`, { issueId });
+      }
+      return toPrIssueDetailView(issue);
     },
     async rollbackStone({ objectId, targetCommit }: { objectId: string; targetCommit: string }) {
       const r = await rollback({

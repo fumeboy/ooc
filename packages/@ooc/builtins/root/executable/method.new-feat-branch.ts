@@ -13,6 +13,12 @@
  * finalize（commit + 开 PR + 清绑定）。
  *
  * 仅 super flow 可调（沉淀单元只在 super(foo) thread 上）。
+ *
+ * **P6 回修 resume 通道（2026-06-11）**：PR 被 reject / request-changes / 合入失败后，
+ * super(foo) 收到回修 inbox message。此时再调 new_feat_branch(**同 intent**) 即可幂等
+ * **重绑**该 feat 分支：同 intent → 同 slug → 同分支名 → git WORKTREE_EXISTS 视为成功，
+ * 把分支重新绑回本 thread（request-changes 时旧 worktree 与编辑都还在，可继续改；reject
+ * 后旧 worktree 已归档清理，从 main 重新派生空白副本重做）。re-edit 后再 evolve_self 重开 PR。
  */
 
 import type {

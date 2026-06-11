@@ -40,10 +40,37 @@
 
 - **P1 地基**：retire session→main 合入语义；`create_object`/evolve 文案与路径更新为「session ephemeral，不合入」；`evolve_self` 改造或新增 `sediment`/`open_pr` 类 super-flow method 的骨架（建 feat 分支、commit、调 PR 创建）。复用 PR-Issue 存储。**TDD。**
 - **P2 scope 冒泡 + reviewer 集**：把 `classifyDiffAgainstMain` 的二元判定升级为「计算变更触及对象 → 冒泡出 reviewer 集（决策2）」。产出 PR record 带 reviewer 列表。
-- **P3 多 reviewer 审批聚合**：PR record 加 per-reviewer approve 状态；全 approve 才可合入；`resolvePrIssue` 从「单 supervisor 一次 resolve」升级为「按 reviewer 聚合」。
-- **P4 PR context window + knowledge 激活**：每个 reviewer thread 注入 PR context window（diff/intent/来源）+ 激活相关 knowledge（补 G2）。补 `GET /api/runtime/pr-issues`(list/get) 可观测端点。
-- **P5 `.world.json` 合入闸**：auto-merge vs require-human-confirm 配置；接 human-in-the-loop 确认通道。
-- **P6 失败回修 loop**：合入失败 → message 路由回 `super(foo)` thread（复用 talk/inbox 投递），触发其修复续作。
+- **P3 多 reviewer 审批聚合**〔**已落 2026-06-11**〕：`PrIssueRecord` 加 `approvals?: Record<objectId, "approved"|"rejected"|"changes-requested">`（已批状态，对应 `reviewers` 应批集合）。纯聚合 `aggregatePrApproval(reviewers, approvals)` → `ready-to-merge`(全 approved) / `rejected`(任一 reject，一票否决) / `changes-requested`(无 reject 但有改) / `pending`(缺批)。`approvePrIssue({baseDir,issueId,reviewerObjectId,action})` 校验 reviewer∈reviewers（非 reviewer→`NOT_A_REVIEWER`）、写 approvals、走 `enqueueSessionWrite("super")` 串行化。合入复用 `resolvePrIssue`（聚合结论触发，未绕过）。锚点 `pr-issue.ts`（aggregatePrApproval / approvePrIssue）+ `service.ts` approvePrIssue。
+- **P4 可观测端点**〔**端点部分已落 2026-06-11**；PR context window + knowledge 激活留 P6〕：补齐 G2 的 list/get + approve 端点并注册进 runtime module（`modules/runtime/index.ts`）：
+  - `GET  /api/runtime/pr-issues` → `{items: PrIssueSummaryView[]}`（id/status/branch/reviewers/approvals/verdict）。
+  - `GET  /api/runtime/pr-issues/:issueId` → `PrIssueDetailView`（+ intent/diff/paths/baseSha/description）；未知→404。
+  - `POST /api/runtime/pr-issues/:issueId/approve` body `{reviewerObjectId:string, decision:"approve"|"reject"|"request-changes"}` → `{ok,verdict,merged?,rejected?,commitSha?,archivedRef?}`；非 reviewer / 已 closed→409，未知→404。
+- **P5 `.world.json` 合入闸**〔**已落 2026-06-11**〕：`.world.json` 新增 flag **`prAutoMerge: boolean`，缺省 `false`**（更安全 = 默认人工确认；接受 `"true"/"false"` 字符串，非法值 fallback false + warn）。ready-to-merge 时：`prAutoMerge=true`→service 立即 `resolvePrIssue(merge)`（返回 `merged:true`）；`false`→留 open 标 approved（`merged:false`），人工经既有 `POST /pr-issues/:id/resolve {decision:"merge"}` 落锤（human-in-the-loop）。reject verdict→`resolvePrIssue(reject)` archive+close。锚点 `world-config.ts` prAutoMerge + `service.ts` approvePrIssue 闸判定。
+- **P4 窗口 + knowledge 激活**〔**已落 2026-06-11**〕：PR 开启后给每个 reviewer 投递 **pr_window**
+  并经既有 `activates_on` 激活评审 knowledge。锚点：
+  - window 类型名 **`pr`**（PrWindow，collaborable 家族）：`executable/windows/pr/types.ts`
+    `PrWindow`（持 issueId/reviewerObjectId/authorObjectId/authorThreadId）；注册
+    `executable/windows/pr/index.ts`（readable 渲染 getPrIssue DetailView + 3 个 method
+    `approve`/`reject`/`request_changes`）；加入 `_shared/types.ts` ContextWindow union +
+    object-registry.ts `BASE_TYPE_DEFINITIONS`/`RENDERABLE_VISIBLE_TYPES`。
+  - 投递入口：`executable/windows/pr/delivery.ts` `deliverPrWindowToReviewers`（每 reviewer 的
+    super-session pr-review thread inline pr_window + inbox 事件，thread id =
+    `prReviewThreadId(reviewer, issueId)`，幂等）；由 `method.evolve-self.ts` finalize 后调。
+  - 协议 knowledge：`builtins/root/knowledge/pr-review.md`（`activates_on: { "object::pr": "show_content" }`），
+    thread 出现 pr_window 即注入「你是本 PR reviewer，审 diff / approve·reject·request_changes」协议。
+  - supervisor 恒在 reviewer 集 → 其 pr_window method + HTTP approve 端点天然可用。
+- **P6 失败回修 loop**〔**已落 2026-06-11**〕：reject / request-changes / 合入失败 → message 路由回
+  `super(foo)` thread（复用 inbox/notifyThreadActivated 投递），触发其修复续作。锚点：
+  - 统一编排：`executable/windows/pr/approval-flow.ts` `applyPrApproval`（P3 聚合 + P5 prAutoMerge
+    闸 + P6 回修单一编排点；HTTP `service.approvePrIssue` 与 pr_window method 同源委托它）。
+  - 回投通道：`executable/windows/pr/delivery.ts` `routePrRepairMessage`（按 PR record
+    `prPayload.authorThreadId` 找 super(foo) thread → inbox 追加 verdict+反馈 → 翻 running；
+    找不到 fail-loud `NO_AUTHOR_THREAD`）。authorThreadId 由 `commitAndOpenPr` 经 evolve_self
+    传入并持久化进 prPayload。
+  - **resume 入口**：`method.new-feat-branch.ts` —— super(foo) 收回修 message 后再调
+    `new_feat_branch(**同 intent**)` 即幂等**重绑**该 feat 分支（同 intent → 同 slug → 同分支 →
+    git WORKTREE_EXISTS 视为成功）。request-changes 时旧 worktree+编辑都在可续改；reject 后旧
+    worktree 已归档清理，从 main 重新派生重做。re-edit → 再 evolve_self 重开 PR。
 
 ## 4. 与现有 PR-Issue 链路的复用/改动对照
 
@@ -53,7 +80,7 @@
 | 分支 | `session-<sid>`（合入单元） | **改**：feat 分支（沉淀单元）；session 分支退出合入 |
 | 编辑落法 | （旧设想：evolve_self 吃显式 edits 数组） | **改（拍板 2026-06-11）**：feat 分支**直接编辑**——`new_feat_branch` 开分支 + 绑定 thread（`thread.persistence.stonesBranch`），`resolveStoneIdentityRef` 覆盖优先路由，普通 write_file / file_window.edit 直接落 feat worktree；`evolve_self` 退化为无参 finalizer（commit + PR + 清绑定） |
 | scope 判定 | `classifyDiffAgainstMain` 二元 self/cross | **升级**：冒泡算 reviewer 集（P2） |
-| PR 存储 | `pr-issue.ts` `flows/super/issues/` | 复用，record 加 reviewers + approvals |
-| 决议 | `resolvePrIssue` 单 supervisor merge/reject | **升级**：多 reviewer 聚合 + `.world.json` 闸（P3/P5） |
-| 呈现 | 无（G2） | **新增**：PR context window + knowledge 激活 + list/get 端点（P4） |
-| 失败 | request-changes 留 open，无 loop | **新增**：message→super(foo) 回修（P6） |
+| PR 存储 | `pr-issue.ts` `flows/super/issues/` | 复用，record 加 reviewers + approvals〔**P3 已落**〕 |
+| 决议 | `resolvePrIssue` 单 supervisor merge/reject | **已升级（P3/P5）**：`approvePrIssue` 多 reviewer 聚合 + `.world.json prAutoMerge` 闸；合入仍复用 `resolvePrIssue`（聚合触发，未绕过） |
+| 呈现 | 无（G2） | list/get/approve 端点 + **pr_window context window + activates_on 评审 knowledge 已落（P4）** |
+| 失败 | request-changes 留 open，无 loop | **已落（P6）**：reject/request-changes/合入失败 → message→super(foo) 回修；resume 经 `new_feat_branch(同 intent)` 幂等重绑分支再 submit |
