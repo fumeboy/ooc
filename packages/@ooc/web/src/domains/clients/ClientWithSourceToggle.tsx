@@ -15,10 +15,36 @@ import {
 } from "./ObjectClientRenderer";
 import { FileViewer } from "../files/components/FileViewer";
 import type { FileContent } from "../files";
-import { fetchFile } from "../files";
+import { fetchAnyFile } from "../files";
+import { endpoints } from "../../transport/endpoints";
+import { requestJson } from "../../transport/http";
 // matchClientTarget + deriveClientPath moved to client-path.ts to share with
 // routing.ts (file-link shortcut) and FileViewer (visible preview dispatch).
 export { matchClientTarget, isClientEntryPath, deriveClientPath } from "./client-path";
+
+/**
+ * 源码 pane 取源：走与渲染 pane (ObjectClientRenderer) 同一条权威路径。
+ *
+ * 不再用 deriveClientPath 硬编 `stones/<id>/visible/index.tsx` —— 那只认 flat+visible/，
+ * 漏掉 versioning 布局 (`stones/<branch>/objects/<id>/...`) 与 legacy `client/index.tsx`，
+ * 取不到源码 → 404/空 (FR3 bug)。
+ *
+ * 改为：① client-source-url endpoint 用 versioning-aware stoneDir + legacy fallback 给出
+ * 权威 absPath；② fetchAnyFile(absPath) 取**原始 tsx 文本**（/@fs URL 拿回的是 vite
+ * 转译后的模块，不能用作源码展示，故走读任意文件的 endpoint 取磁盘原文）。
+ */
+async function fetchClientSource(target: ClientTarget): Promise<FileContent> {
+  const url =
+    target.scope === "stone"
+      ? endpoints.clientSourceUrl("stone", target.objectId)
+      : endpoints.clientSourceUrl("flow", target.objectId, {
+          sessionId: target.sessionId,
+          page: target.page,
+        });
+  const { absPath } = await requestJson<{ absPath: string; fsUrl: string }>(url);
+  const file = await fetchAnyFile(absPath);
+  return { path: file.path, content: file.content, size: file.size };
+}
 
 export interface ClientWithSourceToggleProps {
   target: ClientTarget;
@@ -41,13 +67,13 @@ export function ClientWithSourceToggle({
   // → finally 阶段 setSourceLoading(false) 被跳过 → 永远停在 loading
   const inflightRef = useRef(false);
 
-  // sourcePath 变化时重置（不同 client target 切换场景）
+  // target 变化时重置（不同 client target 切换场景）
   useEffect(() => {
     setSourceFile(undefined);
     setSourceError(undefined);
     setSourceLoading(false);
     inflightRef.current = false;
-  }, [sourcePath]);
+  }, [target]);
 
   // 切到 source 才 fetch；只在首次 mode→source 时触发
   useEffect(() => {
@@ -57,7 +83,7 @@ export function ClientWithSourceToggle({
     setSourceLoading(true);
     setSourceError(undefined);
     let cancelled = false;
-    fetchFile(sourcePath)
+    fetchClientSource(target)
       .then((f) => {
         if (!cancelled) setSourceFile(f);
       })
@@ -75,7 +101,7 @@ export function ClientWithSourceToggle({
     return () => {
       cancelled = true;
     };
-  }, [mode, sourcePath, sourceFile]);
+  }, [mode, target, sourceFile]);
 
   return (
     <div className="client-toggle">
