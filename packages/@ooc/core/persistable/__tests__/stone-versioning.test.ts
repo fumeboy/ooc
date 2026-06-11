@@ -1,21 +1,55 @@
+/**
+ * stone-versioning —— 退役 session→main 合入闸（tryMergeSelf/classifyWorktreeBranch/
+ * requestPrIssueReview，2026-06-11 地基不变量）后，保留的治理 + interim 合入原语测试。
+ *
+ * 覆盖：resolvePrIssue（feat-branch PR 的 interim 合入/驳回，来源 createFeatBranchWorktree +
+ * 直接编辑 + commitAndOpenPr）、rollback（supervisor 署名回滚）、pruneStaleWorktrees、
+ * isValidObjectId 防御。scope 冒泡（reviewer 集）+ feat-branch 流程见 feat-branch-pr.test。
+ */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
-  classifyWorktreeBranch,
-  commitWorktree,
-  requestPrIssueReview,
   resolvePrIssue,
   rollback,
-  tryMergeSelf,
   pruneStaleWorktrees,
-  type SessionWorktreeRef,
   __testing,
 } from "@ooc/core/persistable/stone-versioning";
+import {
+  createFeatBranchWorktree,
+  commitAndOpenPr,
+  type CommitAndOpenPrResult,
+} from "@ooc/core/persistable/stone-feat-branch";
+import { ensureStoneRepo } from "@ooc/core/persistable";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
-import { gitHead, gitRevParse } from "@ooc/core/persistable/stone-git";
+import { gitRevParse } from "@ooc/core/persistable/stone-git";
 import { readPrIssue } from "../pr-issue";
+
+/**
+ * 测试 helper：开 feat 分支 → 直接编辑 worktree 下文件 → finalize（commit + 开 PR）。
+ * 取代退役的 openFeatBranchPr（一步吃 edits 数组）——现在沉淀拆三步，本 helper 串起来。
+ */
+async function sediment(opts: {
+  baseDir: string;
+  authorObjectId: string;
+  intent: string;
+  edits: { path: string; content: string }[];
+}): Promise<CommitAndOpenPrResult> {
+  const open = await createFeatBranchWorktree({ baseDir: opts.baseDir, intent: opts.intent });
+  if (!open.ok) return open as unknown as CommitAndOpenPrResult;
+  for (const e of opts.edits) {
+    const abs = join(opts.baseDir, "stones", open.branch, ...e.path.split("/"));
+    await mkdir(join(abs, ".."), { recursive: true });
+    await writeFile(abs, e.content, "utf8");
+  }
+  return commitAndOpenPr({
+    baseDir: opts.baseDir,
+    branch: open.branch,
+    authorObjectId: opts.authorObjectId,
+    intent: opts.intent,
+  });
+}
 
 let tempRoots: string[] = [];
 
@@ -28,341 +62,79 @@ afterEach(async () => {
   tempRoots = [];
 });
 
-/** 建一个干净 world：bootstrap repo + 两个 agent，每个 agent 一个 self.md。 */
+/** 建一个干净 world：ensureStoneRepo（bare repo + main worktree 正确连通）+ agents。 */
 async function newWorld(extraAgents: string[] = []): Promise<string> {
   const baseDir = await mkdtemp(join(tmpdir(), "ooc-stone-versioning-"));
   tempRoots.push(baseDir);
-  // 直接在 stones/main/objects/ 下创建（不再依赖 ensureStoneRepo 迁移）
   for (const id of ["agent_of_x", "agent_of_y", "supervisor", ...extraAgents]) {
-    await mkdir(join(baseDir, "stones", "main", "objects", id), { recursive: true });
-    await writeFile(join(baseDir, "stones", "main", "objects", id, "self.md"), `${id} v1\n`);
+    await mkdir(join(baseDir, "stones", id), { recursive: true });
+    await writeFile(join(baseDir, "stones", id, "self.md"), `${id} v1\n`);
+    await writeFile(
+      join(baseDir, "stones", id, "package.json"),
+      JSON.stringify({
+        name: `@ooc-obj/${id}`,
+        version: "0.1.0",
+        private: true,
+        type: "module",
+        ooc: { objectId: id, kind: "object", type: "agent" },
+      }),
+      "utf8",
+    );
   }
-  // bootstrap git repo in stones/main/
-  await initMainRepo(baseDir);
+  await ensureStoneRepo({ baseDir });
   return baseDir;
 }
 
-/**
- * 建一个带嵌套 child 的 world：parent 物理含 children/<child>/self.md。
- * 直接在 stones/main/objects/ 下创建，形成
- * objects/parent/children/child/self.md 的嵌套物理布局（与 nestedObjectPath 对齐）。
- */
-async function newNestedWorld(): Promise<string> {
-  const baseDir = await mkdtemp(join(tmpdir(), "ooc-stone-versioning-nested-"));
-  tempRoots.push(baseDir);
-  for (const id of ["parent", "supervisor"]) {
-    await mkdir(join(baseDir, "stones", "main", "objects", id), { recursive: true });
-    await writeFile(join(baseDir, "stones", "main", "objects", id, "self.md"), `${id} v1\n`);
-  }
-  // parent 下嵌套 child（物理 children/ marker）
-  await mkdir(join(baseDir, "stones", "main", "objects", "parent", "children", "child"), { recursive: true });
-  await writeFile(join(baseDir, "stones", "main", "objects", "parent", "children", "child", "self.md"), "child v1\n");
-  await initMainRepo(baseDir);
-  return baseDir;
+function mainObjectFile(baseDir: string, id: string, rel: string): string {
+  return join(baseDir, "stones", "main", "objects", id, rel);
 }
 
-/** 初始化 stones/main/ 为 git repo，做一次 bootstrap commit。 */
-async function initMainRepo(baseDir: string): Promise<void> {
-  const mainDir = join(baseDir, "stones", "main");
-  Bun.spawnSync(["git", "init", "-b", "main"], { cwd: mainDir, stdout: "pipe", stderr: "pipe" });
-  Bun.spawnSync(["git", "add", "-A"], { cwd: mainDir, stdout: "pipe", stderr: "pipe" });
-  Bun.spawnSync(
-    [
-      "git",
-      "-c",
-      "user.name=bootstrap",
-      "-c",
-      "user.email=bootstrap@ooc.local",
-      "commit",
-      "-m",
-      "chore(bootstrap): import existing stones/",
-      "--allow-empty",
-    ],
-    { cwd: mainDir, stdout: "pipe", stderr: "pipe" },
-  );
-}
-
-/**
- * 测试用 worktree 落点（去 metaprog 后，openMetaprogWorktree 已删）。
- *
- * 直接 `git worktree add` 从 main HEAD 派生一个分支 worktree（完整副本），返回
- * `SessionWorktreeRef`——与 evolve-self.ts 构造 session worktree ref 同形（baseDir/branch/
- * path）。retained 的 commitWorktree/classifyWorktreeBranch/tryMergeSelf/
- * requestPrIssueReview/resolvePrIssue 全部 branch-name 无关，照样覆盖。
- */
-async function mkWorktree(
-  baseDir: string,
-  _objectId: string,
-  token: string,
-): Promise<SessionWorktreeRef> {
-  const repo = __testing.repoDir(baseDir);
-  const branch = `session-test-${token}`;
-  const path = __testing.worktreePath(baseDir, branch);
-  const add = Bun.spawnSync(["git", "worktree", "add", "-b", branch, path, "main"], {
-    cwd: repo,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  if (add.exitCode !== 0) {
-    throw new Error(`git worktree add failed: ${add.stderr.toString()}`);
-  }
-  return { baseDir, branch, path };
-}
-
-describe("mkWorktree (test helper: session worktree 落点)", () => {
-  test("worktree 从 main HEAD 派生，含所有 objects/ 完整副本", async () => {
+describe("resolvePrIssue (interim 合入：来源 feat-branch PR)", () => {
+  test("merge resolution lands feat-branch changes on main, closes issue", async () => {
     const baseDir = await newWorld();
-    const wt = await mkWorktree(baseDir, "agent_of_x", "t1");
-    expect(wt.path).toBe(__testing.worktreePath(baseDir, "session-test-t1"));
-    // 工作树有 agent_of_x/self.md（其它 Object 也在）
-    const content = await readFile(join(wt.path, "objects", "agent_of_x", "self.md"), "utf8");
-    expect(content).toBe("agent_of_x v1\n");
-    const otherContent = await readFile(join(wt.path, "objects", "agent_of_y", "self.md"), "utf8");
-    expect(otherContent).toBe("agent_of_y v1\n");
-  });
-});
-
-describe("commitWorktree + classifyWorktreeBranch", () => {
-  test("self-scope when only stones/{authorId}/ paths changed", async () => {
-    const baseDir = await newWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "self") };
-    expect(open.ok).toBe(true);
-    if (!open.ok) return;
-
-    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "v2\n");
-    const c = await commitWorktree({
-      worktree: open.worktree,
-      intent: "update self",
+    const pr = await sediment({
+      baseDir,
       authorObjectId: "agent_of_x",
-    });
-    expect(c.ok).toBe(true);
-
-    const cls = await classifyWorktreeBranch(open.worktree, "agent_of_x");
-    expect(cls.ok).toBe(true);
-    if (cls.ok) {
-      expect(cls.scope).toBe("self-scope");
-      expect(cls.paths).toEqual(["objects/agent_of_x/self.md"]);
-    }
-  });
-
-  test("cross-scope when commit touches another Object's stone", async () => {
-    const baseDir = await newWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "cross") };
-    expect(open.ok).toBe(true);
-    if (!open.ok) return;
-
-    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "v2\n");
-    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "edited by x\n");
-    const c = await commitWorktree({
-      worktree: open.worktree,
-      intent: "cross",
-      authorObjectId: "agent_of_x",
-    });
-    expect(c.ok).toBe(true);
-
-    const cls = await classifyWorktreeBranch(open.worktree, "agent_of_x");
-    expect(cls.ok).toBe(true);
-    if (cls.ok) {
-      expect(cls.scope).toBe("cross-scope");
-      expect(cls.paths.sort()).toEqual(["objects/agent_of_x/self.md", "objects/agent_of_y/self.md"]);
-    }
-  });
-
-  test("supervisor 走标准 path-based 判定（R12 例外撤销）：改自己 stones → self-scope", async () => {
-    const baseDir = await newWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "supervisor", "sv2") };
-    if (!open.ok) throw new Error("open failed");
-    // 改 supervisor 自己自治区
-    await writeFile(join(open.worktree.path, "objects", "supervisor", "self.md"), "supervisor v2\n");
-    const commit = await commitWorktree({
-      worktree: open.worktree,
-      intent: "supervisor self",
-      authorObjectId: "supervisor",
-    });
-    expect(commit.ok).toBe(true);
-    const cls = await classifyWorktreeBranch(open.worktree, "supervisor");
-    expect(cls.ok).toBe(true);
-    if (cls.ok) {
-      expect(cls.scope).toBe("self-scope");
-      expect(cls.paths).toEqual(["objects/supervisor/self.md"]);
-    }
-  });
-
-  test("supervisor 改他人 stones → cross-scope（PR-Issue 由 supervisor 自审）", async () => {
-    const baseDir = await newWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "supervisor", "sv3") };
-    if (!open.ok) throw new Error("open failed");
-    // 改 agent_of_x stone（不在 objects/supervisor/ 下 → cross-scope）
-    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "agent_of_x edited by supervisor\n");
-    const commit = await commitWorktree({
-      worktree: open.worktree,
-      intent: "supervisor cross",
-      authorObjectId: "supervisor",
-    });
-    expect(commit.ok).toBe(true);
-    const cls = await classifyWorktreeBranch(open.worktree, "supervisor");
-    expect(cls.ok).toBe(true);
-    if (cls.ok) {
-      expect(cls.scope).toBe("cross-scope");
-      expect(cls.paths).toEqual(["objects/agent_of_x/self.md"]);
-    }
-  });
-});
-
-describe("tryMergeSelf", () => {
-  test("self-scope edits → fast-forward merged into main", async () => {
-    const baseDir = await newWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "ff1") };
-    if (!open.ok) throw new Error("open failed");
-
-    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "v2\n");
-    expect(
-      (
-        await commitWorktree({
-          worktree: open.worktree,
-          intent: "ff",
-          authorObjectId: "agent_of_x",
-        })
-      ).ok,
-    ).toBe(true);
-
-    const before = gitHead(__testing.repoDir(baseDir));
-    expect(before.ok).toBe(true);
-
-    const r = await tryMergeSelf(open.worktree, "agent_of_x");
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.kind).toBe("merged");
-    }
-
-    // main 上 agent_of_x/self.md 内容为 v2
-    const after = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8");
-    expect(after).toBe("v2\n");
-  });
-
-  test("cross-scope edits → must-pr-issue (no merge)", async () => {
-    const baseDir = await newWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "cross") };
-    if (!open.ok) throw new Error("open failed");
-
-    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "violated\n");
-    expect(
-      (
-        await commitWorktree({
-          worktree: open.worktree,
-          intent: "x",
-          authorObjectId: "agent_of_x",
-        })
-      ).ok,
-    ).toBe(true);
-
-    const r = await tryMergeSelf(open.worktree, "agent_of_x");
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.kind).toBe("must-pr-issue");
-    }
-
-    // main 上 agent_of_y/self.md 仍是 v1
-    const yMain = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
-    expect(yMain).toBe("agent_of_y v1\n");
-  });
-
-  test("AE7: even mostly-self with one cross-scope path → whole branch must-pr-issue", async () => {
-    const baseDir = await newWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "mixed") };
-    if (!open.ok) throw new Error("open failed");
-
-    // 95% self, 5% cross
-    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "self-edit\n");
-    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "extra.md"), "more\n");
-    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "single.md"), "tiny\n");
-    expect(
-      (
-        await commitWorktree({
-          worktree: open.worktree,
-          intent: "mixed",
-          authorObjectId: "agent_of_x",
-        })
-      ).ok,
-    ).toBe(true);
-
-    const r = await tryMergeSelf(open.worktree, "agent_of_x");
-    if (r.ok) expect(r.kind).toBe("must-pr-issue");
-  });
-});
-
-describe("requestPrIssueReview + resolvePrIssue", () => {
-  test("creates PR-Issue, merge resolution lands changes on main", async () => {
-    const baseDir = await newWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "pr1") };
-    if (!open.ok) throw new Error("open failed");
-    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "x edits y\n");
-    expect(
-      (
-        await commitWorktree({
-          worktree: open.worktree,
-          intent: "pr",
-          authorObjectId: "agent_of_x",
-        })
-      ).ok,
-    ).toBe(true);
-
-    const pr = await requestPrIssueReview({
-      worktree: open.worktree,
-      intent: "x wants to update y",
-      authorObjectId: "agent_of_x",
+      intent: "x updates y",
+      edits: [{ path: "objects/agent_of_y/self.md", content: "x edits y\n" }],
     });
     expect(pr.ok).toBe(true);
     if (!pr.ok) return;
 
     const issue = await readPrIssue(baseDir, pr.issueId);
     expect(issue?.title.startsWith("[PR]")).toBe(true);
-    expect(issue?.prPayload?.branch).toBe(open.worktree.branch);
+    expect(issue?.prPayload?.branch).toBe(pr.branch);
     expect(issue?.prPayload?.paths).toEqual(["objects/agent_of_y/self.md"]);
+    // cross-scope: reviewer 含 agent_of_y + supervisor
+    expect(issue?.reviewers?.sort()).toEqual(["agent_of_y", "supervisor"]);
 
     const resolved = await resolvePrIssue({ baseDir, issueId: pr.issueId, decision: "merge" });
     expect(resolved.ok).toBe(true);
     if (resolved.ok) expect(resolved.kind).toBe("merged");
 
-    const yAfter = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
-    expect(yAfter).toBe("x edits y\n");
-
-    const issueAfter = await readPrIssue(baseDir, pr.issueId);
-    expect(issueAfter?.status).toBe("closed");
+    expect(await readFile(mainObjectFile(baseDir, "agent_of_y", "self.md"), "utf8")).toBe("x edits y\n");
+    expect((await readPrIssue(baseDir, pr.issueId))?.status).toBe("closed");
   });
 
   test("AE3: reject archives branch and leaves main unchanged", async () => {
     const baseDir = await newWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "rej") };
-    if (!open.ok) throw new Error("open failed");
-    await writeFile(join(open.worktree.path, "objects", "agent_of_y", "self.md"), "rejected change\n");
-    expect(
-      (
-        await commitWorktree({
-          worktree: open.worktree,
-          intent: "rej",
-          authorObjectId: "agent_of_x",
-        })
-      ).ok,
-    ).toBe(true);
-
-    const pr = await requestPrIssueReview({
-      worktree: open.worktree,
-      intent: "rej",
+    const pr = await sediment({
+      baseDir,
       authorObjectId: "agent_of_x",
+      intent: "rejected change",
+      edits: [{ path: "objects/agent_of_y/self.md", content: "rejected change\n" }],
     });
-    if (!pr.ok) throw new Error("pr failed");
+    expect(pr.ok).toBe(true);
+    if (!pr.ok) return;
 
     const r = await resolvePrIssue({ baseDir, issueId: pr.issueId, decision: "reject" });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.kind).toBe("rejected");
 
     // main 上 agent_of_y 仍是 v1
-    const yMain = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_y", "self.md"), "utf8");
-    expect(yMain).toBe("agent_of_y v1\n");
-
+    expect(await readFile(mainObjectFile(baseDir, "agent_of_y", "self.md"), "utf8")).toBe("agent_of_y v1\n");
     // archived ref 存在
-    const archived = gitRevParse(__testing.repoDir(baseDir), `refs/ooc/rejected/${open.worktree.branch}`);
+    const archived = gitRevParse(__testing.repoDir(baseDir), `refs/ooc/rejected/${pr.branch}`);
     expect(archived.ok).toBe(true);
   });
 });
@@ -370,42 +142,29 @@ describe("requestPrIssueReview + resolvePrIssue", () => {
 describe("rollback", () => {
   test("AE4: Supervisor-signed rollback restores objectId/ subtree", async () => {
     const baseDir = await newWorld();
-    // 让 agent_of_x merge 一个新版本 v2 进 main
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "agent_of_x", "v2") };
-    if (!open.ok) throw new Error();
-    await writeFile(join(open.worktree.path, "objects", "agent_of_x", "self.md"), "broken-v2\n");
-    expect(
-      (
-        await commitWorktree({
-          worktree: open.worktree,
-          intent: "broken",
-          authorObjectId: "agent_of_x",
-        })
-      ).ok,
-    ).toBe(true);
-    expect((await tryMergeSelf(open.worktree, "agent_of_x")).ok).toBe(true);
-
-    // 取上一个 commit（bootstrap）作为目标
     const repo = __testing.repoDir(baseDir);
-    const log = Bun.spawnSync(["git", "log", "--pretty=format:%H", "--reverse"], {
-      cwd: repo,
-      stdout: "pipe",
+    // 合入前的 main HEAD（agent_of_x 仍 v1）作为回滚目标——该 commit 已含 objects/agent_of_x/。
+    const headBefore = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: repo, stdout: "pipe" });
+    const target = new TextDecoder().decode(headBefore.stdout).trim();
+
+    // 经 feat-branch PR + merge 把 agent_of_x 推进到 broken-v2
+    const pr = await sediment({
+      baseDir,
+      authorObjectId: "agent_of_x",
+      intent: "broken v2",
+      edits: [{ path: "objects/agent_of_x/self.md", content: "broken-v2\n" }],
     });
-    const commits = new TextDecoder().decode(log.stdout).trim().split("\n");
-    const target = commits[0]; // bootstrap commit
+    expect(pr.ok).toBe(true);
+    if (!pr.ok) return;
+    expect((await resolvePrIssue({ baseDir, issueId: pr.issueId, decision: "merge" })).ok).toBe(true);
+    expect(await readFile(mainObjectFile(baseDir, "agent_of_x", "self.md"), "utf8")).toBe("broken-v2\n");
 
     const r = await rollback({ baseDir, objectId: "agent_of_x", targetCommit: target });
     expect(r.ok).toBe(true);
+    expect(await readFile(mainObjectFile(baseDir, "agent_of_x", "self.md"), "utf8")).toBe("agent_of_x v1\n");
 
-    // self.md 回到 v1
-    const restored = await readFile(join(baseDir, "stones", "main", "objects", "agent_of_x", "self.md"), "utf8");
-    expect(restored).toBe("agent_of_x v1\n");
-
-    // 最新 commit 的 author 是 supervisor
-    const author = Bun.spawnSync(["git", "log", "-1", "--pretty=format:%an"], {
-      cwd: repo,
-      stdout: "pipe",
-    });
+    // 最新 commit author = supervisor
+    const author = Bun.spawnSync(["git", "log", "-1", "--pretty=format:%an"], { cwd: repo, stdout: "pipe" });
     expect(new TextDecoder().decode(author.stdout)).toBe("supervisor");
   });
 });
@@ -418,7 +177,7 @@ describe("pruneStaleWorktrees", () => {
   });
 });
 
-describe("isValidObjectId (task#16: nested child + path-traversal defense)", () => {
+describe("isValidObjectId (nested child + path-traversal defense)", () => {
   const { isValidObjectId } = __testing;
 
   test("accepts flat and nested objectIds", () => {
@@ -440,132 +199,5 @@ describe("isValidObjectId (task#16: nested child + path-traversal defense)", () 
     expect(isValidObjectId("a/./b")).toBe(false);
     expect(isValidObjectId(".")).toBe(false);
     expect(isValidObjectId("")).toBe(false);
-  });
-});
-
-describe("selfScopePrefix (task#16: nested child uses physical children/ layout)", () => {
-  const { selfScopePrefix } = __testing;
-
-  test("flat objectId → objects/<id>/", () => {
-    expect(selfScopePrefix("agent_of_x")).toBe("objects/agent_of_x/");
-  });
-
-  test("nested child → objects/parent/children/child/ (physical path, not direct splice)", () => {
-    expect(selfScopePrefix("parent/child")).toBe("objects/parent/children/child/");
-    expect(selfScopePrefix("a/b/c")).toBe("objects/a/children/b/children/c/");
-  });
-});
-
-describe("nested child metaprog (task#16)", () => {
-  test("worktree 含嵌套 child 的物理落点（objects/parent/children/child/）", async () => {
-    const baseDir = await newNestedWorld();
-    const r = { ok: true as const, worktree: await mkWorktree(baseDir, "parent/child", "n1") };
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    // 工作树里能读到 child 的物理落点
-    const content = await readFile(
-      join(r.worktree.path, "objects", "parent", "children", "child", "self.md"),
-      "utf8",
-    );
-    expect(content).toBe("child v1\n");
-  });
-
-  test("① child edits its own subtree → self-scope ff-merge to main", async () => {
-    const baseDir = await newNestedWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "parent/child", "self") };
-    if (!open.ok) throw new Error("open failed");
-
-    await writeFile(
-      join(open.worktree.path, "objects", "parent", "children", "child", "self.md"),
-      "child v2\n",
-    );
-    const c = await commitWorktree({
-      worktree: open.worktree,
-      intent: "child self update",
-      authorObjectId: "parent/child",
-    });
-    expect(c.ok).toBe(true);
-
-    const cls = await classifyWorktreeBranch(open.worktree, "parent/child");
-    expect(cls.ok).toBe(true);
-    if (cls.ok) {
-      expect(cls.scope).toBe("self-scope");
-      expect(cls.paths).toEqual(["objects/parent/children/child/self.md"]);
-    }
-
-    const merge = await tryMergeSelf(open.worktree, "parent/child");
-    expect(merge.ok).toBe(true);
-    if (merge.ok) expect(merge.kind).toBe("merged");
-
-    const onMain = await readFile(
-      join(baseDir, "stones", "main", "objects", "parent", "children", "child", "self.md"),
-      "utf8",
-    );
-    expect(onMain).toBe("child v2\n");
-  });
-
-  test("② child edits parent (objects/parent/self.md) → cross-scope PR-Issue", async () => {
-    const baseDir = await newNestedWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "parent/child", "cross") };
-    if (!open.ok) throw new Error("open failed");
-
-    // 改 parent 自己的 self.md（objects/parent/self.md，不在 child 子树下）
-    await writeFile(join(open.worktree.path, "objects", "parent", "self.md"), "parent edited by child\n");
-    const c = await commitWorktree({
-      worktree: open.worktree,
-      intent: "child edits parent",
-      authorObjectId: "parent/child",
-    });
-    expect(c.ok).toBe(true);
-
-    const cls = await classifyWorktreeBranch(open.worktree, "parent/child");
-    expect(cls.ok).toBe(true);
-    if (cls.ok) {
-      expect(cls.scope).toBe("cross-scope");
-      expect(cls.paths).toEqual(["objects/parent/self.md"]);
-    }
-
-    const merge = await tryMergeSelf(open.worktree, "parent/child");
-    expect(merge.ok).toBe(true);
-    if (merge.ok) expect(merge.kind).toBe("must-pr-issue");
-
-    // main 上 parent/self.md 未被改
-    const onMain = await readFile(join(baseDir, "stones", "main", "objects", "parent", "self.md"), "utf8");
-    expect(onMain).toBe("parent v1\n");
-  });
-
-  test("③ parent edits child subtree → self-scope (parent prefix covers children/)", async () => {
-    const baseDir = await newNestedWorld();
-    const open = { ok: true as const, worktree: await mkWorktree(baseDir, "parent", "p2c") };
-    if (!open.ok) throw new Error("open failed");
-
-    // parent 改 child 的物理落点（在 objects/parent/ 子树内）
-    await writeFile(
-      join(open.worktree.path, "objects", "parent", "children", "child", "self.md"),
-      "child edited by parent\n",
-    );
-    const c = await commitWorktree({
-      worktree: open.worktree,
-      intent: "parent edits child",
-      authorObjectId: "parent",
-    });
-    expect(c.ok).toBe(true);
-
-    const cls = await classifyWorktreeBranch(open.worktree, "parent");
-    expect(cls.ok).toBe(true);
-    if (cls.ok) {
-      expect(cls.scope).toBe("self-scope");
-      expect(cls.paths).toEqual(["objects/parent/children/child/self.md"]);
-    }
-
-    const merge = await tryMergeSelf(open.worktree, "parent");
-    expect(merge.ok).toBe(true);
-    if (merge.ok) expect(merge.kind).toBe("merged");
-
-    const onMain = await readFile(
-      join(baseDir, "stones", "main", "objects", "parent", "children", "child", "self.md"),
-      "utf8",
-    );
-    expect(onMain).toBe("child edited by parent\n");
   });
 });

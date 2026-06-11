@@ -8,10 +8,11 @@
  *
  * 本函数补回这条原语，但**落 session worktree（非旧的立即 commit main）**：
  * 复用 createStoneObject 建骨架（package.json + 空 self + 空 readable）→ writeSelf /
- * writeReadable 填内容 + 写 knowledge/<file>.md。**不 commit**——留给 super flow
- * evolve_self 合入（newId ≠ author 自治区 → cross-scope → PR-Issue 自审 resolve）。
+ * writeReadable 填内容 + 写 knowledge/<file>.md。**不 commit**。
  *
- * 合入闸门归 evolve_self，本函数只负责落盘骨架到 worktree（fail-loud，不静默吞）。
+ * 地基不变量（2026-06-11）：session worktree 是纯运行时派生物，**永不合入 main**——
+ * 新对象本 session 内即可用（session-aware 读已支持），进 canonical 走独立 feat-branch PR
+ * （super flow new_feat_branch → 直接编辑 → evolve_self）。本函数只负责落盘骨架到 worktree（fail-loud，不静默吞）。
  */
 
 import { mkdir, stat, writeFile } from "node:fs/promises";
@@ -48,7 +49,7 @@ export interface CreateObjectInSessionInput {
   baseDir: string;
   /** 建对象的业务 session（thread.persistence.sessionId）——必须是 business session（非 super / 非空）。 */
   sessionId: string;
-  /** 发起者 objectId（事后审计；新对象 ≠ author 故 evolve_self 时是 cross-scope）。 */
+  /** 发起者 objectId（事后审计；新对象 ≠ author 故沉淀 PR 时 reviewer 含新对象 owner）。 */
   authorObjectId: string;
   /** 新对象 id（不能是 Builtin、不能在 main 或当前 worktree 已存在）。 */
   newObjectId: string;
@@ -168,7 +169,7 @@ export async function createObjectInSession(
       }
     }
 
-    // 不 commit：留 session worktree，evolve_self 合入（newId ≠ author → cross-scope → PR-Issue）。
+    // 不 commit：留 session worktree（本 session 即可用）。session 永不合入——进 canonical 走 feat-branch PR。
     return { ok: true, objectId: newObjectId, worktreePath: stoneDir(wtRef) } as const;
   });
 }

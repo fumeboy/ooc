@@ -87,6 +87,15 @@ export async function readThread(
   try {
     const raw = await readFile(threadFile(persistence), "utf8");
     const parsed = JSON.parse(raw) as ThreadContext;
+    // feat 分支绑定（2026-06-11，reflectable 沉淀直接编辑路径）随 thread.json 持久化在
+    // parsed.persistence；caller 传的 ref 只含 {baseDir,sessionId,objectId}，恢复时把绑定
+    // 从磁盘读回挂上，使其跨 exec tick 存活（缺省即不挂，行为不变）。
+    if (parsed.persistence?.stonesBranch) {
+      persistence.stonesBranch = parsed.persistence.stonesBranch;
+      if (parsed.persistence.sedimentIntent) {
+        persistence.sedimentIntent = parsed.persistence.sedimentIntent;
+      }
+    }
     // §10 退役（2026-06-09）：thread.json 不再携带 contextWindows——它由独立的
     // thread-context.json 单独权威落盘。这里把 contextWindows 起始为空数组，
     // 完全交给下方 thread-context.json hydrate + init 注入填充；不再以

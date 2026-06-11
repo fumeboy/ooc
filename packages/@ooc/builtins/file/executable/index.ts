@@ -154,14 +154,17 @@ async function resolveStoneWorktreeTarget(
   const thread = ctx.thread;
   const baseDir = thread?.persistence?.baseDir;
   const sessionId = thread?.persistence?.sessionId;
-  if (!baseDir || !sessionUsesWorktree(sessionId)) return undefined;
-  const stoneClass = classifyPackagesPath(absPath, baseDir);
+  // feat 分支绑定（reflectable 沉淀，super(foo) 直接编辑）也要路由——不只 business session。
+  const stonesBranch = thread?.persistence?.stonesBranch;
+  if (!baseDir || (!sessionUsesWorktree(sessionId) && !stonesBranch)) return undefined;
+  // feat 分支沉淀允许新建对象（package.json 尚不在 main / feat worktree）→ 结构化判 owner。
+  const stoneClass = classifyPackagesPath(absPath, baseDir, { allowNewObject: !!stonesBranch });
   if (stoneClass.kind !== "package-object") return undefined;
   const targetObjectId = stoneClass.ownerObjectId;
   const rel = relWithinObjectFromPackages(targetObjectId, stoneClass.relInPackages);
   if (!rel) return undefined;
   const wtRef = await resolveStoneIdentityRef(
-    { baseDir, sessionId, objectId: targetObjectId },
+    { baseDir, sessionId, objectId: targetObjectId, stonesBranch },
     mode,
   );
   if (!wtRef._stonesBranch) return undefined;
@@ -219,12 +222,15 @@ export async function executeFileWindowEdit(
   }
 
   if (toWorktree && ctx.thread?.events) {
+    const onFeatBranch = !!ctx.thread.persistence?.stonesBranch;
     ctx.thread.events.push({
       category: "context_change",
       kind: "inject",
-      text:
-        `[file_window.edit] 改动落在本 session 的 worktree（${writePath}），main 未变。` +
-        `经 super flow evolve_self 合入 main 才永久生效。`,
+      text: onFeatBranch
+        ? `[file_window.edit] 改动落在 feat 分支 worktree（${writePath}），main 未变。` +
+          `编辑完调 evolve_self 提交并开 PR 交 review 合入。`
+        : `[file_window.edit] 改动落在本 session 的 worktree（${writePath}），main 未变。` +
+          `经 super flow new_feat_branch + 直接编辑 + evolve_self 开 PR 合入 main 才永久生效。`,
     });
   }
 
@@ -274,7 +280,10 @@ const fileConstructor: ObjectMethod = {
       }
       const path = resolveSessionPath(thread, rawPath);
       const baseDir = thread.persistence?.baseDir;
-      const stoneClass = classifyPackagesPath(path, baseDir);
+      // feat 分支沉淀允许新建对象（package.json 尚不在 main / feat worktree）→ 结构化判 owner。
+      const stoneClass = classifyPackagesPath(path, baseDir, {
+        allowNewObject: !!thread.persistence?.stonesBranch,
+      });
 
       let preExisted = false;
       if (stoneClass.kind !== "package-object" && stoneClass.kind !== "packages-world") {
@@ -298,17 +307,20 @@ const fileConstructor: ObjectMethod = {
         }
 
         const sessionId = thread.persistence?.sessionId;
+        // feat 分支绑定（reflectable 沉淀，super(foo) 直接编辑）也放行——不只 business session。
+        const stonesBranch = thread.persistence?.stonesBranch;
         const targetObjectId = stoneClass.ownerObjectId;
         const relWithinObject = relWithinObjectFromPackages(
           targetObjectId,
           stoneClass.relInPackages,
         );
-        if (!sessionUsesWorktree(sessionId)) {
+        if (!sessionUsesWorktree(sessionId) && !stonesBranch) {
           return {
             ok: false,
             error:
-              `[write_file] 路径落在 stone 自治区 (${path})，需在业务 session 的 worktree 内写入，` +
-              `但当前不是业务 session（sessionId=${sessionId ?? "<none>"}）。控制面写请走 HTTP versioning endpoint。`,
+              `[write_file] 路径落在 stone 自治区 (${path})，需在业务 session 的 worktree 或 feat 分支绑定下写入，` +
+              `但当前既非业务 session（sessionId=${sessionId ?? "<none>"}）也无 feat 绑定。` +
+              `沉淀请先在 super flow 调 new_feat_branch；控制面写请走 HTTP versioning endpoint。`,
           };
         }
         if (!relWithinObject) {
@@ -319,7 +331,7 @@ const fileConstructor: ObjectMethod = {
           };
         }
         const wtRef = await resolveStoneIdentityRef(
-          { baseDir, sessionId, objectId: targetObjectId },
+          { baseDir, sessionId, objectId: targetObjectId, stonesBranch },
           "write",
         );
         if (!wtRef._stonesBranch) {
@@ -339,16 +351,22 @@ const fileConstructor: ObjectMethod = {
         }
         const isOwnStone = targetObjectId === authorObjectId;
         if (thread.events) {
+          // feat 分支绑定下（reflectable 沉淀 super(foo) 直接编辑）：改动落 feat worktree，
+          // 经 evolve_self commit + 开 PR；与 business session worktree 文案区分。
+          const onFeatBranch = !!stonesBranch;
           thread.events.push({
             category: "context_change",
             kind: "inject",
-            text: isOwnStone
-              ? `[write_file] ${path} 的改动落在本 session 的 worktree（${wtTarget}），` +
-                `main 未变。本 session 内即时生效；要把它沉淀为正式身份，去 super flow 调 ` +
-                `evolve_self 合入 main 才永久生效。`
-              : `[write_file] 你改/建了别人的对象 ${targetObjectId}（${path}），改动落在本 session 的 ` +
-                `worktree（${wtTarget}），main 未变。本 session 内即时生效；经 super flow evolve_self 时，` +
-                `因越出你的自治区将开 PR-Issue 等 Supervisor 评审后才合入 main。`,
+            text: onFeatBranch
+              ? `[write_file] ${path} 的改动落在 feat 分支 worktree（${wtTarget}），main 未变。` +
+                `继续 write_file / file_window.edit 编辑，编辑完调 evolve_self 提交并开 PR 交 review 合入。`
+              : isOwnStone
+                ? `[write_file] ${path} 的改动落在本 session 的 worktree（${wtTarget}），` +
+                  `main 未变。本 session 内即时生效；要把它沉淀为正式身份，去 super flow 调 ` +
+                  `new_feat_branch + 直接编辑 + evolve_self 开 PR 合入 main 才永久生效。`
+                : `[write_file] 你改/建了别人的对象 ${targetObjectId}（${path}），改动落在本 session 的 ` +
+                  `worktree（${wtTarget}），main 未变。本 session 内即时生效；经 super flow new_feat_branch 沉淀时，` +
+                  `因越出你的自治区将开 PR-Issue 等 Supervisor 评审后才合入 main。`,
           });
         }
         const wtWindow: FileWindow = {

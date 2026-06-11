@@ -97,15 +97,16 @@ export async function runAgentNative(): Promise<StoryResult> {
     infraDetail = await threadLlmInfraFailed(sid, "supervisor", seed.threadId);
     if (!infraDetail) {
       trace = await processTrace(sid, "supervisor", seed.threadId);
-      // 新模型：create_object 落 session worktree → super flow evolve_self 合入 main 才在 /api/stones 可见。
+      // 新模型：create_object 落 session worktree（运行时派生物，永不合入 main）；进 canonical 走
+      // super flow evolve_self → feat-branch PR → resolve merge 才在 /api/stones(main) 可见。
       const self = await getStoneSelfWithRetry(id);
       if (self.status === 200 && self.text.length > 20) {
         verified = true;
-        detail = `${id} 已建并 evolve 合入 main，self.md ${self.text.length} 字符`;
+        detail = `${id} 已建并经 feat-branch PR 合入 main，self.md ${self.text.length} 字符`;
       } else if (await calledMethodOk(sid, "supervisor", seed.threadId, "create_object")) {
-        // 建对象能力达成：create_object 成功落 session worktree（evolve 合入 main 是单独的合入能力）。
+        // 建对象能力达成：create_object 成功落 session worktree（沉淀进 main 是单独的 feat-branch PR 能力）。
         verified = true;
-        detail = `${id} 已由 create_object 建对象落 session worktree（未 evolve 合入 main——evolve 是单独的合入能力）`;
+        detail = `${id} 已由 create_object 建对象落 session worktree（未沉淀 main——沉淀走单独的 feat-branch PR）`;
       } else {
         detail = `self=${self.status}, len=${self.text.length}——agent 未成功建对象（create_object 未成功）`;
       }

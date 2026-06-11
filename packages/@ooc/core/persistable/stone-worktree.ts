@@ -113,6 +113,32 @@ export async function ensureSessionWorktree(baseDir: string, sessionId: string):
 }
 
 /**
+ * feat 分支 worktree 物理落点：`<baseDir>/stones/<branch>/`（与 main / session worktree 并列）。
+ * 与 stone-feat-branch.featWorktreePath 同实现（避免循环依赖，路径常量极简故本地化）。
+ */
+function featBranchWorktreePath(baseDir: string, branch: string): string {
+  return join(baseDir, "stones", branch);
+}
+
+/**
+ * 确保 feat 分支 worktree 已就绪（含 `.git` worktree link）。
+ *
+ * 沉淀流程下 feat worktree 由 super-flow `new_feat_branch`（createFeatBranchWorktree）eager
+ * 建好后才把绑定挂上 thread，故正常路径下本检查恒为 true。绑定存在但 worktree 不在
+ * （磁盘被清 / 异常）→ fail-loud warn，caller 兜底 main。**本函数不建分支**（建分支是
+ * 沉淀方法的职责，需从 main 派生 + 串行化）。
+ */
+async function ensureFeatBranchWorktreeReady(baseDir: string, branch: string): Promise<boolean> {
+  const wtPath = featBranchWorktreePath(baseDir, branch);
+  if (await pathExists(join(wtPath, ".git"))) return true;
+  console.warn(
+    `[stone-worktree] feat-branch 绑定 '${branch}' 的 worktree 不存在（${wtPath}）；` +
+      `先经 super flow new_feat_branch 开分支。兜底走 main。`,
+  );
+  return false;
+}
+
+/**
  * worktree 模型的统一 identity 目录解析（读写同一个目录，无 shadow）。
  *
  * - super / 控制面 / 无 session → main canonical。
@@ -125,7 +151,7 @@ export async function ensureSessionWorktree(baseDir: string, sessionId: string):
  * $OOC_SELF_DIR / 控制面 visible endpoint）都应过本函数，结构上杜绝再漏接。
  */
 export async function resolveStoneIdentityDir(
-  ref: { baseDir: string; sessionId?: string; objectId: string },
+  ref: { baseDir: string; sessionId?: string; objectId: string; stonesBranch?: string },
   mode: "read" | "write",
 ): Promise<string> {
   return stoneDir(await resolveStoneIdentityRef(ref, mode));
@@ -141,11 +167,22 @@ export async function resolveStoneIdentityDir(
  * 完全一致（同一实现）。
  */
 export async function resolveStoneIdentityRef(
-  ref: { baseDir: string; sessionId?: string; objectId: string },
+  ref: { baseDir: string; sessionId?: string; objectId: string; stonesBranch?: string },
   mode: "read" | "write",
 ): Promise<StoneObjectRef> {
-  const { baseDir, sessionId, objectId } = ref;
+  const { baseDir, sessionId, objectId, stonesBranch } = ref;
   const mainRef: StoneObjectRef = { baseDir, objectId };
+
+  // feat 分支绑定优先（2026-06-11，reflectable 沉淀直接编辑路径）：放在 sessionId 路由**最前面**。
+  // 绑定缺省（绝大多数 thread）→ 整段跳过，下方 session 解析逐字节不变（回归不变量）。
+  // 绑定存在 → super(foo) 读写自然落 feat worktree（无视 sessionId 是 super 还是 business）。
+  if (stonesBranch) {
+    const ready = await ensureFeatBranchWorktreeReady(baseDir, stonesBranch);
+    if (ready) return { baseDir, objectId, _stonesBranch: stonesBranch };
+    // 建失败（理论不到这——开分支入口已 eager 建）：兜底 main，warn 已发。
+    return mainRef;
+  }
+
   if (!sessionUsesWorktree(sessionId)) return mainRef;
 
   const wtPath = sessionWorktreePath(baseDir, sessionId!);

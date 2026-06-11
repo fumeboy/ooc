@@ -7,7 +7,8 @@
  *  (a) 业务 session create_object → 骨架落 flows/<sid>/objects/<newId>/{package.json,self.md,readable.md[,knowledge]}，内容正确；
  *  (b) main 仍无该对象（未合入）；
  *  (c) ALREADY_EXISTS（main 已存在 / 同 session 重复建）/ super-session 拒 / 非空校验 / 非法 id；
- *  (d) 随后 evolveSelfMerge → newId ≠ author 自治区 → cross-scope must-pr-issue → requestPrIssueReview。
+ *  (d) 地基不变量（2026-06-11）：session 新对象天生 ephemeral——session worktree 永不合入 main；
+ *      进 canonical 走独立 feat-branch PR（super(foo) new_feat_branch + 直接编辑 + evolve_self）。
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,6 +17,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests, readSelf } from "@ooc/core/persistable";
 import { executeCreateObject } from "@ooc/builtins/root/executable/method.create-object";
 import { executeEvolveSelf } from "@ooc/builtins/root/executable/method.evolve-self";
+import { executeNewFeatBranch } from "@ooc/builtins/root/executable/method.new-feat-branch";
+import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 
 let tempRoots: string[] = [];
@@ -60,17 +63,11 @@ function bizCtx(baseDir: string, objectId: string, sessionId: string, args: Reco
   } as unknown as MethodExecutionContext;
 }
 
-/** super flow ctx（带 creatorSessionId）。 */
-function superCtx(
-  baseDir: string,
-  objectId: string,
-  creatorSessionId: string | undefined,
-  args: Record<string, unknown>,
-) {
+/** super(foo) ctx：super flow，objectId=foo。 */
+function superCtx(baseDir: string, objectId: string, args: Record<string, unknown>) {
   return {
     thread: {
       persistence: { baseDir, objectId, sessionId: "super", threadId: "tS" },
-      creatorSessionId,
       contextWindows: [],
       events: [],
     },
@@ -147,7 +144,7 @@ describe("create_object (建新对象原语)", () => {
   test("(c) super flow / 无 session → 拒（仅业务 session 可建）", async () => {
     const baseDir = await newWorld(["alice"]);
     const superOut = await executeCreateObject(
-      superCtx(baseDir, "alice", "s1", { objectId: "x", selfMd: "a\n", readableMd: "b\n" }),
+      superCtx(baseDir, "alice", { objectId: "x", selfMd: "a\n", readableMd: "b\n" }),
     );
     expect(superOut).toContain("仅业务 session");
     // main 不被建
@@ -182,10 +179,10 @@ describe("create_object (建新对象原语)", () => {
     expect(builtin).toContain("[create_object:BUILTIN_CONFLICT]");
   });
 
-  test("(d) evolve_self 合入新对象 → cross-scope must-pr-issue（newId ≠ author 自治区）", async () => {
+  test("(d) session 新对象 ephemeral；进 canonical 走独立 feat-branch PR（super(foo) new_feat_branch + 直接编辑 + evolve_self）", async () => {
     const baseDir = await newWorld(["alice"]);
 
-    // 业务 session s1：alice 建 report-writer（新对象 ≠ alice 自己 → cross-scope）
+    // 业务 session s1：alice 建 report-writer（落 session worktree，永不合入）
     const created = await executeCreateObject(
       bizCtx(baseDir, "alice", "s1", {
         objectId: "report-writer",
@@ -194,26 +191,33 @@ describe("create_object (建新对象原语)", () => {
       }),
     );
     expect(JSON.parse(created as string).ok).toBe(true);
+    // session worktree 有，main 没有（session 永不合入）
+    await expect(stat(mainObjDir(baseDir, "report-writer"))).rejects.toMatchObject({ code: "ENOENT" });
 
-    // super flow diff 列出新对象文件（owner 段前缀 report-writer/）
-    const diff = JSON.parse((await executeEvolveSelf(superCtx(baseDir, "alice", "s1", {}))) as string);
-    expect(diff.kind).toBe("diff");
-    expect(diff.files).toContain("report-writer/self.md");
-    expect(diff.files).toContain("report-writer/readable.md");
-    expect(diff.files).toContain("report-writer/package.json");
+    // 进 canonical = super(alice) 经 feat-branch PR 沉淀新对象（独立路径，不碰 session）。
+    // 同一可变 thread 携 feat 绑定贯穿 new_feat_branch → write_file → evolve_self。
+    const superThread = {
+      persistence: { baseDir, objectId: "alice", sessionId: "super", threadId: "tS" } as Record<string, unknown>,
+      contextWindows: [] as unknown[],
+      events: [] as unknown[],
+    };
+    const ctx = (args: Record<string, unknown>) =>
+      ({ thread: superThread, args }) as unknown as MethodExecutionContext;
 
-    // super flow merge → cross-scope（新对象不在 alice 自治区）→ pr-issue，main 不变
-    const merge = JSON.parse(
-      (await executeEvolveSelf(
-        superCtx(baseDir, "alice", "s1", { message: "feat: introduce report-writer" }),
-      )) as string,
+    await executeNewFeatBranch(ctx({ intent: "introduce report-writer" }));
+    await executeWriteFileMethod(
+      ctx({ path: "stones/report-writer/self.md", content: "# report-writer\n身份\n" }),
     );
-    expect(merge.ok).toBe(true);
-    expect(merge.kind).toBe("pr-issue");
-    expect(typeof merge.prIssueId).toBe("number");
-    expect(merge.prIssueId).toBeGreaterThan(0);
-
-    // main 仍无 report-writer（cross-scope 等 supervisor resolve）
+    await executeWriteFileMethod(
+      ctx({ path: "stones/report-writer/readable.md", content: "# report-writer\n自述\n" }),
+    );
+    // 新对象 ≠ alice 自治区 → reviewer 集含新对象 owner + supervisor。
+    const out = await executeEvolveSelf(ctx({}));
+    const r = JSON.parse(out as string);
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe("pr-issue");
+    expect(r.reviewers.sort()).toEqual(["report-writer", "supervisor"]);
+    // 沉淀未合入前 main 仍无该对象（等 PR resolve）
     await expect(stat(mainObjDir(baseDir, "report-writer"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

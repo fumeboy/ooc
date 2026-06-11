@@ -70,6 +70,12 @@ export interface PrIssueRecord {
   lastUpdatedAt: number;
   /** PR-Issue 才有的 payload；recovery-needed 类 issue 留空。 */
   prPayload?: PrIssuePayload;
+  /**
+   * 该 PR 的 reviewer 集（objectId 列表，P2 决策A 冒泡算出 + supervisor 恒含）。
+   * P1+P2 阶段**只存储、不强制执行**（interim 合入仍走 resolvePrIssue 单 supervisor）；
+   * P3 多 reviewer 审批聚合据此推进。feat-branch PR 必带；旧 record / recovery-needed 留空。
+   */
+  reviewers?: string[];
 }
 
 /** index.json 内对单条 PR-Issue 的摘要条目。 */
@@ -218,6 +224,11 @@ export interface CreatePrIssueInput {
   description?: string;
   /** PR-Issue payload：diff、worktree branch、intent、baseSha、paths 列表。 */
   prPayload: PrIssuePayload;
+  /**
+   * reviewer 集（objectId 列表，P2 冒泡结果）。feat-branch PR 传入；缺省视为 []。
+   * 仅存储——P1+P2 不据此强制审批（interim 合入走 resolvePrIssue）。
+   */
+  reviewers?: string[];
 }
 
 /**
@@ -228,11 +239,16 @@ export interface CreatePrIssueInput {
  * - 必带 prPayload；recovery-needed 类 issue 走 createRecoveryIssue
  */
 export async function createPrIssue(input: CreatePrIssueInput): Promise<PrIssueRecord> {
-  const { baseDir, title, description, createdByObjectId, prPayload } = input;
+  const { baseDir, title, description, createdByObjectId, prPayload, reviewers } = input;
   if (!title || !title.trim()) {
     throw new Error("[pr-issue] PR title is required");
   }
   validatePrPayload(prPayload);
+  if (reviewers !== undefined) {
+    if (!Array.isArray(reviewers) || reviewers.some((r) => typeof r !== "string" || !r.trim())) {
+      throw new Error("[pr-issue] reviewers must be a string[] of non-empty objectIds");
+    }
+  }
   const trimmed = title.trim();
   const decoratedTitle = (trimmed.startsWith("[PR]") ? trimmed : `[PR] ${trimmed}`).slice(0, MAX_TITLE_LENGTH);
 
@@ -251,6 +267,7 @@ export async function createPrIssue(input: CreatePrIssueInput): Promise<PrIssueR
       createdAt: now,
       lastUpdatedAt: now,
       prPayload,
+      ...(reviewers !== undefined ? { reviewers } : {}),
     };
     await writePrIssue(baseDir, issue);
     await writePrIssueIndex(baseDir, {

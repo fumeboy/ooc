@@ -115,6 +115,16 @@ export type PackagesPathClass =
 export function classifyPackagesPath(
   absPath: string,
   baseDir: string | undefined,
+  opts: {
+    /**
+     * reflectable 沉淀 feat 分支直接编辑路径（2026-06-11）：author 可在 feat worktree 下
+     * **新建对象**——此时目标对象 `package.json` 还不在 main / feat worktree（从 main 派生）。
+     * 设为 true 时，对 `objects/<id>/<file>`（深度 ≥ 2，首段非 children）即便未命中
+     * package.json 也判 package-object（owner=首段）。**默认 false → 行为逐字节不变**
+     * （只有 file builtin 在 thread 携 feat 绑定时才传 true）。
+     */
+    allowNewObject?: boolean;
+  } = {},
 ): PackagesPathClass {
   if (!baseDir) return { kind: "non-package" };
   // P1 收口（2026-06-05）：canonical 对象根 = stones/main/objects/（main worktree），取代旧 packages/ 根。
@@ -149,6 +159,16 @@ export function classifyPackagesPath(
       i++;
     }
     if (foundPackage && objectIdSegments.length > 0) {
+      return { kind: "package-object", ownerObjectId: objectIdSegments.join("/"), relInPackages: relObjects };
+    }
+    // 沉淀 feat 分支新建对象：package.json 尚不存在，但路径结构 objects/<id>/<file> 即已点名
+    // owner——结构化判 package-object（首段为 owner，须深度 ≥ 2 即对象目录内的文件）。
+    if (
+      opts.allowNewObject &&
+      objectIdSegments.length > 0 &&
+      objectIdSegments[0] !== "children" &&
+      segs.length > objectIdSegments.length // 至少有一段文件名落在对象目录内
+    ) {
       return { kind: "package-object", ownerObjectId: objectIdSegments.join("/"), relInPackages: relObjects };
     }
     // objects/ 下但未命中 package.json（如 objects/ 根散落文件）→ workspace-level

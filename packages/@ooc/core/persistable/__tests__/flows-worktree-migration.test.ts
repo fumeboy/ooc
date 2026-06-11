@@ -4,8 +4,12 @@
  *
  * 验证 session worktree 物理布局从 `stones/session-<sid>` 迁到 `flows/<sid>`、改 eager、
  * 运行时文件由 main 根 .gitignore 排除 的端到端正确性。单测 PASS≠真路由通——本测试
- * 走真实 bootstrap + ensureSessionWorktree + write_file(builtin) + evolveSelfMerge 链路，
- * 断言落点/排除/合入四件事（gate 5 的 a/b/c/d）。
+ * 走真实 bootstrap + ensureSessionWorktree + write_file(builtin) 链路，断言落点/排除/
+ * 写路由（gate 5 的 a/b/c）。
+ *
+ * 地基不变量（2026-06-11）：`session-<sid>` worktree 是纯运行时派生物，**永不合入 main**
+ * （旧 evolveSelfMerge session→main 合入已退役）。session 编辑停在 worktree；进 canonical
+ * 走 reflectable feat-branch PR（见 stone-feat-branch.test）。本测试 (c) 后断言「main 不变」。
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -22,7 +26,6 @@ import {
   __resetSerialQueueForTests,
 } from "@ooc/core/persistable";
 import { scanRunningThreads } from "@ooc/core/app/server/runtime/thread-query";
-import { evolveSelfMerge } from "@ooc/core/persistable/stone-evolve-self";
 import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
 
@@ -78,7 +81,6 @@ function bizCtx(
   } as unknown as MethodExecutionContext;
 }
 
-/** super flow 的 evolve_self 经 evolveSelfMerge（creatorSessionId = 业务 session）。 */
 function gitStatusPorcelain(repoDir: string): string {
   const r = Bun.spawnSync(["git", "status", "--porcelain", "--untracked-files=all"], {
     cwd: repoDir,
@@ -89,7 +91,7 @@ function gitStatusPorcelain(repoDir: string): string {
 }
 
 describe("flows-worktree-migration（方案 A 真实-world 实测）", () => {
-  test("a/b/c/d：worktree 落 flows/<sid> + gitignore 排除运行时 + 写 self 落 worktree + evolve 合入", async () => {
+  test("a/b/c：worktree 落 flows/<sid> + gitignore 排除运行时 + 写 self 落 worktree（main 不变，session 永不合入）", async () => {
     const sid = "s1";
     const objectId = "agent_of_x";
     const baseDir = await bootstrapWorld([objectId]);
@@ -154,29 +156,16 @@ describe("flows-worktree-migration（方案 A 真实-world 实测）", () => {
     expect(statusAfter).not.toContain(".session.json");
     expect(statusAfter).not.toContain("thread.json");
 
-    // ---- (d) super flow evolve_self 合入：self-scope ff-merge → main 推进到 v2，worktree GC ----
-    const merge = await evolveSelfMerge({
-      baseDir,
-      objectId,
-      creatorSessionId: sid,
-      message: "evolve: session self edit",
-    });
-    expect(merge.ok).toBe(true);
-    if (merge.ok) {
-      expect(merge.kind).toBe("merged");
-      expect(merge.merged).toBe(true);
-      expect(merge.files).toEqual([`${objectId}/self.md`]);
-    }
-    // main 已推进到 v2
-    const mainSelfAfter = await readFile(
+    // ---- 地基不变量：session worktree 是纯运行时派生物，永不合入 main ----
+    // 没有 session→main 合入路径；session 编辑停在 worktree（v2），canonical main 永远 v1，
+    // 直到经独立 feat-branch PR 沉淀（stone-feat-branch.test 覆盖）才进 main。
+    const mainSelfFinal = await readFile(
       join(baseDir, "stones", "main", "objects", objectId, "self.md"),
       "utf8",
     );
-    expect(mainSelfAfter).toBe(`${objectId} v2 (session edit)\n`);
-    // worktree 身份已解除（.git link 删除），但目录与运行时数据保留——session 对话历史不随 evolve 丢失
-    expect((await stat(wtRoot)).isDirectory()).toBe(true);
-    await expect(stat(join(wtRoot, ".git"))).rejects.toMatchObject({ code: "ENOENT" });
-    // 运行时数据（thread.json）仍在（objects/<id>/threads/root/）
+    expect(mainSelfFinal).toBe(`${objectId} v1\n`);
+    // worktree 仍是活 worktree（.git link 在），运行时数据保留——session 仍可见可续
+    expect((await stat(join(wtRoot, ".git"))).isFile()).toBe(true);
     expect(
       (await stat(join(wtRoot, "objects", objectId, "threads", "root", "thread.json"))).isFile(),
     ).toBe(true);

@@ -2,19 +2,22 @@
  * stone-versioning —— 高层编排，把 worktree commit / scope 评估 / merge /
  * PR-Issue / rollback / GC 收口在 persistable 层之上。
  *
- * stone 写只有两个落点：
- * - **LLM session 内任何 stone 写**（改自己 + 改别人/建别人）落业务 session 的 worktree
- *   （物理 `flows/<sid>/`、branch `session-<sid>`，plain write），经 super flow `evolve_self` 合入 main。
- * - **HTTP 控制面写**（人类已决策）经 `httpDirectMainWrite` 直写 `stones/main/` 并 commit。
+ * 地基不变量（用户拍板，2026-06-11）：`session-<sid>` worktree 是纯运行时派生物，**永不合入
+ * main**——session→main 合入语义（旧 tryMergeSelf self-scope ff / cross-scope→PR 二元闸 +
+ * evolve_self）已退役。沉淀进 canonical 走 reflectable feat-branch PR 路径（见 stone-feat-branch.ts）。
  *
- * 保留的底层原语（供上述两路 + 治理复用）：commitWorktree / tryMergeSelf / requestPrIssueReview /
- * resolvePrIssue / rollback / httpDirectMainWrite / pruneStaleWorktrees。各自 docstring 详述。
+ * stone 写落点：
+ * - **HTTP 控制面写**（人类已决策）经 `httpDirectMainWrite` 直写 `stones/main/` 并 commit。
+ * - **reflectable 沉淀**经 stone-feat-branch.ts 从 main 派生 feat 分支（createFeatBranchWorktree）
+ *   → 直接编辑 → commit + 开 PR（commitAndOpenPr）；本模块 `resolvePrIssue` 作 interim 合入通道
+ *   （单 supervisor merge/reject）。
+ *
+ * 保留的底层原语（供上述两路 + 治理复用）：resolvePrIssue / rollback / httpDirectMainWrite /
+ * pruneStaleWorktrees / commitWorktree（feat/test 用）。各自 docstring 详述。
  * 所有 git 子命令通过 `enqueueSessionWrite("git:" + baseDir, ...)` 串行化。
  *
- * Supervisor 对称化：走与其它 Object 完全相同的合入路径——改 `objects/supervisor/` 下是 self-scope
- * （ff merge），跨自治区是 cross-scope 自动开 PR-Issue（**supervisor 自审自己的 PR-Issue 合法**，
- * 自审是治理责任的一部分）。唯一特权是 `rollback`（仅 supervisor 可调）。supervisor 与 user 都是
- * Builtin Object（`packages/@ooc/builtins/{supervisor,user}`），随 OOC 发版，Agent 不可改写。
+ * 唯一治理特权是 `rollback`（仅 supervisor 可调）。supervisor 与 user 都是 Builtin Object
+ * （`packages/@ooc/builtins/{supervisor,user}`），随 OOC 发版，Agent 不可改写。
  */
 
 import { rmdir, stat, cp } from "node:fs/promises";
@@ -25,18 +28,15 @@ import {
   gitCheckout,
   gitCommit,
   gitCommitAll,
-  gitDiffNames,
-  gitDiffPatch,
   gitHead,
   gitMergeFastForward,
-  gitRebase,
   gitRevParse,
   gitWorktreeList,
   gitWorktreePrune,
   gitWorktreeUnregister,
   type GitErrorCode,
 } from "./stone-git.js";
-import { closePrIssue, createPrIssue, readPrIssue, type PrIssueRecord } from "./pr-issue.js";
+import { closePrIssue, readPrIssue, type PrIssueRecord } from "./pr-issue.js";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import {
   nestedObjectPath,
@@ -182,20 +182,6 @@ function isValidObjectId(value: string): boolean {
 }
 
 /**
- * self-scope 自治区路径前缀。对嵌套 child 必须基于物理布局（nestedObjectPath），
- * 而非直拼 `objects/${objectId}/`：
- *   - flat `agent_of_x`   → `objects/agent_of_x/`
- *   - nested `parent/child` → `objects/parent/children/child/`（物理路径）
- *
- * 直拼会让 nested child 改自己（物理在 objects/parent/children/child/）被误判为
- * cross-scope。parent 的前缀 `objects/parent/` 仍正确覆盖整棵子树（含
- * children/），故 parent 改 child 自动落 self-scope。
- */
-function selfScopePrefix(authorObjectId: string): string {
-  return `objects/${nestedObjectPath(authorObjectId).join("/")}/`;
-}
-
-/**
  * Sync a merged object from the git repo (stones/main/objects/) to the
  * workspace packages/ directory. After a successful ff merge, changes live
  * in the git worktree at stones/main/objects/<nestedPath>/ but runtime reads
@@ -274,200 +260,6 @@ export async function commitWorktree(input: CommitWorktreeInput): Promise<Commit
   });
 }
 
-/* ---------------------------------------------------------------- *
- * classifyWorktreeBranch
- * ---------------------------------------------------------------- */
-
-export type ScopeClass = "self-scope" | "cross-scope";
-
-export interface ClassifyResult {
-  ok: true;
-  scope: ScopeClass;
-  /** branch 累积 diff vs main merge-base 的文件路径列表。 */
-  paths: string[];
-}
-
-export type ClassifyError =
-  | { ok: false; code: "INVALID_INPUT"; message: string }
-  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
-
-/**
- * 路径划界核心（无 queue，caller 须已持 git queue）：branch 累积 diff vs main
- * merge-base，每个文件路径必须以 `selfScopePrefix(authorObjectId)` 起头才算 self-scope
- * （R5/R6）。前缀对嵌套 child 基于物理布局（nestedObjectPath：`objects/parent/children/child/`），
- * 直拼会误判。`classifyWorktreeBranch`（带 queue）与 `tryMergeSelf`（已在 queue 内）共用此核心。
- */
-function classifyDiffAgainstMain(
-  repo: string,
-  branch: string,
-  authorObjectId: string,
-): { ok: true; scope: ScopeClass; paths: string[] } | { ok: false; gitCode: GitErrorCode; stderr: string } {
-  const r = gitDiffNames(repo, STONES_MAIN_BRANCH, branch);
-  if (!r.ok) return { ok: false, gitCode: r.code, stderr: r.stderr };
-  const prefix = selfScopePrefix(authorObjectId);
-  const scope: ScopeClass = r.value.every((p) => p.startsWith(prefix)) ? "self-scope" : "cross-scope";
-  return { ok: true, scope, paths: r.value };
-}
-
-/**
- * 路径划界判定（公共可观测原语）。supervisor 走同款判定——改自己 stones 是 self-scope（ff），
- * 改他人 stones 是 cross-scope（自动开 PR-Issue，可由 supervisor 自审）。
- */
-export async function classifyWorktreeBranch(
-  worktree: SessionWorktreeRef,
-  authorObjectId: string,
-): Promise<ClassifyResult | ClassifyError> {
-  if (!isValidObjectId(authorObjectId)) {
-    return { ok: false, code: "INVALID_INPUT", message: `invalid authorObjectId '${authorObjectId}'` };
-  }
-
-  return enqueueSessionWrite(gitQueueKey(worktree.baseDir), async () => {
-    const c = classifyDiffAgainstMain(repoDir(worktree.baseDir), worktree.branch, authorObjectId);
-    if (!c.ok) return { ok: false, code: "GIT", gitCode: c.gitCode, stderr: c.stderr } as const;
-    return { ok: true, scope: c.scope, paths: c.paths } as const;
-  });
-}
-
-/* ---------------------------------------------------------------- *
- * tryMergeSelf
- * ---------------------------------------------------------------- */
-
-export type TryMergeSelfResult =
-  | { ok: true; kind: "merged"; commitSha: string }
-  | { ok: true; kind: "must-pr-issue"; paths: string[] }
-  | { ok: true; kind: "rebase-conflict"; stderr: string }
-  | { ok: true; kind: "non-fast-forward"; stderr: string }
-  | { ok: false; code: "INVALID_INPUT"; message: string }
-  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
-
-/**
- * 尝试自治区 fast-forward merge。流程：
- *   1. cd worktree → rebase main HEAD（冲突 abort 后返回 rebase-conflict）
- *   2. 重新 classify（rebase 后 path 集合可能变化）
- *   3. cross-scope → 返回 must-pr-issue（caller 应转 requestPrIssueReview）
- *   4. self-scope → 在 main 上 ff merge worktree branch；non-FF 返回 non-fast-forward
- *      （正常情况下 rebase 后必能 FF；non-FF 表示 main 又飘了，caller 应重试）
- *   5. 成功 ff → cleanup worktree
- */
-export async function tryMergeSelf(
-  worktree: SessionWorktreeRef,
-  authorObjectId: string,
-): Promise<TryMergeSelfResult> {
-  if (!isValidObjectId(authorObjectId)) {
-    return { ok: false, code: "INVALID_INPUT", message: `invalid authorObjectId '${authorObjectId}'` };
-  }
-
-  return enqueueSessionWrite(gitQueueKey(worktree.baseDir), async () => {
-    const repo = repoDir(worktree.baseDir);
-    // step 1: rebase
-    const rebase = gitRebase(worktree.path, STONES_MAIN_BRANCH);
-    if (!rebase.ok) {
-      if (rebase.code === "REBASE_CONFLICT") {
-        return { ok: true, kind: "rebase-conflict", stderr: rebase.stderr } as const;
-      }
-      return { ok: false, code: "GIT", gitCode: rebase.code, stderr: rebase.stderr } as const;
-    }
-
-    // step 2: classify（rebase 后 path 集合可能变化，重判）
-    const cls = classifyDiffAgainstMain(repo, worktree.branch, authorObjectId);
-    if (!cls.ok) return { ok: false, code: "GIT", gitCode: cls.gitCode, stderr: cls.stderr } as const;
-    if (cls.scope === "cross-scope") {
-      return { ok: true, kind: "must-pr-issue", paths: cls.paths } as const;
-    }
-
-    // step 3: ff merge in repo (main work-tree)
-    const checkoutMain = gitCheckout(repo, STONES_MAIN_BRANCH);
-    if (!checkoutMain.ok) {
-      return { ok: false, code: "GIT", gitCode: checkoutMain.code, stderr: checkoutMain.stderr } as const;
-    }
-    const ff = gitMergeFastForward(repo, worktree.branch);
-    if (!ff.ok) {
-      if (ff.code === "NON_FAST_FORWARD") {
-        return { ok: true, kind: "non-fast-forward", stderr: ff.stderr } as const;
-      }
-      return { ok: false, code: "GIT", gitCode: ff.code, stderr: ff.stderr } as const;
-    }
-
-    await syncMergedObjectToPackages(worktree.baseDir, authorObjectId);
-
-    const head = gitHead(repo);
-    if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
-
-    // step 4: cleanup worktree（解除注册，保留运行时数据；session worktree=flows/<sid> 物理合一）
-    await cleanupWorktreeAfterMerge(repo, worktree.path, worktree.baseDir, worktree.branch, "tryMergeSelf");
-    return { ok: true, kind: "merged", commitSha: head.value } as const;
-  });
-}
-
-/* ---------------------------------------------------------------- *
- * requestPrIssueReview
- * ---------------------------------------------------------------- */
-
-export interface RequestPrIssueInput {
-  worktree: SessionWorktreeRef;
-  intent: string;
-  authorObjectId: string;
-  /** 可选的 PR 标题；缺省由 intent 前 60 字符构造。 */
-  title?: string;
-  /** 可选的扩展描述。 */
-  description?: string;
-}
-
-export type RequestPrIssueResult =
-  | { ok: true; issueId: number }
-  | { ok: false; code: "INVALID_INPUT"; message: string }
-  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string }
-  | { ok: false; code: "ISSUE_SERVICE"; message: string };
-
-/**
- * 拿到 worktree branch 的 diff（vs main），构造 PrIssuePayload，调
- * `createPrIssue` 落到 super session。
- */
-export async function requestPrIssueReview(input: RequestPrIssueInput): Promise<RequestPrIssueResult> {
-  if (!isValidObjectId(input.authorObjectId)) {
-    return { ok: false, code: "INVALID_INPUT", message: `invalid authorObjectId '${input.authorObjectId}'` };
-  }
-  if (!input.intent.trim()) {
-    return { ok: false, code: "INVALID_INPUT", message: "intent required" };
-  }
-
-  return enqueueSessionWrite(gitQueueKey(input.worktree.baseDir), async () => {
-    const repo = repoDir(input.worktree.baseDir);
-    const head = gitHead(repo);
-    if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
-    const baseSha = head.value;
-
-    const names = gitDiffNames(repo, STONES_MAIN_BRANCH, input.worktree.branch);
-    if (!names.ok) return { ok: false, code: "GIT", gitCode: names.code, stderr: names.stderr } as const;
-
-    const patch = gitDiffPatch(repo, STONES_MAIN_BRANCH, input.worktree.branch);
-    if (!patch.ok) return { ok: false, code: "GIT", gitCode: patch.code, stderr: patch.stderr } as const;
-
-    const title = (input.title ?? input.intent).slice(0, 80);
-    try {
-      const issue = await createPrIssue({
-        baseDir: input.worktree.baseDir,
-        title,
-        description: input.description,
-        createdByObjectId: input.authorObjectId,
-        prPayload: {
-          intent: input.intent,
-          branch: input.worktree.branch,
-          diff: patch.value,
-          paths: names.value,
-          baseSha,
-        },
-      });
-      return { ok: true, issueId: issue.id } as const;
-    } catch (e) {
-      return {
-        ok: false,
-        code: "ISSUE_SERVICE",
-        message: e instanceof Error ? e.message : String(e),
-      } as const;
-    }
-  });
-}
 
 /* ---------------------------------------------------------------- *
  * resolvePrIssue
@@ -805,7 +597,6 @@ export async function httpDirectMainWrite(
 export const __testing = {
   gitQueueKey,
   isValidObjectId,
-  selfScopePrefix,
   worktreePath,
   repoDir,
 };

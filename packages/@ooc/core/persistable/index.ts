@@ -165,7 +165,7 @@ export { enqueueSessionWrite, __resetSerialQueueForTests } from "../runtime/seri
 // STONES_MAIN_BRANCH canonical 源已迁入 ./common（打破 pr-issue → bootstrap 反向依赖）。
 export { STONES_MAIN_BRANCH } from "./common";
 
-// git / versioning 编排（stone-git / stone-bootstrap / stone-versioning / stone-evolve-self）。
+// git / versioning 编排（stone-git / stone-bootstrap / stone-versioning / stone-feat-branch）。
 // persistable/index re-export 这些符号，作为 `@ooc/core/persistable` barrel 的统一对外面。
 export {
   ensureStoneRepo,
@@ -203,37 +203,40 @@ export {
 } from "./stone-git.js";
 
 export {
-  // U4: 高层 versioning 编排（session worktree 合入 + 治理 + 控制面直写 main）
+  // U4: 高层 versioning 编排（治理 rollback + 控制面直写 main + PR-Issue interim 合入）。
+  // session→main 合入语义（tryMergeSelf/classifyWorktreeBranch/requestPrIssueReview）已退役
+  // （2026-06-11 地基不变量）；沉淀走 stone-feat-branch（createFeatBranchWorktree + commitAndOpenPr）。
   commitWorktree,
-  classifyWorktreeBranch,
-  tryMergeSelf,
-  requestPrIssueReview,
   resolvePrIssue,
   rollback,
   httpDirectMainWrite,
   pruneStaleWorktrees,
   SUPERVISOR_OBJECT_ID,
   type SessionWorktreeRef,
-  type ScopeClass,
   type PrIssueDecision,
   type RollbackInput,
   type RollbackResult,
   type HttpDirectMainWriteInput,
   type HttpDirectMainWriteResult,
-  type TryMergeSelfResult,
-  type RequestPrIssueResult,
   type ResolvePrIssueResult,
 } from "./stone-versioning.js";
 
 export {
-  // evolve-self: super-flow 身份合入闸门（session worktree → main）
-  evolveSelfDiff,
-  evolveSelfMerge,
-  type EvolveSelfInput,
-  type EvolveSelfDiff,
-  type EvolveSelfMerged,
-  type EvolveSelfErr,
-} from "./stone-evolve-self.js";
+  // stone-feat-branch: reflectable 沉淀的 feat-branch PR 路径（取代退役的 session→main 合入）。
+  // 2026-06-11 改写：createFeatBranchWorktree（开分支不写文件）+ commitAndOpenPr（finalizer）
+  // 由 super(foo) thread 的 feat 分支绑定串起来；编辑走普通 write_file / file_window.edit。
+  computeReviewerSet,
+  createFeatBranchWorktree,
+  commitAndOpenPr,
+  unregisterFeatWorktree,
+  slugFromIntent,
+  featBranchName,
+  featWorktreePath,
+  type CreateFeatBranchWorktreeInput,
+  type CreateFeatBranchWorktreeResult,
+  type CommitAndOpenPrInput,
+  type CommitAndOpenPrResult,
+} from "./stone-feat-branch.js";
 
 export { parseMentions } from "@ooc/core/_shared/utils/mention.js";
 

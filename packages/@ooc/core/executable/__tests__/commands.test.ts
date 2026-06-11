@@ -55,6 +55,7 @@ describe("executable methods", () => {
       "example",
       "glob",
       "grep",
+      "new_feat_branch",
       "open_feishu_chat",
       "open_feishu_doc",
       "open_file",

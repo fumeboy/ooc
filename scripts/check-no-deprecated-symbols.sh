@@ -49,6 +49,7 @@ ALLOW_LIST=(
   "packages/@ooc/core/executable/server/types.ts"
   "packages/@ooc/core/executable/__tests__/server-loader.test.ts"
   "packages/@ooc/core/executable/windows/_shared/command-types.ts"  # 历史变更说明注释
+  "packages/@ooc/builtins/supervisor/knowledge/creating-objects.md"  # 建对象 knowledge 教「别写 llm_methods」需引用该字面量
   "scripts/check-no-deprecated-symbols.sh"
 )
 

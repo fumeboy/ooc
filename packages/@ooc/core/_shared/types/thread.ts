@@ -38,6 +38,20 @@ export interface FlowObjectRef {
 export interface ThreadPersistenceRef extends FlowObjectRef {
   /** `threads/` 下的线程目录名。 */
   threadId: string;
+  /**
+   * reflectable 沉淀的 **feat 分支绑定**（2026-06-11，super(foo) 直接编辑路径）。
+   *
+   * super(foo) 调 `new_feat_branch` 开 feat 分支后，把分支名（`feat/<slug>`）绑到本 thread
+   * 的 persistence 上并随 thread.json 持久化——使绑定跨 exec tick 存活（开分支后多次
+   * write_file / file_window.edit 直接编辑 feat worktree 下文件，再 evolve_self 提交）。
+   *
+   * 设置后 `resolveStoneIdentityRef` 在 sessionId 路由**最前面**优先认它：读写都落
+   * `stones/<stonesBranch>/objects/<id>/`。**缺省时（绝大多数 thread）行为分毫不变**——
+   * session-aware 读 / in-session create_object 零触碰。仅 super(foo) 沉淀 thread 才有此绑定。
+   */
+  stonesBranch?: string;
+  /** feat 分支绑定的沉淀意图（派生 PR title / commit message；与 stonesBranch 配套）。 */
+  sedimentIntent?: string;
 }
 
 /**

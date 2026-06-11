@@ -1,21 +1,32 @@
 /**
- * P3 super-flow evolve_self —— 身份合入闸门端到端验证（worktree 统一模型，design §4）。
+ * reflectable 沉淀 finalizer 全链 —— new_feat_branch + 直接编辑 + evolve_self 端到端验证。
+ *
+ * 地基不变量（2026-06-11）：`session-<sid>` worktree 永不合入 main；沉淀走 feat 分支 → PR。
+ * 用户拍板：不封装 edits 参数——super(foo) 开 feat 分支后用**普通 write_file** 直接编辑 feat
+ * worktree 下文件（thread 携 feat 绑定，resolveStoneIdentityRef 覆盖优先路由），evolve_self
+ * 是 finalizer（commit + 开 PR + 清绑定）。
  *
  * 场景：
- *  1. 业务 session 改 self.md → 该 session 的 worktree（P2）。
- *  2. super flow（带 creatorSessionId=业务 session）调 evolve_self diff → 列出改动文件。
- *  3. evolve_self merge → commit session 分支 + ff-merge main（署名 = objectId，非 bootstrap），
- *     worktree GC（移除目录 + 删分支）。
- *  4. 新 session 读到新身份（canonical main）。
- *  5. 错误路径：非 super flow / 无改动 → fail-loud，main 不变。
+ *  1. super(foo) new_feat_branch → write_file ×N（落 feat worktree）→ evolve_self（开 PR，
+ *     reviewers 冒泡，main 不变）。
+ *  2. cross-scope（write_file 触及别人）→ reviewers 含别人 + supervisor。
+ *  3. 错误路径：非 super flow / 无绑定就 evolve_self → fail-loud。
+ *  4. interim 端到端：evolve_self 开 PR → resolvePrIssue(merge) 合入 main。
  */
-import { mkdir, mkdtemp, readFile, rm, writeFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ensureStoneRepo, __resetSerialQueueForTests, readSelf } from "@ooc/core/persistable";
-import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
+import {
+  ensureStoneRepo,
+  __resetSerialQueueForTests,
+  readPrIssue,
+  readSelf,
+  resolvePrIssue,
+} from "@ooc/core/persistable";
 import { executeEvolveSelf } from "@ooc/builtins/root/executable/method.evolve-self";
+import { executeNewFeatBranch } from "@ooc/builtins/root/executable/method.new-feat-branch";
+import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 
 let tempRoots: string[] = [];
@@ -27,7 +38,7 @@ afterEach(async () => {
 });
 
 async function newWorld(agents: string[]): Promise<string> {
-  const baseDir = await mkdtemp(join(tmpdir(), "ooc-evolve-self-"));
+  const baseDir = await mkdtemp(join(tmpdir(), "_test_evolve_self_"));
   tempRoots.push(baseDir);
   for (const id of [...agents, "supervisor"]) {
     await mkdir(join(baseDir, "stones", id), { recursive: true });
@@ -52,173 +63,127 @@ function mainSelf(baseDir: string, id: string): string {
   return join(baseDir, "stones", "main", "objects", id, "self.md");
 }
 
-/** 业务 session ctx（write_file 走 worktree）。 */
-function bizCtx(baseDir: string, objectId: string, sessionId: string, args: Record<string, unknown>) {
+/**
+ * super(foo) 的可变 thread（持有同一 persistence 对象贯穿 new_feat_branch → write_file →
+ * evolve_self，模拟 thread 携绑定跨 method exec 存活）。
+ */
+function superThread(baseDir: string, objectId: string) {
   return {
-    thread: {
-      persistence: { baseDir, objectId, sessionId, threadId: "t" },
-      contextWindows: [],
-      events: [],
-    },
-    args,
-  } as unknown as MethodExecutionContext;
+    persistence: { baseDir, objectId, sessionId: "super", threadId: "tS" } as Record<string, unknown>,
+    contextWindows: [] as unknown[],
+    events: [] as unknown[],
+  };
 }
 
-/** super flow ctx（带 creatorSessionId）。 */
-function superCtx(
-  baseDir: string,
-  objectId: string,
-  creatorSessionId: string | undefined,
-  args: Record<string, unknown>,
-) {
-  return {
-    thread: {
-      persistence: { baseDir, objectId, sessionId: "super", threadId: "tS" },
-      creatorSessionId,
-      contextWindows: [],
-      events: [],
-    },
-    args,
-  } as unknown as MethodExecutionContext;
+function ctxWith(thread: unknown, args: Record<string, unknown>): MethodExecutionContext {
+  return { thread, args } as unknown as MethodExecutionContext;
 }
 
-function gitLastAuthor(baseDir: string): string {
-  const log = Bun.spawnSync(["git", "log", "-1", "--pretty=%an"], {
-    cwd: join(baseDir, "stones", "main"),
-    stdout: "pipe",
-  });
-  return new TextDecoder().decode(log.stdout).trim();
-}
-
-describe("evolve_self (P3)", () => {
-  test("diff mode lists worktree files; merge mode commits to main (author=objectId); new session sees it", async () => {
+describe("reflectable 沉淀 finalizer（new_feat_branch + 直接编辑 + evolve_self）", () => {
+  test("self-scope：开分支 → write_file 落 feat worktree → evolve_self 开 PR，main 不变", async () => {
     const baseDir = await newWorld(["alice"]);
+    const thread = superThread(baseDir, "alice");
 
-    // 1. 业务 session s1 改 self.md → worktree
-    await executeWriteFileMethod(
-      bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "alice v2 (evolved)\n" }),
+    // 1) new_feat_branch
+    const open = JSON.parse(
+      (await executeNewFeatBranch(ctxWith(thread, { intent: "tighten self identity" }))) as string,
     );
-    // main 未变
+    expect(open.ok).toBe(true);
+    expect(open.branch).toBe("feat/tighten-self-identity");
+    // 绑定已挂上 thread.persistence
+    expect((thread.persistence as Record<string, unknown>).stonesBranch).toBe(open.branch);
+
+    // 2) write_file 直接编辑（路径 stones/alice/self.md → 经 feat 绑定落 feat worktree）
+    const w = await executeWriteFileMethod(
+      ctxWith(thread, { path: "stones/alice/self.md", content: "alice v2 (evolved)\n" }),
+    );
+    expect(typeof w === "object" && w !== null && (w as { ok?: boolean }).ok === true).toBe(true);
+    // 落点是 feat worktree，不是 main、不是 session
+    const featSelf = join(baseDir, "stones", open.branch, "objects", "alice", "self.md");
+    expect(await readFile(featSelf, "utf8")).toBe("alice v2 (evolved)\n");
     expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v1\n");
 
-    // 2. super flow diff（无 message）
-    const diffOut = await executeEvolveSelf(superCtx(baseDir, "alice", "s1", {}));
-    expect(typeof diffOut).toBe("string");
-    const diff = JSON.parse(diffOut as string);
-    expect(diff.kind).toBe("diff");
-    // 去 metaprog 后 evolve_self 列全部 objects/ 改动，files 带 owner 段前缀（区分 cross-object）。
-    expect(diff.files).toEqual(["alice/self.md"]);
+    // 3) evolve_self finalize
+    const r = JSON.parse((await executeEvolveSelf(ctxWith(thread, {}))) as string);
+    expect(r.ok).toBe(true);
+    expect(r.kind).toBe("pr-issue");
+    expect(typeof r.issueId).toBe("number");
+    expect(r.branch).toBe(open.branch);
+    expect(r.reviewers).toEqual(["supervisor"]);
+    expect(r.paths).toEqual(["objects/alice/self.md"]);
+    // 绑定已清除
+    expect((thread.persistence as Record<string, unknown>).stonesBranch).toBeUndefined();
 
-    // 3. super flow merge
-    const mergeOut = await executeEvolveSelf(
-      superCtx(baseDir, "alice", "s1", { message: "evolve: tighten self-identity" }),
-    );
-    const merge = JSON.parse(mergeOut as string);
-    expect(merge.ok).toBe(true);
-    expect(merge.kind).toBe("merged");
-    expect(typeof merge.commitSha).toBe("string");
-    expect(merge.files).toEqual(["alice/self.md"]);
-
-    // main 已更新
-    expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v2 (evolved)\n");
-    // git commit 署名 = alice（非 bootstrap/supervisor）
-    expect(gitLastAuthor(baseDir)).toBe("alice");
-
-    // worktree 身份解除（.git link 删），flows/s1 运行时目录保留——方案 A 物理合一，对话不丢
-    expect((await stat(join(baseDir, "flows", "s1"))).isDirectory()).toBe(true);
-    await expect(
-      stat(join(baseDir, "flows", "s1", ".git")),
-    ).rejects.toMatchObject({ code: "ENOENT" });
-
-    // 4. 新 session（s2，无 worktree）读 canonical main → 新身份
-    const got = await readSelf({ baseDir, objectId: "alice" });
-    expect(got).toBe("alice v2 (evolved)\n");
+    // main 未变（沉淀未合入，等 PR resolve）
+    expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v1\n");
+    const issue = await readPrIssue(baseDir, r.issueId);
+    expect(issue?.reviewers).toEqual(["supervisor"]);
+    expect(issue?.prPayload?.branch).toBe(open.branch);
   });
 
-  test("merge 合入整个 session 的多文件改动（session 分支即演化单元）", async () => {
-    const baseDir = await newWorld(["alice"]);
-    await executeWriteFileMethod(
-      bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "self v2\n" }),
-    );
-    await executeWriteFileMethod(
-      bizCtx(baseDir, "alice", "s1", {
-        path: "stones/alice/executable/index.ts",
-        content: "export const methods = {};\n",
-      }),
-    );
-
-    // diff sees both（files 带 owner 段前缀）
-    const diff = JSON.parse((await executeEvolveSelf(superCtx(baseDir, "alice", "s1", {}))) as string);
-    expect(diff.files.sort()).toEqual(["alice/executable/index.ts", "alice/self.md"]);
-
-    // merge 整个 session（不再支持挑文件子集）→ 两个文件都合入 main
-    const merge = JSON.parse(
-      (await executeEvolveSelf(
-        superCtx(baseDir, "alice", "s1", { message: "evolve both" }),
-      )) as string,
-    );
-    expect(merge.files.sort()).toEqual(["alice/executable/index.ts", "alice/self.md"]);
-    expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("self v2\n");
-    // executable 也已合入 main
-    expect(
-      await readFile(join(baseDir, "stones", "main", "objects", "alice", "executable", "index.ts"), "utf8"),
-    ).toBe("export const methods = {};\n");
-  });
-
-  test("cross-scope: 业务 session 改别人 stone → evolve_self 整体走 PR-Issue，main 不变", async () => {
-    // 去 metaprog（2026-06-09）：业务 session 的 write_file 对**任何** stone（含别人）的写
-    // 都落同一 session worktree；evolve_self 列全部 objects/ 改动，tryMergeSelf 把含 cross-object
-    // 的 session 整体判 must-pr-issue → requestPrIssueReview。
+  test("cross-scope：write_file 触及 bob → reviewers 含 bob + supervisor", async () => {
     const baseDir = await newWorld(["alice", "bob"]);
-
-    // 1. 业务 session s1（caller=alice）改 alice 自己 + bob（cross-object）→ 同一 worktree
+    const thread = superThread(baseDir, "alice");
+    await executeNewFeatBranch(ctxWith(thread, { intent: "share into bob" }));
     await executeWriteFileMethod(
-      bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "alice v2\n" }),
+      ctxWith(thread, { path: "stones/alice/self.md", content: "alice v2\n" }),
     );
     await executeWriteFileMethod(
-      bizCtx(baseDir, "alice", "s1", { path: "stones/bob/self.md", content: "bob edited by alice\n" }),
+      ctxWith(thread, { path: "stones/bob/readable.md", content: "bob touched by alice\n" }),
     );
-
-    // 2. diff 列出全部改动（含 cross-object bob/self.md，前缀含 owner 段）
-    const diff = JSON.parse((await executeEvolveSelf(superCtx(baseDir, "alice", "s1", {}))) as string);
-    expect(diff.files.sort()).toEqual(["alice/self.md", "bob/self.md"]);
-
-    // 3. merge → cross-scope 整体走 PR-Issue（merged=false + prIssueId），main 不变
-    const merge = JSON.parse(
-      (await executeEvolveSelf(
-        superCtx(baseDir, "alice", "s1", { message: "evolve crossing into bob" }),
-      )) as string,
-    );
-    expect(merge.ok).toBe(true);
-    expect(merge.kind).toBe("pr-issue");
-    expect(typeof merge.prIssueId).toBe("number");
-    expect(merge.prIssueId).toBeGreaterThan(0);
-
-    // main 两边都未变（cross-scope 不直接合入）
+    const r = JSON.parse((await executeEvolveSelf(ctxWith(thread, {}))) as string);
+    expect(r.ok).toBe(true);
+    expect(r.reviewers.sort()).toEqual(["bob", "supervisor"]);
     expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v1\n");
     expect(await readFile(mainSelf(baseDir, "bob"), "utf8")).toBe("bob v1\n");
   });
 
-  test("fail-loud: not in super flow → error, main unchanged", async () => {
+  test("interim 端到端：evolve_self 开 PR → resolvePrIssue(merge) 合入 main", async () => {
     const baseDir = await newWorld(["alice"]);
+    const thread = superThread(baseDir, "alice");
+    await executeNewFeatBranch(ctxWith(thread, { intent: "land alice v2" }));
     await executeWriteFileMethod(
-      bizCtx(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "v2\n" }),
+      ctxWith(thread, { path: "stones/alice/self.md", content: "alice v2 merged\n" }),
     );
-    const out = await executeEvolveSelf(bizCtx(baseDir, "alice", "s1", { message: "x" }));
+    const r = JSON.parse((await executeEvolveSelf(ctxWith(thread, {}))) as string);
+    expect(r.ok).toBe(true);
+
+    const resolved = await resolvePrIssue({ baseDir, issueId: r.issueId, decision: "merge" });
+    expect(resolved.ok).toBe(true);
+    if (resolved.ok) expect(resolved.kind).toBe("merged");
+
+    expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v2 merged\n");
+    expect(await readSelf({ baseDir, objectId: "alice" })).toBe("alice v2 merged\n");
+  });
+
+  test("fail-loud: 非 super flow new_feat_branch → error", async () => {
+    const baseDir = await newWorld(["alice"]);
+    const bizThread = {
+      persistence: { baseDir, objectId: "alice", sessionId: "s1", threadId: "t" },
+      contextWindows: [],
+      events: [],
+    };
+    const out = await executeNewFeatBranch(ctxWith(bizThread, { intent: "x" }));
     expect(out).toContain("仅 super flow");
+  });
+
+  test("fail-loud: evolve_self 无 feat 绑定 → 提示先 new_feat_branch，main 不变", async () => {
+    const baseDir = await newWorld(["alice"]);
+    const thread = superThread(baseDir, "alice");
+    const out = await executeEvolveSelf(ctxWith(thread, {}));
+    const r = JSON.parse(out as string);
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.missing)).toContain("new_feat_branch");
     expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v1\n");
   });
 
-  test("fail-loud: missing creatorSessionId → error", async () => {
+  test("fail-loud: evolve_self 绑定后未编辑就 finalize → NO_CHANGES，绑定保留", async () => {
     const baseDir = await newWorld(["alice"]);
-    const out = await executeEvolveSelf(superCtx(baseDir, "alice", undefined, { message: "x" }));
-    expect(out).toContain("creatorSessionId");
-  });
-
-  test("no worktree changes to merge → NO_CHANGES error, main unchanged", async () => {
-    const baseDir = await newWorld(["alice"]);
-    const out = await executeEvolveSelf(superCtx(baseDir, "alice", "s1", { message: "x" }));
-    expect(out).toContain("[evolve_self:NO_CHANGES]");
-    expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v1\n");
+    const thread = superThread(baseDir, "alice");
+    await executeNewFeatBranch(ctxWith(thread, { intent: "noop" }));
+    const out = await executeEvolveSelf(ctxWith(thread, {}));
+    expect(out).toContain("NO_CHANGES");
+    // 绑定保留供继续编辑后重试
+    expect((thread.persistence as Record<string, unknown>).stonesBranch).toBe("feat/noop");
   });
 });

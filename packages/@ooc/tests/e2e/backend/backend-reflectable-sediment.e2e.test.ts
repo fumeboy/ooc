@@ -7,9 +7,10 @@
  *
  * 本场景走真实用户路径触发 super flow，借真链路实证两条刚落地的修复：
  *   1. memory 落 pools/<self>/knowledge/memory/<slug>.md 且含合法 frontmatter
- *      （reflectable.memory_layout 的 sediment write contract）
- *   2. （若 super flow 改了 self.md）self.md 经 stone-versioning 进 git
- *      （write_file 落 session worktree → super flow evolve_self → ff-merge commit）
+ *      （reflectable.memory_layout 的 sediment write contract；pool 直写即时沉淀，无 PR）
+ *   2. （若 super flow 沉淀 self.md）self.md 经 reflectable feat-branch PR 进 git
+ *      （super flow new_feat_branch → 直接编辑 feat worktree → evolve_self commit + PR；resolve merge 后落 main）。
+ *      地基不变量（2026-06-11）：session worktree 永不合入 main——沉淀走独立 feat 分支。
  *
  * Design spec:
  *   - meta/object.doc.ts:reflectable（super_session / super_alias_target /
@@ -174,10 +175,10 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S5 reflectable-sediment", (
         `stones/main/objects/${SELF_ID}/knowledge/memory`,
       );
 
-      // ③ self.md 是否经 stone-versioning 进 git（task#17 实证）
+      // ③ self.md 是否经 reflectable feat-branch PR 进 git（沉淀实证）
       // bootstrap commit 由 "bootstrap" 署名；createStone 的初始 commit 也署名 SELF_ID
       // （`http:createStone <id>`），故仅凭 author 含 SELF_ID 会把建对象误判为"反思改了
-      // self.md"。只认 super flow 真改 self.md 的 commit（write_file / evolve_self），
+      // self.md"。只认 super flow 经 feat-branch PR 真改 self.md 的 commit，
       // 排除 createStone / bootstrap 这两类非反思初始 commit。
       const selfCommits = stoneFileCommits(handle.baseDir, `objects/${SELF_ID}/self.md`);
       const selfModifiedByAgent = selfCommits.some(
