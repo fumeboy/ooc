@@ -1,14 +1,16 @@
 /**
  * Per-world runtime subsystem.
  *
- * 把原 module-level singleton 重构成可实例化的类，按 World 聚合。
- * 含 stoneRegistry。
- * 含 ObjectTypeRegistrar，启动期注册 stone-backed object types。
+ * 把原 module-level singleton 重构成可实例化的类，按 World 聚合：
+ * stoneRegistry / serverLoader / observable / serialQueue。
  *
- * 长期所有 per-world 状态都通过 `WorldRuntime` 访问：
- *   const runtime = await createWorldRuntime({ worldPath });
- *   runtime.objects.registerExecutable(...); // + registerReadable(...) 按维度注册
+ * 所有 per-world 状态都通过 `WorldRuntime` 访问：
+ *   const runtime = createWorldRuntime({ worldPath });
+ *   runtime.stoneRegistry.rescan();
  *   runtime.observable.enableDebug();
+ *
+ * object 类型注册不在此聚合：think/exec/render 经全局 builtinRegistry，world stone
+ * 的对象类型由渲染期 thinkable/context/object-windows.ts 的 lazy ensure 注册。
  *
  * 过渡期：module-level 默认实例（defaultObservableStore /
  * defaultSerialQueue / defaultServerLoader）继续存在，保持向后兼容。
@@ -44,6 +46,3 @@ export type { StoneRegistry, StoneDefinition, StoneKind, StoneChangedEvent } fro
 
 export { startHotReloadWatcher, parseStoneChange } from "./hot-reload.js";
 export type { HotReloadWatcher, HotReloadOptions } from "./hot-reload.js";
-
-export { createObjectTypeRegistrar, ObjectTypeRegistrar } from "./object-type-registrar.js";
-export type { ObjectTypeRegistrarDeps } from "./object-type-registrar.js";

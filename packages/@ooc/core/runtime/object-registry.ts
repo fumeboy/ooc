@@ -353,12 +353,12 @@ export class ObjectRegistry {
  * executable/index.ts 调 `builtinRegistry.registerExecutable("file", { methods })`，
  * readable.ts 调 `builtinRegistry.registerReadable("file", { readable, windowMethods, ... })`。
  *
- * Each per-world `WorldRuntime.objects` seeds itself from this registry at
- * construction time, so builtins are available in every world without being
- * re-registered.
+ * think / exec / render 默认就用这个 module-level registry（buildContext /
+ * dispatchToolCall 不显式传 registry 时回退到它）。
  *
- * Stone-backed user-defined types are NOT registered here — they are registered
- * per-world by `ObjectTypeRegistrar`.
+ * Stone-backed user-defined types are NOT registered here at load time — they are
+ * registered on demand by the render-time lazy ensure in
+ * `thinkable/context/object-windows.ts`（首次进入某 thread context 时从磁盘加载）.
  */
 export const builtinRegistry = new ObjectRegistry();
 

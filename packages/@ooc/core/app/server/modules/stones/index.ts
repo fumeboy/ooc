@@ -18,12 +18,11 @@ import { createStonesService } from "./service";
 
 export function stonesModule(
   config: Pick<ServerConfig, "baseDir">,
-  runtime?: Pick<WorldRuntime, "stoneRegistry" | "registerStone">,
+  runtime?: Pick<WorldRuntime, "stoneRegistry">,
 ) {
   const service = createStonesService({
     baseDir: config.baseDir,
     stoneRegistry: runtime?.stoneRegistry,
-    registerStone: runtime?.registerStone,
   });
   return new Elysia({ prefix: "/api", name: "ooc.stones" })
     .use(listStonesApi(service))

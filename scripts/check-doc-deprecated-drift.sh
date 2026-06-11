@@ -50,6 +50,11 @@ declare -a FORBIDDEN_PATTERNS=(
   # —— 已不存在的 core/programmable 目录（机制寄居 persistable）——
   "core/programmable/"
   "@ooc/core/programmable/"
+  # —— ObjectTypeRegistrar / per-world WorldRuntime.objects 死表退役（2026-06-12，L1）——
+  # 真正运转的是渲染期 object-windows.ts lazy ensure 进全局 builtinRegistry。
+  "ObjectTypeRegistrar"
+  "object-type-registrar"
+  "WorldRuntime\\.objects"
 )
 
 # 退役标记词：命中行含其一 = 合法的「退役说明」，放行。

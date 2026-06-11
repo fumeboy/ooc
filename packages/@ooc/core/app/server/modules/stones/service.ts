@@ -94,12 +94,9 @@ function knowledgeActivationWarning(content: string): string | undefined {
 export function createStonesService({
   baseDir,
   stoneRegistry,
-  registerStone,
 }: {
   baseDir: string;
   stoneRegistry?: StoneRegistry;
-  /** 运行时把新建/改动的 stone 注册进 ObjectRegistry（runtime.registerStone）。非 dev server 必需。 */
-  registerStone?: (objectId: string) => Promise<void>;
 }) {
   const ref = (objectId: string) => ({ baseDir, objectId });
   const dir = (objectId: string) => stoneDir(ref(objectId));
@@ -275,13 +272,6 @@ export function createStonesService({
         }
         if (readme !== undefined) await writeReadable(wtRef, readme);
       });
-      // 运行时注册新 stone 的 type 定义进 ObjectRegistry——不依赖 dev-only 的 hot-reload fs.watch，
-      // 让其它对象的 think 上下文立即能用上这个 peer（修 collaborable 惰性注册）。fail-soft：注册失败不阻断创建。
-      try {
-        await registerStone?.(objectId);
-      } catch {
-        // 注册失败不影响 stone 已创建的事实；渲染侧已 fail-soft 容忍未注册 type。
-      }
       return {
         objectId,
         dir: dir(objectId),
@@ -329,8 +319,6 @@ export function createStonesService({
       const versioned = await runVersioned(objectId, `http:putServerSource ${objectId}`, async (branch) => {
         await writeExecutableSource({ baseDir, objectId, _stonesBranch: branch }, code);
       });
-      // 重注册：agent 写了新的 server 方法后，非 dev server 也立即生效（修 programmable 自写方法 prod 不 re-register）。
-      try { await registerStone?.(objectId); } catch { /* fail-soft：写已成功，注册失败不阻断 */ }
       return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
     },
     async createKnowledgeDirectory({ objectId, path }: { objectId: string; path: string }) {

@@ -6,12 +6,10 @@
  * - `derivePeerObjectWindows`：把 peer / children Object 注入成 context window（type=peerId），
  *   顺带注册其类型。由 PeerProcessor 调用。
  *
- * 二者都是**渲染期惰性注册**——startup / hot-reload 的注册主路径是
- * `runtime/object-type-registrar.ts:ObjectTypeRegistrar.registerStone`；这里是兜底（时序上
- * thread 可能先于 registrar 后台扫描完成，或 session 内新建的 stone 尚未触发注册事件）。
- *
- * 注：与 registrar 的「从 windowDef 注册 stone 对象类型」逻辑同源——跨 runtime/thinkable
- * 的统一抽取留待 type-system 批协调。
+ * 这里是 world stone 对象类型注册进 registry 的**唯一路径**（渲染期 lazy ensure）：
+ * think/exec/render 经全局 builtinRegistry，stone 类型在首次进入某 thread 的 context 时
+ * 经 resolveStoneIdentityRef(read) 从磁盘（session worktree 或 main）加载并注册；registry
+ * 已有该 type 则跳过（幂等）。
  */
 
 import {

@@ -40,6 +40,10 @@ declare -a FORBIDDEN_PATTERNS=(
   "handleSubmitTool"
   "runCallCommandProgram"
   "program\\.callCommand"
+  # —— ObjectTypeRegistrar / per-world objects 死表退役（2026-06-12，L1：死表无 think/exec 读取方）——
+  "ObjectTypeRegistrar"
+  "createObjectTypeRegistrar"
+  "typeRegistration"
 )
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）

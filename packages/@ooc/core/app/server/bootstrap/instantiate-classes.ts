@@ -30,10 +30,9 @@ export interface InstantiateClassesResult {
  */
 export async function instantiateBuiltinClassObjects(opts: {
   baseDir: string;
-  registerStone?: (objectId: string) => Promise<void>;
 }): Promise<InstantiateClassesResult> {
-  const { baseDir, registerStone } = opts;
-  const service = createStonesService({ baseDir, registerStone });
+  const { baseDir } = opts;
+  const service = createStonesService({ baseDir });
   const instantiated: string[] = [];
   const skipped: string[] = [];
 
