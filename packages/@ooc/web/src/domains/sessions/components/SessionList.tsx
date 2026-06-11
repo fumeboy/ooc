@@ -89,10 +89,10 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
   }
 
   const toggleTitle = showTestSessions
-    ? `Hide _test_ sessions (${testCount} hidden when off)`
+    ? `隐藏 ${testCount} 个测试会话（_test_ 前缀）`
     : testCount > 0
-      ? `Show ${testCount} hidden _test_ session${testCount === 1 ? "" : "s"}`
-      : "No _test_ sessions to show";
+      ? `显示 ${testCount} 个隐藏会话（_test_ 前缀）`
+      : "没有可显示的隐藏会话";
 
   const renderItem = (flow: FlowSession) => {
     const label = flowTitle(flow);
@@ -144,19 +144,38 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
           title={toggleTitle}
           aria-label={toggleTitle}
           aria-pressed={showTestSessions}
+          data-testid="toggle-hidden-sessions"
         >
           {showTestSessions ? <Eye size={12} /> : <EyeOff size={12} />}
         </button>
       </div>
+      {!showTestSessions && testCount > 0 && (
+        <button
+          type="button"
+          className="session-list-hidden-hint"
+          onClick={() => setShowTestSessions(true)}
+          data-testid="reveal-hidden-sessions-hint"
+        >
+          <EyeOff size={11} /> {testCount} 个会话已隐藏 — 点此显示
+        </button>
+      )}
       <nav className="session-list-nav">
         {sortedFlows.length === 0 ? (
-          <p className="session-list-empty">
-            {flows.length === 0
-              ? "No sessions yet"
-              : testCount > 0 && !showTestSessions
-                ? `No sessions (${testCount} _test_ hidden)`
-                : "No sessions yet"}
-          </p>
+          flows.length > 0 && testCount > 0 && !showTestSessions ? (
+            <p className="session-list-empty">
+              暂无可见会话 ——{" "}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => setShowTestSessions(true)}
+                data-testid="reveal-hidden-sessions"
+              >
+                显示 {testCount} 个隐藏会话
+              </button>
+            </p>
+          ) : (
+            <p className="session-list-empty">No sessions yet</p>
+          )
         ) : (
           <>
             {pinnedFlows.length > 0 && (

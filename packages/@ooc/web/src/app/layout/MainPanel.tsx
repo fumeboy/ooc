@@ -146,7 +146,7 @@ export function MainPanel({
           <strong title={typeof headerTitle === "string" ? headerTitle : undefined}>{headerTitle}</strong>
           {loading && <span className="pill">loading</span>}
           {!isWelcome && editableFile && !clientTarget && <span className="pill">codemirror</span>}
-          {clientTarget && <span className="pill">object client</span>}
+          {clientTarget && <span className="pill">visible</span>}
           {isUserHomeView && <span className="pill">user home</span>}
           {isThreadContextView && <span className="pill">thread context</span>}
           {error && !file && !isWelcome && (
@@ -174,6 +174,8 @@ export function MainPanel({
           {showBlockingError && <div className="section compact"><div className="error">{error}</div></div>}
           {isWelcome || isFlowsLanding ? (
             <Welcome stones={stones} onCreateSession={onCreateSession} />
+          ) : route.kind === "notFound" ? (
+            <RouteNotFound path={route.path} />
           ) : sessionMissing ? (
             <SessionNotFound sessionId={sessionIdFromRoute!} />
           ) : scopeEmpty ? (
@@ -195,7 +197,7 @@ export function MainPanel({
           ) : isThreadContextView && !threadContextReady ? (
             <EmptyState
               title="No thread selected"
-              detail="URL 里需要带 ?sessionId=&objectId=&threadId= 才能展示 thread context。"
+              detail="从左侧 flow 图里点选一个 thread 节点，查看它的上下文。"
             />
           ) : threadContextReady && route.kind === "flowsView" ? (
             <ThreadDetailTabs
@@ -245,6 +247,28 @@ function SessionNotFound({ sessionId }: { sessionId: string }) {
   );
 }
 
+/**
+ * UI-2: 未知路由的 first-class 404，渲染在 AppShell 内（侧栏/导航壳保留），
+ * 与对象级 404（StoneFallback "Stone not found" / SessionNotFound）风格一致，
+ * 取代旧 catch-all 脱壳裸页（RouteErrorBoundary）。
+ */
+function RouteNotFound({ path }: { path: string }) {
+  return (
+    <div className="p-6" data-testid="route-not-found" style={{ maxWidth: 560 }}>
+      <h2 style={{ marginTop: 0 }}>Page not found</h2>
+      <p className="muted small">
+        没有找到路径 <code title={path}>{path}</code> 对应的页面 — 它可能已失效，或 URL 拼写有误。
+      </p>
+      <p>
+        <Link to="/flows" className="btn" data-testid="route-not-found-flows">← Browse flows / 查看全部 flows</Link>
+      </p>
+      <p>
+        <Link to="/" className="btn" data-testid="route-not-found-home">Home / 回首页</Link>
+      </p>
+    </div>
+  );
+}
+
 function sessionIdFromRouteHelper(route: RouteState): string | undefined {
   switch (route.kind) {
     case "flowsView":
@@ -267,6 +291,8 @@ function deriveBreadcrumbSegments(route: RouteState, isWelcome: boolean, path: s
     return [{ label: "flows", href: "/flows" }, { label: "welcome" }];
   }
   switch (route.kind) {
+    case "notFound":
+      return [{ label: "404" }];
     case "scope":
       return [{ label: route.scope, href: `/${route.scope}` }];
     case "stoneClient":
@@ -336,8 +362,16 @@ function objectIdFromRoute(route: RouteState): string | undefined {
 function deriveHeaderTitle(route: RouteState, isWelcome: boolean, path: string | undefined, objectDisplay: string): string {
   if (isWelcome || route.kind === "welcome") return "Welcome";
   switch (route.kind) {
+    case "notFound":
+      return "Not found";
     case "scope":
-      return route.scope === "flows" ? "Flows" : route.scope === "stones" ? "Stones" : "World";
+      return route.scope === "flows"
+        ? "Flows"
+        : route.scope === "stones"
+          ? "Stones"
+          : route.scope === "pools"
+            ? "Pools"
+            : "World";
     case "stoneClient":
       return objectDisplay || route.objectId;
     case "flowsView":

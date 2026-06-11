@@ -41,6 +41,7 @@ export type FlowsView = "index" | "thread_context";
 
 export type RouteState =
   | { kind: "welcome" }
+  | { kind: "notFound"; path: string }
   | { kind: "scope"; scope: "stones" | "flows" | "world" | "pools" }
   | { kind: "file"; path: string; thread?: ThreadContext }
   | { kind: "stoneClient"; objectId: string; thread?: ThreadContext }
@@ -79,6 +80,10 @@ export type RouteState =
 export function toPath(state: RouteState): string {
   switch (state.kind) {
     case "welcome":
+      return "/";
+    // notFound 是 parse-only 状态（未知 URL），从不反向序列化成 path；
+    // 真要导出时回首页，避免静默产出坏链接。
+    case "notFound":
       return "/";
     case "scope":
       return `/${state.scope}`;
@@ -294,7 +299,9 @@ export function parseRoute(
     }
   }
 
-  return { kind: "welcome" };
+  // 未匹配任何已知形态的非根路径 → notFound（在 AppShell 内渲染 NotFound，
+  // 而非脱壳裸页或静默回落 Welcome）。空路径（path === "/"）已在开头归 welcome。
+  return { kind: "notFound", path };
 }
 
 /** @deprecated 用 parseRoute(pathname, search, params)；旧名留作兼容。 */
@@ -354,6 +361,7 @@ function parseSelectedQuery(
 export function scopeOf(route: RouteState): "stones" | "flows" | "world" | "pools" {
   switch (route.kind) {
     case "welcome":
+    case "notFound":
       return "flows";
     case "scope":
       return route.scope;

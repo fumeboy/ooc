@@ -34,5 +34,8 @@ export const router = createBrowserRouter([
   { path: "/flows/:sessionId", ...shell },
   { path: "/flows/:sessionId/threads/:objectId/:threadId", ...shell },
   { path: "/flows/:sessionId/:objectId/pages/:page", ...shell },
-  { path: "*", element: <RouteErrorBoundary /> },
+  // UI-2: catch-all 复用 AppShell；未知路径由 useRouteState→parseRoute 归
+  // { kind: "notFound" }，MainPanel 在导航壳内渲染 RouteNotFound（不再脱壳裸页）。
+  // RouteErrorBoundary 仍作 errorElement 兜真正的 loader/render 异常。
+  { path: "*", ...shell },
 ]);

@@ -62,6 +62,9 @@ export function ClientWithSourceToggle({
   const [sourceFile, setSourceFile] = useState<FileContent | undefined>(undefined);
   const [sourceLoading, setSourceLoading] = useState(false);
   const [sourceError, setSourceError] = useState<string | undefined>(undefined);
+  // NOT_FOUND（对象没有 visible 实现）不是错误，是预期空态：与渲染 pane 的
+  // StoneFallback 行为一致，给友好提示而非内部 not-found 报错。
+  const [sourceMissing, setSourceMissing] = useState(false);
   // 用 ref 标记"已发起 fetch"避免把 sourceLoading 放进 deps
   // 否则 effect 在 setSourceLoading(true) 后自己重新跑→cleanup 把 cancelled 置 true
   // → finally 阶段 setSourceLoading(false) 被跳过 → 永远停在 loading
@@ -71,6 +74,7 @@ export function ClientWithSourceToggle({
   useEffect(() => {
     setSourceFile(undefined);
     setSourceError(undefined);
+    setSourceMissing(false);
     setSourceLoading(false);
     inflightRef.current = false;
   }, [target]);
@@ -82,14 +86,19 @@ export function ClientWithSourceToggle({
     inflightRef.current = true;
     setSourceLoading(true);
     setSourceError(undefined);
+    setSourceMissing(false);
     let cancelled = false;
     fetchClientSource(target)
       .then((f) => {
         if (!cancelled) setSourceFile(f);
       })
       .catch((e: unknown) => {
-        if (!cancelled) {
-          const msg = e instanceof Error ? e.message : String(e);
+        if (cancelled) return;
+        const msg = e instanceof Error ? e.message : String(e);
+        // NOT_FOUND = 该对象没有 visible 实现 → 友好空态；其它才是真错误。
+        if (/not\s*found|404/i.test(msg)) {
+          setSourceMissing(true);
+        } else {
           setSourceError(msg);
         }
       })
@@ -140,6 +149,14 @@ export function ClientWithSourceToggle({
       >
         {sourceLoading && !sourceFile && (
           <div className="p-4 text-sm text-[var(--muted-foreground)]">加载源码...</div>
+        )}
+        {sourceMissing && (
+          <div className="p-4 text-sm text-[var(--muted-foreground)]" data-testid="source-no-visible">
+            <p className="font-medium">该对象暂无自定义界面（visible）</p>
+            <p className="mt-2 text-xs">
+              这个对象还没有写下自己的 <code>visible/index.tsx</code> —— 切到「已渲染」可看到它的对象名片（self / readme / knowledge）。
+            </p>
+          </div>
         )}
         {sourceError && (
           <div className="p-4 text-sm">

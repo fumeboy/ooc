@@ -87,6 +87,9 @@ button { cursor: pointer; }
 .session-list-title { font-size: 10px; font-weight: 600; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .08em; }
 .session-list-nav { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: auto; padding: 0 2px 2px; }
 .session-list-empty { margin: 0; padding: 14px 8px; text-align: center; font-size: 12px; color: var(--muted-foreground); }
+.session-list-hidden-hint { display: flex; align-items: center; gap: 5px; width: 100%; margin: 0 0 6px; padding: 5px 8px; border: 1px dashed var(--border); border-radius: 6px; background: transparent; color: var(--muted-foreground); font-size: 11px; cursor: pointer; text-align: left; }
+.session-list-hidden-hint:hover { color: var(--foreground); border-color: var(--foreground); }
+.link-button { background: none; border: none; padding: 0; color: var(--accent, #2563eb); font: inherit; cursor: pointer; text-decoration: underline; }
 .session-list-group { display: flex; flex-direction: column; gap: 4px; }
 .session-list-group-label { padding: 2px 8px; font-size: 10px; font-weight: 600; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .08em; }
 .session-list-group-items { display: flex; flex-direction: column; gap: 2px; }
