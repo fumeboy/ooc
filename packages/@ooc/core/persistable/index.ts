@@ -172,6 +172,14 @@ export { enqueueSessionWrite, __resetSerialQueueForTests } from "../runtime/seri
 // STONES_MAIN_BRANCH canonical 源已迁入 ./common（打破 pr-issue → bootstrap 反向依赖）。
 export { STONES_MAIN_BRANCH } from "./common";
 
+// super-flow actor 冒泡（reflectable 新对象自沉淀 bootstrap，#3）：super-alias 的 callee
+// 解析——canonical caller 透明、新对象冒泡到最近 canonical 祖先、顶层兜底 supervisor。
+export {
+  resolveSuperActor,
+  isCanonicalObject,
+  SUPER_ACTOR_FALLBACK,
+} from "./super-actor.js";
+
 // git / versioning 编排（stone-git / stone-bootstrap / stone-versioning / stone-feat-branch）。
 // persistable/index re-export 这些符号，作为 `@ooc/core/persistable` barrel 的统一对外面。
 export {

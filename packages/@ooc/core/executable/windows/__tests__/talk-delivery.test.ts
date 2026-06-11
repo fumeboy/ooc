@@ -11,7 +11,9 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { mkdir } from "node:fs/promises";
 import { createFlowObject, createFlowSession, readThread, writeThread, nestedObjectPath } from "../../../persistable";
+import { stoneDir, STONES_MAIN_BRANCH } from "../../../persistable/common";
 import { deliverTalkMessage } from "../talk/delivery";
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 import { initContextWindows } from "../_shared/init";
@@ -23,8 +25,17 @@ async function setupCaller(opts: {
   sessionId: string;
   objectId: string;
   target: string;
+  /** caller 是否 canonical（stones/main/objects/<id>/ 存在）；默认 true。super-alias 自指路径靠它。 */
+  canonical?: boolean;
 }): Promise<{ thread: ThreadContext; talkWindow: TalkWindow }> {
   await createFlowSession(opts.baseDir, opts.sessionId);
+  if (opts.canonical !== false) {
+    // canonical = stones/main/objects/<nestedPath>/ 存在（与 ensureAuthorExists / resolveSuperActor 同寻址）。
+    await mkdir(
+      stoneDir({ baseDir: opts.baseDir, objectId: opts.objectId, _stonesBranch: STONES_MAIN_BRANCH }),
+      { recursive: true },
+    );
+  }
   const flow = await createFlowObject({
     baseDir: opts.baseDir,
     sessionId: opts.sessionId,
@@ -127,6 +138,52 @@ describe("talk-delivery target='super' alias", () => {
         tempRoot, "flows", SUPER_SESSION_ID, "objects", ...nestedObjectPath("alice"), "threads", delivered.calleeThreadId,
       );
       await expect(stat(calleeDir)).resolves.toBeDefined();
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  // #3（reflectable 新对象自沉淀 bootstrap）：新对象只在 session worktree 存在、未 canonical，
+  // 不能当 super-flow actor / PR author。super-alias 的 callee 冒泡到最近 canonical 祖先；
+  // 顶层新对象（无路径 parent）→ supervisor。canonical caller 自指不变（上面 happy/edge 已覆盖）。
+  it("#3 顶层新对象 target='super' → 冒泡到 supervisor 代发", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-tdsa-"));
+    try {
+      // supervisor 恒 canonical（bootstrap）；新对象 bar 未 canonical
+      await mkdir(stoneDir({ baseDir: tempRoot, objectId: "supervisor", _stonesBranch: STONES_MAIN_BRANCH }), {
+        recursive: true,
+      });
+      const { thread, talkWindow } = await setupCaller({
+        baseDir: tempRoot, sessionId: "web-test", objectId: "bar", target: SUPER_ALIAS_TARGET, canonical: false,
+      });
+      const delivered = await deliverTalkMessage({
+        caller: { thread, talkWindow }, content: "sediment me", source: "talk",
+      });
+      // callee = 最近 canonical 祖先 = supervisor（顶层兜底），不是 bar 自己
+      expect(delivered.calleeObjectId).toBe("supervisor");
+      const superSupervisorDir = join(
+        tempRoot, "flows", SUPER_SESSION_ID, "objects", ...nestedObjectPath("supervisor"), "threads", delivered.calleeThreadId,
+      );
+      await expect(stat(superSupervisorDir)).resolves.toBeDefined();
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("#3 nested 新对象 target='super' → 冒泡到最近 canonical 祖先", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "ooc-tdsa-"));
+    try {
+      // alice canonical（parent）；alice/baz 是 session 内新对象
+      await mkdir(stoneDir({ baseDir: tempRoot, objectId: "alice", _stonesBranch: STONES_MAIN_BRANCH }), {
+        recursive: true,
+      });
+      const { thread, talkWindow } = await setupCaller({
+        baseDir: tempRoot, sessionId: "web-test", objectId: "alice/baz", target: SUPER_ALIAS_TARGET, canonical: false,
+      });
+      const delivered = await deliverTalkMessage({
+        caller: { thread, talkWindow }, content: "sediment me", source: "talk",
+      });
+      expect(delivered.calleeObjectId).toBe("alice");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

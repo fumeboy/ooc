@@ -34,7 +34,7 @@
  * 不在本模块负责：调度（由 worker 自然轮询）、UI 通知（控制面自己决定何时 refresh）。
  */
 
-import { readThread, writeThread, createFlowObject, createFlowSession, sessionMetadataFile } from "../../../persistable/index.js";
+import { readThread, writeThread, createFlowObject, createFlowSession, sessionMetadataFile, resolveSuperActor } from "../../../persistable/index.js";
 import { stat } from "node:fs/promises";
 import { notifyThreadActivated } from "../../../observable/index.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
@@ -86,7 +86,13 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   if (!rawTarget) throw new Error("talk_window.target is empty");
 
   const isSuperAlias = isSuperSessionId(rawTarget);
-  const calleeObjectId = isSuperAlias ? callerRef.objectId : rawTarget;
+  // super-alias 的 callee = super-flow actor。canonical caller → 自身（透明，自我演化不变）；
+  // 新对象（仅 session 内、未 canonical）→ 冒泡到最近 canonical 祖先（顶层兜底 supervisor），
+  // 由其以 super flow 身份代为把新对象首版经 feat-branch PR 沉淀进 main（author=祖先，
+  // ensureAuthorExists 自然通过）。必须与 worker.ts:syncCrossObjectCalleeEnds 严格一致（同 helper）。
+  const calleeObjectId = isSuperAlias
+    ? await resolveSuperActor(callerRef.baseDir, callerRef.objectId)
+    : rawTarget;
   // session 解析：
   // - super-alias（X→super）：派进 super session
   // - 默认：派进 caller 自身 session（同 session 协作）

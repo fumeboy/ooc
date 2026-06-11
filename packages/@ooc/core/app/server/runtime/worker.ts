@@ -1,5 +1,5 @@
 import { createLlmClient } from "@ooc/core/thinkable/llm/client";
-import { readThread, writeThread, llmInputFile } from "@ooc/core/persistable";
+import { readThread, writeThread, llmInputFile, resolveSuperActor } from "@ooc/core/persistable";
 import { runScheduler } from "@ooc/core/thinkable/scheduler";
 import { detectInterruptedThread, markInterrupted } from "@ooc/core/thinkable/recovery";
 import { stat } from "node:fs/promises";
@@ -275,7 +275,12 @@ async function syncCrossObjectCalleeEnds(
     // 这里的 callee 解析必须与 talk-delivery.ts 严格一致 — 否则 readThread 会
     // 读错路径(在 sessions/super/objects/super/ 找不到任何东西)。
     const isSuperAlias = w.target === SUPER_ALIAS_TARGET;
-    const calleeObjectId = isSuperAlias ? caller.persistence.objectId : w.target;
+    // super-alias 的 callee = super-flow actor。canonical caller → 自身（透明）；
+    // 新对象（仅 session 内、未 canonical）→ 冒泡到最近 canonical 祖先（顶层兜底 supervisor），
+    // 由其代为发起沉淀 super flow。必须与 talk-delivery.ts 严格一致（同 resolveSuperActor）。
+    const calleeObjectId = isSuperAlias
+      ? await resolveSuperActor(baseDir, caller.persistence.objectId)
+      : w.target;
     const calleeSessionId = isSuperAlias ? SUPER_SESSION_ID : callerSessionId;
     const calleeRef = { baseDir, sessionId: calleeSessionId, objectId: calleeObjectId };
     let callee: ThreadContext | undefined;

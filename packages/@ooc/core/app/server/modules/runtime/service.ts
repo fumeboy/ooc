@@ -108,6 +108,8 @@ export interface PrIssueDetailView extends PrIssueSummaryView {
   diff?: string;
   paths: string[];
   baseSha?: string;
+  /** 发起沉淀的 super(foo) threadId（P6 回修目标 thread）；磁盘 prPayload 有，view 此前漏。 */
+  authorThreadId?: string;
 }
 
 export interface RuntimeService {
@@ -262,6 +264,9 @@ function toPrIssueDetailView(issue: PrIssueRecord): PrIssueDetailView {
           diff: issue.prPayload.diff,
           baseSha: issue.prPayload.baseSha,
           paths: issue.prPayload.paths,
+          ...(issue.prPayload.authorThreadId !== undefined
+            ? { authorThreadId: issue.prPayload.authorThreadId }
+            : {}),
         }
       : { paths: [] }),
   };

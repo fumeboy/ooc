@@ -102,7 +102,18 @@
 - **#2 HIGH**：feat 绑定生效时 `write_file pools/...` 静默落 pool（不进 feat worktree）→
   `evolve_self` NO_CHANGES、PR 开不出。pool 沉淀(write-through 不 PR) vs 身体沉淀(feat PR) 两通道
   在知识里不够互斥，LLM 易选错。
-- **#3 MEDIUM**：supervisor 是 Builtin、world 内无 `stones/supervisor/` → self-scope 自沉淀对
-  supervisor 物理不可达（须用真 Stone Object 当 author）。
+- **#3 MEDIUM**〔**已解法 2026-06-11，用户拍板**〕：原症状是「新对象（仅 session worktree、未进
+  `stones/main`、不 canonical）`talk(super)` 沉淀自己时撞 `ensureAuthorExists`——它当不了 super(self)
+  actor / PR author」。解法沿用**冒泡机制**：super-alias 的 callee 不再裸取 caller 自身，而是
+  `resolveSuperActor(baseDir, callerObjectId)`——caller 自身 canonical 则透明返回自身（自我演化路径
+  逐字节不变）；否则沿 parent 链由近及远找**最近 canonical 祖先**；顶层新对象（无路径 parent）或
+  一路无 canonical 祖先 → 落 **supervisor**（根 parent，恒 canonical bootstrap）。由该 canonical 祖先
+  以 super flow 身份 `new_feat_branch` → 把新对象目录写进 feat 分支 → `evolve_self` 开 PR 把新对象首版
+  沉淀进 main。author=祖先（canonical），`ensureAuthorExists` 自然通过，**无需放宽 author 校验**。
+  锚点：`persistable/super-actor.ts`（`resolveSuperActor` / `isCanonicalObject` / `SUPER_ACTOR_FALLBACK`）；
+  接入 `app/server/runtime/worker.ts`（syncCrossObjectCalleeEnds 的 super-alias 解析）+
+  `executable/windows/talk/delivery.ts`（deliverTalkMessage 的 super-alias 解析），两处同 helper 严格一致。
+  协议 knowledge：`builtins/root/knowledge/super-flow.md`「建 / 改对象」补「新对象 talk(super) 由最近
+  canonical 祖先代发」一句。observability：`GET /pr-issues/:id` DetailView 补回 `authorThreadId`（intent 早已在）。
 - **#4 MEDIUM**：回修 resume 时 LLM 不照「new_feat_branch 同 intent 重绑」提示走，即兴 curl 空转
   （叠加 521 端点抖动）。提示语需更强导向具体 method 动作。
