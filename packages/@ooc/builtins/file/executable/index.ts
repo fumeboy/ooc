@@ -393,6 +393,21 @@ const fileConstructor: ObjectMethod = {
         } catch (err) {
           return { ok: false, error: `[write_file] 写入 ${path} 失败：${(err as Error).message}` };
         }
+        // reflectable #2（2026-06-11）：feat 分支绑定生效时，落在 stone 自治区**之外**
+        // 的写（典型 pools/ 知识/记忆路径）是 write-through——立即生效、**不进本 PR**、
+        // 不在 feat worktree。此前静默无提示 → 随后 evolve_self 发现 feat 分支无 stone
+        // 改动报 NO_CHANGES，LLM 不知为何。这里显式点破两通道，消除静默 + 困惑。
+        if (thread.persistence?.stonesBranch && thread.events) {
+          thread.events.push({
+            category: "context_change",
+            kind: "inject",
+            text:
+              `[write_file] 你在 feat 沉淀绑定（${thread.persistence.stonesBranch}）中，但 ${path} ` +
+              `落在 stone 自治区之外，是 write-through 写——立即生效、不进本 PR、不在 feat 分支。` +
+              `若你只想沉淀知识/记忆（pool），写完即生效，无需 evolve_self（feat 分支无 stone 改动会报 NO_CHANGES）。` +
+              `若要改身体/身份并经 PR review 合入，请写 stone 路径 stones/<self>/...（objects/...）。`,
+          });
+        }
       }
       const fileWindow: FileWindow = {
         id: generateWindowId("file"),

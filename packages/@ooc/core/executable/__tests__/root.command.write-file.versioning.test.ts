@@ -338,4 +338,52 @@ describe("write_file stone-versioning routing", () => {
     const onMain = await readFile(join(mainObjectsDir(baseDir), "agent_of_x", "self.md"), "utf8");
     expect(onMain).toBe("agent_of_x v1\n");
   });
+
+  // reflectable #2 回归（2026-06-11）：feat 分支绑定生效时写 pool 路径 = write-through
+  // 立即生效、**不进本 PR**。此前静默直写无任何提示 → 随后 evolve_self 发现 feat 分支
+  // 无 stone 改动报 NO_CHANGES，LLM 困惑。断言：feat 绑定下写 pool 注入显式提示。
+  test("feat 绑定下写 pools/ → 直写 + 注入 write-through 提示（不静默）", async () => {
+    const baseDir = await newWorld(["agent_of_x"]);
+    const events: unknown[] = [];
+    const thread = {
+      persistence: {
+        baseDir,
+        objectId: "agent_of_x",
+        sessionId: "super",
+        threadId: "t",
+        stonesBranch: "feat/agent-of-x-mem",
+      },
+      contextWindows: [] as unknown[],
+      events,
+    };
+    const ctx = {
+      thread,
+      args: { path: "pools/agent_of_x/knowledge/memory/note.md", content: "记一笔\n" },
+    } as unknown as MethodExecutionContext;
+
+    const out = await executeWriteFileMethod(ctx);
+    expect(typeof out).toBe("object");
+    if (!(typeof out === "object" && out && out.ok === true)) {
+      throw new Error(`expected success outcome, got ${JSON.stringify(out)}`);
+    }
+
+    // 文件确实落 pool（write-through 语义不变）
+    const written = await readFile(
+      join(baseDir, "pools", "agent_of_x", "knowledge", "memory", "note.md"),
+      "utf8",
+    );
+    expect(written).toBe("记一笔\n");
+
+    // 注入了 feat 绑定下 pool 写的显式提示（消除静默 + 提前点破 NO_CHANGES 困惑）
+    const injected = events.find(
+      (e): e is { kind: string; text: string } =>
+        typeof e === "object" &&
+        e !== null &&
+        (e as { kind?: string }).kind === "inject" &&
+        typeof (e as { text?: string }).text === "string",
+    );
+    expect(injected).toBeDefined();
+    expect(injected!.text).toContain("write-through");
+    expect(injected!.text).toContain("不进本 PR");
+  });
 });

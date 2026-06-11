@@ -57,20 +57,42 @@ function resolveErrorText(
   return r.code === "GIT" ? `git ${r.gitCode}: ${r.stderr}` : r.message;
 }
 
+/**
+ * 回修 message 的「可照抄动作块」（reflectable #4，2026-06-11）。
+ *
+ * 体验官实证：LLM 收到泛化的「new_feat_branch(同 intent) 重绑」提示后不照走，
+ * 反而即兴 curl 自查空转。这里把真实 intent 拼进可逐字复制的 exec(...) 调用，
+ * 并显式禁止 curl/program 自查——把 LLM 钉死在 method 动作序列上。
+ *
+ * @param intent  PR 原始 intent（prPayload.intent）；用于让 LLM 照抄重绑同一 feat 分支。
+ * @param editVerb  本轮要做的编辑动词（reject→"重新编辑"；request-changes→"按反馈修改"；合入失败→"解决冲突"）。
+ */
+function repairActionBlock(intent: string, editVerb: string): string {
+  return (
+    `\n\n照此动作序列 resume（逐字照抄，不要用 curl / program 自查）：\n` +
+    `1. exec(method="new_feat_branch", args={ intent: ${JSON.stringify(intent)} }) ` +
+    `—— 同 intent 幂等重绑该 feat 分支续修。\n` +
+    `2. 用 write_file / file_window.edit ${editVerb}（改 stone 路径 stones/<self>/...）。\n` +
+    `3. exec(method="evolve_self") —— 提交并重开/更新 PR 交 review。`
+  );
+}
+
 /** 回投 P6 修复 message（best-effort；author thread 缺失只记 repairRouted=false，不翻 ok）。 */
 async function routeRepair(
   baseDir: string,
   issueId: number,
-  reason: string,
+  verdictText: string,
+  editVerb: string,
 ): Promise<boolean> {
   const issue = await readPrIssue(baseDir, issueId);
   const authorThreadId = issue?.prPayload?.authorThreadId;
   if (!issue || !authorThreadId) return false;
+  const intent = issue.prPayload?.intent ?? "";
   const r = await routePrRepairMessage({
     baseDir,
     authorObjectId: issue.createdByObjectId,
     authorThreadId,
-    reason,
+    reason: verdictText + repairActionBlock(intent, editVerb),
   });
   return r.ok;
 }
@@ -95,8 +117,8 @@ export async function applyPrApproval(
     const repairRouted = await routeRepair(
       baseDir,
       issueId,
-      `[PR #${issueId} 被 reject] reviewer '${reviewerObjectId}' 拒绝了本次沉淀（分支已 archive）。` +
-        `请审视反馈、修复后 resume：new_feat_branch(同 intent) 重绑 feat 分支 → 重新编辑 → evolve_self 重开 PR。`,
+      `[PR #${issueId} 被 reject] reviewer '${reviewerObjectId}' 拒绝了本次沉淀（分支已 archive）。请审视反馈后修复。`,
+      "重新编辑",
     );
     return {
       ok: true,
@@ -117,8 +139,8 @@ export async function applyPrApproval(
         const repairRouted = await routeRepair(
           baseDir,
           issueId,
-          `[PR #${issueId} 合入失败] ${errText}。` +
-            `请 resume 修复：new_feat_branch(同 intent) 重绑 feat 分支 → 解决冲突 → evolve_self 重开 PR。`,
+          `[PR #${issueId} 合入失败] ${errText}。`,
+          "解决冲突",
         );
         return {
           ok: false,
@@ -141,8 +163,8 @@ export async function applyPrApproval(
     const repairRouted = await routeRepair(
       baseDir,
       issueId,
-      `[PR #${issueId} 需修改] reviewer '${reviewerObjectId}' 对本次沉淀提了修改意见（PR 仍 open）。` +
-        `请审视反馈、修复后 resume：new_feat_branch(同 intent) 重绑 feat 分支 → 修改 → evolve_self 更新 PR。`,
+      `[PR #${issueId} 需修改] reviewer '${reviewerObjectId}' 对本次沉淀提了修改意见（PR 仍 open）。请审视反馈后修改。`,
+      "按反馈修改",
     );
     return { ok: true, verdict: a.verdict, repairRouted };
   }

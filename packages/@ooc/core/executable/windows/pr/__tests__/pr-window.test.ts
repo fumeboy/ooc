@@ -211,8 +211,16 @@ describe("pr_window method（P4）", () => {
 
     // super(foo) thread 收到回修 message
     const reloaded = await readThread({ baseDir, sessionId: "super", objectId: "foo" }, superFooThreadId);
-    expect(reloaded?.inbox?.some((m) => m.content.includes("被 reject"))).toBe(true);
+    const repairMsg = reloaded?.inbox?.find((m) => m.content.includes("被 reject"));
+    expect(repairMsg).toBeDefined();
     expect(reloaded?.status).toBe("running");
+
+    // reflectable #4 回归（2026-06-11）：回修 message 必须给 LLM 可照抄的 method 动作序列
+    // （带真实 intent），并明确禁止 curl/program 自查空转。
+    expect(repairMsg!.content).toContain("new_feat_branch");
+    expect(repairMsg!.content).toContain('share into supervisor land'); // 真实 intent，照抄即可
+    expect(repairMsg!.content).toContain("evolve_self");
+    expect(repairMsg!.content).toMatch(/curl|program/); // 明示「不要 curl/program 自查」
   });
 });
 

@@ -4,11 +4,18 @@ import type { RuntimeJob, RuntimeJobInput } from "./types";
 export function createJobManager() {
   const jobs = new Map<string, RuntimeJob>();
 
-  function findRunning(sessionId: string, objectId: string): RuntimeJob | undefined {
+  // dedupe 必须按 **thread** 粒度，不能只按 (sessionId, objectId)：一个 object 在同一
+  // session 下可有多条并存 thread（reflectable #1：super session 下 supervisor 既有
+  // 自己的别的 thread，又有每个 PR 的 t_prreview_supervisor_<id>）。只按 object 折叠会
+  // 让 supervisor 的 pr-review thread 被其它 super-session job 吞掉，永不被 worker 调度。
+  // job 本就跑特定 threadId（runJob 读 job.threadId），dedupe 唯一目的是防同一 thread
+  // 在 running/queued 时被重复入队 —— 把 threadId 纳入 key 完全保留该意图。
+  function findRunning(sessionId: string, objectId: string, threadId: string): RuntimeJob | undefined {
     return [...jobs.values()].find((job) => {
       return (
         job.sessionId === sessionId &&
         job.objectId === objectId &&
+        job.threadId === threadId &&
         (job.status === "queued" || job.status === "running")
       );
     });
@@ -16,7 +23,7 @@ export function createJobManager() {
 
   function createJob(kind: RuntimeJob["kind"], input: RuntimeJobInput, dedupe: boolean): RuntimeJob {
     if (dedupe) {
-      const existing = findRunning(input.sessionId, input.objectId);
+      const existing = findRunning(input.sessionId, input.objectId, input.threadId);
       if (existing) return existing;
     }
 
