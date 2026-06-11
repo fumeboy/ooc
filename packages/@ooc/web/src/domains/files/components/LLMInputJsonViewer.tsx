@@ -13,6 +13,7 @@
 import { useMemo, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json as jsonLanguage } from "@codemirror/lang-json";
+import { Copy } from "lucide-react";
 import type { FileContent } from "../model";
 
 type ViewMode = "json" | "xml";
@@ -60,6 +61,31 @@ function prettyJson(raw: string): string {
   }
 }
 
+/** 复制当前视图文本到剪贴板，带「已复制」短反馈（模式同 chat TuiBlock 的 CopyBtn）。 */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="pill llm-input-copy"
+      title={copied ? "已复制" : "复制当前视图"}
+      aria-label="复制当前视图"
+      disabled={text.length === 0}
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      }}
+    >
+      {copied ? "✓ 已复制" : (
+        <>
+          <Copy size={11} aria-hidden="true" /> 复制
+        </>
+      )}
+    </button>
+  );
+}
+
 export function LLMInputJsonViewer({ file }: { file: FileContent }) {
   const parsed = useMemo<LlmInputDebugRecord | null>(() => {
     try {
@@ -89,27 +115,30 @@ export function LLMInputJsonViewer({ file }: { file: FileContent }) {
             {typeof itemCount === "number" ? ` · ${itemCount} items` : ""}
           </div>
         </div>
-        <div className="llm-input-stats" role="tablist" aria-label="View mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={effectiveMode === "json"}
-            className={`pill llm-input-view-toggle ${effectiveMode === "json" ? "is-active" : ""}`}
-            onClick={() => setMode("json")}
-          >
-            JSON
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={effectiveMode === "xml"}
-            className={`pill llm-input-view-toggle ${effectiveMode === "xml" ? "is-active" : ""}`}
-            onClick={() => setMode("xml")}
-            disabled={!xmlAvailable}
-            title={xmlAvailable ? "View system prompt (XML)" : "No system prompt in this file"}
-          >
-            XML
-          </button>
+        <div className="llm-input-actions">
+          <CopyButton text={effectiveMode === "json" ? jsonText : (systemPrompt ?? "")} />
+          <div className="llm-input-stats" role="tablist" aria-label="View mode">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={effectiveMode === "json"}
+              className={`pill llm-input-view-toggle ${effectiveMode === "json" ? "is-active" : ""}`}
+              onClick={() => setMode("json")}
+            >
+              JSON
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={effectiveMode === "xml"}
+              className={`pill llm-input-view-toggle ${effectiveMode === "xml" ? "is-active" : ""}`}
+              onClick={() => setMode("xml")}
+              disabled={!xmlAvailable}
+              title={xmlAvailable ? "View system prompt (XML)" : "No system prompt in this file"}
+            >
+              XML
+            </button>
+          </div>
         </div>
       </div>
       <div className="llm-input-text-body">

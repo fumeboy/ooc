@@ -148,7 +148,11 @@ button { cursor: pointer; }
 .llm-input-header { padding: 14px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; background: rgba(255,255,255,.5); }
 .llm-input-title { font-size: 14px; font-weight: 700; }
 .llm-input-subtitle { margin-top: 4px; color: var(--muted-foreground); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.llm-input-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .llm-input-stats { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.llm-input-copy { cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.llm-input-copy:hover:not(:disabled) { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+.llm-input-copy:disabled { opacity: .45; cursor: not-allowed; }
 .llm-input-view-toggle { cursor: pointer; }
 .llm-input-view-toggle.is-active { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
 .llm-input-view-toggle:disabled { opacity: .45; cursor: not-allowed; }
