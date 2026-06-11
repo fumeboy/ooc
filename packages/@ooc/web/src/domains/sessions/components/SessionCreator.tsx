@@ -49,7 +49,7 @@ export function SessionCreator({
       )}
 
       <div className="welcome-form-field">
-        <Label htmlFor="session-id">Session ID</Label>
+        <Label htmlFor="session-id">session id</Label>
         <Input
           id="session-id"
           value={sessionId}
@@ -60,7 +60,7 @@ export function SessionCreator({
       </div>
 
       <div className="welcome-form-field">
-        <Label htmlFor="target-object-id">Talk to (objectId)</Label>
+        <Label htmlFor="target-object-id">对话对象（objectId）</Label>
         <Select
           id="target-object-id"
           value={targetObjectId}
@@ -74,7 +74,7 @@ export function SessionCreator({
       </div>
 
       <div className="welcome-form-field">
-        <Label htmlFor="initial-message">First message</Label>
+        <Label htmlFor="initial-message">第一条消息</Label>
         <Textarea
           id="initial-message"
           value={initialMessage}
@@ -89,6 +89,7 @@ export function SessionCreator({
           variant="primary"
           size="lg"
           className="welcome-submit-btn"
+          data-testid="create-session-submit"
           disabled={!canSubmit}
           onClick={async () => {
             setBusy(true);
@@ -105,7 +106,7 @@ export function SessionCreator({
             }
           }}
         >
-          {busy ? "Creating…" : "Create session"}
+          {busy ? "创建中…" : "创建 session"}
         </Button>
       </div>
     </fieldset>

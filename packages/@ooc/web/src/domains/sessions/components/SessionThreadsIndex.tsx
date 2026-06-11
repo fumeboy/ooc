@@ -136,22 +136,22 @@ export function SessionThreadsIndex({
       <header className="session-threads-index-header">
         <div className="session-threads-index-header-main">
           <Layers size={14} className="muted" />
-          <h2 className="session-threads-index-title">Session threads</h2>
+          <h2 className="session-threads-index-title">session threads</h2>
           <span className="muted small session-threads-index-stats">
-            {groupedAll.length} object{groupedAll.length === 1 ? "" : "s"}
+            {groupedAll.length} 个 object
             {" · "}
-            {items.length} thread{items.length === 1 ? "" : "s"}
+            {items.length} 个 thread
             {totalTalks > 0 && (
               <>
                 {" · "}
-                {totalTalks} talk link{totalTalks === 1 ? "" : "s"}
+                {totalTalks} 条 talk 链路
               </>
             )}
             {relatedItems && (
               <>
                 {" · "}
                 <span className="session-threads-index-mode-pill">
-                  staff view ({relatedItems.length} related)
+                  五线谱视图（{relatedItems.length} 个相关）
                 </span>
               </>
             )}
@@ -167,17 +167,17 @@ export function SessionThreadsIndex({
               }
               title="清除选中，回到全量视图"
             >
-              Clear filter
+              清除筛选
             </button>
           )}
           <button
             type="button"
             className="btn primary session-threads-index-new-chat"
             onClick={() => setNewChatOpen(true)}
-            title="Start a chat with another object"
+            title="与另一个 object 开启对话"
           >
             <Plus size={12} style={{ marginRight: 4 }} />
-            New chat
+            新对话
           </button>
         </div>
       </header>
@@ -189,7 +189,7 @@ export function SessionThreadsIndex({
       )}
       {degraded && (
         <div className="session-threads-index-banner muted small" role="status">
-          Backend returned minimal shape — status/relations unavailable until D2 lands.
+          后端返回了精简结构 —— 状态 / 关系暂不可用。
         </div>
       )}
 
@@ -198,7 +198,7 @@ export function SessionThreadsIndex({
           <EmptySession sessionId={sessionId} />
         ) : visibleColumns.length === 0 ? (
           <div className="session-threads-index-empty muted small">
-            No threads yet — start a chat to see this session take shape.
+            还没有 thread —— 开启一段对话，这个 session 就会成形。
           </div>
         ) : (
           // 无选中 → 用全量 items；选中 → 用 relatedItems。统一走 StaffView 避免两套
@@ -395,8 +395,7 @@ function EmptySession({ sessionId }: { sessionId: string }) {
   return (
     <div className="session-threads-index-empty-state">
       <p>
-        Nothing happening in this session yet — no talk windows on user.root and no
-        peer threads.
+        这个 session 还没有任何动静 —— user.root 上没有 talk window，也没有 peer thread。
       </p>
       <p>
         <Link
@@ -405,7 +404,7 @@ function EmptySession({ sessionId }: { sessionId: string }) {
           data-testid="seed-via-welcome"
         >
           <MessageSquare size={11} style={{ marginRight: 4 }} />
-          Seed first conversation via welcome
+          从 welcome 开启第一段对话
           <ArrowRight size={11} style={{ marginLeft: 4 }} />
         </Link>
       </p>
@@ -462,20 +461,20 @@ function NewChatModal({
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card compact-modal" onClick={(e) => e.stopPropagation()}>
         <div className="row space-between">
-          <strong>New chat</strong>
+          <strong>新对话</strong>
           <button type="button" className="btn" onClick={onClose}>
-            Close
+            关闭
           </button>
         </div>
         <p className="muted small">
-          在当前 session 的 user.root 上挂一个新 talk_window 指向 target object 并发首条消息。
-          target 已存在则复用既有 talk_window。
+          在当前 session 的 user.root 上挂一个新 talk window 指向目标 object 并发首条消息。
+          目标已存在则复用既有 talk window。
         </p>
         <label className="field-label">
-          Target object id
+          目标 object id
           <input
             className="input"
-            placeholder="e.g. supervisor / pdf-extractor / alice"
+            placeholder="例如 supervisor / pdf-extractor / alice"
             value={target}
             onChange={(e) => setTarget(e.target.value)}
             disabled={busy}
@@ -483,11 +482,11 @@ function NewChatModal({
           />
         </label>
         <label className="field-label">
-          First message
+          第一条消息
           <textarea
             className="textarea"
             rows={4}
-            placeholder="Say something to start the conversation…"
+            placeholder="说点什么来开启对话…"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
@@ -501,14 +500,14 @@ function NewChatModal({
         </label>
         {err && <div className="modal-error">{err}</div>}
         <div className="row space-between modal-actions">
-          <span className="muted small">⌘/Ctrl + Enter to submit</span>
+          <span className="muted small">⌘/Ctrl + Enter 提交</span>
           <button
             type="button"
             className="btn primary"
             onClick={() => void submit()}
             disabled={busy || !target.trim() || !text.trim()}
           >
-            {busy ? "Creating…" : "Start chat"}
+            {busy ? "创建中…" : "开始对话"}
           </button>
         </div>
       </div>

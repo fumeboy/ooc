@@ -324,7 +324,7 @@ export { expect };
  *   #session-id            input
  *   #target-object-id      select
  *   #initial-message       textarea
- *   button:has-text("Create session")
+ *   button[data-testid="create-session-submit"]  （文案随语言方针变动，按 testid 定位更稳）
  */
 export async function createSessionVia(
   page: Page,
@@ -335,7 +335,7 @@ export async function createSessionVia(
   }
   await page.locator("#target-object-id").selectOption(input.targetObjectId);
   await page.locator("#initial-message").fill(input.firstMessage);
-  await page.getByRole("button", { name: /create session/i }).click();
+  await page.getByTestId("create-session-submit").click();
   // RightPanel 出现意味着已经进入 chat 页（thread.creator=user 时显示 composer）
   await page.locator(".right-panel").waitFor({ state: "visible", timeout: 30_000 });
 }

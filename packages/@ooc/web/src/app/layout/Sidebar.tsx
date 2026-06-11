@@ -1,4 +1,5 @@
 import { MainLogo } from "../../shared/brand/MainLogo";
+import { GlossaryLink } from "../../shared/ui/Glossary";
 import { Box, Database, Globe2, List, Plus, Zap } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { FileTreeNode, TreeScope } from "../../domains/files";
@@ -161,7 +162,7 @@ function buildHeatmapCells(
     else if (n <= 3) level = "lvl2";
     else level = "lvl3";
     const classes = [level, day === todayDay ? "today" : ""].filter(Boolean).join(" ");
-    const title = `${year}-${pad2(month + 1)}-${pad2(day)}: ${n} session${n === 1 ? "" : "s"}`;
+    const title = `${year}-${pad2(month + 1)}-${pad2(day)}: ${n} 个 session`;
     cells.push({ className: classes, title });
   }
   return cells;
@@ -192,6 +193,7 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
     <aside className="sidebar gap-2">
       <div className="sidebar-brand panel">
         <MainLogo />
+        <GlossaryLink className="sidebar-glossary-link" />
       </div>
 
       <div className="sidebar-frame panel">
@@ -235,15 +237,15 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
               </div>
             ) : (
               <div className="section tree-section">
-                <p className="section-title">Flow tree</p>
+                <p className="section-title">flow 树</p>
                 <FileTree root={flowTreeDisplay} selectedPath={activePath} onSelect={onNode} onCreate={onCreateKnowledge} />
               </div>
             )
           ) : scope === "stones" ? (
             <div className="section tree-section">
               <div className="row space-between">
-                <p className="section-title" style={{ marginBottom: 0 }}>Stones tree</p>
-                <button className="mini-button" title="Create object" onClick={onCreateStone}>
+                <p className="section-title" style={{ marginBottom: 0 }}>stone 树</p>
+                <button className="mini-button" title="新建 object" onClick={onCreateStone}>
                   <Plus size={12} />
                 </button>
               </div>
@@ -251,12 +253,12 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
             </div>
           ) : scope === "pools" ? (
             <div className="section tree-section">
-              <p className="section-title">Pools tree</p>
+              <p className="section-title">pool 树</p>
               <FileTree root={tree} selectedPath={activePath} onSelect={onNode} onCreate={onCreateKnowledge} />
             </div>
           ) : (
             <div className="section tree-section">
-              <p className="section-title">World tree</p>
+              <p className="section-title">world 树</p>
               <FileTree root={tree} selectedPath={activePath} onSelect={onNode} onCreate={onCreateKnowledge} />
             </div>
           )}
@@ -268,18 +270,18 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
          */}
         {flows.length === 0 ? (
           <div className="session-calendar session-calendar-empty">
-            <span className="muted small">No sessions yet</span>
+            <span className="muted small">还没有 session</span>
           </div>
         ) : (
           <div className="session-calendar">
             <div className="calendar-title">
               <span>{calendarMonth(flows).label}</span>
               <span>
-                {flows.length} sessions
+                {flows.length} 个 session
                 {hiddenTestCount > 0 && (
                   <span
                     className="calendar-hidden-tag"
-                    title={`${hiddenTestCount} _test_ session${hiddenTestCount === 1 ? "" : "s"} 已隐藏；点眼睛 toggle 显示`}
+                    title={`已隐藏 ${hiddenTestCount} 个 _test_ session；点眼睛图标可显示`}
                     data-testid="calendar-hidden-tag"
                   >
                     {" "}({hiddenTestCount} 隐藏)
@@ -298,13 +300,13 @@ export function Sidebar({ scope, flows, tree, activePath, activeSessionId, activ
 function SessionBar({ title, onToggleSessions, onShowWelcome }: { title: string; onToggleSessions: () => void; onShowWelcome: () => void }) {
   return (
     <div className="session-bar">
-      <button className="session-bar-icon" onClick={onToggleSessions} title="Show sessions">
+      <button className="session-bar-icon" onClick={onToggleSessions} title="显示 session 列表">
         <List size={14} />
       </button>
-      <button className="session-bar-title" onClick={onToggleSessions} title={title || "Untitled session"}>
-        {title || "Untitled session"}
+      <button className="session-bar-title" onClick={onToggleSessions} title={title || "未命名 session"}>
+        {title || "未命名 session"}
       </button>
-      <button className="session-bar-icon" onClick={onShowWelcome} title="Create session" aria-label="Create session">
+      <button className="session-bar-icon" onClick={onShowWelcome} title="新建 session" aria-label="新建 session">
         <Plus size={14} />
       </button>
     </div>

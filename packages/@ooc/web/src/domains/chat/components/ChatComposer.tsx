@@ -54,10 +54,10 @@ export function ChatComposer({
   // Issue #3 A4 fix: 原写死 'Continue root thread...' 与 callee thread 现实脱节。
   // 改为从 peer 派生 `Reply to <name>...`(优先 displayName,缺省回退 objectId);缺 peer 时退回通用 `Continue thread...`。
   const peerLabel = peerDisplayName || peerObjectId;
-  const idlePlaceholder = peerLabel ? `Reply to ${peerLabel}…` : "Continue thread…";
+  const idlePlaceholder = peerLabel ? `回复 ${peerLabel}…` : "继续这个 thread…";
   // Issue #3 A7 fix: composer send 通道只支持 ⌘↵, 在 placeholder 末尾增加 hint, 与 send button title 共同消除
   // "新用户找不到发送方式" 的体验问题。
-  const placeholder = paused ? "Thread 等待审批中,先在上方决议卡处理…" : `${idlePlaceholder} (⌘↵ to send)`;
+  const placeholder = paused ? "thread 等待审批中，先在上方决议卡处理…" : `${idlePlaceholder}（⌘↵ 发送）`;
 
   return (
     <div className="chat-composer panel">
@@ -73,8 +73,8 @@ export function ChatComposer({
         <button
           type="button"
           className="chat-composer-side-btn chat-send-btn"
-          aria-label={busy ? "Sending message (⌘↵)" : "Send message (⌘↵)"}
-          title={busy ? "Sending…" : "Send (⌘↵)"}
+          aria-label={busy ? "发送中（⌘↵）" : "发送消息（⌘↵）"}
+          title={busy ? "发送中…" : "发送（⌘↵）"}
           disabled={cannotSend}
           onClick={() => { void trySend(); }}
         >

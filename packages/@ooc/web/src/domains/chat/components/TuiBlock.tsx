@@ -28,6 +28,9 @@ function getToolIcon(toolName: string): LucideIcon {
 function buildCopyText(line: ChatLine) {
   if (line.kind === "message") return line.content;
   if (line.kind === "notice") return `${line.title}\n${line.content}`;
+  if (line.kind === "notice_group") {
+    return `${line.title} ×${line.items.length}\n${line.items.map((it) => it.content).join("\n---\n")}`;
+  }
   if (line.kind === "permission_card") {
     return `permission_ask command=${line.method}${line.argsSummary ? `\nargs=${line.argsSummary}` : ""}${line.windowId ? `\nwindow=${line.windowId}` : ""}`;
   }
@@ -441,11 +444,13 @@ export function TuiBlock({ line, loading = false, liveWindowIds, sessionId, obje
           <div className="tui-notice-card-head">
             {renderHeader("tui-card-head tui-card-head-embedded", <span className="tui-notice-title">{line.title}</span>)}
           </div>
-          <div className="tui-notice-body">
-            <pre className="tui-pre tui-notice-pre">{line.content}</pre>
-          </div>
+          <CollapsibleNoticeBody content={line.content} />
         </div>
       );
+    }
+
+    if (line.kind === "notice_group") {
+      return <NoticeGroupCard line={line} renderHeader={renderHeader} />;
     }
 
     return <ToolCardRouter line={line} liveWindowIds={liveWindowIds} />;
@@ -454,6 +459,91 @@ export function TuiBlock({ line, loading = false, liveWindowIds, sessionId, obje
   return (
     <div className={`tui-block ${config.className}`}>
       {renderBody()}
+    </div>
+  );
+}
+
+/**
+ * notice 卡的 JSON 明细：默认收起，仅显示一行「展开详情」按钮（UI-6）。
+ * 点击后展开整段 JSON。保持单条 notice 信息可达，但默认不挤占右栏。
+ */
+function CollapsibleNoticeBody({ content }: { content: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="tui-notice-body">
+      <button
+        type="button"
+        className="tui-notice-toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <ChevronDown
+          size={11}
+          className={`tui-notice-toggle-chevron${open ? " is-open" : ""}`}
+          aria-hidden="true"
+        />
+        {open ? "收起详情" : "展开详情"}
+      </button>
+      {open && <pre className="tui-pre tui-notice-pre">{content}</pre>}
+    </div>
+  );
+}
+
+/**
+ * 同类连续 notice 折叠卡（UI-6）：摘要行「title ×N」默认收起，
+ * 展开后逐条显示各 notice 的 JSON 明细。去 thinkloop trace 的重复噪声。
+ */
+function NoticeGroupCard({
+  line,
+  renderHeader,
+}: {
+  line: Extract<ChatLine, { kind: "notice_group" }>;
+  renderHeader: (
+    className?: string,
+    detail?: React.ReactNode,
+    aside?: React.ReactNode,
+    labelOverride?: string,
+    showCopy?: boolean,
+    iconOverride?: LucideIcon,
+  ) => React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`tui-notice-card is-${line.tone ?? "info"}`}>
+      <div className="tui-notice-card-head">
+        {renderHeader(
+          "tui-card-head tui-card-head-embedded",
+          <span className="tui-notice-title">
+            {line.title}
+            <span className="tui-notice-count">×{line.items.length}</span>
+          </span>,
+        )}
+      </div>
+      <div className="tui-notice-body">
+        <button
+          type="button"
+          className="tui-notice-toggle"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          <ChevronDown
+            size={11}
+            className={`tui-notice-toggle-chevron${open ? " is-open" : ""}`}
+            aria-hidden="true"
+          />
+          {open ? `收起 ${line.items.length} 条` : `展开 ${line.items.length} 条`}
+        </button>
+        {open && (
+          <div className="tui-notice-group-items">
+            {line.items.map((it, idx) => (
+              <pre key={it.id} className="tui-pre tui-notice-pre tui-notice-group-item">
+                <span className="tui-notice-group-item-idx muted small">#{idx + 1}</span>
+                {it.content}
+              </pre>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

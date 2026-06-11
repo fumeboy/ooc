@@ -111,7 +111,7 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
             e.preventDefault();
             onSelect(flow);
           }}
-          title={`${label}\n${flow.sessionId}${test ? "\n(test session — hidden by default)" : ""}`}
+          title={`${label}\n${flow.sessionId}${test ? "\n（测试 session，默认隐藏）" : ""}`}
         >
           <div className="session-list-item-row">
             <span className="session-list-item-label" title={label}>{label}</span>
@@ -123,8 +123,8 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
           type="button"
           className={`mini-button session-list-pin ${isPinned ? "is-pinned" : ""}`}
           onClick={() => handleTogglePin(flow.sessionId)}
-          title={isPinned ? "Unpin session" : "Pin session"}
-          aria-label={isPinned ? "Unpin session" : "Pin session"}
+          title={isPinned ? "取消置顶" : "置顶 session"}
+          aria-label={isPinned ? "取消置顶" : "置顶 session"}
           aria-pressed={isPinned}
         >
           {isPinned ? <PinOff size={12} /> : <Pin size={12} />}
@@ -136,7 +136,7 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
   return (
     <div className="session-list-shell">
       <div className="session-list-header">
-        <span className="session-list-title">Sessions</span>
+        <span className="session-list-title">session 列表</span>
         <button
           type="button"
           className="mini-button"
@@ -174,13 +174,13 @@ export function SessionList({ flows, activeSessionId, onSelect }: { flows: FlowS
               </button>
             </p>
           ) : (
-            <p className="session-list-empty">No sessions yet</p>
+            <p className="session-list-empty">还没有 session</p>
           )
         ) : (
           <>
             {pinnedFlows.length > 0 && (
               <div className="session-list-group session-list-group-pinned">
-                <div className="session-list-group-label">Pinned</div>
+                <div className="session-list-group-label">已置顶</div>
                 <div className="session-list-group-items">{pinnedFlows.map(renderItem)}</div>
               </div>
             )}

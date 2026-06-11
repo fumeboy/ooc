@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { Home } from "lucide-react";
+import { Home, Menu } from "lucide-react";
 import type { FileContent } from "../../domains/files";
 import { FileViewer } from "../../domains/files/components/FileViewer";
 import type { Stone } from "../../domains/stones";
@@ -41,6 +41,7 @@ export function MainPanel({
   flowsReady,
   layoutMode,
   onToggleLayoutMode,
+  onToggleSidebar,
 }: {
   route: RouteState;
   isWelcome?: boolean;
@@ -67,6 +68,8 @@ export function MainPanel({
   layoutMode?: LayoutMode;
   /** 切换布局模式回调；shell 持有状态。 */
   onToggleLayoutMode?: () => void;
+  /** 切换窄屏侧栏抽屉；仅窄屏（≤860px）显示 hamburger（UI-9）。 */
+  onToggleSidebar?: () => void;
 }) {
   const showBlockingError = Boolean(error && file);
   const clientTarget = path ? matchClientTarget(path) : undefined;
@@ -119,6 +122,17 @@ export function MainPanel({
   return (
     <main className="main-panel gap-1">
       <div className="breadcrumb-bar panel">
+        {onToggleSidebar && (
+          <button
+            type="button"
+            className="sidebar-hamburger"
+            onClick={onToggleSidebar}
+            aria-label="打开侧栏"
+            title="打开侧栏"
+          >
+            <Menu size={15} strokeWidth={2} />
+          </button>
+        )}
         {layoutMode && onToggleLayoutMode && (
           <LayoutModeToggle
             mode={layoutMode}
@@ -144,25 +158,25 @@ export function MainPanel({
         </span>
         <div className="flex items-center gap-3">
           <strong title={typeof headerTitle === "string" ? headerTitle : undefined}>{headerTitle}</strong>
-          {loading && <span className="pill">loading</span>}
+          {loading && <span className="pill">加载中</span>}
           {!isWelcome && editableFile && !clientTarget && <span className="pill">codemirror</span>}
           {clientTarget && <span className="pill">visible</span>}
-          {isUserHomeView && <span className="pill">user home</span>}
+          {isUserHomeView && <span className="pill">用户主页</span>}
           {isThreadContextView && <span className="pill">thread context</span>}
           {error && !file && !isWelcome && (
             <span className="muted small" title={error}>
-              error: {error.length > 60 ? error.slice(0, 59) + "…" : error}
+              错误：{error.length > 60 ? error.slice(0, 59) + "…" : error}
             </span>
           )}
           {threadHeader}
-          <button type="button" className="refresh" onClick={onRefresh} disabled={loading || !onRefresh} aria-label="Refresh" title="Refresh">↻</button>
+          <button type="button" className="refresh" onClick={onRefresh} disabled={loading || !onRefresh} aria-label="刷新" title="刷新">↻</button>
           <BreadcrumbHistory />
           {homeTarget && (
             <Link
               to={homeTarget}
               className="refresh"
-              aria-label="User home"
-              title="User home (talk)"
+              aria-label="用户主页"
+              title="用户主页（talk）"
             >
               <Home size={14} strokeWidth={1.8} />
             </Link>
@@ -184,7 +198,7 @@ export function MainPanel({
             <ClientWithSourceToggle target={clientTarget} sourcePath={path} />
           ) : isUserHomeView && !userHomeReady ? (
             <EmptyState
-              title="Pick a session"
+              title="选择一个 session"
               detail="从左侧 sidebar 选一个 session，或在 welcome 页新建。"
             />
           ) : userHomeReady && route.kind === "flowsView" ? (
@@ -196,7 +210,7 @@ export function MainPanel({
             />
           ) : isThreadContextView && !threadContextReady ? (
             <EmptyState
-              title="No thread selected"
+              title="未选择 thread"
               detail="从左侧 flow 图里点选一个 thread 节点，查看它的上下文。"
             />
           ) : threadContextReady && route.kind === "flowsView" ? (
@@ -236,12 +250,12 @@ export function MainPanel({
 function SessionNotFound({ sessionId }: { sessionId: string }) {
   return (
     <div className="p-6" data-testid="session-not-found" style={{ maxWidth: 560 }}>
-      <h2 style={{ marginTop: 0 }}>Session not found</h2>
+      <h2 style={{ marginTop: 0 }}>未找到 session</h2>
       <p className="muted small">
-        没有找到 sessionId 为 <code title={sessionId}>{sessionId}</code> 的 flow session — 它可能已被删除,或 URL 拼写有误。
+        没有找到 sessionId 为 <code title={sessionId}>{sessionId}</code> 的 flow session — 它可能已被删除，或 URL 拼写有误。
       </p>
       <p>
-        <Link to="/flows" className="btn">← Browse all sessions / 查看全部 sessions</Link>
+        <Link to="/flows" className="btn">← 查看全部 session</Link>
       </p>
     </div>
   );
@@ -255,15 +269,15 @@ function SessionNotFound({ sessionId }: { sessionId: string }) {
 function RouteNotFound({ path }: { path: string }) {
   return (
     <div className="p-6" data-testid="route-not-found" style={{ maxWidth: 560 }}>
-      <h2 style={{ marginTop: 0 }}>Page not found</h2>
+      <h2 style={{ marginTop: 0 }}>未找到页面</h2>
       <p className="muted small">
         没有找到路径 <code title={path}>{path}</code> 对应的页面 — 它可能已失效，或 URL 拼写有误。
       </p>
       <p>
-        <Link to="/flows" className="btn" data-testid="route-not-found-flows">← Browse flows / 查看全部 flows</Link>
+        <Link to="/flows" className="btn" data-testid="route-not-found-flows">← 查看全部 flows</Link>
       </p>
       <p>
-        <Link to="/" className="btn" data-testid="route-not-found-home">Home / 回首页</Link>
+        <Link to="/" className="btn" data-testid="route-not-found-home">回首页</Link>
       </p>
     </div>
   );
@@ -360,10 +374,10 @@ function objectIdFromRoute(route: RouteState): string | undefined {
  * 显示 oid+tid，避免与之重复 → 留空。
  */
 function deriveHeaderTitle(route: RouteState, isWelcome: boolean, path: string | undefined, objectDisplay: string): string {
-  if (isWelcome || route.kind === "welcome") return "Welcome";
+  if (isWelcome || route.kind === "welcome") return "欢迎";
   switch (route.kind) {
     case "notFound":
-      return "Not found";
+      return "未找到";
     case "scope":
       return route.scope === "flows"
         ? "Flows"

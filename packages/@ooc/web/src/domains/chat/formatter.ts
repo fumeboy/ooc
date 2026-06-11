@@ -246,6 +246,53 @@ function groupConsecutiveToolLines(lines: ChatLine[]): ChatLine[] {
 }
 
 /**
+ * 把**连续**、同 title、同 tone 的 notice 折叠成一条 `notice_group`，
+ * 摘要行显示「title ×N」，JSON 明细默认收起、点击展开（见 TuiBlock）。
+ *
+ * 典型场景：thinkloop 每轮写一条 `LLM_INTERACTION · CALL_STARTED` notice，
+ * 多轮下来右栏被近乎相同的 JSON 卡淹没。单条 notice（N=1）保持原样不分组。
+ *
+ * 仅折叠 `kind === "notice"`；permission_card / message / tool 立即断链，
+ * 保证语义无关的内容不会被错误归组。输出新数组，不改输入引用语义。
+ */
+function groupConsecutiveNotices(lines: ChatLine[]): ChatLine[] {
+  const result: ChatLine[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const head = lines[i]!;
+    if (head.kind !== "notice") {
+      result.push(head);
+      continue;
+    }
+    let j = i + 1;
+    while (j < lines.length) {
+      const next = lines[j]!;
+      if (next.kind !== "notice") break;
+      if (next.title !== head.title || next.tone !== head.tone) break;
+      j += 1;
+    }
+    const runLength = j - i;
+    if (runLength <= 1) {
+      result.push(head);
+      continue;
+    }
+    const items = lines.slice(i, j).map((line) => {
+      const n = line as Extract<ChatLine, { kind: "notice" }>;
+      return { id: n.id, content: n.content };
+    });
+    result.push({
+      id: `notice-group-${head.id}`,
+      kind: "notice_group",
+      role: "notice",
+      title: head.title,
+      tone: head.tone,
+      items,
+    });
+    i = j - 1; // 外层 i+=1 跳到 j
+  }
+  return result;
+}
+
+/**
  * 优先看 output JSON 中的 ok(reliable source — 由 tool handler 显式写入);
  * 若 output 不是合规 JSON 或无 ok 字段,退而用 event.ok(旧数据可能不准但聊胜于无)。
  */
@@ -580,5 +627,6 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
 
   // 把连续的 open → refine / submit / close（同一 window_id）合并成一张卡，
   // followUps 渲染在主卡下面的紧凑 step 行（详见 TuiBlock）。
-  return groupConsecutiveToolLines(lines);
+  // 再把连续同类 notice 折叠成一条 notice_group，去 thinkloop trace 的重复噪声（UI-6）。
+  return groupConsecutiveNotices(groupConsecutiveToolLines(lines));
 }

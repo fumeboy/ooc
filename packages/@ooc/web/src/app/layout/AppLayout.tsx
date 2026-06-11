@@ -12,12 +12,17 @@ export function AppLayout({
   main,
   right,
   mode = "three-column",
+  sidebarOpen = false,
+  onCloseSidebar,
   children,
 }: {
   sidebar: ReactNode;
   main: ReactNode;
   right?: ReactNode;
   mode?: LayoutMode;
+  /** 窄屏侧栏抽屉是否展开（UI-9）。宽屏由 CSS 忽略，侧栏常驻。 */
+  sidebarOpen?: boolean;
+  onCloseSidebar?: () => void;
   children?: ReactNode;
 }) {
   const showSidebar = mode === "three-column";
@@ -27,10 +32,20 @@ export function AppLayout({
   return (
     <div className="app-shell">
       <div className={layoutClass.join(" ")}>
-        {showSidebar && sidebar}
+        {showSidebar && (
+          <div className={`sidebar-slot${sidebarOpen ? " is-open" : ""}`}>{sidebar}</div>
+        )}
         {main}
         {right}
       </div>
+      {/* 窄屏抽屉打开时的遮罩——点击关闭。宽屏 CSS display:none。 */}
+      {showSidebar && (
+        <div
+          className={`sidebar-backdrop${sidebarOpen ? " is-open" : ""}`}
+          aria-hidden={!sidebarOpen}
+          onClick={onCloseSidebar}
+        />
+      )}
       {children}
     </div>
   );

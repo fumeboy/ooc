@@ -39,6 +39,8 @@ export function AppShell() {
   const location = useLocation();
   const [state, setState] = useState<AppState>(initialState);
   const [showSessions, setShowSessions] = useState(true);
+  // 窄屏（≤860px）侧栏抽屉开合（UI-9）。宽屏 CSS 让侧栏常驻，本 state 无副作用。
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [stoneModalOpen, setStoneModalOpen] = useState(false);
   const [stoneDraft, setStoneDraft] = useState({ name: "", description: "", self: "", readme: "" });
   const [knowledgeModal, setKnowledgeModal] = useState<{ objectId: string; parentPath: string } | undefined>();
@@ -55,8 +57,10 @@ export function AppShell() {
   }, []);
 
   // 路由变化处统一拦截：记录最近访问的 path（只记 pathname，不含 query / domain）。
+  // 同时关闭窄屏侧栏抽屉——导航后回到主内容（UI-9）。
   useEffect(() => {
     recordVisit(location.pathname);
+    setSidebarOpen(false);
   }, [location.pathname]);
 
   // URL 派生导航维度 —— 下游只读这几个变量，不再读 state.scope / state.active* 的导航字段
@@ -453,8 +457,10 @@ export function AppShell() {
   return (
     <AppLayout
       mode={layoutMode}
+      sidebarOpen={sidebarOpen}
+      onCloseSidebar={() => setSidebarOpen(false)}
       sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={(() => { const f = state.flows.find((flow) => flow.sessionId === activeSessionId); return f ? flowTitle(f) : activeSessionId; })()} scopeQuery={location.search} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
-      main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} />}
+      main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />}
       right={activeSessionId && activeObjectId && activeThreadId && !(activeObjectId === "user" && activeThreadId === "root") ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onShowContextWindows={handleShowContextWindows} /> : undefined}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />

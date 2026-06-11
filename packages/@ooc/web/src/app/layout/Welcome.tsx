@@ -2,6 +2,7 @@ import { useLocation } from "react-router";
 import { SessionCreator } from "../../domains/sessions/components/SessionCreator";
 import type { Stone } from "../../domains/stones";
 import { Card } from "../../shared/ui/card";
+import { GlossaryLink } from "../../shared/ui/Glossary";
 
 export function Welcome({
   stones,
@@ -27,17 +28,18 @@ export function Welcome({
     <div className="welcome-shell">
       <div className="welcome-stack">
         <div className="welcome-hero">
-          <strong className="welcome-title">Welcome</strong>
+          <strong className="welcome-title">欢迎</strong>
           <div className="welcome-copy">
-            Create your first session, or pick one from the sidebar to continue.
+            创建你的第一个 session，或从左侧边栏选一个继续。
           </div>
+          <GlossaryLink className="welcome-glossary-link" />
         </div>
 
         <Card className="welcome-card">
           <div className="welcome-card-head">
-            <strong>Create session</strong>
+            <strong>创建 session</strong>
             <div className="muted small">
-              Choose who you want to talk to and type your first message — we'll start a new session for you.
+              选择想对话的 object 并输入第一条消息，我们会为你开启一个新 session。
             </div>
           </div>
           {onCreateSession && (

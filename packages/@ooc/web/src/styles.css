@@ -33,6 +33,13 @@ button { cursor: pointer; }
 .app-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr) 350px; gap: 6px; min-height: 0; }
 .app-layout-no-right { grid-template-columns: 280px minmax(0, 1fr); }
 .app-layout-fixed { height: calc(100vh - 16px); overflow: hidden; }
+/* 侧栏槽：宽屏即第 1 列、撑满高度，让内部 .sidebar(height:100%) 正常铺满。
+   窄屏(≤860px) 时由 media query 转为 off-canvas 抽屉。 */
+.sidebar-slot { display: flex; flex-direction: column; min-height: 0; height: 100%; min-width: 0; }
+/* hamburger / backdrop 默认隐藏，仅窄屏出现（UI-9）。 */
+.sidebar-hamburger { display: none; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); border-radius: 7px; cursor: pointer; flex: 0 0 auto; padding: 0; transition: background .12s ease; }
+.sidebar-hamburger:hover { background: var(--muted); }
+.sidebar-backdrop { display: none; }
 .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 0 0 1px rgba(255,255,255,.42), 0 8px 24px rgba(71, 78, 62, .05); overflow: hidden; backdrop-filter: blur(12px); min-height: 0; }
 .sidebar, .main-panel, .right-panel { display: flex; flex-direction: column; min-height: 0; height: 100%;}
 .right-column { display: flex; flex-direction: column; min-height: 0; height: 100%; }
@@ -339,7 +346,15 @@ button { cursor: pointer; }
 .tui-notice-card.is-error { background: rgba(255, 244, 242, .92); border-color: rgba(243, 182, 174, .72); }
 .tui-notice-body { padding: 10px 12px; display: grid; gap: 6px; }
 .tui-notice-title { font-size: 10px; font-weight: 700; color: #55635c; letter-spacing: .04em; text-transform: uppercase; }
+.tui-notice-count { margin-left: 6px; padding: 0 6px; border-radius: 999px; background: rgba(86, 116, 106, .14); color: #4e5c55; font-size: 9.5px; font-weight: 700; letter-spacing: 0; vertical-align: middle; }
 .tui-notice-pre { font-size: 11px; line-height: 1.55; color: #4e5c55; }
+.tui-notice-toggle { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; padding: 2px 4px; margin: -2px -4px; border: 0; background: transparent; color: var(--muted-foreground); font: inherit; font-size: 11px; cursor: pointer; border-radius: 5px; transition: color .12s ease, background .12s ease; }
+.tui-notice-toggle:hover { color: #4e5c55; background: rgba(86, 116, 106, .1); }
+.tui-notice-toggle-chevron { transition: transform .15s ease; transform: rotate(-90deg); flex: 0 0 auto; }
+.tui-notice-toggle-chevron.is-open { transform: rotate(0deg); }
+.tui-notice-group-items { display: grid; gap: 6px; }
+.tui-notice-group-item { position: relative; padding-top: 16px; }
+.tui-notice-group-item-idx { position: absolute; top: 2px; left: 0; }
 .tui-permission-card { background: rgba(253, 233, 214, .55); border-color: rgba(241, 201, 142, .8); }
 .tui-permission-card .tui-notice-card-head { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: rgba(253, 224, 196, .55); border-bottom: 1px solid rgba(241, 201, 142, .55); }
 .tui-permission-card .tui-prefix { color: #a35a14; }
@@ -375,9 +390,20 @@ button { cursor: pointer; }
 .breadcrumb-history-item:hover { background: rgba(0,0,0,.05); }
 .welcome-shell { min-height: 100%; display: grid; place-items: center; padding: 24px; }
 .welcome-stack { width: min(640px, 100%); display: grid; gap: 18px; }
-.welcome-hero { display: grid; gap: 8px; text-align: center; }
+.welcome-hero { display: grid; gap: 8px; text-align: center; justify-items: center; }
 .welcome-title { font-size: 28px; line-height: 1.15; }
 .welcome-copy { color: var(--muted-foreground); font-size: 13px; }
+
+/* Glossary（UI-10）：轻量「这些词是什么」链接 + 弹层。复用 muted accent，不引新风格。 */
+.glossary-link { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); border-radius: 999px; font-size: 11.5px; cursor: pointer; transition: color .12s ease, background .12s ease, border-color .12s ease; }
+.glossary-link:hover { color: var(--foreground); background: var(--muted); border-color: rgba(31, 111, 74, .4); }
+.welcome-glossary-link { margin-top: 2px; }
+.sidebar-glossary-link { margin-top: 10px; width: 100%; justify-content: center; }
+.glossary-dialog { width: min(560px, 100%); gap: 10px; }
+.glossary-list { display: grid; gap: 10px; margin: 0; }
+.glossary-item { display: grid; gap: 2px; }
+.glossary-term { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; font-weight: 700; color: #1f6f4a; }
+.glossary-def { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--foreground); }
 .ui-card { background: rgba(255,255,255,.78); }
 .welcome-card { display: grid; gap: 14px; padding: 20px; }
 .welcome-card-head { display: grid; gap: 4px; }
@@ -438,7 +464,37 @@ button { cursor: pointer; }
 .modal-actions { padding-top: 2px; }
 @media (max-width: 1100px) { .app-layout { grid-template-columns: 300px minmax(0, 1fr); } .right-panel { grid-column: 1 / -1; min-height: 420px; } }
 @media (max-width: 900px) { .llm-input-layout { grid-template-columns: 1fr; } .llm-input-items { border-right: 0; border-bottom: 1px solid var(--border); } }
-@media (max-width: 760px) { .app-shell { padding: 8px; } .app-layout { grid-template-columns: 1fr; } }
+
+/* 窄屏（≤860px）：侧栏收起为 off-canvas 抽屉，由 breadcrumb-bar 的 hamburger 切换（UI-9）。
+   主区/右栏占满，不再被 ~300px 侧栏挤窄。 */
+@media (max-width: 860px) {
+  .app-layout, .app-layout-no-right, .app-layout-two-col { grid-template-columns: minmax(0, 1fr); }
+  .right-panel { grid-column: 1 / -1; min-height: 420px; }
+  .sidebar-hamburger { display: inline-flex; }
+  /* 抽屉：脱离 grid 流，固定在左侧，默认平移出屏外。 */
+  .sidebar-slot {
+    position: fixed;
+    top: 8px; left: 8px; bottom: 8px;
+    width: min(300px, 84vw);
+    z-index: 40;
+    transform: translateX(calc(-100% - 12px));
+    transition: transform .22s ease;
+    box-shadow: 0 12px 40px rgba(51, 58, 42, .22);
+    border-radius: var(--radius);
+  }
+  .sidebar-slot.is-open { transform: translateX(0); }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed; inset: 0;
+    background: rgba(40, 44, 36, .32);
+    opacity: 0; pointer-events: none;
+    transition: opacity .22s ease;
+    z-index: 39;
+  }
+  .sidebar-backdrop.is-open { opacity: 1; pointer-events: auto; }
+}
+
+@media (max-width: 760px) { .app-shell { padding: 8px; } }
 
 /* ContextWindows tree (used by ContextSnapshotViewer); legacy chat-side panel removed */
 /* Tree row: applied to every TreeNode in the ContextSnapshotViewer left pane */
@@ -736,7 +792,7 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 
 .session-threads-index-banner { padding: 6px 10px; border-radius: 6px; flex: 0 0 auto; font-size: 12px; }
 
-.session-threads-index-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 0; }
+.session-threads-index-body { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 0; display: flex; flex-direction: column; }
 .session-threads-index-empty { padding: 24px; text-align: center; border: 1px dashed var(--border); border-radius: 8px; color: var(--muted-foreground); }
 .session-threads-index-empty-state { display: flex; flex-direction: column; gap: 12px; align-items: center; justify-content: center; padding: 40px 20px; color: var(--muted-foreground); text-align: center; flex: 1 1 auto; }
 
@@ -771,10 +827,18 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
 .threads-staff {
   display: grid;
   grid-template-columns: repeat(var(--staff-cols, 1), minmax(220px, 1fr));
+  /* header 占第 1 行(auto)；thread 行(grid-row >= 2)走 grid-auto-rows，
+     用 minmax(行高, 1fr) 让它们均分容器剩余高度 → 节点纵向铺满画布，
+     不再挤在顶部一条而下方大片空白（UI-8）。 */
+  grid-template-rows: auto;
+  grid-auto-rows: minmax(44px, 1fr);
   gap: 0;
   align-items: stretch;
   background: var(--card);
   padding: 0;
+  /* min-height:100% 让 grid 填满 .session-threads-index-body 的可用高度；
+     内容超高时正常溢出滚动（body overflow:auto）。 */
+  min-height: 100%;
   overflow: hidden;
   /* 五线谱质感：每行底部一根淡色横线（用 grid-row 占位的 cell border 实现，
      这里 staff 容器自身仅给 column 之间画 1px 分隔线） */
@@ -806,6 +870,9 @@ a.stone-fallback-entry:hover { background: rgba(245, 246, 242, .9); border-color
   padding: 6px 8px;
   border-top: 1px dashed rgba(94, 106, 86, 0.2);
   border-right: 1px solid var(--border);
+  /* row 现为 1fr 高，cell 内容纵向居中显示，节点均匀分布于画布而非贴行顶 */
+  display: flex;
+  align-items: center;
   /* 让占据本行的 cell 在自己列里显示，未被占据的列在该行视觉上是空的 spacer */
 }
 /* 最右一列不画右边竖线 */

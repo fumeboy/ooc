@@ -211,6 +211,16 @@ export type ChatLine =
     }
   | {
       id: string;
+      kind: "notice_group";
+      role: "notice";
+      /** 同类连续 notice 的共同标题，如 "LLM_INTERACTION · CALL_STARTED"。 */
+      title: string;
+      tone?: "info" | "warning" | "error";
+      /** 折叠进本组的各条 notice（按时间序）；默认收起，点击摘要行展开。 */
+      items: Array<{ id: string; content: string }>;
+    }
+  | {
+      id: string;
       kind: "permission_card";
       role: "notice";
       /** 触发本次 ask 的 function_call id (与 backend permission_ask.toolCallId 对齐, 用于拼 eventId)。 */
