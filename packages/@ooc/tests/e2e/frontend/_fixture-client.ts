@@ -134,41 +134,71 @@ export const test = base.extend<{ world: WorldFixture }>({
     mkdirSync(join(baseDir, "flows"), { recursive: true });
     const state: InternalState = {};
 
+    // stone-repo worktree 模型（CLAUDE.md 约束 1/2）：backend 启动期 `ensureStoneRepo`
+    // 把 `stones/main` 重置成 git worktree（仅 canonical commit 内容），任何**先于** boot
+    // 直写到 `stones/main/objects/...` 的未提交文件都会被这次 checkout 抹掉。
+    // 因此 createStone/writeStoneClient/writeStoneServer 只入队闭包，等 startStack() boot
+    // 完 backend（端口可连=ensureStoneRepo 已完成）后再真写盘。
+    // flows/ 不在 stone repo 内，不受影响，但同样延迟以保持单一写盘时机。
+    const pendingSeeds: Array<() => void> = [];
+
     const fixture: WorldFixture = {
       baseDir,
       createStone(objectId) {
-        const dir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId));
-        mkdirSync(dir, { recursive: true });
-        mkdirSync(join(dir, "knowledge"), { recursive: true });
-        mkdirSync(join(dir, "client"), { recursive: true });
-        mkdirSync(join(dir, "server"), { recursive: true });
-        writeFileSync(
-          join(dir, ".stone.json"),
-          JSON.stringify({ type: "stone", objectId }, null, 2),
-          "utf8",
-        );
+        pendingSeeds.push(() => {
+          const dir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId));
+          mkdirSync(dir, { recursive: true });
+          mkdirSync(join(dir, "knowledge"), { recursive: true });
+          mkdirSync(join(dir, "client"), { recursive: true });
+          mkdirSync(join(dir, "server"), { recursive: true });
+          // stone-registry（packages/@ooc/core/runtime/stone-registry.ts:92）把"带
+          // package.json#ooc 的目录"识别为 stone；/api/stones 据此 list，StoneFallback
+          // 的 useStoneExists 又据 list 判存在。旧 .stone.json marker 已退役——必须写
+          // package.json，否则 seeded stone 不被 list → fallback 报 "Stone not found"。
+          writeFileSync(
+            join(dir, "package.json"),
+            JSON.stringify(
+              {
+                name: `@ooc-obj/${objectId}`,
+                version: "0.0.0",
+                private: true,
+                type: "module",
+                ooc: { objectId, kind: "object" },
+              },
+              null,
+              2,
+            ),
+            "utf8",
+          );
+        });
       },
       writeStoneClient(objectId, code) {
-        const file = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId), "client", "index.tsx");
-        mkdirSync(join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId), "client"), { recursive: true });
-        writeFileSync(file, code, "utf8");
+        pendingSeeds.push(() => {
+          const clientDir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId), "client");
+          mkdirSync(clientDir, { recursive: true });
+          writeFileSync(join(clientDir, "index.tsx"), code, "utf8");
+        });
       },
       writeFlowClientPage({ sessionId, objectId, page, code }) {
-        const dir = join(baseDir, "flows", sessionId, "objects", ...nestedObjectPath(objectId), "client", "pages");
-        mkdirSync(dir, { recursive: true });
-        writeFileSync(join(dir, `${page}.tsx`), code, "utf8");
+        pendingSeeds.push(() => {
+          const dir = join(baseDir, "flows", sessionId, "objects", ...nestedObjectPath(objectId), "client", "pages");
+          mkdirSync(dir, { recursive: true });
+          writeFileSync(join(dir, `${page}.tsx`), code, "utf8");
+        });
       },
       writeStoneServer(objectId, code) {
-        const dir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId), "server");
-        mkdirSync(dir, { recursive: true });
-        writeFileSync(join(dir, "index.ts"), code, "utf8");
+        pendingSeeds.push(() => {
+          const dir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId), "server");
+          mkdirSync(dir, { recursive: true });
+          writeFileSync(join(dir, "index.ts"), code, "utf8");
+        });
       },
       async startStack() {
         const repoRoot = resolve(process.cwd());
         const backendPort = pickPort();
         const backend = spawn(
           "bun",
-          [join(repoRoot, "src/app/server/index.ts"), "--world", baseDir],
+          [join(repoRoot, "packages/@ooc/core/app/server/index.ts"), "--world", baseDir],
           {
             cwd: repoRoot,
             env: envWithoutProxy({
@@ -184,12 +214,17 @@ export const test = base.extend<{ world: WorldFixture }>({
         await waitForPort("127.0.0.1", backendPort, 30_000);
         state.backend = { proc: backend, port: backendPort, baseURL };
 
+        // backend boot 完成 → ensureStoneRepo 已建好 worktree；此刻才真写 seed 文件，
+        // 避免被启动期 checkout 抹掉。vite 随后启动，OOC_WORLD_DIR 指向同一 baseDir，
+        // /@fs 能读到这些文件。
+        for (const seed of pendingSeeds) seed();
+
         const webPort = pickPort();
         const web = spawn(
           "bun",
           ["run", "dev", "--", "--port", String(webPort), "--strictPort", "--host", "127.0.0.1"],
           {
-            cwd: join(repoRoot, "web"),
+            cwd: join(repoRoot, "packages/@ooc/web"),
             env: envWithoutProxy({
               OOC_API_TARGET: baseURL,
               OOC_WORLD_DIR: baseDir,

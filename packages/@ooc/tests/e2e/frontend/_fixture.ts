@@ -4,8 +4,8 @@
  * 详见 `docs/testing/strategy.md` 与 `docs/testing/oocable-codeagent-frontend-e2e.md`。
  *
  * 启动模型（spec § 启动模型）：
- * 1. spawn 后端：bun src/app/server/index.ts --world <mkdtemp>，端口 OOC_APP_PORT=<random>
- * 2. spawn Vite dev：bun --cwd web run dev --port <random>，注 OOC_API_TARGET 指向后端
+ * 1. spawn 后端：bun packages/@ooc/core/app/server/index.ts --world <mkdtemp>，端口 OOC_APP_PORT=<random>
+ * 2. spawn Vite dev：bun run --cwd packages/@ooc/web dev --port <random>，注 OOC_API_TARGET 指向后端
  * 3. test.extend 把 baseURL / baseDir 注入到每个 spec
  * 4. 测试结束 kill 两个进程 + rm baseDir
  *
@@ -97,6 +97,15 @@ function killGracefully(proc: ChildProcess): Promise<void> {
 export type SeedFile = { path: string; content: string };
 export type SeedStone = { objectId: string; self?: string; readme?: string };
 
+/**
+ * 把 seedFiles / seedStones 真写进 world。
+ *
+ * 必须在 backend boot **之后**调用：启动期 `ensureStoneRepo` 把 `stones/main` 重置成
+ * git worktree（仅 canonical commit 内容），先于 boot 直写的未提交 stone 会被 checkout 抹掉。
+ *
+ * stone 识别走 package.json#ooc（stone-registry.ts:92）；旧 `.stone.json` marker 已退役。
+ * stone 落到 versioning 布局 `stones/main/objects/<id>/`，与运行时一致，/api/stones 才能 list。
+ */
 function seedBaseDir(baseDir: string, opts: { seedFiles?: SeedFile[]; seedStones?: SeedStone[] }) {
   for (const file of opts.seedFiles ?? []) {
     const abs = join(baseDir, file.path);
@@ -104,11 +113,21 @@ function seedBaseDir(baseDir: string, opts: { seedFiles?: SeedFile[]; seedStones
     writeFileSync(abs, file.content, "utf8");
   }
   for (const stone of opts.seedStones ?? []) {
-    const stoneDir = join(baseDir, "stones", stone.objectId);
+    const stoneDir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(stone.objectId));
     mkdirSync(join(stoneDir, "knowledge"), { recursive: true });
     writeFileSync(
-      join(stoneDir, ".stone.json"),
-      JSON.stringify({ objectId: stone.objectId, name: stone.objectId, createdAt: Date.now() }, null, 2),
+      join(stoneDir, "package.json"),
+      JSON.stringify(
+        {
+          name: `@ooc-obj/${stone.objectId}`,
+          version: "0.0.0",
+          private: true,
+          type: "module",
+          ooc: { objectId: stone.objectId, kind: "object" },
+        },
+        null,
+        2,
+      ),
       "utf8",
     );
     if (stone.self !== undefined) writeFileSync(join(stoneDir, "self.md"), stone.self, "utf8");
@@ -127,13 +146,12 @@ export async function startBackend(opts: {
   seedStones?: SeedStone[];
 } = {}): Promise<BackendHandle> {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-e2e-fe-"));
-  seedBaseDir(baseDir, opts);
 
   const port = pickPort();
   const repoRoot = resolve(process.cwd());
   const proc = spawn(
     "bun",
-    [join(repoRoot, "src/app/server/index.ts"), "--world", baseDir],
+    [join(repoRoot, "packages/@ooc/core/app/server/index.ts"), "--world", baseDir],
     {
       cwd: repoRoot,
       env: {
@@ -164,6 +182,9 @@ export async function startBackend(opts: {
     throw err;
   }
 
+  // health OK → ensureStoneRepo 已建好 worktree；此刻才 seed，避免被启动期 checkout 抹掉。
+  seedBaseDir(baseDir, opts);
+
   return {
     proc,
     port,
@@ -192,7 +213,7 @@ export async function startWeb(backendURL: string, worldDir: string): Promise<We
   // Bug C: Vite 6 默认 bind `::` (IPv6)；强制 --host 127.0.0.1 让 Playwright/waitForHttp(127.0.0.1) 命中。
   const proc = spawn(
     "bun",
-    ["run", "--cwd", "web", "dev", "--", "--port", String(port), "--strictPort", "--host", "127.0.0.1"],
+    ["run", "--cwd", "packages/@ooc/web", "dev", "--", "--port", String(port), "--strictPort", "--host", "127.0.0.1"],
     {
       cwd: repoRoot,
       env: {

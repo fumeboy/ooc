@@ -5,8 +5,8 @@ import { defineConfig, devices } from "@playwright/test";
  *
  * 详见 `docs/testing/oocable-codeagent-frontend-e2e.md`。
  *
- * 跑法：
- *   RUN_FRONTEND_E2E=1 bunx playwright test --config tests/e2e/frontend/playwright.config.ts
+ * 跑法（必须在 bun 下跑 playwright；bunx 解析为 node，会撞 builtin executable 的 bun-only import）：
+ *   RUN_FRONTEND_E2E=1 bun node_modules/.bin/playwright test --config packages/@ooc/tests/e2e/frontend/playwright.config.ts
  *
  * 默认 skip（fixture 内根据 RUN_FRONTEND_E2E 与 .env 三件套判定）。
  * 串行（不 parallel），避免真 LLM 资源争抢。

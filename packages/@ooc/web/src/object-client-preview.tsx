@@ -10,6 +10,7 @@
  */
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { MemoryRouter } from "react-router";
 import {
   ObjectClientRenderer,
   type ClientTarget,
@@ -60,6 +61,11 @@ function Preview() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Preview />
+    {/* StoneFallback / NotProducedYet 等 fallback 用 react-router 的 <Link>；
+        预览页不接 shell.tsx，需自带一个最小 router context 才不致 useContext 为 null。
+        MemoryRouter 即可——预览页里这些 Link 仅展示语义入口，不需要真导航。 */}
+    <MemoryRouter>
+      <Preview />
+    </MemoryRouter>
   </StrictMode>,
 );
