@@ -6,15 +6,15 @@
  * file_window.edit) 接收 LLM 传入的相对路径时，应当解析到 baseDir，而不是
  * OOC 进程的 cwd——后者在多 session / 服务化场景毫无意义。
  *
- * packages routing（2026-06-01 bun workspace 迁移）：
+ * packages routing：
  * 当路径形如 `packages/<objectId>/...` 时，保持原样（bun workspace 把所有 objects
  * 都放在 packages/ 下，嵌套通过 children/ 物理目录分隔）。
  *   - 简单 objectId: `packages/supervisor/readme.md`
  *   - 嵌套 objectId: `packages/sentry/children/sentry_factor_dev/readme.md`
  *
- * pools routing（2026-05-23 起）：当路径形如 `pools/<id>/...` 时，自动重写为
+ * pools routing：当路径形如 `pools/<id>/...` 时，自动重写为
  * `pools/objects/<id>/...`：
- *   - pools 不挂 branch（事实是单向积累的；详见 meta/object.doc.ts persistable.pool.no_branch patch）。
+ *   - pools 不挂 branch（事实是单向积累的）。
  *   - 已经形如 `pools/objects/...` 的路径不重写。
  *
  * 注意：program(language="shell") 不走这里——shell 显式承诺"cwd 等于 OOC 进程的
@@ -65,12 +65,12 @@ export function resolveSessionPath(thread: ThreadContext | undefined, p: string)
 }
 
 /**
- * P1 路径收口（2026-06-05）：agent 的概念 stone 根 `stones/<self>/...` → 物理 canonical
+ * 路径收口：agent 的概念 stone 根 `stones/<self>/...` → 物理 canonical
  * `stones/main/objects/<self>/...`（main 分支 worktree，stoneDir 默认）。
  * 取代旧的 `stones/<id>` → `packages/<id>` rewrite（packages/ 空/deprecated，是布局分叉的根之一）。
  * 已经是物理 `stones/main/objects/...` 的路径不重复映射；`packages/...`（builtin）保持原样。
  * 嵌套 Object 通过 children/ 物理目录分隔——本 string 级映射只处理常见的单层 id（self 自身根）；
- * 跨嵌套对象的 children/ 由后续 overlay/解析器层精化（P2/P3）。
+ * 跨嵌套对象的 children/ 由后续 overlay/解析器层精化。
  */
 function rewritePackagesPath(p: string): string {
   const norm = p.replace(/\\/g, "/").replace(/^\.\//, "");
@@ -92,8 +92,8 @@ function rewritePackagesPath(p: string): string {
 
 /**
  * 形如 `pools/<id>/...` 的路径在 bun workspace 迁移后直接使用，不再需要
- * 注入 `objects/` 中间层（2026-06-01）。pools 不挂 branch（事实层单向累积，
- * 不跟着 metaprog branch 切换；详见 meta/object.doc.ts persistable.pool.no_branch patch）。
+ * 注入 `objects/` 中间层。pools 不挂 branch（事实层单向累积，
+ * 不跟着 metaprog branch 切换）。
  *
  * 保留此函数作为 no-op 以便调用方保持统一接口。
  */
@@ -123,7 +123,7 @@ export function classifyPackagesPath(
   baseDir: string | undefined,
   opts: {
     /**
-     * reflectable 沉淀 feat 分支直接编辑路径（2026-06-11）：author 可在 feat worktree 下
+     * reflectable 沉淀 feat 分支直接编辑路径：author 可在 feat worktree 下
      * **新建对象**——此时目标对象 `package.json` 还不在 main / feat worktree（从 main 派生）。
      * 设为 true 时，对 `objects/<id>/<file>`（深度 ≥ 2，首段非 children）即便未命中
      * package.json 也判 package-object（owner=首段）。**默认 false → 行为逐字节不变**

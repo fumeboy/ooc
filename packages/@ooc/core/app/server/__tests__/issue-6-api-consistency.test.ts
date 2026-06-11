@@ -7,12 +7,12 @@ import { readServerConfig } from "../bootstrap/config";
 import { buildServer } from "../index";
 
 /**
- * Issue #6 backend API 一致性回归测试。
+ * backend API 一致性回归测试。
  * 覆盖 4 类问题:
- * - Bad #1 silent-fabricate(GET 不存在资源返回 200 + 空)
- * - Bad #2 错误 shape 不统一
- * - Bad #3 URL 命名(/api/sessions 别名 + /api/flows deprecation header)
- * - Bad #4 PUT 覆盖性写无护栏(X-Overwrite-Confirm 强制)
+ * - silent-fabricate(GET 不存在资源返回 200 + 空)
+ * - 错误 shape 不统一
+ * - URL 命名(/api/sessions 别名 + /api/flows deprecation header)
+ * - PUT 覆盖性写无护栏(X-Overwrite-Confirm 强制)
  */
 
 async function makeApp() {
@@ -28,7 +28,7 @@ async function makeApp() {
   return { app, baseDir };
 }
 
-describe("Issue #6 Bad #1: silent-fabricate", () => {
+describe("silent-fabricate", () => {
   test("GET /api/stones/<nonexistent>/self → 404 NOT_FOUND", async () => {
     const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such_obj/self"));
@@ -64,9 +64,9 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
     expect(res.status).toBe(404);
   });
 
-  test("X1 回归：seed session 后 list threads 返回非空（flows/<sid>/<obj>/ flat 布局，非 objects/）", async () => {
-    // harness 首轮 sweep 横切发现：listThreads 沿用 9bd8640b^ 的 flows/<sid>/objects/ 布局扫描，
-    // 但实际 objectDir = flows/<sid>/<nestedObjectPath>（无 objects/ 段）→ list 端点恒返回空（5 维度命中）。
+  test("seed session 后 list threads 返回非空（flows/<sid>/<obj>/ flat 布局，非 objects/）", async () => {
+    // listThreads 曾按 flows/<sid>/objects/ 布局扫描，
+    // 但实际 objectDir = flows/<sid>/<nestedObjectPath>（无 objects/ 段）→ list 端点恒返回空。
     const { app } = await makeApp();
     await app.handle(new Request("http://localhost/api/stones", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -101,7 +101,7 @@ describe("Issue #6 Bad #1: silent-fabricate", () => {
   });
 });
 
-describe("Issue #6 Bad #2: 错误 shape 统一为 { error: { code, message, details } }", () => {
+describe("错误 shape 统一为 { error: { code, message, details } }", () => {
   test("404 (not found) 返回 JSON shape", async () => {
     const { app } = await makeApp();
     const res = await app.handle(new Request("http://localhost/api/stones/_test_no_such/self"));
@@ -139,7 +139,7 @@ describe("Issue #6 Bad #2: 错误 shape 统一为 { error: { code, message, deta
   });
 });
 
-describe("Issue #6 Bad #3: URL 命名 — /api/sessions alias + deprecation", () => {
+describe("URL 命名 — /api/sessions alias + deprecation", () => {
   test("GET /api/sessions 与 GET /api/flows 返回相同形状", async () => {
     const { app } = await makeApp();
     await app.handle(
@@ -163,7 +163,7 @@ describe("Issue #6 Bad #3: URL 命名 — /api/sessions alias + deprecation", ()
   });
 });
 
-describe("Issue #6 Bad #4: PUT 覆盖性写无护栏", () => {
+describe("PUT 覆盖性写无护栏", () => {
   test("PUT self 首次写入(目标不存在)不需要 confirm header", async () => {
     const { app } = await makeApp();
     await app.handle(

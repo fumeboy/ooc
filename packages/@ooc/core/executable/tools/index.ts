@@ -3,7 +3,6 @@
  *
  * 旧 open/refine/submit 三件套合并为单一 `exec`；refine/submit 下沉为
  * MethodExecWindow 上注册的命令，与 do_window/talk_window 上的命令同构。
- * 详见 plan: docs/plans/exec-tool-refactor.md
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";

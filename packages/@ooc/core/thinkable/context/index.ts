@@ -127,7 +127,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
 
   if (event.category === "context_change" && event.kind === "scheduler_yielded") {
     // worker 单次 runJob 跑满 workerMaxTicks 后自唤醒,LLM 下轮入口处看到本事件,
-    // 知道自己被切片了(区别于 done/paused/failed)。详见 meta/app.server.doc.ts § worker。
+    // 知道自己被切片了(区别于 done/paused/failed)。
     const roundsTag = event.rounds !== undefined ? ` rounds=${event.rounds}` : "";
     return [
       {

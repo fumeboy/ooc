@@ -12,7 +12,7 @@ import {
 import { clearKnowledgeLoaderCache, loadKnowledgeIndex } from "../loader";
 
 /**
- * B-tree knowledge 继承测试（2026-05-26）。
+ * B-tree knowledge 继承测试。
  *
  * 验证：
  * 1. 父 Agent 的 knowledge 仅在 frontmatter `inheritable: true` 时被子 Agent 看到

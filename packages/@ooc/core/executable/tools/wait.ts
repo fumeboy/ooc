@@ -1,12 +1,10 @@
 /**
  * wait tool — 显式声明"等指定 window 上的未来 IO 事件"，把 thread 切到 waiting。
  *
- * spec: docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md
- *
  * - `on` 必填：必须 resolve 到当前 contextWindows 一个 open 且可产生未来 IO 的 window
  *   （talk_window / do_window）。
  * - 没有任何合法 `on` 候选时 → reject，强 nudge 改 end method。
- * - thread.inboxSnapshotAtWait 仍用于 wakeup（Phase 1 wakeup 逻辑不变）；
+ * - thread.inboxSnapshotAtWait 仍用于 wakeup（wakeup 逻辑不变）；
  *   thread.waitingOn 仅作 observability，不参与 wakeup 决策。
  */
 

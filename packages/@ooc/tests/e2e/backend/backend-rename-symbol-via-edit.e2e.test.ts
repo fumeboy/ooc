@@ -2,7 +2,6 @@
  * S1 — backend-rename-symbol-via-edit
  *
  * 类别：改文件（核心 CodeAgent 体验）。
- * 详见 `docs/testing/oocable-codeagent-backend-e2e.md § S1`。
  *
  * Seed: baseDir/src/foo.ts 含 helperA / helperB，互相调用一次。
  * User msg: 让 assistant 把 helperA 重命名为 helperZ，回告做了什么。

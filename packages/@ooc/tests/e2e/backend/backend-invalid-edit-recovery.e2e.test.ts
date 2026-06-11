@@ -3,7 +3,6 @@
  *
  * 类别：失败回路 — file_window.edit 的"唯一匹配"规则首次必失败；
  * 验 LLM 收到 fail-loud 错误后能扩大 old 上下文重试。
- * 详见 `docs/testing/oocable-codeagent-backend-e2e.md § S4`。
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";

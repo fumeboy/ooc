@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { parseRoute, toPath } from "./routing";
 
 /**
- * 2026-05-27 路由模型重构：
+ * 路由模型重构：
  *   path 决定视图 (`/flows/index` / `/flows/thread_context`)，sessionId 从 path 移到 query。
  *   tests 整体改造为 flowsView；老 `/flows/:sessionId` 形态仅保留 parse-only 兼容用例。
  */
@@ -44,7 +44,7 @@ describe("toPath: /flows/<view> + ?sessionId=&objectId=&threadId=", () => {
     );
   });
   it("file path == stone visible entry → shortcut /stones/<objectId> (canonical flat layout)", () => {
-    // M2 ooc-6: canonical path is stones/<id>/visible/index.tsx (flat layout).
+    // canonical path is stones/<id>/visible/index.tsx (flat layout).
     expect(
       toPath({ kind: "file", path: "stones/alpha/visible/index.tsx" }),
     ).toBe("/stones/alpha");
@@ -245,7 +245,7 @@ describe("flowsView ?selected= round-trip (legacy compat)", () => {
     const r = parseRoute("/flows/index", "?sessionId=s1&selected=garbage");
     expect(r).toEqual({ kind: "flowsView", view: "index", sessionId: "s1" });
   });
-  it("parseRoute drops unknown tag silently (Round 7 A3: issue 已移除)", () => {
+  it("parseRoute drops unknown tag silently (issue 已移除)", () => {
     const r = parseRoute("/flows/index", "?sessionId=s1&selected=issue:42");
     expect(r).toEqual({ kind: "flowsView", view: "index", sessionId: "s1" });
   });
@@ -260,7 +260,7 @@ describe("flowsView ?selected= round-trip (legacy compat)", () => {
 });
 
 /**
- * Round 9 E3 (2026-05-26): `?loop=N` 表示 Loop Time Machine 当前查看的 loopIndex。
+ * `?loop=N` 表示 Loop Time Machine 当前查看的 loopIndex。
  * 仅在 flowsView 上有意义；非法值（负数 / NaN / 非整数）静默丢；不传 = Latest。
  */
 describe("flowsView ?loop= — Loop Time Machine 状态", () => {

@@ -1,9 +1,9 @@
 /**
  * pr_window —— reviewer 看到的「一条待审 feat-branch PR」（collaborable window 家族）。
  *
- * reflectable 沉淀 P4（spec 2026-06-11 §3）：
+ * reflectable 沉淀：
  * - 注册的 method（executable 维度）：approve / reject / request_changes —— reviewer 在
- *   thinkloop 里亲手批，底层走 applyPrApproval（P3 聚合 + P5 prAutoMerge 闸 + P6 回修）。
+ *   thinkloop 里亲手批，底层走 applyPrApproval（聚合 + prAutoMerge 闸 + 回修）。
  * - readable：渲染 getPrIssue(issueId) 的 DetailView（intent / diff / paths / reviewers /
  *   approvals / verdict），与 list/get 端点同一份视图来源（不冗余存业务数据）。
  * - 知识激活：root knowledge `pr-review.md`（activates_on: object::pr）在 thread 出现

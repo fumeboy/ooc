@@ -65,7 +65,7 @@ describe("TuiBlock tool cards", () => {
 
     expect(html).not.toContain("tui-tool-body");
     expect(html).not.toContain("tui-tool-footer");
-    // 2026-05-20: 用户反馈后, link 按钮被提到 head 行 (折叠也能跳到 ContextTree),
+    // 用户反馈后, link 按钮被提到 head 行 (折叠也能跳到 ContextTree),
     // 所以 head 行 title attr 含 form_id 是预期的; 但 body / footer / argumentsText 中
     // 详细参数依然不应出现.
     expect(html).not.toContain("你好，我可以帮你做什么？");

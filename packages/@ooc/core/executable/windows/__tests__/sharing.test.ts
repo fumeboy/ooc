@@ -1,5 +1,5 @@
 /**
- * sharing.test — do_window.move + sharing 状态守门测试（plan §do_window.move）。
+ * sharing.test — do_window.move + sharing 状态守门测试。
  *
  * 覆盖：
  * - root.do.share_windows: ref / move 模式的初始分享

@@ -14,7 +14,7 @@ export type HistoryViewport = TranscriptViewport;
 /**
  * Program window — REPL 风格的代码执行窗口。
  *
- * - history：每次 exec 一条记录；每次都是独立 sandbox（spec § program_window）
+ * - history：每次 exec 一条记录；每次都是独立 sandbox
  * - ts/js sandbox 通过 self.getThreadLocal/setThreadLocal 跨 exec 共享数据（落到 thread.threadLocalData）
  * - historyViewport: 默认 { tail: 10 } —— 用 set_history_window 调整可见区间
  * - 注册 method：exec / close / set_history_window

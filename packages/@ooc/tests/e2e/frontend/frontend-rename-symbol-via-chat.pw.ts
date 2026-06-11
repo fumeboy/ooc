@@ -2,7 +2,6 @@
  * F2 — frontend-rename-symbol-via-chat
  *
  * 类别：改文件（用户通过 web 让 assistant 改代码的核心体验）。
- * 详见 `docs/testing/oocable-codeagent-frontend-e2e.md § F2`。
  *
  * Seed 路径：work/src/foo.ts —— 与 backend S1 区分；后端 worker 由 startBackend 通过
  * --world <baseDir> 启动，所以相对路径以 baseDir 为根。

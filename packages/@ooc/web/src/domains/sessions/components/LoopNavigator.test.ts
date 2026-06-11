@@ -1,5 +1,5 @@
 /**
- * LoopNavigator tests — Round 9 E3.
+ * LoopNavigator tests.
  *
  * 不依赖 DOM；只对纯函数 planNavigate 做断言（与 LoopTimeline 测试同款无 RTL 风格）。
  * 覆盖 prev / next / latest 三个方向 + 边界 disabled 行为。

@@ -340,7 +340,7 @@ describe("root.program creates program_window with DEFAULT_HISTORY_VIEWPORT", ()
       thread,
       args: { language: "shell", code: "echo hi" },
     });
-    // P6.§4-§5: root.program 现在是 constructor 委托——返回 { ok:true, window } 而非 undefined
+    // root.program 现在是 constructor 委托——返回 { ok:true, window } 而非 undefined
     expect(out).toBeDefined();
     expect(typeof out).toBe("object");
     const outcome = out as { ok: true; window: ProgramWindow };

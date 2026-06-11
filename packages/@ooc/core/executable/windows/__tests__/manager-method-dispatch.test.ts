@@ -1,5 +1,5 @@
 /**
- * P6.§3 单元测试 — manager 层的 self-type 严格校验。
+ * 单元测试 — manager 层的 self-type 严格校验。
  *
  * 不变量：method 必须挂在它所声明的 parent type 上；form 被 re-target 到不声明该 method
  * 的 parent type 后 submit，manager 在 lookupMethodEntry 处拒绝（"not registered on
@@ -72,7 +72,7 @@ async function setupThread(baseDir: string) {
   return { thread, talkWindow, doWindow };
 }
 
-describe("WindowManager.submit — P6.§3 self-type guard", () => {
+describe("WindowManager.submit — self-type guard", () => {
   it("rejects when form re-targeted to a parent type that doesn't declare the method", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-mgr-disp-"));
     try {

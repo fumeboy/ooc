@@ -1,5 +1,5 @@
 /**
- * skill_index object —— stones 上 skills 目录的索引视图（plan §skills 支持）。
+ * skill_index object —— stones 上 skills 目录的索引视图。
  *
  * Object Unification: 从 builtin window 迁移为 builtin object。
  *

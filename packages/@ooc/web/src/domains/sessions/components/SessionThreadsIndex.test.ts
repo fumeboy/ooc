@@ -1,5 +1,5 @@
 /**
- * Session Threads Index — Round 8 D3+D4 单测。
+ * Session Threads Index 单测。
  *
  * 测试范围（与 LoopTimeline.test.ts 同款约束: 不引入 React Testing Library,
  * 只对纯函数 + 数据契约做断言）:
@@ -122,7 +122,7 @@ describe("deriveThreadTitle", () => {
 });
 
 describe("computeEdges", () => {
-  it("创建出 parent + talk + lent + holding 四类关系 (D4)", () => {
+  it("创建出 parent + talk + lent + holding 四类关系", () => {
     const items: ListThreadsItem[] = [
       it_("sup", "root", { status: "running" }),
       it_("sup", "t_plan", {
@@ -187,7 +187,7 @@ describe("computeEdges", () => {
     expect(edges).toEqual([]);
   });
 
-  it("退化场景 — items 无任何关系字段 (D2 未跑完) → []", () => {
+  it("退化场景 — items 无任何关系字段 → []", () => {
     const items: ListThreadsItem[] = [it_("sup", "root"), it_("user", "root")];
     expect(computeEdges(items, { objectId: "sup", threadId: "root" })).toEqual([]);
   });

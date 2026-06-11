@@ -1,5 +1,5 @@
 /**
- * skill-index.test — synthesizer 派生 skill_index window 的测试（plan §skills 支持）。
+ * skill-index.test — synthesizer 派生 skill_index window 的测试。
  *
  * 覆盖：
  * - 没有 skills 时 → enriched 中无 skill_index window（用户补充）

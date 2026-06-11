@@ -2,8 +2,6 @@
  * Window 展示状态对象 —— 持有一个 window 的展示参数，与 window 业务数据（file path、
  * program history…）分离。由 readable 维度的 WindowMethod 读写、readable 函数读取、
  * 随 window 持久化在 thread-context。每个 window type 只用其中与自己相关的字段。
- *
- * 设计来源：docs/2026-06-08-window-visible-render-and-readable-window-method-design.md Part 2。
  */
 import type { Viewport, TranscriptViewport } from "./viewport.js";
 

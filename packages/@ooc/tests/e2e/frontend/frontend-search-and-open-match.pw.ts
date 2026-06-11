@@ -2,7 +2,6 @@
  * F3 — frontend-search-and-open-match
  *
  * 类别：纯读取 + UI 副作用（search_window 真渲染）。
- * 详见 `docs/testing/oocable-codeagent-frontend-e2e.md § F3`。
  */
 
 import {
@@ -86,7 +85,7 @@ test("F3 grep → search_window 出现在 ContextSnapshotViewer", async ({ page,
   ).length;
 
   // assistant 文本中是否含正确数字
-  // 真 DOM 锚（Round 17 后）：.chat-timeline .tui-block.tui-assistant（web/src/domains/chat/components/TuiBlock.tsx:9-13,455）
+  // 真 DOM 锚：.chat-timeline .tui-block.tui-assistant（web/src/domains/chat/components/TuiBlock.tsx:9-13,455）
   const lastReplyText = (await page
     .locator(".chat-timeline .tui-block.tui-assistant")
     .last()

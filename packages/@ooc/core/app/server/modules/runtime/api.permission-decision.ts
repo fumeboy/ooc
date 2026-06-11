@@ -5,9 +5,6 @@ import { threadDebugParams } from "./model";
 /**
  * HITL approve / reject 入口 (AgentOfExecutable + AgentOfVisible)。
  *
- * Design: docs/2026-05-25-permission-model-design.md §原则F
- * Meta:   meta/object.doc.ts:executable.children.permission.patches.approve_reject_path
- *
  * POST /api/runtime/flows/:sessionId/:objectId/threads/:threadId/permission
  *
  * Body:
@@ -23,10 +20,9 @@ import { threadDebugParams } from "./model";
  *   4. 写 decided 字段 + 翻 status=running + writeThread
  *   5. notifyThreadActivated → jobManager.createRunThreadJob (与 talk-delivery / end auto-reply 同款路径)
  *
- * 路径与 design 文档 §6 描述的 `/api/threads/:threadId/permission` 略有出入: 实际改为
- *   `/api/runtime/flows/:sessionId/:objectId/threads/:threadId/permission`
- * 复用现有 threadDebugParams + 与 get-latest-debug endpoint 同 prefix, 避免引入"按
- * threadId 全局扫 session"的新机制 (扫成本高且不稳, threadId 可能跨 session 重复)。
+ * 路径用 `/api/runtime/flows/:sessionId/:objectId/threads/:threadId/permission` 而非按
+ *   threadId 全局寻址: 复用现有 threadDebugParams + 与 get-latest-debug endpoint 同 prefix,
+ * 避免引入"按 threadId 全局扫 session"的新机制 (扫成本高且不稳, threadId 可能跨 session 重复)。
  */
 const permissionBody = t.Object({
   eventId: t.Optional(t.String()),

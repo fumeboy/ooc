@@ -8,7 +8,7 @@ import { readServerConfig } from "../../../bootstrap/config";
 import { buildServer } from "../../../index";
 
 /**
- * Visible 维度 #1 回归（harness 2026-06-05 sweep）：
+ * Visible 维度回归：
  *
  * `GET /api/objects/stone/:id/client-source-url` 只解析 canonical `visible/index.tsx`
  * 或 legacy `client/index.tsx`。Agent 若把组件写成 stone 根具名文件（如 `Card.tsx`），
@@ -98,7 +98,7 @@ describe("ui · client-source-url stone scope", () => {
     const objectId = "vis_named";
     const dir = stoneDir({ baseDir, objectId });
     await mkdir(dir, { recursive: true });
-    // Agent 误把组件写成根具名文件——这是 harness 暴露的首产页 404 落点
+    // Agent 误把组件写成根具名文件——首产页 404 的落点
     await writeFile(join(dir, "Card.tsx"), "export default () => null;\n");
 
     const res = await fetchSource(app, objectId);

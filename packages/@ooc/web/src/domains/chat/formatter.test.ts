@@ -238,7 +238,7 @@ describe("formatThread: groupConsecutiveToolLines", () => {
 
   it("real-world shape: form_id field on open output + refine/submit args.form_id", () => {
     // 真实 OOC 后端用 form_id 作为 form-window 标识符（不是 window_id /
-    // parent_window_id）。回归 2026-05-21：deriveTargetWindowId 应当先看
+    // parent_window_id）。回归：deriveTargetWindowId 应当先看
     // form_id，再 fallback window_id / parent_window_id。
     const lines = formatThread(
       makeThread([

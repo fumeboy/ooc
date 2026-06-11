@@ -1,8 +1,5 @@
 /**
- * plan_window — 基础闭环 e2e (Round 7 B2-B4)。
- *
- * Design: docs/2026-05-26-remove-issue-add-subplan-design.md §3
- * Meta:   meta/object.doc.ts:executable.children.context_window.children.plan_window
+ * plan_window — 基础闭环 e2e。
  *
  * 不真启 backend；用 execRootMethod + WindowManager 直接驱动 command 链：
  * 1. root.plan 创建 root plan_window
@@ -66,7 +63,7 @@ async function execOnWindow(
 
 // ─────────────────────────── tests ────────────────────────────────────────────
 
-describe("[B4] plan_window — basic闭环", () => {
+describe("plan_window — basic闭环", () => {
   it("step 1-2: root.plan 创建 plan_window；add_step 追加 step", async () => {
     const thread = makeThread({ id: "t_plan_1" });
     const created = await execRootMethod("plan", {
@@ -80,7 +77,7 @@ describe("[B4] plan_window — basic闭环", () => {
     expect(plan.steps).toHaveLength(0);
     expect(plan.status).toBe("active");
 
-    // P6.§4-§5 (2026-06-02): root.plan 不再做 update 幂等——每次调用都新建一个
+    // root.plan 不再做 update 幂等——每次调用都新建一个
     // plan_window（in-place 更新改走 exec(<plan_window_id>, "update_plan", ...)）。
     await execRootMethod("plan", {
       thread,
@@ -225,9 +222,9 @@ describe("[B4] plan_window — basic闭环", () => {
   });
 });
 
-// ─────────────────────────── 配套：compressView 验证 (P0-2 协议) ──────────────
+// ─────────────────────────── 配套：compressView 验证 ──────────────
 
-describe("[B2] plan_window — compressView (P0-2)", () => {
+describe("plan_window — compressView", () => {
   it("level 1: title + status + step count + done/total ratio", async () => {
     const thread = makeThread({ id: "t_plan_compress_1" });
     await execRootMethod("plan", {

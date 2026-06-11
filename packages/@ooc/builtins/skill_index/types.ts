@@ -2,7 +2,7 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
 import type { SkillEntry } from "@ooc/core/persistable/stone-skills.js";
 
 /**
- * Skill 索引窗口（plan §skills 支持）。
+ * Skill 索引窗口。
  *
  * 每个 thread 启动时由 initContextWindows 自动注入一份，固定 id="skill_index"。
  *

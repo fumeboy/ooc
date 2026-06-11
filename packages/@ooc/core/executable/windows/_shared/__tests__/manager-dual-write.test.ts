@@ -1,6 +1,6 @@
 /**
- * ooc-6 P5'.1/.3 — WindowManager 写：扁平 state.json + thread context.json registry
- * P6.§6 (2026-06-02) update: todo 改为 builtin feature；本测试改用 plan（independent flow object）
+ * WindowManager 写：扁平 state.json + thread context.json registry。
+ * todo 改为 builtin feature；本测试改用 plan（independent flow object），
  * 验证独立 flow object 的写盘 + thread context registry 维护行为。
  *
  * 验证：

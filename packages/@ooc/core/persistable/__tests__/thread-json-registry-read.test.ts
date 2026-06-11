@@ -1,5 +1,5 @@
 /**
- * ooc-6 P5'.2 — readThread 优先从 context.json registry 读
+ * readThread 优先从 context.json registry 读
  *
  * 验证：
  * 1. 当 registry 存在 + state.json 存在时，readThread 应从 registry 拉对象，覆盖 thread.contextWindows[] 里的旧 entry
@@ -23,7 +23,7 @@ import {
 import type { ThreadPersistenceRef, FlowObjectRef } from "../common";
 import { makeThread } from "../../__tests__/make-thread";
 
-describe("readThread — registry-priority read path (P5'.2)", () => {
+describe("readThread — registry-priority read path", () => {
   let baseDir: string;
   let flowRef: FlowObjectRef;
   let persistence: ThreadPersistenceRef;
@@ -40,7 +40,7 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
   });
 
   it("registry hit: 从 state.json 拉对象，按 params.order 排序", async () => {
-    // §10：thread-context.json 是最高权威；为可达 registry (P5'.1) 路径，thread.contextWindows
+    // thread-context.json 是最高权威；为可达 registry 路径，thread.contextWindows
     // 必须为空（writeThread 写出空 thread-context.json → 回落 registry）。
     const thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
     thread.contextWindows = [];
@@ -139,8 +139,8 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
     expect(ghost).toBeUndefined();
   });
 
-  it("builtin window 经 writeThread 落 thread-context.json，reload 还原（§10 单点刷）", async () => {
-    // §10：builtin feature 窗（todo）由 writeThread 单点刷进 thread-context.json（inline），
+  it("builtin window 经 writeThread 落 thread-context.json，reload 还原（单点刷）", async () => {
+    // builtin feature 窗（todo）由 writeThread 单点刷进 thread-context.json（inline），
     // reload 经 thread-context.json hydrate 还原——不再依赖已退役的 thread.contextWindows fallback。
     const thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
     thread.contextWindows = [
@@ -160,7 +160,7 @@ describe("readThread — registry-priority read path (P5'.2)", () => {
     expect(ids).toContain("todo_legacy");
   });
 
-  // 2026-06-09 回归 gate：self 门面窗不持久化进 thread.json（与 thread-context.json 写盘端
+  // 回归 gate：self 门面窗不持久化进 thread.json（与 thread-context.json 写盘端
   // 的 isNonPersistedWindow 过滤对齐，根治 thread.json 含 self / thread-context.json 不含 self
   // 的双写漂移），但 reload 时由 readThread→initContextWindows→injectSelfWindowIfObjectThread
   // 幂等重注入，行为不丢。

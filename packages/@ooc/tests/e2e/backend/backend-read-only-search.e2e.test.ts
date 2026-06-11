@@ -2,7 +2,6 @@
  * S2 — backend-read-only-search
  *
  * 类别：纯读取（验 root.grep 真链路 + 文件零修改）。
- * 详见 `docs/testing/oocable-codeagent-backend-e2e.md § S2`。
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";

@@ -21,7 +21,7 @@ export const endpoints = {
     return qs ? `${base}?${qs}` : base;
   },
   flows: "/api/flows",
-  /** collaborable § cross-object talk: 一次性 seed 一个 session（user → talk → target）。 */
+  /** collaborable cross-object talk: 一次性 seed 一个 session（user → talk → target）。 */
   sessions: "/api/sessions",
   /** 在已存在 session 的 user.root 上追加一个新 talk_window 指向另一 object（idempotent）。 */
   addUserTalkWindow: (sessionId: string) =>
@@ -59,7 +59,6 @@ export const endpoints = {
    * 对指定 permission_ask event 做 approve / reject 决议。
    * Body 形态: { eventId?: string, action: "approve"|"reject", reason?: string }。
    * 不带 eventId 时由 backend 选择最近一条 pending; 前端总是传 eventId 走精确路径。
-   * 详见 docs/2026-05-25-permission-model-design.md Q0c 段。
    */
   runtimeDecidePermission: (sessionId: string, objectId: string, threadId: string) =>
     `/api/runtime/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/permission`,

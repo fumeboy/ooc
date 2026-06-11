@@ -102,13 +102,13 @@ describe("single object runtime", () => {
     // round 1 时 open 立即提交 form 执行 plan；round 2 没有任何工具调用，所以 outputItems 只有 message
     expect(loopMeta.loopIndex).toBe(2);
     expect(loopMeta.status).toBe("ok");
-    // 2026-05-26: plan 升格为 plan_window；旧 thread.plan 字段已废弃。
+    // plan 升格为 plan_window；旧 thread.plan 字段已废弃。
     const rootPlanWindow = (root.contextWindows as ContextWindow[]).find((w) => w.class === "plan");
     expect(rootPlanWindow?.class).toBe("plan");
     expect(rootPlanWindow && rootPlanWindow.class === "plan" && rootPlanWindow.description).toBe(
       "完成单 object 最小闭环",
     );
-    // §10 退役 thread.json.contextWindows：plan 是独立 flow object，落 thread-context.json 的
+    // 退役 thread.json.contextWindows：plan 是独立 flow object，落 thread-context.json 的
     // _ref，权威字段在 plan 的 state.json。reload 经 readThread（thread-context.json → state.json
     // hydrate）才能拿到完整 plan window —— 直接 parse thread.json 不再含 contextWindows。
     expect(savedThread.contextWindows).toBeUndefined();

@@ -1,5 +1,5 @@
 /**
- * exec tool — OOC 唯一的"调用命令"原语（plan exec-refactor）。
+ * exec tool — OOC 唯一的"调用命令"原语。
  *
  * 形态：
  *   exec(window_id?, method, args?, title, description?)
@@ -97,7 +97,7 @@ export async function handleExecTool(
   const windowId = (args.window_id as string | undefined) ?? ROOT_WINDOW_ID;
   const nestedArgs = getArgs(args);
 
-  // 通用 expand method (design: docs/2026-05-25-context-compression-design.md §4.1 / §D 可逆性):
+  // 通用 expand method：
   // 任何 compressLevel ≥ 1 的 window 自动获得 expand,无需在 registry 里给每个 type 注册。
   // 在 exec 路径上拦截 method="expand" 并对 target window 做 level → 0 的切换;
   // 落一条 context_compressed 事件,与 compress tool 同协议。

@@ -42,7 +42,7 @@ probeApiTarget(apiTarget);
  * OOC_WORLD_DIR：与 backend 同名 env（src/app/server/bootstrap/config.ts:43）。
  * 用作 ObjectClientRenderer 拼 `/@fs/${WORLD_ROOT}/stones|flows/...` 的根。
  *
- * 缺时 fail-loud —— plan §6 D4：避免静默指错目录变成头号 debug 黑洞。
+ * 缺时 fail-loud：避免静默指错目录变成头号 debug 黑洞。
  */
 const worldDir = process.env.OOC_WORLD_DIR;
 if (!worldDir) {
@@ -54,9 +54,9 @@ if (!worldDir) {
 const worldRoot = resolve(worldDir);
 
 /**
- * M3 hot-reload + security plugin.
+ * hot-reload + security plugin.
  *
- * 1. Security (design doc section 7.3): do not leak executable / knowledge sources
+ * 1. Security: do not leak executable / knowledge sources
  *    to the frontend. Any request under stones/<id>/executable or /knowledge or
  *    /database or /files returns 403.
  *

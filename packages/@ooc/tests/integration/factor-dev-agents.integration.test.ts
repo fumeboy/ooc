@@ -9,13 +9,13 @@
  * - fetch 用 monkey-patch 方式 mock，恢复 finally 写在 afterEach；
  * - tests are unit-style，不需要 OOC_* env，always run。
  *
- * **2026-05-27 现状（Supervisor）**: 这组 spec 全部 skip。原因：
- * - `search_event_factors` / `search_factor_groups` 是 meta/case.factor-dev-agents.doc.ts 中
- *   的**蓝图命令**，但当前 stones（sentry_event_factor / sentry_factor_group）的 server/index.ts
+ * **现状**: 这组 spec 全部 skip。原因：
+ * - `search_event_factors` / `search_factor_groups` 是设计中的**蓝图命令**，
+ *   但当前 stones（sentry_event_factor / sentry_factor_group）的 server/index.ts
  *   还没落地它们；现役命令是 create_/update_/get_factor_detail 等创建写操作。
  * - `sentry_factor_dev` agent stone 整体未创建（.ooc-world/stones/main/objects/sentry/children/
  *   下找不到 sentry_factor_dev/）。
- * 落地这些命令 / 创建该 agent 是新 Round 工作；本测试保留作为 spec 锚，等 stone 同步后取消 skip。
+ * 落地这些命令 / 创建该 agent 是后续工作；本测试保留作为 spec 锚，等 stone 同步后取消 skip。
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";

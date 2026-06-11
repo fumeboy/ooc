@@ -3,7 +3,6 @@
  *
  * 类别：UI layout 守护——切到 user.root 时右侧 chat panel 应消失，
  * 中间 MainPanel 占据原右侧空间。
- * 详见 `docs/testing/oocable-codeagent-frontend-e2e.md § F5`。
  */
 
 import {
@@ -35,7 +34,7 @@ test("F5 切到 user.root 后右侧 chat panel 不应可见", async ({ page, ooc
   });
   await waitForReply(page, { sinceCount: 0, timeoutMs: 90_000 });
 
-  // 切到 user.root —— 2026-05-27 起 ThreadHeader 的 .thread-switcher 主动过滤掉 user/root
+  // 切到 user.root —— ThreadHeader 的 .thread-switcher 主动过滤掉 user/root
   // （web/src/app/layout/ThreadHeader.tsx:31-33），且 threads.length<=1 时不渲染 select；
   // 切 user 视角要走 URL（query 改 objectId=user&threadId=root），不是 select。
   const beforeUrl = page.url();

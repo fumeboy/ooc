@@ -261,7 +261,7 @@ describe("buildContext (ContextWindow model)", () => {
       id: "t_parent",
       creatorThreadId: "t_root",
     });
-    // 2026-05-26: thread.plan 字段已废弃；用 plan_window 验证 plan 已渲染。
+    // thread.plan 字段已废弃；用 plan_window 验证 plan 已渲染。
     const planId = `${thread.id}_plan`;
     thread.contextWindows.push({
       id: planId,
@@ -285,10 +285,10 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain("<is_creator_window>true</is_creator_window>");
   });
 
-  // guidance window 机制已整体退役（2026-06-10，form 指引为 plain-string tip 直渲）；
+  // guidance window 机制已整体退役（form 指引为 plain-string tip 直渲）；
   // 未注册 type 的渲染不崩由下一个测试（fail-soft 占位渲染）通用覆盖。
 
-  it("未注册 peer 对象 type 的 window 渲染不崩（harness collaborable 回归：world 级 think 崩）", async () => {
+  it("未注册 peer 对象 type 的 window 渲染不崩（collaborable 回归：world 级 think 崩）", async () => {
     // PeerProcessor/derivePeerObjectWindows 造 type=peer objectId 的 window；若该 peer stone
     // 未注册进 runtime registry（后台注册中 / 新建对象未被 target 命中），renderWindowNode 的
     // getObjectDefinition(peerType) 修复前会抛 → think_error → 全 world 谁都不能 think。
@@ -308,7 +308,7 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain('type="expert"'); // 未注册 peer 仍以占位/可用形式渲染
   });
 
-  it("renders method_exec form result only when status=failed (Round 13 四态机)", async () => {
+  it("renders method_exec form result only when status=failed (四态机)", async () => {
     const thread = makeThread({
       id: "t_status",
       extraWindows: [
@@ -461,7 +461,7 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain("talk_window");
   });
 
-  // 2026-06-10 ObjectMethod API 重构后，form 知识合成（knowledge_window + <path>）已移除：
+  // ObjectMethod API 重构后，form 知识合成（knowledge_window + <path>）已移除：
   // 指引以 plain-string tip 直接渲染在 form 上，跨 form 知识正文去重语义不复存在，原 dedup 测试删除。
 
   it("emits text content raw — no XML escaping, no CDATA (表意为主)", async () => {
@@ -597,7 +597,7 @@ describe("buildInputItems self.md injection", () => {
     expect(xml).not.toContain("<self ");
   });
 
-  it("P2 worktree: business session reads worktree self.md; other session + super read main", async () => {
+  it("worktree: business session reads worktree self.md; other session + super read main", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
     await ensureStoneRepo({ baseDir: tempRoot });
     await createStoneObject({ baseDir: tempRoot, objectId: "alice", _stonesBranch: "main" });

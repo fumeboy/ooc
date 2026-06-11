@@ -5,7 +5,7 @@ import { makeThread } from "../../__tests__/make-thread";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
 /**
- * tools.test — 3 原语在 ContextWindow 模型下的行为验证（plan exec-refactor）。
+ * tools.test — 3 原语在 ContextWindow 模型下的行为验证。
  *
  * 覆盖：
  * - tool 集合定义（exec / close / wait）
@@ -17,7 +17,7 @@ import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.j
  * - wait 切到 waiting + 写 inboxSnapshotAtWait
  */
 describe("executable tools (ContextWindow model)", () => {
-  it("export 4 OOC tools (P0b: compress 已加入)", () => {
+  it("export 4 OOC tools（compress 已加入）", () => {
     expect(OOC_TOOLS).toHaveLength(4);
     const toolNames = OOC_TOOLS.map((t) => t.name);
     expect(toolNames).toEqual(expect.arrayContaining(["exec", "close", "wait", "compress"]));
@@ -64,7 +64,7 @@ describe("executable tools (ContextWindow model)", () => {
     });
     const forms = (thread.contextWindows as ContextWindow[]).filter((w) => w.class === "method_exec");
     expect(forms).toHaveLength(0);
-    // 2026-05-26: plan 升格为 plan_window；不再写 thread.plan 字段
+    // plan 升格为 plan_window；不再写 thread.plan 字段
     const planWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "plan");
     expect(planWindow?.class).toBe("plan");
     expect(planWindow && planWindow.class === "plan" && planWindow.description).toBe(
@@ -110,7 +110,7 @@ describe("executable tools (ContextWindow model)", () => {
     expect(formAfter).toBeUndefined();
   });
 
-  it("MethodExecWindow.submit 失败时 form 保留 status=failed, 可 refine 复活 (Round 13)", async () => {
+  it("MethodExecWindow.submit 失败时 form 保留 status=failed, 可 refine 复活", async () => {
     const thread = makeThread();
     // do 缺 msg 直接 submit 会失败
     await dispatchToolCall(thread, {
@@ -208,7 +208,7 @@ describe("executable tools (ContextWindow model)", () => {
     });
   });
 
-  it("compress(scope=auto) 抛 not-implemented (留给 P0e emergency_guard)", async () => {
+  it("compress(scope=auto) 抛 not-implemented（留给 emergency_guard）", async () => {
     const thread = makeThread();
     const output = await dispatchToolCall(thread, {
       id: "call_compress_auto",
@@ -221,7 +221,7 @@ describe("executable tools (ContextWindow model)", () => {
     expect(parsed.error).toContain("not implemented yet");
   });
 
-  it("compress(scope=events) 缺 summary → 结构化错误 (P0f)", async () => {
+  it("compress(scope=events) 缺 summary → 结构化错误", async () => {
     const thread = makeThread();
     const output = await dispatchToolCall(thread, {
       id: "call_compress_events_no_summary",

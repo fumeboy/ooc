@@ -65,9 +65,9 @@ describe("persistable single object flow", () => {
     expect(restored?.persistence).toEqual({ ...ref, threadId: "root" });
   });
 
-  test("readThread filters out unregistered-type windows from thread-context.json (Round 7 issue cleanup)", async () => {
-    // §10 退役 thread.json.contextWindows 后，thread-context.json 是唯一完整权威。
-    // Round 7 移除 issue 看板后，历史 thread-context.json 可能含 inline type="issue" 等
+  test("readThread filters out unregistered-type windows from thread-context.json", async () => {
+    // 退役 thread.json.contextWindows 后，thread-context.json 是唯一完整权威。
+    // 移除 issue 看板后，历史 thread-context.json 可能含 inline type="issue" 等
     // 已废弃 entries。readThread 应 graceful skip (warn + drop) 而非抛错阻塞所有调用方。
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-persistable-"));
     const ref = await createFlowObject({
@@ -76,7 +76,7 @@ describe("persistable single object flow", () => {
       objectId: "obj"
     });
     const persistence = { ...ref, threadId: "legacy" };
-    // 先写一份最小 thread.json（不含 contextWindows，§10 退役后的形态）。
+    // 先写一份最小 thread.json（不含 contextWindows，退役后的形态）。
     const thread: ThreadContext = {
       id: "legacy",
       status: "running",

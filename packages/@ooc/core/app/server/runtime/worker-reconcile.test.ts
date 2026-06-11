@@ -4,7 +4,7 @@ import { processQueuedJobs, type RuntimeJobResult } from "./worker";
 import type { ServerConfig } from "../bootstrap/config";
 
 /**
- * observability 根因 #4: job 终态与 thread 终态对账。
+ * observability: job 终态与 thread 终态对账。
  *
  * thinkloop 把 LLM 超时/异常**内部消化**成 thread.status="failed"（不向 runner 抛），
  * runner 正常返回。这里验证 processQueuedJobs 据 runner 返回的 thread 终态对账：
@@ -17,7 +17,7 @@ function makeConfig(jobManager: ReturnType<typeof createJobManager>): ServerConf
   return { jobManager } as unknown as ServerConfig;
 }
 
-describe("processQueuedJobs job/thread 对账 (根因 #4)", () => {
+describe("processQueuedJobs job/thread 对账", () => {
   test("thread failed (llm_timeout) → job 标 failed 而非裸 done", async () => {
     const jobManager = createJobManager();
     const job = jobManager.createRunThreadJob({ sessionId: "s1", objectId: "agent", threadId: "root" });

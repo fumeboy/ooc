@@ -1,5 +1,5 @@
 /**
- * create_object —— 建新对象原语端到端验证（去 metaprog 后补回的「建对象」路径，2026-06-09）。
+ * create_object —— 建新对象原语端到端验证（去 metaprog 后补回的「建对象」路径）。
  *
  * 回归背景：去 metaprog 删了 supervisorCreateObject，write_file 又只能改「已存在对象」
  * （靠 package.json 判 owner 边界，新对象没 package.json → 拒），导致建新对象路径完全断。
@@ -7,7 +7,7 @@
  *  (a) 业务 session create_object → 骨架落 flows/<sid>/objects/<newId>/{package.json,self.md,readable.md[,knowledge]}，内容正确；
  *  (b) main 仍无该对象（未合入）；
  *  (c) ALREADY_EXISTS（main 已存在 / 同 session 重复建）/ super-session 拒 / 非空校验 / 非法 id；
- *  (d) 地基不变量（2026-06-11）：session 新对象天生 ephemeral——session worktree 永不合入 main；
+ *  (d) 地基不变量：session 新对象天生 ephemeral——session worktree 永不合入 main；
  *      进 canonical 走独立 feat-branch PR（super(foo) new_feat_branch + 直接编辑 + evolve_self）。
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile, stat } from "node:fs/promises";

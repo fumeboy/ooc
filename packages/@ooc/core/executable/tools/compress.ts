@@ -1,19 +1,17 @@
 /**
  * compress tool — OOC 上下文压缩主动入口。
  *
- * Design: docs/2026-05-25-context-compression-design.md §4.5
- *
  * 形态:
  *   compress(scope: "windows" | "events" | "auto",
  *            target_ids?, level?,
  *            summary?, target_event_ids?)
  *
  * 已实现路径:
- *   - scope="windows" (P0b): 切 ContextWindow.compressLevel,落 context_compressed 事件。
- *   - scope="events"  (P0f): 把 events 中段标 _foldedBy,落一条 events_summary +
- *                            一条 context_compressed (reason="user-events-fold")。
+ *   - scope="windows": 切 ContextWindow.compressLevel,落 context_compressed 事件。
+ *   - scope="events" : 把 events 中段标 _foldedBy,落一条 events_summary +
+ *                      一条 context_compressed (reason="user-events-fold")。
  * 未实现:
- *   - scope="auto": 留给 P0e emergency_guard。
+ *   - scope="auto": 留给 emergency_guard。
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -170,7 +168,7 @@ function compressWindowsClean(
 
 // ─────────────────────────── scope=events ─────────────────────────────────────
 
-/** events ring 配置 (P0f F3); 缺失字段用默认值。 */
+/** events ring 配置; 缺失字段用默认值。 */
 export interface EventsRingConfig {
   /** head ring 长度: 保留最早 J 条 event 不 fold。 */
   headRoundsJ: number;
@@ -371,7 +369,7 @@ export async function handleCompressTool(
 
   if (scope === "auto") {
     return errorOutput(
-      `compress: scope="auto" not implemented yet (留给 P0e emergency_guard)。`,
+      `compress: scope="auto" not implemented yet (留给 emergency_guard)。`,
     );
   }
 

@@ -2,7 +2,7 @@
  * lark event-relay — OOC 反向通道：接收飞书 IM 事件，路由到 OOC session；
  * 同时把 OOC supervisor 回 user 的消息透传回飞书 chat。
  *
- * 设计要点（meta/case.feishu-integration.doc.ts §future.1 + 用户 2026-05-25 拍板）：
+ * 设计要点（用户拍板）：
  *
  * 1. **走 SDK 而非 lark-cli event consume** — @larksuiteoapi/node-sdk 提供 WSClient
  *    长连接，毫秒级延迟；凭证（appId / appSecret）由 .world.json 提供。

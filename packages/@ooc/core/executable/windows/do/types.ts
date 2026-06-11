@@ -15,7 +15,7 @@ export interface DoWindow extends BaseContextWindow {
   class: "do";
   targetThreadId: string;
   status: "running" | "archived";
-  /** 标记为初始 creator do_window，不可被 LLM close（spec § 初始 creator 对话 window）。 */
+  /** 标记为初始 creator do_window，不可被 LLM close（初始 creator 对话 window）。 */
   isCreatorWindow?: boolean;
   /** @deprecated 移到 state.transcriptViewport（WindowDisplayState）；保留以兼容旧 thread.json。 */
   transcriptViewport?: TranscriptViewport;

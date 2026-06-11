@@ -1,9 +1,6 @@
 /**
  * P0b — 上下文压缩最小闭环 e2e。
  *
- * Design: docs/2026-05-25-context-compression-design.md
- * 任务说明: AgentOfThinkable P0b
- *
  * 不走真 LLM:直接调 dispatchToolCall 模拟 LLM 行为,完整覆盖以下链路:
  * 1. 构造 thread + insert 一个真实 file_window
  * 2. dispatchToolCall(compress, scope="windows", target_ids=[file_window_id], level=1)

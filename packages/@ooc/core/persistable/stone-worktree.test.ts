@@ -12,7 +12,7 @@ import {
 /**
  * 把 main worktree 的当前文件树 commit 进 main 分支（模拟控制面 httpDirectMainWrite /
  * bootstrap 对 identity 写入的 commit）。session worktree 从 main HEAD checkout，故 identity
- * 必须先 commit 到 main 才能被 worktree 看到（design doc §8 约束）。
+ * 必须先 commit 到 main 才能被 worktree 看到。
  */
 function commitMain(baseDir: string): void {
   const mainDir = join(baseDir, "stones", "main");
@@ -69,7 +69,7 @@ describe("stone-worktree", () => {
         { baseDir, sessionId: "s1", objectId: "assistant" },
         "write",
       );
-      // 方案 A（2026-06-09）：worktree 物理落 flows/<sid>（branch 名仍 session-<sid>，解耦）。
+      // 方案 A：worktree 物理落 flows/<sid>（branch 名仍 session-<sid>，解耦）。
       expect(wtDir).toContain(join("flows", "s1", "objects", "assistant"));
 
       // worktree 目录已物理建出（从 main 完整 checkout，物理在 flows/<sid>）

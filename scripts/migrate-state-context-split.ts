@@ -1,7 +1,7 @@
 /**
- * P6.§6 migration — split state (object dim) from context (thread dim).
+ * migration — split state (object dim) from context (thread dim).
  *
- * What this fixes (legacy on-disk shape from before §6):
+ * What this fixes (legacy on-disk shape from before this split):
  *   - Built-in feature ContextWindows (talk/do/method_exec/command_exec/todo)
  *     were each given their own `flows/<sid>/<wid>/state.json` directory at
  *     the same level as user/supervisor/plan/etc — but they're not stand-alone

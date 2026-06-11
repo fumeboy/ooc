@@ -1,5 +1,5 @@
 /**
- * ErrorBoundary.test — Round 10 F3.
+ * ErrorBoundary.test.
  *
  * Web 无 RTL；这里测 boundary 的 contract：
  *   - getDerivedStateFromError 返回 hasError + message

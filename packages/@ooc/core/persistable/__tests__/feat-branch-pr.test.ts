@@ -1,7 +1,7 @@
 /**
- * createFeatBranchWorktree + commitAndOpenPr —— feat-branch 直接编辑 + 建 PR 集成测试（P1）。
+ * createFeatBranchWorktree + commitAndOpenPr —— feat-branch 直接编辑 + 建 PR 集成测试。
  *
- * 2026-06-11 改写（用户拍板：不封装 edits 参数）：沉淀拆两步——开 feat 分支 worktree（不写文件）
+ * 用户拍板：不封装 edits 参数——沉淀拆两步——开 feat 分支 worktree（不写文件）
  * → super(foo) 用普通写文件直接编辑该 worktree 下文件 → commitAndOpenPr finalize（commit +
  * 冒泡 reviewer + 开 PR）。本测试用 node:fs writeFile 模拟「直接编辑 feat worktree」。
  *

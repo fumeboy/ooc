@@ -46,7 +46,7 @@ afterEach(async () => {
 
 async function createObjectPackage(baseDir: string, objectId: string): Promise<void> {
   const segs = objectId.split("/");
-  // P1 收口：对象在 canonical main worktree stones/main/objects/<nestedPath>/
+  // 收口：对象在 canonical main worktree stones/main/objects/<nestedPath>/
   let current = join(baseDir, "stones", "main", "objects");
   for (let i = 0; i < segs.length; i++) {
     if (i > 0) current = join(current, "children");
@@ -56,7 +56,7 @@ async function createObjectPackage(baseDir: string, objectId: string): Promise<v
   await writeFile(join(current, "package.json"), JSON.stringify({ name: objectId, version: "0.1.0" }), "utf8");
 }
 
-describe("rewritePackagesPath: stones/<id>/ → stones/main/objects/<id>/ 收口（P1 2026-06-05）", () => {
+describe("rewritePackagesPath: stones/<id>/ → stones/main/objects/<id>/ 收口", () => {
   test("stones/<id>/foo → stones/main/objects/<id>/foo", () => {
     expect(rewritePackagesPath("stones/agent_of_x/self.md")).toBe(
       "stones/main/objects/agent_of_x/self.md",
@@ -146,7 +146,7 @@ describe("classifyPackagesPath: package boundary detection", () => {
     }
   });
 
-  test("packages/@ooc/core/... → non-package（P1: packages/ 不再是对象树，不在 stones/main/ 内）", () => {
+  test("packages/@ooc/core/... → non-package（packages/ 不再是对象树，不在 stones/main/ 内）", () => {
     const baseDir = tempRoot!;
     const abs = resolve(baseDir, "packages/@ooc/core/persistable/common.ts");
     const r = classifyPackagesPath(abs, baseDir);

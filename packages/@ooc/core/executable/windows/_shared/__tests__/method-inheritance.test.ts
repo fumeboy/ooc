@@ -1,5 +1,5 @@
 /**
- * P6.§7 (2026-06-02): resolveMethod 沿 ObjectDefinition.parentClass 链向上回退。
+ * resolveMethod 沿 ObjectDefinition.parentClass 链向上回退。
  *
  * 三态语义验证：
  *   - undefined（缺省）→ 默认隐式 "root"，subclass 自动拿到 root 上的 methods
@@ -25,7 +25,7 @@ const fakeMethod: ObjectMethod = {
 // 该 assert 在其他测试文件 import windows/index.ts 时运行，会扫描整个 REGISTRY。
 const stubReadable = () => [];
 
-describe("resolveMethod + parentClass chain (P6.§7)", () => {
+describe("resolveMethod + parentClass chain", () => {
   test("undefined parentClass → defaults to \"root\" → finds talk", () => {
     const t = `__test_default_root_${Date.now()}`;
     builtinRegistry.registerNewObjectType(t as never, { methods: {}, readable: stubReadable });

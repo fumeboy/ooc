@@ -1,5 +1,5 @@
 /**
- * window-diff.helpers.test — Round 9 E3.
+ * window-diff.helpers.test.
  *
  * 覆盖 4 态 diff 全分支 + 边界（current/previous undefined / 空数组）+ 顺序稳定性。
  * 与 LoopTimeline.test.ts / LoopTimeline.interactions.test.ts 同 bun:test 风格。

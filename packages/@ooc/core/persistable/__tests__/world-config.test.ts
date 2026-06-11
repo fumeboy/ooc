@@ -107,7 +107,7 @@ describe("readWorldConfig: workerMaxTicks", () => {
   });
 });
 
-describe("readWorldConfig: prAutoMerge (P5 合入闸)", () => {
+describe("readWorldConfig: prAutoMerge (合入闸)", () => {
   test("缺字段时缺省 false（人工确认更安全）", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-wcfg-"));
     await writeWorldJson(tempRoot, { siteName: "X" });

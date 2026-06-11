@@ -15,7 +15,7 @@ import { spawn } from "node:child_process";
  *   3. Produce `.ooc-dist/stones/index.json` — a deterministic registry consumed by
  *      `ooc start` to skip filesystem scanning.
  *
- * Not yet implemented in M4:
+ * Not yet implemented:
  *   - Visible (React) bundling per stone. The frontend still relies on Vite HMR in dev
  *     and will need a per-stone Rollup pass for production; tracked as a follow-up.
  *   - `@ooc/web` SPA bundle copying (depends on the above).
@@ -308,7 +308,7 @@ export default async function build(argv: string[]): Promise<void> {
       console.log(`[ooc]   copy ${stone.objectId}: knowledge/ (${files.length} file(s))`);
     }
 
-    // Visible/ — copy the tree as-is (Vite/rollup per-stone bundling is M5 follow-up).
+    // Visible/ — copy the tree as-is (Vite/rollup per-stone bundling is a follow-up).
     let hasVisible = false;
     if (visibleDir) {
       hasVisible = true;

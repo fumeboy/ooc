@@ -1,7 +1,7 @@
 /**
  * method-description —— 从一个 ObjectMethod / WindowMethod 拿描述。
  *
- * 2026-06-10: ObjectMethod now has a required `description` field directly; this helper
+ * ObjectMethod now has a required `description` field directly; this helper
  * simply returns it (kept for call-site ergonomics and single source of truth).
  */
 import type { ObjectMethod } from "../../../_shared/types/method.js";

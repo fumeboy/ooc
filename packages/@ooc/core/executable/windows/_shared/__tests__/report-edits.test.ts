@@ -1,5 +1,5 @@
 /**
- * ooc-6 P6.§8 (2026-06-02) — reportStateEdit / reportContextEdit + dispatch wiring.
+ * reportStateEdit / reportContextEdit + dispatch wiring.
  *
  * 验证：
  * 1. reportStateEdit(ref) on a non-builtin (plan) flow object → state.json 反映内存里的最新状态
@@ -52,7 +52,7 @@ function makePlan(id: string, title: string, description: string): PlanWindow {
   } as PlanWindow;
 }
 
-describe("P6.§8 reportStateEdit / reportContextEdit + dispatch wiring", () => {
+describe("reportStateEdit / reportContextEdit + dispatch wiring", () => {
   let baseDir: string;
   let persistence: ThreadPersistenceRef;
   let thread: ThreadContext;

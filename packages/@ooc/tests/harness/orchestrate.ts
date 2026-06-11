@@ -25,7 +25,7 @@ const ALL_DIMENSIONS = [
 
 const REPO_ROOT = process.cwd();
 const HARNESS_DIR = join(REPO_ROOT, "packages/@ooc/tests/harness");
-// 2026-06-09 测试归属（Phase 3）：体验官剧本（场景 + rubric）的单一来源已从 storybook specs/
+// 测试归属：体验官剧本（场景 + rubric）的单一来源已从 storybook specs/
 // 进一步收编进 .ooc-world-meta 对象树——每个维度对象的 knowledge/tests.md 持有自己的 Tier A TC +
 // Tier B rubric。orchestrate 读对应维度对象的 tests.md（storybook/specs/ 已删）。
 const OBJECT_TREE_DIR = join(REPO_ROOT, ".ooc-world-meta/stones/main/objects/supervisor/children");

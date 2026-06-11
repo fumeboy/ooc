@@ -7,7 +7,7 @@ import { ensureStoneRepo } from "@ooc/core/persistable";
 import { readServerConfig } from "../bootstrap/config";
 import { buildServer } from "../index";
 
-// 根因 #2：HTTP stone 写入现在必经 stone-versioning（worktree → commit → ff merge），
+// HTTP stone 写入现在必经 stone-versioning（worktree → commit → ff merge），
 // 测试 helper 必须先 bootstrap stones/ bare repo + main worktree。
 async function makeAppWithBaseDir() {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-app-server-routes-"));
@@ -59,9 +59,9 @@ describe("app server routes", () => {
     expect(disabledBody.enabled).toBe(false);
   });
 
-  // 注：debug-ui 模块（/debug/chat.html）已在 2026-05-25 废弃删除。
+  // 注：debug-ui 模块（/debug/chat.html）已废弃删除。
   // 用 web/ 前端控制面替代；此 legacy 调试入口的路由演化跟不上
-  // canonical API 协议（Round 8 R8-1 报告确认）。
+  // canonical API 协议。
 
   test("GET /api/stones lists created objects (used by web frontend / debug tooling)", async () => {
     const app = await makeApp();
@@ -211,7 +211,7 @@ describe("app server routes", () => {
     await mkdir(join(baseDir, "flows", "web-session"), { recursive: true });
     await mkdir(join(baseDir, "stones", "assistant"), { recursive: true });
     await writeFile(join(baseDir, "flows", "web-session", "notes.txt"), "hello web");
-    // 根因 #3 (2026-05-24)：marker 由后端元数据文件存在性决定（.session.json /
+    // marker 由后端元数据文件存在性决定（.session.json /
     // .stone.json / .pool.json / .flow.json），不再用路径前缀启发式。
     await writeFile(join(baseDir, "flows", "web-session", ".session.json"), "{}");
 
@@ -227,7 +227,7 @@ describe("app server routes", () => {
     expect(flowsTree.children[0].path).toBe("flows/web-session");
     expect(flowsTree.children[0].marker).toBe("flow");
     expect(worldResponse.status).toBe(200);
-    // deprecated packages/ 目录已于 2026-06-07 不再由 bootstrap 创建（布局移除）
+    // deprecated packages/ 目录已不再由 bootstrap 创建（布局移除）
     expect(worldTree.children.map((node: { name: string }) => node.name).sort()).toEqual(["flows", "pools", "stones"]);
   });
 
@@ -273,7 +273,7 @@ describe("app server routes", () => {
     expect(body.objectId).toBe("writer");
     expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "self.md"), "utf8")).toBe("# Writer\nI write notes.");
     expect(await readFile(join(baseDir, "stones", "main", "objects", "writer", "readable.md"), "utf8")).toBe("# Writer README");
-    // 2026-05-23：stone 级 data.json 已删除；description 字段已从 schema 移除（无承载位置）。
+    // stone 级 data.json 已删除；description 字段已从 schema 移除（无承载位置）。
     // name 在没有显式 self 时会写成 self.md 首行（display_name_from_self_md 协议）；
     // 本 case 显式传了 self，因此 self 优先。
     // knowledge 已迁到 pool 层；createPoolObject 在 createStone 中创建。
@@ -323,13 +323,13 @@ describe("app server routes", () => {
     expect(folder.status).toBe(200);
     expect(file.status).toBe(200);
     expect(update.status).toBe(200);
-    // 2026-05-23: knowledge 已迁到 pool 层；HTTP API 入口名保留 "knowledge"，但落点是 pools/objects/<id>/knowledge/。
+    // knowledge 已迁到 pool 层；HTTP API 入口名保留 "knowledge"，但落点是 pools/objects/<id>/knowledge/。
     expect(await readFile(join(baseDir, "pools", "researcher", "knowledge", "notes", "idea.md"), "utf8")).toBe("# Updated");
     expect(escape.status).toBe(400);
     expect(escapeBody.error.code).toBe("INVALID_INPUT");
   });
 
-  // 根因 #3：knowledge 路径已迁到 /api/pools/...；旧 /api/stones/.../knowledge/* 加 X-Deprecated header。
+  // knowledge 路径已迁到 /api/pools/...；旧 /api/stones/.../knowledge/* 加 X-Deprecated header。
   test("POST /api/pools/:id/knowledge/files writes to pool, and deprecated stones path keeps working with X-Deprecated header", async () => {
     const { app, baseDir } = await makeAppWithBaseDir();
     await app.handle(
@@ -366,7 +366,7 @@ describe("app server routes", () => {
     expect(await readFile(join(baseDir, "pools", "alice", "knowledge", "via-stones.md"), "utf8")).toBe("legacy");
   });
 
-  // 根因 #3：tree marker 元数据化——基于 .stone.json / .pool.json / .session.json 存在性。
+  // tree marker 元数据化——基于 .stone.json / .pool.json / .session.json 存在性。
   test("GET /api/tree marks directories based on metadata files (.stone.json / .pool.json)", async () => {
     const { app, baseDir } = await makeAppWithBaseDir();
     // 用 HTTP createStone 触发 createStoneObject + createPoolObject，会写出 .stone.json + .pool.json
@@ -396,7 +396,7 @@ describe("app server routes", () => {
     expect(alicePool.marker).toBe("pool");
   });
 
-  // 根因 #3：client-source-url endpoint 给 frontend 权威路径。
+  // client-source-url endpoint 给 frontend 权威路径。
   test("GET /api/objects/stone/:id/client-source-url returns absPath/fsUrl or 404", async () => {
     const { app, baseDir } = await makeAppWithBaseDir();
     await app.handle(

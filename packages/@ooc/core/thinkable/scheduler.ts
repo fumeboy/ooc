@@ -50,7 +50,7 @@ function makeSystemMessage(fromId: string, toId: string, content: string): Threa
 /**
  * 给 waiting 父线程注入"子线程已结束"的 system 消息。
  *
- * spec § 等待语义的简化：
+ * 等待语义的简化：
  * 旧 await_children 隐式唤醒被替换为"子线程结束 → 父 inbox 写 system 消息 → 父唤醒"。
  *
  * 幂等：同一 (parentId, childId, 本次 end 实例) 只写一次。
@@ -91,7 +91,7 @@ function emitChildEndNotifications(root: ThreadContext): void {
 /**
  * 把 waiting 状态的线程在 inbox 长度增长后翻回 running。
  *
- * spec § 等待语义的简化：唯一唤醒规则 = inbox 出现新消息（与入眠快照对比）。
+ * 等待语义的简化：唯一唤醒规则 = inbox 出现新消息（与入眠快照对比）。
  */
 function wakeWaitingThreadsOnInbox(root: ThreadContext): void {
   for (const thread of iterateThreads(root)) {

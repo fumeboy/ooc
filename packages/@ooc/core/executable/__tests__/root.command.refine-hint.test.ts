@@ -63,7 +63,7 @@ function buildCases(): CmdCase[] {
 
 const CASES: CmdCase[] = buildCases();
 
-describe("Round 12 refine-hint", () => {
+describe("refine-hint", () => {
   describe("onFormChange tip at status=open with missing args", () => {
     for (const c of CASES) {
       it(`${c.name}: tip contains "refine" guidance`, () => {

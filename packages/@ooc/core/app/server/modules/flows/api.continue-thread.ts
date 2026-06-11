@@ -5,7 +5,7 @@ import { continueThreadBody, sessionIdParams } from "./model";
 /**
  * POST /api/flows/:sessionId/continue
  *
- * collaborable § cross-object talk：
+ * collaborable cross-object talk：
  * 把 user 这一轮输入投递到当前 session 中由 user.root 上 talk_window 指向的 callee；
  * 等价于 user 这个 flow object 在它的 root thread 上调用 talk_window.say。
  *

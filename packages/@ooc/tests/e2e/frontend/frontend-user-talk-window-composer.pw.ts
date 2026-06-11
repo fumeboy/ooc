@@ -2,7 +2,6 @@
  * F4 — frontend-user-talk-window-composer
  *
  * 类别：UI 单点（验证 ContextSnapshotViewer 内 inline talk composer 真能用）。
- * 详见 `docs/testing/oocable-codeagent-frontend-e2e.md § F4`。
  */
 
 import {
@@ -36,7 +35,7 @@ test("F4 user.root.talk_window 详情内 inline composer 发出第二轮回复",
   });
   await waitForReply(page, { sinceCount: 0, timeoutMs: 90_000 });
 
-  // 切到 user.root thread_context 视图 —— 2026-05-27 路由重构：
+  // 切到 user.root thread_context 视图：
   // path=/flows/thread_context 决定 view，query 带 sessionId/objectId/threadId。
   // ThreadHeader 的 .thread-switcher 主动过滤 user/root（ThreadHeader.tsx:31-33），
   // 所以不能 selectOption 切，要直接 navigate。

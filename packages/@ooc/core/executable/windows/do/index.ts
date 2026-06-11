@@ -1,7 +1,7 @@
 /**
  * do_window — fork 子线程后在父线程下产生的对话窗口。
  *
- * spec § do_window：
+ * do_window：
  * - targetThreadId：fork 出的 child thread id；transcript 视图按它过滤 inbox/outbox
  * - 注册的 method：continue / wait / close
  * - close 语义：B=ii archive — 把 child thread 标记为 archived；window 释放
@@ -115,7 +115,7 @@ function renderDoWindow(ctx: RenderContext): XmlNode[] {
 const DO_TRANSCRIPT_TRUNCATE = 200;
 
 /**
- * do_window 的 compressView hook（design §4.1）。
+ * do_window 的 compressView hook。
  *
  * - Level 1 (folded):  target_thread + status + 最近 1 条 transcript 消息(截断到 200 字)
  *   + total_messages 总数
@@ -168,7 +168,7 @@ function onCloseDoWindow(ctx: OnCloseContext): boolean | void {
     ctx.thread.events.push({
       category: "context_change",
       kind: "inject",
-      text: `[close 拒绝] window ${window.id} 是初始 creator do_window，不可关闭（spec § 初始 creator 对话 window）。`,
+      text: `[close 拒绝] window ${window.id} 是初始 creator do_window，不可关闭（初始 creator 对话 window）。`,
       source: "executable/windows/do#onCloseDoWindow",
       errorCode: "creator_do_window_close_rejected",
     });
@@ -315,14 +315,14 @@ function applyInitialShare(
 }
 
 /**
- * P6.§4-§5 constructor —— fork child thread + 创建父侧 do_window。
+ * constructor —— fork child thread + 创建父侧 do_window。
  *
  * 行为（与历史 root.do 一致）:
  *  1. 校验 msg 非空
  *  2. 生成 childId，构造 child ThreadContext + creator do_window
  *  3. 写消息到 child.inbox + parent.outbox + child.events.inbox_message_arrived
  *  4. 父挂 child（childThreadIds + childThreads + 反向 _parentThreadRef）
- *  5. 构造父侧 do_window —— 由 manager.submit §2 分支调 insertTypedWindow 挂载
+ *  5. 构造父侧 do_window —— 由 manager.submit 分支调 insertTypedWindow 挂载
  *  6. wait=true 时父进 waiting + inboxSnapshotAtWait
  *  7. share_windows 语法糖：对每个 entry 调 applyInitialShare（mutate parent.contextWindows + child.contextWindows）
  *
@@ -407,7 +407,7 @@ const doConstructor: ObjectMethod = {
       configurable: true,
     });
 
-    // 4) build do_window —— 不在此处 insert,manager.submit §2 分支统一走 insertTypedWindow
+    // 4) build do_window —— 不在此处 insert,manager.submit 分支统一走 insertTypedWindow
     const doWindow: DoWindow = {
       id: generateWindowId("do"),
       class: "do",

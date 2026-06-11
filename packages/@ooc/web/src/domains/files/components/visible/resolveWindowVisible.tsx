@@ -14,8 +14,6 @@
  * scope 恒为 stone：OOC object 的 visible 是其身份的一部分，写在 stone scope
  * `stones/<obj>/visible/index.tsx`；session（flow）是 stone 的 lazy worktree 分支，
  * client-source-url 的 stone 分支已用 sessionId 做 worktree 路由（可选）。
- *
- * 设计来源：docs/2026-06-08-line-a-unified-window-visible-render-plan.md（## Review 修订）。
  */
 import {
   Component,

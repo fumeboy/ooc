@@ -9,7 +9,7 @@ import { Select } from "../../../shared/ui/select";
 import { Textarea } from "../../../shared/ui/textarea";
 
 /**
- * SessionCreator — collaborable § cross-object talk 下的 session 创建表单。
+ * SessionCreator — collaborable cross-object talk 下的 session 创建表单。
  *
  * targetObjectId（"对方 object"）与 initialMessage（"第一句话"）现在都必填——
  * 创建 session 等价于 user 对该 target 发起初次 talk。

@@ -1,8 +1,5 @@
 /**
  * wait tool 5 条 reject 分支 + 2 条 happy path 的单元测试。
- *
- * 参见 spec: docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md §3
- * 参见 plan: docs/superpowers/plans/2026-05-17-wait-requires-dependency.md Task 7
  */
 
 import { describe, expect, it } from "bun:test";
@@ -33,7 +30,7 @@ async function callWaitAsync(
   return JSON.parse(raw);
 }
 
-describe("wait tool — explicit IO dependency (spec 2026-05-17)", () => {
+describe("wait tool — explicit IO dependency", () => {
   it("R1: 缺 on → reject 且枚举候选", async () => {
     const thread = makeThread();
     const out = await callWaitAsync(thread, { reason: "等一下" });

@@ -3,8 +3,6 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * Frontend e2e — Playwright 配置。
  *
- * 详见 `docs/testing/oocable-codeagent-frontend-e2e.md`。
- *
  * 跑法（必须在 bun 下跑 playwright；bunx 解析为 node，会撞 builtin executable 的 bun-only import）：
  *   RUN_FRONTEND_E2E=1 bun node_modules/.bin/playwright test --config packages/@ooc/tests/e2e/frontend/playwright.config.ts
  *

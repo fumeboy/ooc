@@ -27,7 +27,7 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
   });
 
   test("agent enters waiting state via wait tool with valid on target", async () => {
-    // spec 2026-05-17 wait-requires-dependency: wait 必须指定 on=<合法 IO 来源 window>。
+    // wait-requires-dependency: wait 必须指定 on=<合法 IO 来源 window>。
     // 给 thread 挂一个 creator talk_window（模拟 callee thread）作为合法 on 目标，
     // 让 LLM 可以 wait(on=<该 talk>) 而不被 reject。
     const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });

@@ -5,8 +5,6 @@
  *   主体完全替换为 `<SessionThreadsIndex>`，从旧的 "Chats list + SelectionDetail"
  *   形态升级为 "ObjectColumns + RelationOverlay + SelectionDetail" 多 object 索引。
  *
- *   设计依据: docs/2026-05-26-session-threads-index-design.md。
- *
  * 保留行为：
  *   - MainPanel 通过 `isUserThreadHome` 路由到这里, 不动 MainPanel 分发逻辑
  *   - ChatPanel 路径完全保留: SessionThreadsIndex 选中 chat:<wid> 时仍渲染 ChatPanel

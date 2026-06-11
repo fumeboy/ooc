@@ -10,7 +10,7 @@ import type { ThreadContext } from "@ooc/core/thinkable/context";
 import type { RuntimeJob } from "./types";
 
 /**
- * scheduler yield 自唤醒（设计：meta/app.server.doc.ts § worker.scheduler_yielded）。
+ * scheduler yield 自唤醒。
  *
  * 验证 runJob 单次跑满 workerMaxTicks 自然返回，且 thread.status 仍为 running 时：
  *   1. thread.events 末尾追加一条 scheduler_yielded（reason=max_ticks）留痕
@@ -131,7 +131,7 @@ describe("runJob scheduler yield 自唤醒", () => {
 });
 
 /**
- * scheduler yield 续跑（2026-06-06 修复 max_ticks 冻结 hang）。
+ * scheduler yield 续跑（修复 max_ticks 冻结 hang）。
  *
  * 续跑入队的职责从 runJob 移到 processQueuedJobs（标当前 job done 之后）。这里用**真实
  * claim 路径**（createRunThreadJob 注册 → processQueuedJobs 经 tryClaimQueuedJob 翻 running）

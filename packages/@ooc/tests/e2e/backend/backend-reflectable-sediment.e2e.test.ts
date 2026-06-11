@@ -10,12 +10,7 @@
  *      （reflectable.memory_layout 的 sediment write contract；pool 直写即时沉淀，无 PR）
  *   2. （若 super flow 沉淀 self.md）self.md 经 reflectable feat-branch PR 进 git
  *      （super flow new_feat_branch → 直接编辑 feat worktree → evolve_self commit + PR；resolve merge 后落 main）。
- *      地基不变量（2026-06-11）：session worktree 永不合入 main——沉淀走独立 feat 分支。
- *
- * Design spec:
- *   - meta/object.doc.ts:reflectable（super_session / super_alias_target /
- *     reflectable_knowledge / memory_layout / stone_versioning）
- *   - meta/engineering.testing.doc.ts（Good/OK/Bad + A/B 两观察孔）
+ *      地基不变量：session worktree 永不合入 main——沉淀走独立 feat 分支。
  *
  * 与 end-reflection-reminder.e2e.test.ts 的区别：那个测「业务 thread 调 end 时
  * 注入反思提醒 knowledge」（纯函数 buildInputItems，不真跑反思）；本测真起 worker +

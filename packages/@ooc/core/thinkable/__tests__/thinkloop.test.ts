@@ -512,7 +512,7 @@ describe("think", () => {
   });
 });
 
-describe("think 失败终态结构化 (observability 根因 #4)", () => {
+describe("think 失败终态结构化 (observability)", () => {
   it("LLM 超时 → thread.status='failed' + statusReason='llm_timeout' + lastError 有内容", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-timeout",
@@ -579,7 +579,7 @@ describe("think 失败终态结构化 (observability 根因 #4)", () => {
     expect(thread.lastError).toBe("boom: provider 500");
   });
 
-  it("透传 thread.llmTimeoutMs 到 generate 的 params.timeoutMs (根因 #1 plumbing)", async () => {
+  it("透传 thread.llmTimeoutMs 到 generate 的 params.timeoutMs (plumbing)", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-task-timeout",
       status: "running",

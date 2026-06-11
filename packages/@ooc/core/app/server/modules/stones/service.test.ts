@@ -10,7 +10,7 @@ describe("stones service", () => {
     const baseDir = await mkdtemp(join(tmpdir(), "ooc-stones-"));
 
     try {
-      // 根因 #2：HTTP createStone/putSelf 现在必经 stone-versioning（worktree → commit → ff merge），
+      // HTTP createStone/putSelf 现在必经 stone-versioning（worktree → commit → ff merge），
       // 需要先 bootstrap stones/ git repo。
       await ensureStoneRepo({ baseDir });
       const service = createStonesService({ baseDir });

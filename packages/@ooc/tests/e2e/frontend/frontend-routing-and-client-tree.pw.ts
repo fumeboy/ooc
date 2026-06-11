@@ -1,7 +1,7 @@
 /**
  * Frontend e2e — routing + FileTree 接 ObjectClientRenderer。
  *
- * 覆盖 plan-003 §7 判据：
+ * 覆盖判据：
  * - FR1: 直接打 /stones/<id> URL → 渲染 stone client
  * - FR2: 主页 → 在 stones tree 点 client/index.tsx → URL 变 /stones/<id> + 渲染
  * - FR3: tab 切 "源码" → CodeMirror；再切 "已渲染" 保留 button click 计数
@@ -64,12 +64,12 @@ test.describe("Web routing + FileTree client integration", () => {
     await world.startStack();
 
     await page.goto(getWebUrl(world));
-    // 切到 stones tab → URL 应变 /stones（R6 #47 起 sidebar tabs 改用 <a href>，
+    // 切到 stones tab → URL 应变 /stones（sidebar tabs 用 <a href>，
     // 浏览器右键/中键能用；getByRole("link") 而非 "button"）。
     await page.getByRole("link", { name: "Stones", exact: true }).click();
     await expect(page).toHaveURL(/\/stones$/, { timeout: 10_000 });
 
-    // 2026-05-21 stones repo 重组：tree 结构变成
+    // stones repo tree 结构：
     // stones → <branch>=main → objects → <objectId> → client → index.tsx
     await expect(page.locator(".tree-button").filter({ hasText: "main" })).toBeVisible({
       timeout: 15_000,
@@ -158,7 +158,7 @@ test.describe("Web routing + FileTree client integration", () => {
     // 没创建任何 stone
     await page.goto(`${getWebUrl(world)}/stones/nonexistent`);
     // ClientWithSourceToggle 已挂上；StoneFallback 在 stone 不存在时
-    // 渲染 StoneNotFoundCard（Issue #5 Bad #2 fix）而非旧的 "信息待产出..."。
+    // 渲染 StoneNotFoundCard 而非旧的 "信息待产出..."。
     await expect(page.getByTestId("stone-not-found")).toBeVisible({ timeout: 15_000 });
     // 路由本身不应报 errorElement
     await expect(page.getByTestId("route-error")).toHaveCount(0);

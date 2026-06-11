@@ -1,7 +1,6 @@
 /**
  * Backend e2e fixture — 共享给所有 `tests/e2e/backend/*.e2e.test.ts` 的工具集。
  *
- * 详见 `docs/testing/strategy.md` 与 `docs/testing/oocable-codeagent-backend-e2e.md`。
  * 设计要点：
  * - 通过 `app.handle(new Request(...))` 直调 in-process Elysia，不起真端口（与
  *   `src/app/server/__tests__/real-app-server.test.ts` 同形态，但走新 seedSession 路径）
@@ -481,7 +480,7 @@ export function findContextWindows(
  * 列出某个 stone 文件（如 objects/<id>/self.md）在 stones bare repo 里的 commit 短 sha 列表。
  *
  * 走 `git -C <baseDir>/stones/.stones_repo log --oneline -- <relPathInBranch>`，
- * 实证 super flow 改 self.md 是否真经 stone-versioning 进 git（task#17）。
+ * 实证 super flow 改 self.md 是否真经 stone-versioning 进 git。
  * relPathInBranch 形如 `objects/assistant/self.md`（相对 branch worktree 根）。
  * repo 不存在或无 commit 时返回空数组。
  */
@@ -573,7 +572,7 @@ export function listMemoryFiles(baseDir: string, selfId: string): string[] {
  * 第一行 `---`，闭合 `---`，且 block 内含 title / description / activates_on，
  * 且 activates_on 至少含一条新协议 trigger（`window::` / `method::` / `object::` / `super`）。
  *
- * 2026-05-28 切换到 trigger map 后，旧 `show_description_when:` / `show_content_when:`
+ * 切换到 trigger map 后，旧 `show_description_when:` / `show_content_when:`
  * 不再视为有效。（reflectable 协议要求：缺 frontmatter 或写错 schema 的 memory
  * 永远无法被 activator 激活。）
  */
@@ -612,7 +611,7 @@ export type ScoreResult = {
 };
 
 /**
- * 给一个场景打分。详见 `strategy.md §2`。
+ * 给一个场景打分。
  *
  * 约定：bad 规则的语义是"出现就糟糕"，good 规则的语义是"应该全部满足才算最佳"。
  * 测试断言侧只断 tier !== "Bad"；OK / Good 趋势靠 console.log(result) 留 CI 历史。

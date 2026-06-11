@@ -1,8 +1,5 @@
 /**
- * P0c — 4 个高频 ContextWindow type 的 compressView 验收 e2e。
- *
- * Design: docs/2026-05-25-context-compression-design.md §4.1
- * 任务说明: AgentOfThinkable P0c
+ * 4 个高频 ContextWindow type 的 compressView 验收 e2e。
  *
  * 覆盖：file_window / search_window / do_window / talk_window 四种 type 的自定义折叠态。
  * 每种 type 验证：

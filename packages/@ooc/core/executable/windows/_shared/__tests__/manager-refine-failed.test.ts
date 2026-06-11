@@ -1,7 +1,7 @@
 /**
- * Round 13 G2 — manager.refine 支持 failed → open 复活路径单测。
+ * manager.refine 支持 failed → open 复活路径单测。
  *
- * 2026-06-10 ObjectMethod API 重构后语义：refine 后若 onFormChange 返回
+ * ObjectMethod API 重构后语义：refine 后若 onFormChange 返回
  * quick_exec_submit=true（参数已补齐），manager.refine 会 await 自动 submit——
  * 成功 → form 自动移除；失败 → form 落 failed 带 result。
  *
@@ -46,7 +46,7 @@ async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string
   return { thread, formId: form.id };
 }
 
-describe("Round 13 G2: manager.refine 支持 failed → open 复活", () => {
+describe("manager.refine 支持 failed → open 复活", () => {
   it("open 状态 refine（参数未补齐）→ 仍 open + args 累积", async () => {
     const thread = makeThread({ id: "t_open_refine" });
     await dispatchToolCall(thread, {

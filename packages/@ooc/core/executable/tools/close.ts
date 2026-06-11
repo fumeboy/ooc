@@ -1,7 +1,7 @@
 /**
  * close tool — 关闭任意 ContextWindow（form / do_window / todo_window 等）。
  *
- * spec § 5 原语 close：
+ * 原语 close：
  * - 级联：parent 关闭 → 所有 sub-window 强制关闭
  * - 释放该 window 引入的 knowledge 引用计数（WindowManager 内部处理）
  * - type 注册的 onClose hook 决定额外副作用（do_window archive、creator window 拒绝等）

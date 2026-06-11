@@ -1,7 +1,7 @@
 /**
- * budget.test.ts — BudgetManager (P6) unit tests.
+ * budget.test.ts — BudgetManager unit tests.
  *
- * P6 (2026-06-03): Legacy applyNaturalDecay / applyEmergencyGuard / estimateThreadTokens
+ * Legacy applyNaturalDecay / applyEmergencyGuard / estimateThreadTokens
  * have been removed. BudgetManager is the canonical budget API.
  *
  * Tests here cover:

@@ -1,5 +1,5 @@
 /**
- * stone-skills.test — skills 目录扫描器与 10s 缓存测试（plan §skills 支持）。
+ * stone-skills.test — skills 目录扫描器与 10s 缓存测试。
  */
 
 import { afterEach, describe, expect, test } from "bun:test";

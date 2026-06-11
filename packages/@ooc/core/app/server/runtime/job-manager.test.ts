@@ -19,7 +19,7 @@ describe("job-manager", () => {
     expect(second.jobId).toBe(first.jobId);
   });
 
-  // reflectable #1 回归（2026-06-11）：同一 object 在同一 session 下的**不同 thread**
+  // 回归：同一 object 在同一 session 下的**不同 thread**
   // 各自必须拿到独立 job。此前 dedupe 只按 (sessionId, objectId)，导致 supervisor 的
   // pr-review thread（t_prreview_supervisor_<id>）被其已有的别的 super-session job
   // 折叠吞掉，永不被 worker 调度 →「supervisor 始终参与 review」在 agent 侧形同虚设。

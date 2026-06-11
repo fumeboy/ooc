@@ -4,8 +4,6 @@
  * 与 ObjectMethod（控制 object 业务数据，归 executable）函数签名不同：exec 额外接收
  * `windowState`（当前 window 展示状态快照），返回新 WindowDisplayState 而非原地 mutate。
  * 协作闭环：windowMethod 写 state → 持久化 thread-context → readable 读 state 构造输出。
- *
- * 设计来源：docs/2026-06-08-window-visible-render-and-readable-window-method-design.md Part 2。
  */
 import type { MethodExecutionContext, MethodExecuteForm } from "./method.js";
 import type { ContextWindow } from "./context-window.js";

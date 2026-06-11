@@ -1,16 +1,16 @@
 /**
- * pr-approval-flow —— reviewer 行使审批后的统一聚合 + 合入闸 + P6 回修编排。
+ * pr-approval-flow —— reviewer 行使审批后的统一聚合 + 合入闸 + 回修编排。
  *
- * 这是 P3 聚合（approvePrIssue）+ P5 合入闸（.world.json prAutoMerge）+ P6 回修
+ * 这是聚合（approvePrIssue）+ 合入闸（.world.json prAutoMerge）+ 回修
  * （routePrRepairMessage）的**单一编排点**，HTTP service（approve 端点）与 pr_window 的
  * approve/reject/request_changes method 都委托它，避免 gating 逻辑两处漂移。
  *
- * 编排（与 spec §3 P3/P5/P6 一致）：
+ * 编排：
  *   1. approvePrIssue 写 approvals + 聚合 verdict（校验 reviewer∈reviewers）。
- *   2. verdict=rejected      → resolvePrIssue(reject) archive+close → **P6** message 回 super(foo)。
+ *   2. verdict=rejected      → resolvePrIssue(reject) archive+close → message 回 super(foo)。
  *   3. verdict=ready-to-merge → prAutoMerge=true 立即 resolvePrIssue(merge)；false 留 open 待人工。
- *   4. verdict=changes-requested → **P6** message 回 super(foo)（留 open 等回修）。
- *   5. 合入失败（resolvePrIssue git 错）→ **P6** message 回 super(foo)（合入失败也是回修触发）。
+ *   4. verdict=changes-requested → message 回 super(foo)（留 open 等回修）。
+ *   5. 合入失败（resolvePrIssue git 错）→ message 回 super(foo)（合入失败也是回修触发）。
  *
  * 失败一律 fail-loud（返回结构化 code，不静默吞）。
  */
@@ -42,7 +42,7 @@ export type ApplyPrApprovalResult =
       rejected?: boolean;
       commitSha?: string;
       archivedRef?: string;
-      /** P6 是否已把回修 message 投回 super(foo)。 */
+      /** 是否已把回修 message 投回 super(foo)。 */
       repairRouted?: boolean;
     }
   | { ok: false; code: "NOT_FOUND"; message: string }
@@ -58,7 +58,7 @@ function resolveErrorText(
 }
 
 /**
- * 回修 message 的「可照抄动作块」（reflectable #4，2026-06-11）。
+ * 回修 message 的「可照抄动作块」。
  *
  * 体验官实证：LLM 收到泛化的「new_feat_branch(同 intent) 重绑」提示后不照走，
  * 反而即兴 curl 自查空转。这里把真实 intent 拼进可逐字复制的 exec(...) 调用，
@@ -77,7 +77,7 @@ function repairActionBlock(intent: string, editVerb: string): string {
   );
 }
 
-/** 回投 P6 修复 message（best-effort；author thread 缺失只记 repairRouted=false，不翻 ok）。 */
+/** 回投修复 message（best-effort；author thread 缺失只记 repairRouted=false，不翻 ok）。 */
 async function routeRepair(
   baseDir: string,
   issueId: number,
@@ -98,7 +98,7 @@ async function routeRepair(
 }
 
 /**
- * 统一审批编排：approve → 聚合 → gate → (merge|reject) → P6 回修。
+ * 统一审批编排：approve → 聚合 → gate → (merge|reject) → 回修。
  */
 export async function applyPrApproval(
   input: ApplyPrApprovalInput,

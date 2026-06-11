@@ -85,7 +85,7 @@ export interface RuntimeActivitySnapshot {
   logPatterns: LogPattern[];
 }
 
-/** P4 list view：单条 PR-Issue 摘要（reviewers/approvals/verdict 概览）。 */
+/** list view：单条 PR-Issue 摘要（reviewers/approvals/verdict 概览）。 */
 export interface PrIssueSummaryView {
   id: number;
   title: string;
@@ -101,14 +101,14 @@ export interface PrIssueSummaryView {
   verdict: PrApprovalVerdict;
 }
 
-/** P4 get view：单条 PR-Issue 全量（含 diff/intent/paths）。 */
+/** get view：单条 PR-Issue 全量（含 diff/intent/paths）。 */
 export interface PrIssueDetailView extends PrIssueSummaryView {
   description?: string;
   intent?: string;
   diff?: string;
   paths: string[];
   baseSha?: string;
-  /** 发起沉淀的 super(foo) threadId（P6 回修目标 thread）；磁盘 prPayload 有，view 此前漏。 */
+  /** 发起沉淀的 super(foo) threadId（回修目标 thread）；磁盘 prPayload 有，view 此前漏。 */
   authorThreadId?: string;
 }
 
@@ -149,7 +149,7 @@ export interface RuntimeService {
   getLatestDebug(ref: ThreadPersistenceRef): Promise<{ input: unknown; output: unknown }>;
   getLoopDebug(ref: ThreadPersistenceRef, loopIndex: number): Promise<{ input: unknown; output: unknown; meta: unknown }>;
   /**
-   * R0b: 列出指定 thread 下 debug/ 目录里所有 loop_NNNN.{input,output,meta}.json
+   * 列出指定 thread 下 debug/ 目录里所有 loop_NNNN.{input,output,meta}.json
    * 文件, 按 loopIndex 升序返回. 不携带 input/output 全文 (前端按需 GET 单条).
    *
    * 退化路径 (返回 { loops: [] }, 不抛):
@@ -161,7 +161,7 @@ export interface RuntimeService {
    */
   listLoops(ref: ThreadPersistenceRef): Promise<ListLoopsResponse>;
   /**
-   * Q0c: HITL approve/reject (design §原则F + 落地分配 Q0c)。
+   * HITL approve/reject。
    *
    * 接收来自控制面 / 测试 fixture 的决议, 把 thread.events 中最近一条 (或 eventId
    * 指定的) permission_ask 标记 decided + 翻 status="paused"→"running" + 调
@@ -234,7 +234,7 @@ export interface RuntimeService {
   }): Promise<{ ok: true; commitSha: string }>;
 }
 
-/** PrIssueRecord → P4 list 摘要视图。 */
+/** PrIssueRecord → list 摘要视图。 */
 function toPrIssueSummaryView(issue: PrIssueRecord): PrIssueSummaryView {
   const reviewers = issue.reviewers ?? [];
   const approvals = issue.approvals ?? {};
@@ -253,7 +253,7 @@ function toPrIssueSummaryView(issue: PrIssueRecord): PrIssueSummaryView {
   };
 }
 
-/** PrIssueRecord → P4 get 全量视图（含 diff/intent/paths）。 */
+/** PrIssueRecord → get 全量视图（含 diff/intent/paths）。 */
 function toPrIssueDetailView(issue: PrIssueRecord): PrIssueDetailView {
   return {
     ...toPrIssueSummaryView(issue),

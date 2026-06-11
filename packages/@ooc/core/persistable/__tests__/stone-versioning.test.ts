@@ -1,6 +1,6 @@
 /**
  * stone-versioning —— 退役 session→main 合入闸（tryMergeSelf/classifyWorktreeBranch/
- * requestPrIssueReview，2026-06-11 地基不变量）后，保留的治理 + interim 合入原语测试。
+ * requestPrIssueReview，地基不变量）后，保留的治理 + interim 合入原语测试。
  *
  * 覆盖：resolvePrIssue（feat-branch PR 的 interim 合入/驳回，来源 createFeatBranchWorktree +
  * 直接编辑 + commitAndOpenPr）、rollback（supervisor 署名回滚）、pruneStaleWorktrees、

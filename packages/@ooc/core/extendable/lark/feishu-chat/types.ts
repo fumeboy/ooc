@@ -19,7 +19,7 @@ import type { BaseContextWindow } from "../../../executable/windows/_shared/type
  * - cursor：飞书消息分页游标（next page token）；存活窗口生命周期，不持久化到 stone。
  * - buffer：已加载的消息切片，渲染入 LLM context（按 size 截断）。
  * - subscribePollIntervalMs：≥0 时表示窗口希望被周期性 refresh；当前阶段仅作为元数据，
- *   实际 poller 集成见 case 文档 §future。
+ *   实际 poller 集成待定。
  */
 export interface FeishuChatMessage {
   /** 飞书 message_id（om_xxx）。 */

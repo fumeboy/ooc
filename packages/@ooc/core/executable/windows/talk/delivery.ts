@@ -1,14 +1,14 @@
 /**
  * talk-delivery — 跨对象 talk 消息派送的统一入口。
  *
- * collaborable § cross-object talk（spec 2026-05-15）：
+ * collaborable cross-object talk：
  *
  * 一次"派送"做以下 5 件事：
  *
  * 1. 解析 caller 与 target：caller = ctx.thread + ctx.talkWindow；target = talkWindow.target
  *    （objectId）。两者必须都带 persistence ref。
  *
- *    **target="super" 自指别名**（spec 2026-05-18 super-flow-channel）：
+ *    **target="super" 自指别名**（super-flow-channel）：
  *    callerWindow.target === "super" 时翻译为
  *    `(calleeObjectId = caller.objectId, calleeSessionId = "super")`——派送到
  *    自己的 super 分身。这是跨 session 派送（caller 的当前 session 与 "super" 不同），
@@ -165,8 +165,6 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
     // 早些时候这里还 spawn 过一条 "回复创建者" todo 用作文本 nudge。
     // 现在结构性约束（wait 要求 on=合法 IO 来源 window）已接管它的作用——
     // LLM 不 say 就 wait 会直接 reject。todo 撤除以避免"双保险"带来的冗余。
-    // 详见 docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md §6。
-
     // 回填 caller talk_window.targetThreadId
     callerWindow.targetThreadId = calleeThreadId;
   }
@@ -212,7 +210,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   await writeThread(callerThread);
   await writeThread(calleeThread);
 
-  // 5) 根因 #5：状态翻转 → 通知 runtime。callback 自己决定要不要入队 worker。
+  // 5) 状态翻转 → 通知 runtime。callback 自己决定要不要入队 worker。
   //    历史上这里对 user 短路（避免 user 被 worker 跑），现在改在 buildServer 的
   //    setThreadActivationNotifier callback 里判 user 后跳过 jobManager —
   //    talk-delivery 总是发 notify，让 lark event-relay 等订阅方都能收到 user 激活信号。

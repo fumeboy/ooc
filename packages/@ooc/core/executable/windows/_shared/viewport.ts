@@ -1,12 +1,10 @@
 /**
  * viewport 协议 — file_window / knowledge_window 共享的"精细化窗口大小"控制。
  *
- * 纯类型 + 纯函数（`Viewport` / `mergeViewport` / `applyViewport` / …）已于
- * batch C2 迁入 canonical 源 `@ooc/core/_shared/types/viewport.ts`，此处 re-export
+ * 纯类型 + 纯函数（`Viewport` / `mergeViewport` / `applyViewport` / …）已迁入
+ * canonical 源 `@ooc/core/_shared/types/viewport.ts`，此处 re-export
  * 保持旧 import 路径可用。本文件仅保留 runtime 执行入口
  * `executeWindowSetViewport`（依赖 MethodExecutionContext + 写 ctx.self 副作用）。
- *
- * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 
 import type { WindowMethodExecutionContext, WindowMethodOutcome } from "../../../_shared/types/window-method.js";

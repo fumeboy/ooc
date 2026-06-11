@@ -113,7 +113,7 @@ export function readThreadJson(baseDir: string, sid: string, objectId: string, t
 }
 
 /**
- * 读 thread-context.json（§10 退役 thread.json.contextWindows 后，contextWindows 的唯一权威）。
+ * 读 thread-context.json（退役 thread.json.contextWindows 后，contextWindows 的唯一权威）。
  * 返回 `{ threadId, contextWindows }`；不存在/坏数据 → undefined。
  * builtin feature 窗（talk/do/todo）以完整 inline 落盘，可直接读到 type/target 等字段。
  */

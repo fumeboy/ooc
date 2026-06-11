@@ -1,5 +1,5 @@
 /**
- * method_exec window — form lifecycle 的 LLM 视角统一抽象（P6.§9，2026-06-02）。
+ * method_exec window — form lifecycle 的 LLM 视角统一抽象。
  *
  * 注册的 methods：
  * - refine：累积参数到 form.accumulatedArgs，重算 intentPaths

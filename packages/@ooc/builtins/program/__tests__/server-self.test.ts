@@ -40,7 +40,7 @@ describe("createProgramSelf", () => {
     );
 
     const thread: ThreadContext = makeThread({ id: "t1" });
-    // ooc-6 new design: window id = object id, window type = object id
+    // window id = object id, window type = object id
     const objectId = "alice";
     // 局部 registry：不污染全局 builtinRegistry，也不依赖其他测试注册的同名 "alice"
     const registry = createObjectRegistry();
@@ -83,7 +83,7 @@ describe("createProgramSelf", () => {
       `export const window = { methods: {} };`,
     );
     const thread: ThreadContext = makeThread({ id: "t1" });
-    // ooc-6 new design: window id = object id, window type = object id
+    // window id = object id, window type = object id
     const objectId = "alice";
     // 局部 registry：同上，避免全局 registry 跨测试污染
     const registry = createObjectRegistry();
@@ -117,7 +117,7 @@ describe("createProgramSelf", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-self-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
     const thread: ThreadContext = makeThread({ id: "t1" });
-    // 2026-05-23: getData/setData 现在是 session-scoped，需要 thread.persistence。
+    // getData/setData 现在是 session-scoped，需要 thread.persistence。
     thread.persistence = {
       baseDir: tempRoot!,
       sessionId: "s1",

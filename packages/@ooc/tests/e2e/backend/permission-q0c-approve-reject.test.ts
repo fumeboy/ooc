@@ -1,16 +1,13 @@
 /**
  * Q0c — permission HITL approve/reject 闭环 e2e (AgentOfExecutable + AgentOfVisible)。
  *
- * Design: docs/2026-05-25-permission-model-design.md §原则F + Q0c
- * Meta:   meta/object.doc.ts:executable.children.permission.patches.approve_reject_path
- *
  * 本测试覆盖完整 Ask → approve / reject → resume 闭环:
  *   A. approve 路径 — HITL 批准 → thinkloop 重放 tool call → dispatcher 真正执行
  *   B. reject 路径  — HITL 拒绝 → 写 permission_denied + 合成 function_call_output
  *   C. 错误路径    — HTTP 400/404 / thread 不存在 / 没有待审批 ask / eventId 拼错
  *   D. 渲染一致性  — pending / approved / rejected 三态 system message 区分
  *
- * 测试卫生 (engineering.harness.doc.ts:patches.test_session_hygiene):
+ * 测试卫生:
  *  - mkdtempSync 独立 tmp baseDir, afterEach 清理 (rm -rf)
  *  - 不起 worker (跑 `service.decidePermission(...)` + 直调 `think()`), 进程零残留
  *  - session id 用 `_test_executable_<timestamp>` 前缀
@@ -84,7 +81,7 @@ function makeLlmClient(result: LlmGenerateResult): LlmClient {
 
 /**
  * policies.json 物理落点必须与 loadPoliciesJson 一致（`stoneDir(deriveStoneFromThread(ref))`）。
- * M2 (2026-06-03) canonical 布局后该路径是 flat `stones/<objectId>/config/`（非旧
+ * canonical 布局下该路径是 flat `stones/<objectId>/config/`（非旧
  * `stones/main/objects/<id>/`），直接用 stoneDir 推算避免布局漂移。
  */
 function policiesConfigDir(ref: ThreadPersistenceRef): string {

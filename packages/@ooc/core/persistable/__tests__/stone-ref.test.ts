@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { stoneDir, deriveStoneFromThread, type StoneObjectRef, type ThreadPersistenceRef } from "../common";
 
-// M2 (2026-06-03): "packages/" renamed to "stones/" as canonical user-stone path.
+// "packages/" renamed to "stones/" as canonical user-stone path.
 describe("stoneDir resolves stones/{nestedPath(objectId)}", () => {
   test("flat objectId resolves to stones/<id>", () => {
     const ref: StoneObjectRef = { baseDir: "/tmp/world", objectId: "agent_of_x" };

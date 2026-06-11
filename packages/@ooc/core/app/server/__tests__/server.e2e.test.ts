@@ -6,7 +6,7 @@ import { ensureStoneRepo } from "@ooc/core/persistable";
 import { readServerConfig } from "../bootstrap/config";
 import { buildServer } from "../index";
 
-// 根因 #2：HTTP stone 写入必经 stone-versioning，需先 bootstrap stones/ bare repo。
+// HTTP stone 写入必经 stone-versioning，需先 bootstrap stones/ bare repo。
 async function makeApp() {
   const baseDir = mkdtempSync(join(tmpdir(), "ooc-app-server-e2e-"));
   await ensureStoneRepo({ baseDir });

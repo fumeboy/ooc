@@ -4,7 +4,6 @@
  * 能力：Object 通过 executable/index.ts 的 `window.methods` 定义自定义方法。标 `for_ui_access`
  * 的方法经 HTTP `call_method` 被外部调用，响应即标准 MethodOutcome（结构化数据走 `data`）；
  * 改源码后热更新立即生效。规格见 programmable 对象 knowledge/tests.md（.ooc-world-meta）。
- * （2026-06-11 废 ui_methods 维度后统一到 window.methods + for_ui_access。）
  */
 import { setTimeout as sleep } from "node:timers/promises";
 import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";

@@ -1,5 +1,5 @@
 /**
- * P3 多 reviewer 审批聚合 —— aggregatePrApproval 纯逻辑 + approvePrIssue 写入/校验。
+ * 多 reviewer 审批聚合 —— aggregatePrApproval 纯逻辑 + approvePrIssue 写入/校验。
  *
  * 验证：
  * - aggregatePrApproval：全 approve → ready-to-merge；任一 reject → rejected（一票否决）；

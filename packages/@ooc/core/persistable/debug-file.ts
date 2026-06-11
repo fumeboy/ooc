@@ -12,7 +12,7 @@ import type { WindowSnapshotEntry } from "@ooc/core/observable/window-hash";
  * 调用 LLM 前同时落盘的 thread context 快照。
  *
  * 与 inputItems 中的 system message XML 一一对应，但用结构化 JSON 表示，
- * 方便 UI 直接消费（无需重新 parse XML）。spec § 渲染示例。
+ * 方便 UI 直接消费（无需重新 parse XML）。
  */
 export interface ContextSnapshot {
   id: string;

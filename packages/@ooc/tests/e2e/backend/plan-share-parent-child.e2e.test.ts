@@ -1,13 +1,7 @@
 /**
- * plan_window 跨 thread share 完整闭环 e2e（Round 7 Phase B6）。
+ * plan_window 跨 thread share 完整闭环 e2e。
  *
- * Design: docs/2026-05-26-remove-issue-add-subplan-design.md §3.6
- * Meta:
- *   - meta/object.doc.ts:executable.children.context_window.children.plan_window
- *   - meta/object.doc.ts:executable.children.context_window.children.sharing
- *   - meta/object.doc.ts:collaborable.children.cross_thread_window_sharing
- *
- * 三个剧本（与本轮 B6 派单口径一致）：
+ * 三个剧本：
  *
  *   Scenario A (move) — 完整闭环：
  *     父建 plan → share 给子 (mode=move) → 父侧 lent_out + 不可写
@@ -104,7 +98,7 @@ function getOnlyChild(parent: ThreadContext): ThreadContext {
 
 // ───────────────────────────── Scenario A (move) ──────────────────────────────
 
-describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () => {
+describe("plan_window share — Scenario A: move 模式完整闭环", () => {
   it("父建 plan → move 给子 → 子改 + expand → 归还 → 父见进度", async () => {
     // 1. setup: 父 thread
     const parent = makeThread({ id: "_test_thinkable_b6_a_parent" });
@@ -223,7 +217,7 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
     expect(parentPlanReturned.steps[1]!.status).toBe("in-progress");
     expect(parentPlanReturned.steps[2]!.subPlanWindowId).toBe(PW2);
 
-    // sub plan 是否回流到父：现实记录（design §3.6 没明说）
+    // sub plan 是否回流到父：现实记录（设计文档没明说）
     // do_window.move 的归还路径只按 window_id 精确匹配（无 cascade），
     // sub plan 留在子；父侧不会看到 PW2 这个 plan_window。
     const parentSub = findPlanWindowById(parent, PW2);
@@ -237,7 +231,7 @@ describe("[B6] plan_window share — Scenario A: move 模式完整闭环", () =>
 
 // ───────────────────────────── Scenario B (ref) ───────────────────────────────
 
-describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () => {
+describe("plan_window share — Scenario B: ref 模式（子只读）", () => {
   it("父建 plan → share ref 给子 → 子改被拒 → 子 close 不影响父", async () => {
     const parent = makeThread({ id: "_test_thinkable_b6_b_parent" });
     await execRootMethod("plan", {
@@ -302,7 +296,7 @@ describe("[B6] plan_window share — Scenario B: ref 模式（子只读）", () 
 
 // ───────────────────────────── Scenario C (边界) ──────────────────────────────
 
-describe("[B6] plan_window share — Scenario C: 边界 / 错误路径", () => {
+describe("plan_window share — Scenario C: 边界 / 错误路径", () => {
   it("root + sub plan_window 都能被 share（都是 plan 类型实例）", async () => {
     const parent = makeThread({ id: "_test_thinkable_b6_c_parent" });
     await execRootMethod("plan", { thread: parent, args: { plan: "p" } });

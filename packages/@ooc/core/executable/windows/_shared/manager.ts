@@ -1,8 +1,6 @@
 /**
  * WindowManager — 替代旧 FormManager 的统一 ContextWindow 操作入口。
  *
- * 设计依据：docs/superpowers/specs/2026-05-14-context-window-unification-design.md
- *
  * 职责：
  * - 持有 thread.contextWindows，封装所有增删改查
  * - 提供与 LLM 5 原语对齐的方法：
@@ -45,8 +43,7 @@ import { WindowPersistence, threadPersistRef, runtimeObjectRef } from "./window-
  * - "root" → root 注册到 object registry 的 methods（来自 windows/root/index.ts）
  * - 其他 → 该 window 的 type definition.methods
  *
- * 2026-05-28 ooc-6 Object Unification：现在通过 registry.lookupMethod 公共 API 检索。
- * 2026-06-04 Phase E：改为 WindowManager 私有方法，使用实例持有的 registry。
+ * WindowManager 私有方法，使用实例持有的 registry，通过 registry.lookupMethod 检索。
  */
 
 export class WindowManager {
@@ -193,7 +190,7 @@ export class WindowManager {
     const parentId = opts.parentWindowId ?? ROOT_WINDOW_ID;
     const parent = this.requireParent(parentId);
 
-    // sharing 守门（plan §do_window.move）：
+    // sharing 守门（do_window.move）：
     if (parent.sharing) {
       const isCloseOnRef = parent.sharing.kind === "ref" && opts.method === "close";
       if (!isCloseOnRef) {
@@ -363,7 +360,7 @@ export class WindowManager {
   /**
    * 累积 method_exec form 的 args 并重算 tip/intents。
    *
-   * Round 13: 允许 status="open" 或 status="failed" 上调 refine。
+   * 允许 status="open" 或 status="failed" 上调 refine。
    * If onFormChange returns quick_exec_submit after the refine, auto-submits (awaited;
    * caller reads back the form for the submit outcome — success 时 form 已移除，
    * failed 时 form.result 带错误)。

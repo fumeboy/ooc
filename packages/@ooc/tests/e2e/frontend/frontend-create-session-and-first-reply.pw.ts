@@ -2,7 +2,6 @@
  * F1 — frontend-create-session-and-first-reply
  *
  * 类别：多轮对话起点。
- * 详见 `docs/testing/oocable-codeagent-frontend-e2e.md § F1`。
  */
 
 import {
@@ -68,7 +67,7 @@ test("F1 SessionCreator → 首条 assistant 回复出现在 chat panel", async 
   const replyVisible = replyCount > 0;
 
   // ChatPanel timeline 至少 2 条 message（user hi + assistant 一句）。
-  // Round 17 后 DOM：.chat-timeline > .tui-thread > .tui-block.tui-{user|assistant}。
+  // DOM：.chat-timeline > .tui-thread > .tui-block.tui-{user|assistant}。
   const transcriptCount = await page
     .locator(".chat-timeline .tui-block.tui-user, .chat-timeline .tui-block.tui-assistant")
     .count();

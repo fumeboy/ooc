@@ -1,7 +1,7 @@
 /**
  * 单元化 story catalog —— 聚合所有 L<n>_<layer>.stories.ts。
  *
- * 每条 story 是一个独立预期（见 docs/ooc-6/storybook/stories-outline.md）。
+ * 每条 story 是一个独立预期。
  * 被 stories/_catalog.test.ts（CI gate，gate!==false 的进 gate）逐条收为 bun:test `it`；
  * 被 catalog-runner.ts 全量跑出 PASS/FAIL/SKIP 审计报告（docs/ooc-6/storybook/stories-report.md）。
  */

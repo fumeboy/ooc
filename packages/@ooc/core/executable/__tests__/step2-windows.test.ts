@@ -32,7 +32,7 @@ describe("Step 2 window lifecycles", () => {
       // 必须先建 caller flow object 目录，writeThread 才能落盘
       const { createFlowObject } = await import("../../persistable");
       await createFlowObject({ baseDir: tempRoot, sessionId: "s1", objectId: "alice" });
-      // root.talk 校验 target 对应 stones/ 存在(spec relation activation 2026-05-18);
+      // root.talk 校验 target 对应 stones/ 存在(relation activation);
       // 测试场景需要预先建 bob stone 才能 open talk_window
       await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
 
@@ -150,7 +150,7 @@ describe("Step 2 window lifecycles", () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-kw-"));
     clearKnowledgeLoaderCache();
     try {
-      // 2026-05-23: knowledge 已迁到 pool 层；createStoneObject 仍创建 stone 骨架，
+      // knowledge 已迁到 pool 层；createStoneObject 仍创建 stone 骨架，
       // 但 knowledge 文档现在落在 pools/objects/<id>/knowledge/。
       await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
       const poolRef = await createPoolObject({ baseDir: tempRoot, objectId: "agent" });

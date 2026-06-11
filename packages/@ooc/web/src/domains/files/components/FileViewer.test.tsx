@@ -1,5 +1,5 @@
 /**
- * Round 6 Batch A — H-2 fallback test
+ * FileViewer 无文件 fallback 测试
  *
  * FileViewer 无文件 + 收到 (path, error) 时, 不能再用通用 "Select a file" 占位
  * (会误导用户以为 URL 路径参数没起作用), 必须显式呈现 "File not available" +
@@ -9,7 +9,7 @@ import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FileViewer } from "./FileViewer";
 
-describe("FileViewer H-2 fallback (file path miss)", () => {
+describe("FileViewer fallback (file path miss)", () => {
   it("renders 'Select a file' when no path / no error / no file", () => {
     const html = renderToStaticMarkup(<FileViewer />);
     expect(html).toContain("Select a file");

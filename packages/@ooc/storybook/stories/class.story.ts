@@ -1,5 +1,5 @@
 /**
- * Story: class —— 一等继承抽象（2026-06-07）。
+ * Story: class —— 一等继承抽象。
  *
  * 能力：builtin class 经 instantiate_with_new_world 幂等实例化为 objects/ object（拷贝 self.md +
  * ooc.class）；二次实例化保用户改动；instance 经 class 链继承框架 seed knowledge；class 不可交互

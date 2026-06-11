@@ -5,9 +5,7 @@ import type { LlmEnvConfig, LlmGenerateParams, LlmInputItem, LlmTool } from "../
  * content 形如 "[context_change:inbox_message_arrived] msg_id=X source=talk from=ObjY window_id=W\n<真实正文>"。
  * Claude transport 边界识别这个前缀，把它从 system 上下文里挪出来作为 user 消息，
  * 让 Claude 看到一条真正的"用户对话起点"。
- * 详见 spec: docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md
- * 与 docs/solutions/conventions/reuse-before-introducing-new-concepts-2026-05-17.md
- * 的"边界适配优于核心改造"理念。
+ * 体现「边界适配优于核心改造」的理念。
  */
 const INBOX_MARKER = "[context_change:inbox_message_arrived]";
 

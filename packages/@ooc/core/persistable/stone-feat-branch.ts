@@ -14,8 +14,10 @@
  *      冒泡算 reviewer、`createPrIssue` 落 `flows/super/issues/`（prPayload.branch=feat 分支、
  *      record.reviewers=冒泡结果）。
  *
- * `computeReviewerSet` 纯函数保留（决策 A：逐路径拥有者）。reviewer 集只计算+存储，
- * 当前阶段**不强制执行**——interim 合入仍走既有 `resolvePrIssue`（单 supervisor merge/reject）。
+ * `computeReviewerSet` 纯函数（决策 A：逐路径拥有者）算出的 reviewer 集**强制执行**：
+ * 落 `record.reviewers`，合入闸 `aggregateVerdict`（pr-issue.ts）要求全员 approve 才
+ * `ready-to-merge`（reject 一票否决），再由 `.world.json prAutoMerge` 决定自动/人工合入
+ * （编排见 `executable/windows/pr/approval-flow.ts`）。
  *
  * 与 session 合入闸（已退役）的本质区别：分支是**沉淀单元**而非运行时派生物；source 是
  * super(foo) 在 feat worktree 下的直接编辑，不读任何 session worktree。
@@ -48,7 +50,7 @@ export const SUPERVISOR_OBJECT_ID = "supervisor";
  * ================================================================ */
 
 /**
- * 把 `objects/...` 物理路径翻译回**领地包含它的最近 parent 对象**（决策 A，spec §决策2A）。
+ * 把 `objects/...` 物理路径翻译回**领地包含它的最近 parent 对象**（决策 A）。
  *
  * reviewer 是「领地包含变更的最近 parent 对象」：领地 = `objects/<X>/**`（含 children/）。
  * 因此触及别人 children 的变更，reviewer 是那个**顶层对象 X**（X 授权其整个领地，含子对象）——

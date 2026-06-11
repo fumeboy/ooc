@@ -1,9 +1,9 @@
 /**
- * Object Method 相关类型 —— canonical 源已于 batch C7 迁入
+ * Object Method 相关类型 —— canonical 源已迁入
  * `@ooc/core/_shared/types/method.ts`；此处 re-export 保持旧 import 路径
  * (`executable/windows/_shared/method-types`) 可用。
  *
- * **契约决策（batch C7，见 docs/refactor_0604/shared-types.md §3.2）**：
+ * **契约决策**：
  * `MethodExecutionContext` 的 `manager` 字段在零依赖层声明为 `unknown`、`form` 为 base
  * `ContextWindow`——因为 `_shared` 不能引 WindowManager / MethodExecWindow 的 runtime 类型。
  * executable 内部与 builtins 的 method 实现在用到 `ctx.manager` / `ctx.form` 的具体能力时，

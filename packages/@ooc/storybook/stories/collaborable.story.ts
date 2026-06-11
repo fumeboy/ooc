@@ -36,7 +36,7 @@ export async function runControlPlane(): Promise<StoryResult> {
     }
 
     // TC-COLLAB-02: user.root 上挂了指向 target 的 talk_window（显式协作通道）
-    // §10：contextWindows 已从 thread.json 迁出，唯一权威是 thread-context.json
+    // contextWindows 已从 thread.json 迁出，唯一权威是 thread-context.json
     // （talk 是 builtin feature → 完整 inline，含 type/target）。
     {
       const userCtx = readThreadContextJson(baseDir, sid, "user", "root");

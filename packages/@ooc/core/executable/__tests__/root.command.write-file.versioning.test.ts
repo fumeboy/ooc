@@ -1,5 +1,5 @@
 /**
- * write_file → stone-versioning 路由（2026-05-28 方案1）。
+ * write_file → stone-versioning 路由。
  *
  * 验证 LLM 的 write_file 命令写 stones/<self>/... 路径时不再裸 writeFile，而是经
  * stone-versioning（git commit + self-scope ff-merge / cross-scope PR-Issue）：
@@ -89,7 +89,7 @@ describe("write_file stone-versioning routing", () => {
     });
 
     const out = await executeWriteFileMethod(ctx);
-    // 成功 outcome（constructor object outcome；P6.§4-§5）
+    // 成功 outcome（constructor object outcome）
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === true && "window" in out && out.window) {
       expect(out.window.class).toBe("file");
@@ -141,7 +141,7 @@ describe("write_file stone-versioning routing", () => {
   });
 
   test("super flow: write_file 写 stone 自治区 → fail-loud（非业务 session，无 worktree 落点），main 不变", async () => {
-    // 去 metaprog（2026-06-09）：stone 写的两个落点是「业务 session worktree」（LLM 试验，
+    // 去 metaprog：stone 写的两个落点是「业务 session worktree」（LLM 试验，
     // 经 evolve_self 合入）与「HTTP 控制面直写 main」（人类已决策）。super flow 既非业务 session
     // （sessionUsesWorktree("super")=false）也非 HTTP，其角色是 evolve_self 合入闸门、不是 stone
     // 作者——故 super session 内 write_file 写 stone 自治区 fail-loud，不再裸 commit main。
@@ -192,7 +192,7 @@ describe("write_file stone-versioning routing", () => {
       content: "a,b\n1,2\n",
     });
     const out = await executeWriteFileMethod(ctx);
-    // non-stone 新建：constructor outcome { ok: true, object } (P6.§4-§5)
+    // non-stone 新建：constructor outcome { ok: true, object }
     expect(typeof out).toBe("object");
     if (typeof out === "object" && out && out.ok === true && "window" in out && out.window) {
       expect(out.window.class).toBe("file");
@@ -339,7 +339,7 @@ describe("write_file stone-versioning routing", () => {
     expect(onMain).toBe("agent_of_x v1\n");
   });
 
-  // reflectable #2 回归（2026-06-11）：feat 分支绑定生效时写 pool 路径 = write-through
+  // reflectable 回归：feat 分支绑定生效时写 pool 路径 = write-through
   // 立即生效、**不进本 PR**。此前静默直写无任何提示 → 随后 evolve_self 发现 feat 分支
   // 无 stone 改动报 NO_CHANGES，LLM 困惑。断言：feat 绑定下写 pool 注入显式提示。
   test("feat 绑定下写 pools/ → 直写 + 注入 write-through 提示（不静默）", async () => {

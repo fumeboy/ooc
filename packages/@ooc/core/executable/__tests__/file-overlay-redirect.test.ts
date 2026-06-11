@@ -69,7 +69,7 @@ function mainObjectsDir(baseDir: string): string {
   return join(baseDir, "stones", "main", "objects");
 }
 
-/** session worktree 内某 object 的目录：`flows/<sid>/objects/<id>`（方案 A，2026-06-09）。 */
+/** session worktree 内某 object 的目录：`flows/<sid>/objects/<id>`（方案 A）。 */
 function worktreeObjDir(baseDir: string, sessionId: string, objectId: string): string {
   return join(baseDir, "flows", sessionId, "objects", objectId);
 }
@@ -81,7 +81,7 @@ function asFileWindow(out: unknown): FileWindow {
   throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
 }
 
-describe("file worktree redirect (P2)", () => {
+describe("file worktree redirect", () => {
   test("write_file own stone → worktree; main unchanged", async () => {
     const baseDir = await newWorld(["alice"]);
     const out = await executeWriteFileMethod(

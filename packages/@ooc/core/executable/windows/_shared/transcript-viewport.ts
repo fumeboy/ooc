@@ -2,12 +2,10 @@
  * transcript viewport 协议 — talk_window / do_window 共享的"持续对话窗口节流"控制。
  *
  * 纯类型 + 纯函数（`TranscriptViewport` / `mergeTranscriptViewport` /
- * `applyTranscriptViewport` / …）已于 batch C2 迁入 canonical 源
+ * `applyTranscriptViewport` / …）已迁入 canonical 源
  * `@ooc/core/_shared/types/viewport.ts`，此处 re-export 保持旧 import 路径可用。
  * 本文件仅保留 runtime 执行入口 `executeWindowSetTranscriptViewport`
  * （依赖 MethodExecutionContext + 写 ctx.self 副作用）。
- *
- * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 
 import type { WindowMethodExecutionContext, WindowMethodOutcome } from "../../../_shared/types/window-method.js";

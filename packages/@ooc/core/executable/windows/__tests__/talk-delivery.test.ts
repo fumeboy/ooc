@@ -1,6 +1,6 @@
 /**
- * talk-delivery unit tests — focused on the super alias path added in
- * spec 2026-05-18 (super-flow-channel). The existing same-session happy path
+ * talk-delivery unit tests — focused on the super alias path
+ * (super-flow-channel). The existing same-session happy path
  * is covered by step2-windows.test.ts; this file targets:
  *
  *  - regression: non-"super" target still dispatches to caller's session
@@ -143,10 +143,10 @@ describe("talk-delivery target='super' alias", () => {
     }
   });
 
-  // #3（reflectable 新对象自沉淀 bootstrap）：新对象只在 session worktree 存在、未 canonical，
+  // reflectable 新对象自沉淀 bootstrap：新对象只在 session worktree 存在、未 canonical，
   // 不能当 super-flow actor / PR author。super-alias 的 callee 冒泡到最近 canonical 祖先；
   // 顶层新对象（无路径 parent）→ supervisor。canonical caller 自指不变（上面 happy/edge 已覆盖）。
-  it("#3 顶层新对象 target='super' → 冒泡到 supervisor 代发", async () => {
+  it("顶层新对象 target='super' → 冒泡到 supervisor 代发", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-tdsa-"));
     try {
       // supervisor 恒 canonical（bootstrap）；新对象 bar 未 canonical
@@ -170,7 +170,7 @@ describe("talk-delivery target='super' alias", () => {
     }
   });
 
-  it("#3 nested 新对象 target='super' → 冒泡到最近 canonical 祖先", async () => {
+  it("nested 新对象 target='super' → 冒泡到最近 canonical 祖先", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-tdsa-"));
     try {
       // alice canonical（parent）；alice/baz 是 session 内新对象
@@ -189,7 +189,7 @@ describe("talk-delivery target='super' alias", () => {
     }
   });
 
-  // super→origin 回报通道回归（reflectable harness sweep [med] 修复）：
+  // super→origin 回报通道回归：
   // super-alice（super session）通过 creator talk_window 回报创建者 alice（user session）。
   // 修复前：creator window 被 init 误判为 do_window → do_window.continue/say 路由进自身
   // （super）session → 永远找不到 user-session 的创建者 thread → 静默失败。

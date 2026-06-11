@@ -2,8 +2,6 @@
  * ContextWindow 家族的 base 类型 —— canonical 源（从
  * `executable/windows/_shared/types.ts` 迁入 base 部分）。
  *
- * 设计依据：docs/superpowers/specs/2026-05-14-context-window-unification-design.md
- *
  * **分层说明：**
  * 完整的 `ContextWindow` discriminated union（`RootWindow | MethodExecWindow | …`）
  * 依赖 builtins 各包的具体 window 类型，**无法**放进零依赖的 `_shared`。因此：
@@ -13,7 +11,6 @@
  *   本文件的 base 类型再拼装具体 window union（覆盖 base 版同名 export）。
  * - 需要 discriminant narrowing 的调用方显式从 executable 版引。
  *
- * 后续 ooc-7 再考虑把 builtins 具体类型也下沉到 `_shared`。
  */
 
 import type { WindowDisplayState } from "./window-state.js";
@@ -89,7 +86,7 @@ export interface BaseContextWindow {
   /** 跨 thread 共享状态；缺省 = owner-live。 */
   sharing?: SharingState;
   /**
-   * 上下文压缩档位（design: docs/2026-05-25-context-compression-design.md §4.1）。
+   * 上下文压缩档位。
    *
    * - undefined / 0 → live 全量渲染（默认）
    * - 1              → folded 折叠态
@@ -107,7 +104,7 @@ export interface BaseContextWindow {
   relevance?: ContextWindowRelevance;
   boundFormId?: string;
   /**
-   * P-window-state: 展示状态对象（viewport / lines / columns / transcriptViewport…）。
+   * 展示状态对象（viewport / lines / columns / transcriptViewport…）。
    * 与业务数据分离，由 readable 维度的 WindowMethod 读写、readable 函数读取，随 window
    * 持久化在 thread-context。缺省 = 无展示状态（按默认渲染）。
    */

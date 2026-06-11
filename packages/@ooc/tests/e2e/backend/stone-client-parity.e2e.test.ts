@@ -2,12 +2,10 @@
  * Stone client parity e2e — 验证 OOC dogfood "Object 自带 UI" 的承诺真正落地。
  *
  * 背景:
- *   Round 5 体验官报告 M-4: `/api/objects/stone/supervisor/client-source-url`
- *   一直返回 404, 因为没有任何 stone 真的写过 `client/index.tsx`. agent-native
- *   UI parity (meta/object.doc.ts:visible.children.stone_client) 处于 design-only.
+ *   `/api/objects/stone/supervisor/client-source-url` 一直返回 404, 因为没有任何
+ *   stone 真的写过 `client/index.tsx`. agent-native UI parity 处于 design-only.
  *
- *   Round 6 Batch B 给 supervisor stone 写了第一份真 client tsx, 把 dogfood 样例
- *   立起来. 本 e2e 拦截以下回归:
+ *   supervisor stone 写了第一份真 client tsx, 把 dogfood 样例立起来. 本 e2e 拦截以下回归:
  *     - 真 HTTP server 上 client-source-url 必须返回 200 + 路径
  *     - 路径必须可通过 `/@fs/` 风格 absPath 读到 tsx 源码 (用 fs 直接读, 不依赖 vite)
  *     - feedback-tracker (尚未写 client) 仍 404 — 作为"下一轮要补"的提醒
@@ -19,7 +17,7 @@
  *   - 真 Bun.spawn 启 backend, 与 route-audit 同款进程卫生.
  *   - SIGTERM + 1s 超时兜 SIGKILL; afterAll 必 kill, 不留 zombie.
  *
- * 进程卫生 (engineering.harness.doc.ts:patches.test_session_hygiene):
+ * 进程卫生:
  *   - session id 用 `_test_visible_<ts>` 前缀 (虽然本测试不创建 session, 维持约定).
  *   - 不污染 .ooc-world/flows/.
  *
@@ -143,14 +141,13 @@ afterAll(async () => {
 });
 
 describe("stone client parity (agent-native UI dogfood)", () => {
-  // L8 待办（client→visible 迁移 + supervisor builtin 化）：supervisor 已从 world stone
-  // 迁为 builtin object（packages/@ooc/builtins/supervisor/visible/index.tsx），不再物化到
+  // client→visible 迁移 + supervisor builtin 化：supervisor 已从 world stone 迁为
+  // builtin object（packages/@ooc/builtins/supervisor/visible/index.tsx），不再物化到
   // world。endpoint client-source-url 当前只解析 world stoneDir，对 builtin object 的
   // visible 解析（应 fallback 到 builtins package）尚未实现 → 返回 404。
-  // 这属 L8 visible 维度工作，不在 ooc-6（batch A-G + F3 恢复）scope。
-  // 待 L8 给 endpoint 加 builtin package visible fallback 后，去掉 .skip 恢复本 test
-  // （含其中的 Round 17 fsUrl 绝对路径 /@fs/ 回归 gate，line 内 absPath/fsUrl 断言）。
-  test.skip("supervisor stone 自带 client/index.tsx — endpoint 返回 200 + 真 tsx 源码 [L8: builtin visible 解析待实现]", async () => {
+  // 待 endpoint 加 builtin package visible fallback 后，去掉 .skip 恢复本 test
+  // （含其中的 fsUrl 绝对路径 /@fs/ 回归 gate，line 内 absPath/fsUrl 断言）。
+  test.skip("supervisor stone 自带 client/index.tsx — endpoint 返回 200 + 真 tsx 源码 [builtin visible 解析待实现]", async () => {
     if (!backend) throw new Error("backend not started");
 
     // 1) client-source-url endpoint 必须 200
@@ -162,7 +159,7 @@ describe("stone client parity (agent-native UI dogfood)", () => {
     expect(typeof body.fsUrl).toBe("string");
     expect(body.absPath!).toMatch(/supervisor[/\\]client[/\\]index\.tsx$/);
 
-    // === visible 渲染回归 gate (Round 17) ===
+    // === visible 渲染回归 gate ===
     // backend 以相对 `--world ./.ooc-world` 启动 (见 startBackend), config.baseDir
     // 必须已归一为绝对路径, 于是 fsUrl = `/@fs` + 绝对 absPath = `/@fs/...`。
     // 旧 bug: baseDir 取相对原值 → fsUrl = `/@fs.ooc-world/...`, vite `/@fs` 协议

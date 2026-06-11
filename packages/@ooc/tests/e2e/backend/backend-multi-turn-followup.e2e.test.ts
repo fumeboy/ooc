@@ -2,7 +2,6 @@
  * S3 — backend-multi-turn-followup
  *
  * 类别：多轮对话 — 验 cross-object talk 双写、talk_window 复用。
- * 详见 `docs/testing/oocable-codeagent-backend-e2e.md § S3`。
  */
 
 import { afterEach, beforeAll, describe, expect, it } from "bun:test";

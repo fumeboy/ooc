@@ -92,7 +92,7 @@ export const L1_STORIES: Story[] = [
     id: "L1-THREAD-CONTEXT",
     layer: "session",
     expectation: "同一 thread 下 thread-context.json 出现（contextWindows 唯一权威）",
-    design: "thinkable §10：contextWindows 权威落 thread-context.json，与 thread.json 分离。flow-thread-context.ts",
+    design: "thinkable：contextWindows 权威落 thread-context.json，与 thread.json 分离。flow-thread-context.ts",
     run: async ({ app, baseDir }) => {
       const sid = "sb-s-ctx";
       const target = "obj_ctx";
@@ -105,8 +105,8 @@ export const L1_STORIES: Story[] = [
   story({
     id: "L1-THREAD-NO-WINDOWS",
     layer: "session",
-    expectation: "thread.json 不含 contextWindows 字段（§10 退役，单点权威分离）",
-    design: "thinkable §10：thread.json 退役 contextWindows，避免与 thread-context.json 双写漂移。thread-json.ts",
+    expectation: "thread.json 不含 contextWindows 字段（退役，单点权威分离）",
+    design: "thinkable：thread.json 退役 contextWindows，避免与 thread-context.json 双写漂移。thread-json.ts",
     run: async ({ app, baseDir }) => {
       const sid = "sb-s-nowin";
       const target = "obj_nowin";

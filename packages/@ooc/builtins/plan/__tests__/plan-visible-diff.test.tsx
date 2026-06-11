@@ -1,7 +1,7 @@
 /**
  * plan-visible-diff.test — 迁移自 window-diff-renderers/PlanWindowDiff.test.ts（线 C cleanup）。
  *
- * 覆盖 step-level diff（design § 4.4）：
+ * 覆盖 step-level diff：
  *   - smoke: default export 是函数
  *   - Case 1: add step → 含 added
  *   - Case 2: remove step → 含 removed

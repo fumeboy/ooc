@@ -1,7 +1,7 @@
 /**
  * Stone identity 的 session-worktree 访问层（worktree 统一模型核心原语）。
  *
- * 设计见 docs/2026-06-09-remove-metaprog-unify-session-worktree-design.md §1bis（方案 A）：
+ * 方案 A：
  * - business flow session = 从 main 派生的 git worktree 分支 `session-<sid>`，物理落
  *   `flows/<sid>`（eager：session 创建即 worktree add 全量 checkout main），读写都指向它。
  *   运行时数据与 tracked stone 文件共存此目录，靠 main .gitignore 排除运行时产物。

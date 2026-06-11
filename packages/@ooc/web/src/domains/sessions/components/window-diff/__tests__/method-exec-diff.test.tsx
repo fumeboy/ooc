@@ -1,11 +1,11 @@
 /**
- * method-exec-diff.test — 迁移自 window-diff-renderers/OtherRenderers.test.ts（线 C cleanup）。
+ * method-exec-diff.test — 迁移自 window-diff-renderers/OtherRenderers.test.ts。
  *
  * 覆盖：
  *   - smoke: default export 是函数
  *   - Case 1: args 新增 key → added
  *   - Case 2: args 改值 → changed
- *   - Case 3: status 变 → changed (Round 13 四态机: open → failed)
+ *   - Case 3: status 变 → changed (四态机: open → failed)
  */
 
 import { describe, expect, it, test } from "bun:test";
@@ -33,7 +33,7 @@ describe("CommandExecDiff", () => {
     expect(countByStatus(tree, "changed")).toBeGreaterThanOrEqual(1);
   });
 
-  it("Case 3: status 变 → changed (Round 13 四态机: open → failed)", () => {
+  it("Case 3: status 变 → changed (四态机: open → failed)", () => {
     const tree = MethodExecDiff({
       previous: { class: "method_exec", method: "search", status: "open" },
       current: { class: "method_exec", method: "search", status: "failed" },

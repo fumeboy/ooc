@@ -1,5 +1,5 @@
 /**
- * ObjectRegistry —— 类型部分的 canonical 源已于 batch C7 迁入
+ * ObjectRegistry —— 类型部分的 canonical 源已迁入
  * `@ooc/core/_shared/types/registry.ts`；此处 re-export 保持旧 import 路径
  * (`executable/windows/_shared/registry`) 可用，并桥接 runtime 的可变状态部分。
  *

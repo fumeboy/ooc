@@ -1,11 +1,11 @@
 /**
- * P3/P4/P5 治理后端控制面端到端测试（app.handle）。
+ * 治理后端控制面端到端测试（app.handle）。
  *
  * 覆盖：
  * - GET  /api/runtime/pr-issues           list（reviewers/approvals/verdict 摘要）
  * - GET  /api/runtime/pr-issues/:id        get 全量（intent/diff/paths）；未知 → 404
  * - POST /api/runtime/pr-issues/:id/approve  reviewer 审批；非 reviewer → 409
- * - P5 闸：prAutoMerge=true → 全 approve 即合入；false → 待人工经 /resolve {merge} 落锤
+ * - 合入闸：prAutoMerge=true → 全 approve 即合入；false → 待人工经 /resolve {merge} 落锤
  *
  * 真实开 PR 走 createFeatBranchWorktree + 直接编辑 feat worktree + commitAndOpenPr（不 mock）。
  */
@@ -125,7 +125,7 @@ function mainSelf(baseDir: string, id: string): string {
   return join(baseDir, "stones", "main", "objects", id, "self.md");
 }
 
-describe("P4 list/get 端点", () => {
+describe("list/get 端点", () => {
   test("GET /pr-issues list 带 reviewers/approvals/verdict", async () => {
     const baseDir = await newWorld(["foo", "bob"], false);
     const app = await buildApp(baseDir);
@@ -163,7 +163,7 @@ describe("P4 list/get 端点", () => {
   });
 });
 
-describe("P3 approve + 校验", () => {
+describe("approve + 校验", () => {
   test("非 reviewer approve → 409", async () => {
     const baseDir = await newWorld(["foo", "bob"], false);
     const app = await buildApp(baseDir);
@@ -207,7 +207,7 @@ describe("P3 approve + 校验", () => {
   });
 });
 
-describe("P5 合入闸两态", () => {
+describe("合入闸两态", () => {
   test("auto（prAutoMerge=true）：全 approve → 立即合入 main", async () => {
     const baseDir = await newWorld(["foo", "bob"], true);
     const app = await buildApp(baseDir);

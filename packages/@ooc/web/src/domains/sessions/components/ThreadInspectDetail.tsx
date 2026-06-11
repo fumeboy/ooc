@@ -5,8 +5,6 @@
  * 展示该 thread 的 status / created / parent / talkPeers / shares 等信息，
  * 并嵌入 ThreadDetailTabs（Context Snapshot + Loop Timeline）作为深入入口。
  *
- * 设计参考: docs/2026-05-26-session-threads-index-design.md §6.3。
- *
  * 不允许"发消息"操作 — 那是 ChatPanel 的职责（仅 user.root 的 talk_window 可用）。
  */
 

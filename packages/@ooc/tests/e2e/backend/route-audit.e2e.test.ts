@@ -2,7 +2,7 @@
  * Route audit e2e — 拦截 "代码 OK 但真 HTTP server 404" 类假阳性 bug.
  *
  * 背景:
- *   Round 5 体验官 (docs/2026-05-25-round-5-experience-report.md C-1/C-2) 报告
+ *   体验官报告
  *   `POST .../permission` 与 `GET .../debug/loops` 在真 HTTP server 上 404,
  *   但 `app.handle(new Request(...))` 单测全部 PASS——典型的 "in-process e2e
  *   能过, 真 HTTP server 不过" 假阳性. 本 audit 故意走真子进程 + 真端口, 把
@@ -17,7 +17,7 @@
  *     用假参数填 path; 不期望业务 happy path 通过.
  *   - 错误打印: route + method + status + body 前 200 字, 不 silent-swallow.
  *
- * 进程卫生 (engineering.harness.doc.ts:patches.test_session_hygiene):
+ * 进程卫生:
  *   - 独立 mkdtempSync world, afterAll rm -rf
  *   - subprocess kill('SIGTERM') + wait, 不留 zombie
  *   - session id 用 `_test_route_audit_<ts>` 前缀
@@ -91,24 +91,24 @@ function buildRouteCases(): RouteCase[] {
     { name: "tree", method: "GET", path: "/api/tree?scope=world&path=" },
     { name: "tree.file", method: "GET", path: "/api/tree/file?path=nonexistent.md" },
 
-    // Thread-scoped — C-1 + C-2 直接受体, 必含
+    // Thread-scoped — 直接受体, 必含
     {
-      name: "C-2 runtime.debug.latest",
+      name: "runtime.debug.latest",
       method: "GET",
       path: `/api/runtime/flows/${sid}/${oid}/threads/${tid}/debug`,
     },
     {
-      name: "C-2 runtime.debug.loops.list",
+      name: "runtime.debug.loops.list",
       method: "GET",
       path: `/api/runtime/flows/${sid}/${oid}/threads/${tid}/debug/loops`,
     },
     {
-      name: "C-2 runtime.debug.loops.single",
+      name: "runtime.debug.loops.single",
       method: "GET",
       path: `/api/runtime/flows/${sid}/${oid}/threads/${tid}/debug/loops/1`,
     },
     {
-      name: "C-1 runtime.permission",
+      name: "runtime.permission",
       method: "POST",
       path: `/api/runtime/flows/${sid}/${oid}/threads/${tid}/permission`,
       body: { action: "approve" },
@@ -158,7 +158,7 @@ async function waitForReady(port: number, timeoutMs: number): Promise<void> {
 async function startBackend(): Promise<BackendHandle> {
   const baseDir = mkdtempSync(join(tmpdir(), "_test_route_audit_world_"));
   const port = await pickFreePort();
-  // 显式 NO_PROXY: 跨平台让 fetch 不走 Clash:7890 (体验官报告 § 环境校验).
+  // 显式 NO_PROXY: 跨平台让 fetch 不走 Clash:7890.
   // 注意: subprocess 也继承一份, 但 backend 本身不发外网请求, 主要保护 client fetch.
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),

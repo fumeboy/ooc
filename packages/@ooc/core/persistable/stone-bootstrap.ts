@@ -1,7 +1,7 @@
 /**
  * stones/ git 仓库 bootstrap —— 启动期一次性自检与初始化（bare repo + linked worktrees 模式）。
  *
- * 行为契约（详见 docs/plans/2026-05-20-001-feat-stones-git-versioning-plan.md U1）：
+ * 行为契约：
  *
  * 1. 旧布局自动迁移：若 `stones/` 下存在 `agent_of_*` / `supervisor` 等扁平
  *    Object 目录，自动 `mv` 到 `stones/main/` 内。

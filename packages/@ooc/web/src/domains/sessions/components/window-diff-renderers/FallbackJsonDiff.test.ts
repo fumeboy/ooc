@@ -1,7 +1,7 @@
 /**
- * FallbackJsonDiff.test — Round 10 F3.
+ * FallbackJsonDiff.test
  *
- * 覆盖 design § 5：通用 JSON tree diff（字段级 added / removed / changed / unchanged）。
+ * 覆盖通用 JSON tree diff（字段级 added / removed / changed / unchanged）。
  *
  * - Case 1: 嵌套 object 字段变化
  * - Case 2: added (previous undefined)

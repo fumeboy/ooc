@@ -1,7 +1,7 @@
 /**
  * L6 — Reflectable（super flow / evolve_self / memory）。
  * 自我迭代：业务 session 是运行时试验层（worktree，永不合入 main）；进 canonical 走
- * super flow evolve_self → feat-branch PR（地基不变量，2026-06-11）。
+ * super flow evolve_self → feat-branch PR（地基不变量）。
  * feat-branch PR 沉淀 / 多 reviewer / memory 由 super flow 编排，需 worker → skip 归 Tier B；
  * 但「业务 session worktree 隔离 + main 不被污染」可经 ensureSessionWorktree 确定性单测。
  */

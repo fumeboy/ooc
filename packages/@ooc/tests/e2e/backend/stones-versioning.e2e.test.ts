@@ -1,7 +1,7 @@
 /**
  * Stones git versioning e2e —— 端到端跑 reflectable 沉淀（feat-branch PR）→ 治理合入/驳回/回滚的协议。
  *
- * 地基不变量（2026-06-11，docs/2026-06-11-reflectable-feat-branch-pr-flow-design.md）：
+ * 地基不变量：
  * `session-<sid>` worktree 是纯运行时派生物，**永不合入 main**——旧 session→main 合入语义
  * （write_file → super flow evolve_self ff/PR 二元闸）已退役。沉淀进 canonical 走：
  * - super flow 内 `new_feat_branch(intent)` 开 feat 分支并绑定 thread → 普通 write_file 直接

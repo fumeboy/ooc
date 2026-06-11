@@ -139,8 +139,7 @@ function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
  * - sharing.kind === "lent_out" → 进 lentOut（我借出去；borrowerThreadId 来自 sharing）
  *
  * 注意：当前 SharingState（src/executable/windows/_shared/types.ts）**不持久化**
- * ownerObjectId / borrowerObjectId 字段 —— 它们是 design 预留位（design:
- * docs/2026-05-26-session-threads-index-design.md §4.1），实现里永远 undefined。
+ * ownerObjectId / borrowerObjectId 字段 —— 它们是 design 预留位，实现里永远 undefined。
  * 未来若 sharing 扩展，这里读出来即可。
  *
  * 退化：sharing 字段不存在 / shape 异常 → 跳过该 entry，不抛错。
@@ -365,7 +364,7 @@ export function createFlowsService(deps: {
     /**
      * 一次性 seed 一个 session：建 session + user flow object + 让 user 对 target 发起 talk。
      *
-     * collaborable § cross-object talk：web 用户创建 session 的入口，
+     * collaborable cross-object talk：web 用户创建 session 的入口，
      * 等价于 user 这个 flow object 用 talk method 调起对 target 的会话。
      *
      * 流程：
@@ -675,7 +674,6 @@ export function createFlowsService(deps: {
     /**
      * 列出 session 下所有 (objectId, threadId) + thread metadata + 4 种关系字段。
      *
-     * design: docs/2026-05-26-session-threads-index-design.md §4.1：
      * 在原 `{ objectId, threadId }` 基础上增加 status / createdAt / parent / creator /
      * childThreadIds / talkPeers / shares / isSuperFlow，让前端 SessionThreadsIndex
      * 能据此画分栏 + 关系，不再需要拉每个 thread 详情。
@@ -802,7 +800,7 @@ export function createFlowsService(deps: {
     /**
      * 控制面"用户回复"通道。
      *
-     * collaborable § cross-object talk：等价于 user 这个 flow object
+     * collaborable cross-object talk：等价于 user 这个 flow object
      * 在它的 root thread 上调 talk_window.say —— 通过 talk-delivery 把消息派送到 callee。
      *
      * 入参：

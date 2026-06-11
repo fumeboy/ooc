@@ -1,8 +1,5 @@
 /**
- * Permission 模型 (Q0b) — method 级三档准入控制。
- *
- * Design:        docs/2026-05-25-permission-model-design.md
- * Meta 概念:     meta/object.doc.ts:executable.children.permission
+ * Permission 模型 — method 级三档准入控制。
  *
  * 三档语义:
  * - "allow" → 直接执行 (默认)
@@ -79,7 +76,7 @@ interface PoliciesFile {
  * - methods 字段拼错或类型错 → {}
  * - 单个 method 的 level 不是合法 PermissionLevel → 跳过该项
  *
- * 永不抛错 (invariant #5)。
+ * 永不抛错。
  */
 export function loadPoliciesJson(thread: ThreadContext): Record<string, PermissionLevel> {
   if (!thread.persistence) return {};

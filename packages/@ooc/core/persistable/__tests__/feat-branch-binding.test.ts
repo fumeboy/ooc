@@ -1,5 +1,5 @@
 /**
- * feat-branch 绑定 + resolveStoneIdentityRef 覆盖优先 —— 集成测试（2026-06-11 改写）。
+ * feat-branch 绑定 + resolveStoneIdentityRef 覆盖优先 —— 集成测试。
  *
  * 用户拍板：不再封装 edits 参数。super(foo) ①new_feat_branch 开 feat 分支并把绑定
  * 落 thread.persistence.stonesBranch ②用普通 write_file / file_window.edit 直接编辑 feat

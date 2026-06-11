@@ -1,15 +1,15 @@
 /**
- * computeReviewerSet —— scope 冒泡算 reviewer 集（P2，决策 A：逐路径拥有者）。
+ * computeReviewerSet —— scope 冒泡算 reviewer 集（决策 A：逐路径拥有者）。
  *
  * reviewer 集 = {落在 author 子树 objects/<author>/**（含 children）之外的、每个被触及
- * 路径的拥有对象} ∪ {supervisor}。author 自己不作 reviewer（决策3）。
+ * 路径的拥有对象} ∪ {supervisor}。author 自己不作 reviewer。
  *
  * 纯函数，充分单测：纯 author 子树 / 触及别人 / 触及别人的 child / 混合 / nested author。
  */
 import { describe, expect, test } from "bun:test";
 import { computeReviewerSet, SUPERVISOR_OBJECT_ID } from "../stone-feat-branch";
 
-describe("computeReviewerSet (P2 决策A：逐路径拥有者冒泡)", () => {
+describe("computeReviewerSet (决策A：逐路径拥有者冒泡)", () => {
   test("全部落在 flat author 子树内 → reviewer = {supervisor}", () => {
     const r = computeReviewerSet(
       ["objects/foo/self.md", "objects/foo/executable/index.ts"],

@@ -1,7 +1,7 @@
 /**
- * window-hash 单测 — Round 9 E2 + Round 10 F2
+ * window-hash 单测
  *
- * 不变量验证清单（design § 6 + cookbook E2-1 测试清单 + Round 10 F2 fileDiff）：
+ * 不变量验证清单（fileDiff）：
  * 1. 同 window 两次 → 同 hash（确定性）
  * 2. 内容字段（如 file_window.path）变化 → 不同 hash
  * 3. 字段插入顺序变化 → 同 hash（sortedKeys 保护）
@@ -9,7 +9,7 @@
  * 5. compressLevel=1 vs 0 → 不同 hash
  * 6. buildWindowsSnapshot 多 window → 数组顺序与输入一致
  *
- * Round 10 F2 新增 fileDiff 用例（docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1）：
+ * fileDiff 用例：
  * 8. non-file window → 不含 fileDiff
  * 9. file_window 首次出现 → previousContent=""  + currentContent=正文
  * 10. file_window 内容变化 → previousContent=旧 + currentContent=新（核心 case）
@@ -151,7 +151,7 @@ describe("buildWindowsSnapshot — structure & ordering", () => {
   });
 });
 
-describe("buildWindowsSnapshot — fileDiff (Round 10 F2)", () => {
+describe("buildWindowsSnapshot — fileDiff", () => {
   let tempDir: string;
   let originalWarn: typeof console.warn;
   let warnCalls: string[];

@@ -11,7 +11,7 @@ import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**
- * Step 2 (spec 2026-05-14)：runOneExec 是 root.program 与 program_window.exec 共用的运行时。
+ * runOneExec 是 root.program 与 program_window.exec 共用的运行时。
  * 大量原本针对 executeProgramMethod 的"返回 string"断言都迁移到 runOneExec 上的 record.output。
  *
  * executeProgramMethod 现在的副作用是创建 program_window；保留少量集成型断言以验证 window 的产生。
@@ -84,7 +84,7 @@ describe("program runtime — runOneExec (shell)", () => {
         persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
       });
       const rec = await runOneExec(thread, { language: "shell", code: "echo \"$OOC_SELF_DIR\"" });
-      // business session → worktree object 目录（design §2 program shell 通道）。
+      // business session → worktree object 目录（program shell 通道）。
       expect(rec.output).toContain(`${tempRoot}/flows/s1/objects/agent`);
       expect(rec.output).toContain("[exit 0]");
     } finally {
@@ -161,7 +161,7 @@ describe("executeProgramMethod creates a program_window with first exec", () => 
       thread,
       args: { language: "shell", code: "echo hello" },
     });
-    // P6.§4-§5: root.program 是 constructor 委托——返回 {ok:true, window: programWindow}
+    // root.program 是 constructor 委托——返回 {ok:true, window: programWindow}
     expect(result).toBeDefined();
     expect(typeof result).toBe("object");
     const outcome = result as { ok: true; window: ProgramWindow };
@@ -176,7 +176,7 @@ describe("executeProgramMethod creates a program_window with first exec", () => 
   it("returns an error outcome when args are incomplete (manager keeps form executed)", async () => {
     const thread = makeThread({ id: "t" });
     const result = await executeProgramMethod({ thread, args: {} });
-    // P6.§4-§5: 缺参直接返回 {ok:false, error: string}（不再是直接 string）
+    // 缺参直接返回 {ok:false, error: string}（不再是直接 string）
     expect(typeof result).toBe("object");
     expect((result as { ok: false; error: string }).ok).toBe(false);
     expect((result as { ok: false; error: string }).error).toBeDefined();

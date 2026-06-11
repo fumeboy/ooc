@@ -8,7 +8,7 @@ import type { ThreadContext } from "@ooc/core/thinkable/context";
 import { scanPausedThreads, scanRunningThreads } from "./thread-query";
 
 /**
- * 回归 root cause（2026-05-27）：scanThreadsByStatus 旧实现只 readdir 一层
+ * 回归 root cause：scanThreadsByStatus 旧实现只 readdir 一层
  * `objects/`，不会进入 sub-object 目录（如 parent/child/threads/）。
  * 修复后 walker 递归任何深度，按 `.flow.json` 识别 flow object，按相对路径派生 objectId。
  */

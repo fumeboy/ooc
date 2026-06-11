@@ -1,7 +1,7 @@
 /**
  * Thread 初始化 helper — 给任何新建 thread 注入指向 creator 的初始 window。
  *
- * spec § 初始 creator 对话 window：每个 thread 启动时必有一条与创建方的恒在通道。
+ * 初始 creator 对话 window：每个 thread 启动时必有一条与创建方的恒在通道。
  *
  * Creator window 类型由 thread 本身决定，不再由调用方指定：
  * - thread.creatorObjectId === thread.persistence?.objectId（含两者都缺省）→ "do"
@@ -81,7 +81,7 @@ function isUserRootThread(thread: ThreadContext): boolean {
  * - thread.creatorObjectId（跨 object talk-delivery 总会设这条）
  *
  * 三者全无 → self-driven root，没有可指向的 creator，不应注入 phantom creator window。
- * spec 2026-05-17 § wait 校验：phantom creator do_window 会被 wait 误判为合法 IO 来源，
+ * wait 校验：phantom creator do_window 会被 wait 误判为合法 IO 来源，
  * 让 self-driven root 死锁——本函数从源头堵住。
  */
 function hasRealCreator(thread: ThreadContext, opts: InitContextWindowsOpts): boolean {
@@ -155,7 +155,7 @@ export function initContextWindows(
  * ooc-6 Object Unification —— 当 thread 持有方是某 Object 时，幂等注入一个 self window
  * 单例作为该 Object 的"自我门面"。
  *
- * 新设计（2026-06-01）：
+ * 新设计：
  * - window id = object id（不再经过 custom: 前缀包装）
  * - window type = object id（每个 object 注册自己的 type）
  * - 不再有 custom window wrapper
@@ -196,7 +196,7 @@ function injectSelfWindowIfObjectThread(thread: ThreadContext): void {
  * ooc-6 Peer First-Class Window —— 把同级 sibling 与直属 children peer Object
  * 作为真实可 exec 的 ContextWindow 注入 thread.contextWindows。
  *
- * 设计依据：object.doc.ts § thinkable.context.windows —— OOC Object 的 context
+ * 设计依据：OOC Object 的 context
  * 默认"身边"就是它的同级/子级 Object，这些 Object 应当以 first-class window
  * 形式存在，而不是仅作为渲染期派生的 observability mirror（_renderedWindows）。
  *

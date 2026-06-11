@@ -1,7 +1,7 @@
 /**
- * R0b 单测: list-loops endpoint (GET .../debug/loops).
+ * 单测: list-loops endpoint (GET .../debug/loops).
  *
- * 4 用例 (plan §5.1 验收 + AgentOfObservable 派单要求):
+ * 4 用例（验收）:
  *   1. debug 目录不存在 → 200 + { loops: [] }
  *   2. debug 目录存在但无 loop_*.json → 200 + { loops: [] }
  *   3. 多个 loop, 部分仅 meta, 部分齐全 → 升序数组, flag 正确, meta 回填

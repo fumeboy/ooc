@@ -6,7 +6,7 @@ import { clearWorldConfigCache, WORLD_CONFIG_FILENAME } from "@ooc/core/persista
 import { readServerConfig } from "../config";
 
 describe("readServerConfig: baseDir 归一为绝对路径", () => {
-  // 根因 #1 (Round 17): 相对 `--world ./.ooc-world` 不归一会让下游
+  // 相对 `--world ./.ooc-world` 不归一会让下游
   // client-source-url 产坏 `/@fs.ooc-world/...`。config 边界必须 path.resolve。
   test("relative --world is resolved to absolute", async () => {
     const cfg = await readServerConfig({ env: {}, argv: ["--world", "./.ooc-world"] });

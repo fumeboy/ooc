@@ -5,7 +5,7 @@
  * - 不引入 git npm 依赖；用 `Bun.spawnSync` 同步调用 git CLI（与 fs-search /
  *   `packages/@ooc/builtins/program/executable/shell.ts` 同款）
  * - 每个函数 cwd 参数化；不修改 git 全局 config（commit author 走 per-call `-c` 注入）
- * - 失败永远返回 `{ ok: false, code, stderr }`，不抛错（`docs/solutions/conventions/llm-tool-handlers-fail-loud-2026-05-15.md`）
+ * - 失败永远返回 `{ ok: false, code, stderr }`，不抛错
  * - 严格输入校验：branch / path / objectId 等 user-controlled string reject
  *   `..`、控制字符、空字符串、过长、非法字符
  *

@@ -1,8 +1,6 @@
 /**
  * ContextWindow 抽象 — 取代旧的 ActiveForm + thread.windows + pinnedKnowledge 三套并列概念。
  *
- * 设计依据：docs/superpowers/specs/2026-05-14-context-window-unification-design.md
- *
  * 核心思想：
  * - 一个 thread 持有一组 ContextWindow（flat 数组，层级通过 parentWindowId 表达）
  * - 每个 window 都是"持续占 context 的实体"，对 LLM 而言行为一致：通过 3 原语 exec /
@@ -10,7 +8,7 @@
  *   是 MethodExecWindow 上注册的命令，与其它 window 命令同构）
  * - 各 window type 通过 ObjectRegistry（registry.ts）声明自身注册的 method、关闭副作用与渲染规则
  *
- * **batch C6 分层（2026-06-05 ooc-6）**：
+ * **分层**：
  * - base 部分（BaseContextWindow / string / WindowStatus / provenance / relevance /
  *   SharingState / 常量 / id 工具函数）的 canonical 源已迁入零依赖层
  *   `@ooc/core/_shared/types/context-window.ts`；本文件 re-export 它们保持旧 import 路径可用。
@@ -19,8 +17,8 @@
  *   **覆盖** base 版同名 `ContextWindow` export。
  * - 需要 discriminant narrowing 的调用方从本文件引；只读 base 字段的调用方可从 `_shared` 引。
  *
- * 2026-06-10: ContextObject 正名为 ContextWindow（"context window"=展示单元，"Object"=OOP 实体）；
- * 2026-06-11 删除 deprecated 别名，全仓统一 ContextWindow。
+ * ContextObject 正名为 ContextWindow（"context window"=展示单元，"Object"=OOP 实体）；
+ * 已删除 deprecated 别名，全仓统一 ContextWindow。
  */
 
 // base 类型 / 常量 / 工具函数：从 _shared re-export（ContextWindow 除外——下方覆盖）

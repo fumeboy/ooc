@@ -1,5 +1,5 @@
 /**
- * Tests for scripts/migrate-state-context-split.ts (P6.§6 dual migration).
+ * Tests for scripts/migrate-state-context-split.ts (dual migration).
  *
  * Spawns the migration as a child bun process against a synthesized legacy
  * world tree, then asserts the on-disk shape afterwards. We don't import the

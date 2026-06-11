@@ -1,11 +1,11 @@
 /**
- * LoopDiffView.expand.test — Round 14 H1 防回归。
+ * LoopDiffView.expand.test — 防回归。
  *
- * 体验官 Round 14 报告抓到的 critical bug: LoopDiffView.tsx useEffect 把 detailsLoading
+ * critical bug: LoopDiffView.tsx useEffect 把 detailsLoading
  * 既写又放在 deps array → effect 自触发自己的 cleanup (cancelled=true) → finally 内
  * setDetailsLoading(false) 不执行 → 非 file 类型 row 展开后永远显示 "Loading…"。
  *
- * Round 10 的 *.test.ts mock fetch 同步返回掩盖了 self-cancel 行为；本 test 必须
+ * mock fetch 同步返回会掩盖 self-cancel 行为；本 test 必须
  * **真异步** (await Promise.resolve / microtask flush) 才能复现 + 防回归。
  *
  * 覆盖策略：
@@ -22,13 +22,13 @@
  *
  * 不覆盖（受限于无 DOM / 无 RTL）：
  *   - 完整 LoopDiffView 组件 mount + 点击 + DOM 断言 → 已交给 Playwright e2e
- *     (体验官报告建议 #1 列入 e2e 场景)。本单测只兜底 useEffect 内核逻辑。
+ *     场景。本单测只兜底 useEffect 内核逻辑。
  */
 
 import { describe, expect, it } from "bun:test";
 import { fetchLoopInputsForDiff } from "../LoopDiffView";
 
-describe("Round 14 H1 — fetchLoopInputsForDiff 真异步覆盖", () => {
+describe("fetchLoopInputsForDiff 真异步覆盖", () => {
   it("Case 1: needsCurrent + needsPrevious → 调 fetcher 2 次，result 同时含 current/previous", async () => {
     const calls: number[] = [];
     const fetchLoop = async (loopIdx: number): Promise<unknown> => {
@@ -127,7 +127,7 @@ describe("Round 14 H1 — fetchLoopInputsForDiff 真异步覆盖", () => {
   });
 
   it("Case 6: 关键防回归 — fetcher 真异步多 microtask + 多次循环不会卡死 / 不会丢 result", async () => {
-    // 模拟 R10 单测 mock 同步返回的对照: 这里强制 fetcher await 多次。
+    // 对照 mock 同步返回的情形: 这里强制 fetcher await 多次。
     // 如果 effect 重入或者 self-cancel 又 introduced, helper 一旦被串行调用会暴露顺序问题。
     const fetchLoop = async (loopIdx: number): Promise<unknown> => {
       await Promise.resolve();
@@ -163,7 +163,7 @@ describe("Round 14 H1 — fetchLoopInputsForDiff 真异步覆盖", () => {
   });
 });
 
-describe("Round 14 H1 — file_window 短路保护 (静态源码断言)", () => {
+describe("file_window 短路保护 (静态源码断言)", () => {
   it("Case 7: LoopDiffView 源码保留 file_window fileDiff 短路分支 (不走 fetch effect)", async () => {
     // 用静态 import 加载源码 (bun 支持 .text 风格)；这里改用 fs 读
     const fs = await import("node:fs");
@@ -180,7 +180,7 @@ describe("Round 14 H1 — file_window 短路保护 (静态源码断言)", () => 
     expect(effectDepsMatch).not.toBeNull();
     if (effectDepsMatch) {
       const depsBody = effectDepsMatch[1];
-      // 不能含 detailsLoading (这是 Round 14 H1 修复的核心) — 否则 self-cancel 回归
+      // 不能含 detailsLoading (这是修复的核心) — 否则 self-cancel 回归
       expect(depsBody.includes("detailsLoading")).toBe(false);
     }
     // 必须用 inFlightRef 替代防重入 (语义更明确)

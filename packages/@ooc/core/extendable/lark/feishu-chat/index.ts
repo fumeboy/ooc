@@ -13,7 +13,7 @@
  * - 创建群 / 加成员 / 撤回消息（走 raw `lark-cli api` 临时，不上升为 first-class method）
  * - 跨群转发（由 feishu_doc.attach_to_chat 等做引用，群聊 send 不直接搬内容）
  *
- * 鉴权：默认 send/reply 用 `--as bot`（supervisor 决策 §七.2），其它命令用 user。
+ * 鉴权：默认 send/reply 用 `--as bot`（supervisor 决策），其它命令用 user。
  */
 
 import type {

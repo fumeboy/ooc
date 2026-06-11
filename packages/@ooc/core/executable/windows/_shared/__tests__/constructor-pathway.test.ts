@@ -1,7 +1,7 @@
 /**
- * P6.§6/§7/§8 (2026-06-02) — Constructor pathway end-to-end integration test.
+ * Constructor pathway end-to-end integration test.
  *
- * Verifies the §1-§9 contract holds across persistence + dispatch:
+ * Verifies the constructor contract holds across persistence + dispatch:
  *   1. Builtin feature constructor (talk) → object inlined into thread-context.json,
  *      NO independent `<oid>/` dir, parent state.json has no contextWindows.
  *   2. Independent flow object constructor (plan) → own dir with `.flow.json:class === "plan"`
@@ -65,7 +65,7 @@ async function waitFor(check: () => Promise<boolean>, attempts = 40, delayMs = 2
   }
 }
 
-describe("P6 constructor pathway integration (§6/§7/§8)", () => {
+describe("constructor pathway integration", () => {
   let baseDir: string;
   let persistence: ThreadPersistenceRef;
   let thread: ThreadContext;
@@ -353,10 +353,10 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
     expect(entry!.entry.kind).toBeUndefined(); // root.talk is the delegator (not kind="constructor"; that's on the talk type)
 
     // 3. End-to-end dispatch via openMethodExec on a stub-typed parent — verifies the wiring reaches
-    //    submit(). With the current §3 strict-equality guard, manager will fail the form with a
+    //    submit(). With the current strict-equality guard, manager will fail the form with a
     //    [method-error] outcome (declaringType "root" !== parent.class stub). This still proves the
-    //    dispatch lookup walked the chain successfully; the failure surface is the §3 guard, not the
-    //    chain walk. If §3 relaxes to "in chain" semantics (per plan §3 wording), this test should
+    //    dispatch lookup walked the chain successfully; the failure surface is the guard, not the
+    //    chain walk. If the guard relaxes to "in chain" semantics, this test should
     //    flip to expect autoSubmitted result without the [method-error] prefix.
     const stubParent = {
       id: `w_stub_${Date.now()}`,
@@ -376,7 +376,7 @@ describe("P6 constructor pathway integration (§6/§7/§8)", () => {
       args: { target: "peer_alice", title: "stub-to-alice" },
     });
     // openMethodExec already validated lookup succeeded (would throw otherwise) → chain walk worked.
-    // submit's §3 guard then either lets it through (after a §3 relaxation) or fails with [method-error].
+    // submit's guard then either lets it through (after a relaxation) or fails with [method-error].
     expect(opened.formId).toBeDefined();
   });
 

@@ -1,9 +1,7 @@
 /**
  * Frontend e2e fixture — 共享给 `tests/e2e/frontend/*.spec.ts`。
  *
- * 详见 `docs/testing/strategy.md` 与 `docs/testing/oocable-codeagent-frontend-e2e.md`。
- *
- * 启动模型（spec § 启动模型）：
+ * 启动模型：
  * 1. spawn 后端：bun packages/@ooc/core/app/server/index.ts --world <mkdtemp>，端口 OOC_APP_PORT=<random>
  * 2. spawn Vite dev：bun run --cwd packages/@ooc/web dev --port <random>，注 OOC_API_TARGET 指向后端
  * 3. test.extend 把 baseURL / baseDir 注入到每个 spec
@@ -343,7 +341,7 @@ export async function createSessionVia(
 /**
  * 等 ChatPanel 的 .chat-timeline 出现一条新的 assistant 消息（超过 since 之前的数量）。
  *
- * 真实 DOM（Round 17 后）：
+ * 真实 DOM：
  *   .chat-timeline > .tui-thread > .tui-block.tui-{user|assistant|tool|notice}
  * 详见 web/src/domains/chat/components/{ChatPanel,ThreadTimeline,TuiBlock}.tsx。
  * 这里专挑 `.tui-assistant` 作为"assistant 回复"信号。

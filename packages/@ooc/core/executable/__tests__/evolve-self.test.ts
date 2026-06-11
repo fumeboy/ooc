@@ -1,7 +1,7 @@
 /**
  * reflectable 沉淀 finalizer 全链 —— new_feat_branch + 直接编辑 + evolve_self 端到端验证。
  *
- * 地基不变量（2026-06-11）：`session-<sid>` worktree 永不合入 main；沉淀走 feat 分支 → PR。
+ * 地基不变量：`session-<sid>` worktree 永不合入 main；沉淀走 feat 分支 → PR。
  * 用户拍板：不封装 edits 参数——super(foo) 开 feat 分支后用**普通 write_file** 直接编辑 feat
  * worktree 下文件（thread 携 feat 绑定，resolveStoneIdentityRef 覆盖优先路由），evolve_self
  * 是 finalizer（commit + 开 PR + 清绑定）。

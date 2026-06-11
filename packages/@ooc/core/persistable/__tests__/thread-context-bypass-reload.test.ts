@@ -1,5 +1,5 @@
 /**
- * §10 reload 回归 — 验证「绕过 WindowManager 直接改 thread.contextWindows 再 writeThread」
+ * reload 回归 — 验证「绕过 WindowManager 直接改 thread.contextWindows 再 writeThread」
  * 的写路径，在 thread.json.contextWindows **退役** + hydrate legacy fallback **删除** 后仍正确。
  *
  * 机制核心（方案 B）：writeThread 是唯一持久化入口，单点刷 thread-context.json
@@ -33,7 +33,7 @@ import { createObjectRegistry } from "../../runtime/object-registry";
 import type { ContextWindow, TalkWindow } from "../../executable/windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
 
-describe("§10 thread-context bypass reload regression", () => {
+describe("thread-context bypass reload regression", () => {
   let baseDir: string;
 
   beforeEach(async () => {

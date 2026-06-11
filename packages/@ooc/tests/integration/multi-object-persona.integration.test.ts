@@ -6,7 +6,7 @@
  * 摘要中复述一个独特 token；分别跑各自 root thread，看落盘的 endSummary 与
  * debug/llm.input.json 是否携带了对应身份信号。
  *
- * 评分（per meta/engineering/how_to_test/strategy.md §2）：
+ * 评分：
  *
  * | 档 | 条件 |
  * |---|---|
@@ -17,7 +17,7 @@
  * | Bad  | 任一 thread 未到 done / 任一 endSummary 不含自己的 token / 出现身份串台
  *         （alice 的输出含 bob 的 token 或反之） |
  *
- * 重试政策遵循 strategy.md §5：单次 Bad 即记失败；OK 多发是黄信号。
+ * 重试政策：单次 Bad 即记失败；OK 多发是黄信号。
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
@@ -94,7 +94,7 @@ describe.skipIf(!hasLlmEnv)("integration: multi-object-persona", () => {
     expect(bobThread.endSummary ?? "").not.toContain("ALICE-TOKEN-7421");
 
     // 5) 机制断言：debug/llm.input.json 第 0 个 system message 含 <self object_id>
-    //    缺失则降为 OK 档：测试 stdout 打 hint，不 fail——遵循 strategy.md §5
+    //    缺失则降为 OK 档：测试 stdout 打 hint，不 fail
     //    "OK 不等于放行，OK 是需要趋势观察的状态"
     const aliceMarker = await readSelfMarker(tempRoot, "alice");
     const bobMarker = await readSelfMarker(tempRoot, "bob");

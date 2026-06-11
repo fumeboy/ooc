@@ -8,7 +8,7 @@ import { readThread, nestedObjectPath } from "@ooc/core/persistable";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 /**
- * Resume 编排回归（2026-06-06 修「pause 后 resume 100% 崩溃」）。
+ * Resume 编排回归（修「pause 后 resume 100% 崩溃」）。
  *
  * 旧 bug：编排层在入队 resume-thread job 前先 writeThread(applyResumeTransition) 把
  * paused→running 落盘；job handler(resume.ts) readThread 后断言 canResumeThread(=paused)

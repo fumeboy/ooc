@@ -1,5 +1,5 @@
 /**
- * Round 6 Batch A — M-3 filter test
+ * 非 stone object id 过滤 test
  *
  * 验证 `user` / `main` / 空串等非 stone object id 被前置过滤,
  * 不会触发 /api/stones/<id>/self 请求 → console.warn 一次 → fetchSelfFirstLine
@@ -12,7 +12,7 @@ import {
   __resetDisplayNameCacheForTest,
 } from "./query";
 
-describe("M-3 non-stone object id filter", () => {
+describe("non-stone object id filter", () => {
   beforeEach(() => {
     __resetDisplayNameCacheForTest();
   });

@@ -1,5 +1,5 @@
 /**
- * Round 7 B5 — plan_window 数据层渲染单测。
+ * plan_window 数据层渲染单测。
  *
  * 不依赖 ContextSnapshotViewer.tsx（其依赖 MarkdownContent → rehype-raw，
  * 当前环境网络受限缺包；纯数据层独立可测）：
@@ -10,7 +10,7 @@
  * - 因此对 buildContextTree(snapshot) 验证 node.badge / summary / charCount /
  *   data.window 字段保留即等价于验证 ContextSnapshotViewer 能正确渲染。
  *
- * 共 3 用例（与 B5-6 要求对齐）：
+ * 共 3 用例：
  *   1. plan_window with steps → 树/详情数据正确
  *   2. plan_window with subPlanWindowId → sub plan 反向链字段保留
  *   3. plan_window with compressLevel=1 → fallback render 不崩（type union 兼容）

@@ -35,7 +35,7 @@ export type RuntimeJobRunner = (job: RuntimeJob, config: ServerConfig) => Promis
  * 约定值：user 是 web session 中的特殊 flow object，由控制面（人类）驱动；
  * worker 跳过它，让任何针对 user object 的 thread 都不被 LLM 调度。
  *
- * collaborable § cross-object talk。
+ * collaborable cross-object talk。
  */
 const USER_OBJECT_ID = "user";
 

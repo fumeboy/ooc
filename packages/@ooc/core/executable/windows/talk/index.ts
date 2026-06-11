@@ -1,7 +1,7 @@
 /**
  * talk_window — 与另一个 flow object 的某条 thread 持续会话。
  *
- * collaborable § cross-object talk（spec 2026-05-15）：
+ * collaborable cross-object talk：
  * - 注册的 method：say / wait / close
  * - say：通过 talk-delivery 把消息派送到 target object 的 callee thread；同时记入本 thread.outbox
  * - wait：父线程进 status=waiting + inboxSnapshotAtWait 写入
@@ -38,7 +38,7 @@ import type { TalkWindow } from "./types.js";
  * - outbox 上 windowId === self.id（self 在该 window say 时打的标记）
  * - inbox 上 replyToWindowId === self.id（对端回信的路由标记）
  *
- * spec § ThreadMessage 字段扩展。
+ * ThreadMessage 字段扩展。
  */
 export function filterMessagesForTalkWindow(window: TalkWindow, thread: ThreadContext): ThreadMessage[] {
   const messages: ThreadMessage[] = [];
@@ -115,7 +115,7 @@ const TALK_RECENT_COUNT = 2;
 const TALK_MESSAGE_TRUNCATE = 200;
 
 /**
- * talk_window 的 compressView hook（design §4.1）。
+ * talk_window 的 compressView hook。
  *
  * - Level 1 (folded):  peer + total_messages + 最近 2 条消息(各截断到 200 字)
  * - Level 2 (snapshot): peer + total_messages
@@ -192,7 +192,7 @@ function deriveTalkTitle(raw: string, max = 60): string {
 }
 
 /**
- * P6.§4-§5 constructor —— 创建 talk_window。
+ * constructor —— 创建 talk_window。
  *
  * 行为:
  *  - 校验 target / title 必填

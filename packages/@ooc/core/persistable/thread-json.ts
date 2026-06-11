@@ -249,7 +249,7 @@ export async function readThread(
         `[readThread] 读取 context.json registry 失败（不阻塞）: ${(e as Error).message}`,
       );
     }
-    // 兜底：缺 creator window 时补一个（spec § 初始 creator 对话 window）
+    // 兜底：缺 creator window 时补一个（初始 creator 对话 window）
     initContextWindows(restored, {
       creatorThreadId: restored.creatorThreadId,
       initialTaskTitle: `thread ${restored.id}`,

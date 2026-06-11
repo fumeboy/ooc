@@ -194,12 +194,12 @@ describe("observable persistable debug files", () => {
     expect(loopMeta.loopIndex).toBe(1);
     expect(loopMeta.status).toBe("ok");
     expect(loopMeta.messageCount).toBe(1);
-    // Round 9 E2: 即使 contextWindows 为空也应写一个空数组（buildWindowsSnapshot([]) → []）
+    // 即使 contextWindows 为空也应写一个空数组（buildWindowsSnapshot([]) → []）
     expect(Array.isArray(loopMeta.windowsSnapshot)).toBe(true);
     expect(loopMeta.windowsSnapshot).toHaveLength(0);
   });
 
-  it("writes windowsSnapshot with content hashes across loops (Round 9 E2)", async () => {
+  it("writes windowsSnapshot with content hashes across loops", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-observable-snap-"));
     const flowRef = await createFlowObject({
       baseDir: tempRoot,
@@ -273,7 +273,7 @@ describe("observable persistable debug files", () => {
     void hashB1;
   });
 
-  it("populates fileDiff with previousContent/currentContent across loops (Round 10 F2)", async () => {
+  it("populates fileDiff with previousContent/currentContent across loops", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-observable-filediff-"));
     const flowRef = await createFlowObject({
       baseDir: tempRoot,

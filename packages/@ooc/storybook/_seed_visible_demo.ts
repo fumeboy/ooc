@@ -87,7 +87,7 @@ async function main() {
   } else {
     // 从 sb_demo thread 上拿 talk window 的 id（window id = talk_window id，用于
     // formatter 把 outbox 消息映射到 target）。
-    // §10：contextWindows 已迁出 thread.json → 读 thread-context.json（talk 是 builtin
+    // contextWindows 已迁出 thread.json → 读 thread-context.json（talk 是 builtin
     // feature，完整 inline，含 id/type）。
     const sbThread = JSON.parse(await readFile(join(sbThreadDir, "thread.json"), "utf8"));
     let sbContextWindows: any[] = [];

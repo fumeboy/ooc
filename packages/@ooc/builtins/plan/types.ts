@@ -3,7 +3,6 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
 /**
  * Plan window — 行动计划窗口（first-class ContextWindow）。
  *
- * design: docs/2026-05-26-remove-issue-add-subplan-design.md §3
  * - 以前是 thread.plan 字符串字段；现在升格为 ContextWindow
  * - 支持 sub plan 嵌套（expand_step 自动创建 child plan_window）
  * - 复用 do_window.move sharing 协议跨 thread 共享（不发明新机制）

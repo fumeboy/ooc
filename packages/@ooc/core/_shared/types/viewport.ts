@@ -9,9 +9,6 @@
  * 不含 runtime 执行入口：`executeWindowSetViewport` /
  * `executeWindowSetTranscriptViewport` 依赖 `MethodExecutionContext` 且对
  * `ctx.self` 写副作用，留在 `executable/windows/_shared/{viewport,transcript-viewport}.ts`。
- *
- * 详见 docs/refactor_0604/shared-types.md §3.8、
- * meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
 
 // ─────────────────────────── file / knowledge viewport ───────────────────────

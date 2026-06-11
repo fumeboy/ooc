@@ -1,7 +1,7 @@
 /**
  * Frontend e2e — Object Client Renderer
  *
- * 覆盖 plan §7 完成判据 1-6（除 2/3/4 真 LLM 路径外）：
+ * 覆盖完成判据 1-6（除 2/3/4 真 LLM 路径外）：
  * - FC1: 没写 client (stone scope) → StoneFallback 名片 (Identity / About / Entry points)
  * - FC2: 写了正常的 stone client → 渲染按钮，callMethod 命中 for_ui_access 方法 data 显示
  * - FC3: 写了会抛错的 client → 红色错误块带堆栈，且不发任何 talk 请求

@@ -4,7 +4,7 @@ import type { TranscriptViewport } from "../_shared/transcript-viewport.js";
 /**
  * Talk window — 与另一个 flow object 的某条 thread 保持持续会话。
  *
- * collaborable § cross-object talk（spec 2026-05-15）：
+ * collaborable cross-object talk：
  * - target：目标 flow object 的 objectId；user 也是一个 flow object，写作 "user"
  * - targetThreadId：会话对端 thread id；首次 say 时由 talk-delivery 创建并回填
  * - conversationId：同 target 多窗口区分；当前固定等于 windowId

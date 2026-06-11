@@ -1,13 +1,12 @@
 /**
- * flows-worktree-migration —— 方案 A 真实-world 集成实测
- * （docs/2026-06-09-remove-metaprog-unify-session-worktree-design.md §1bis）。
+ * flows-worktree-migration —— 方案 A 真实-world 集成实测。
  *
  * 验证 session worktree 物理布局从 `stones/session-<sid>` 迁到 `flows/<sid>`、改 eager、
  * 运行时文件由 main 根 .gitignore 排除 的端到端正确性。单测 PASS≠真路由通——本测试
  * 走真实 bootstrap + ensureSessionWorktree + write_file(builtin) 链路，断言落点/排除/
  * 写路由（gate 5 的 a/b/c）。
  *
- * 地基不变量（2026-06-11）：`session-<sid>` worktree 是纯运行时派生物，**永不合入 main**
+ * 地基不变量：`session-<sid>` worktree 是纯运行时派生物，**永不合入 main**
  * （旧 evolveSelfMerge session→main 合入已退役）。session 编辑停在 worktree；进 canonical
  * 走 reflectable feat-branch PR（见 stone-feat-branch.test）。本测试 (c) 后断言「main 不变」。
  */

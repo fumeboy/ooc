@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 describe("createStoneObject", () => {
-  test("creates minimal visible skeleton: package.json + self.md + readable.md (2026-06-03 ooc-6)", async () => {
+  test("creates minimal visible skeleton: package.json + self.md + readable.md", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 

@@ -1,8 +1,6 @@
 /**
  * RelationOverlay — 选中某 thread 时画出与其它 thread 的关系连线。
  *
- * 设计参考: docs/2026-05-26-session-threads-index-design.md §5.4。
- *
  * 关系视觉：
  *   - creator/parent   — 蓝色 solid + arrow (child → parent)
  *   - talk peer        — 绿色 dashed + arrow (caller → callee)

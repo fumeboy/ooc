@@ -1,7 +1,7 @@
 /**
  * talk-diff.test — 迁移自 window-diff-renderers/TalkWindowDiff.test.ts（线 C cleanup）。
  *
- * 覆盖 transcript-level diff（design § 4.2）：
+ * 覆盖 transcript-level diff：
  *   - smoke: default export 是函数
  *   - Case 1: 新消息（current 多 1 → added）
  *   - Case 2: 删消息（previous 多 1 → removed）

@@ -6,7 +6,7 @@
  * super-alice 在 flows/super/objects/alice/ 下被创建并运行，
  * LLM 看到 reflectable knowledge 提示后正常 end。
  *
- * 评分（per meta/engineering/how_to_test/strategy.md §2）：
+ * 评分：
  *
  * | 档 | 条件 |
  * |---|---|

@@ -10,7 +10,7 @@ export function fetchThread(sessionId: string, objectId: string, threadId = "roo
 /**
  * 控制面"用户回复"通道。
  *
- * collaborable § cross-object talk：固定走 user.root.talk_window；
+ * collaborable cross-object talk：固定走 user.root.talk_window；
  * 后端找不到 talk_window 时返回 NOT_FOUND。targetWindowId 缺省时取首个非 creator
  * talk_window；若 user.root 上有多个 talk 主题，UI 应显式传 targetWindowId。
  */

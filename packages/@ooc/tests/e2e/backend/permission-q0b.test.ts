@@ -1,10 +1,7 @@
 /**
  * Q0b — permission 模型最小闭环 e2e (AgentOfExecutable + AgentOfObservable)。
  *
- * Design: docs/2026-05-25-permission-model-design.md
- * Meta:   meta/object.doc.ts:executable.children.permission
- *
- * 本轮 (Q0b) 验证 Allow + Deny 两条路径完整, Ask 路径仅落 paused 占位
+ * 本轮验证 Allow + Deny 两条路径完整, Ask 路径仅落 paused 占位
  * (approve/reject API 是 Q0c 的活)。
  *
  * 不走真 LLM: 直接调 think() 并 mock LlmClient 模拟 LLM 行为, 完整覆盖:
@@ -82,7 +79,7 @@ function makeLlmClient(result: LlmGenerateResult): LlmClient {
  */
 /**
  * policies.json 的物理落点必须与 loadPoliciesJson 一致——后者走
- * `stoneDir(deriveStoneFromThread(persistence))`。M2 (2026-06-03) canonical 布局后该路径
+ * `stoneDir(deriveStoneFromThread(persistence))`。canonical 布局后该路径
  * 是 flat `stones/<objectId>/config/policies.json`（非旧 `stones/main/objects/<id>/`），
  * 故直接用 stoneDir 推算，避免再次硬编码旧布局漂移。
  */

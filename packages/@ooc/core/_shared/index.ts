@@ -12,8 +12,6 @@
  * - 不 IO：禁 `node:fs`；`process.cwd()` 之类全局状态读取留在调用方
  * - 只放 interface / type / 无状态常量 / 纯函数
  *
- * 详见 docs/refactor_0604/shared-types.md。
- *
  * barrel：每加一个 types/utils 文件就在此 re-export。
  */
 

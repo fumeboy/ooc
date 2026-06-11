@@ -1,5 +1,5 @@
 /**
- * fs-search.test — U1 ~ U6 of feat-fs-search-codeagent-parity plan.
+ * fs-search.test — fs search codeagent parity.
  *
  * Each section is gated by a top-level describe to keep the file scannable:
  * - U1: SearchWindow type + render + close
@@ -158,9 +158,6 @@ describe("U1: SearchWindow type + render", () => {
   });
 
 });
-
-// ---------- U2 / U3 / U4 / U5 / U6 placeholders (filled in subsequent units) ----------
-// U2-U6 tests will be appended as those units land; this file owns the entire feature group.
 
 // shared fixture utilities for later units
 let TEMP = "";
@@ -412,7 +409,7 @@ describe("U3: root.write_file", () => {
     const out = JSON.parse(await dispatchWriteFile(thread, { path, content: "new content" }));
     expect(out.ok).toBe(true);
     expect(out.executed).toBe(true);
-    // P6.§4-§5: hint 不再嵌在 submit result 字符串里（result = constructor placeholder），
+    // hint 不再嵌在 submit result 字符串里（result = constructor placeholder），
     // 改由 file constructor 注入到 thread.events，作为 inject 类型 context_change 事件。
     const hintEvent = thread.events.find(
       (e) =>
@@ -718,10 +715,10 @@ describe("U5: root.grep", () => {
     expect(sw.truncated).toBe(false);
   });
 
-  // 2026-05-20 用户反馈: chat panel 上 link-btn 跳转无效, 因为 form 在 auto-submit 后 executed,
+  // 用户反馈: chat panel 上 link-btn 跳转无效, 因为 form 在 auto-submit 后 executed,
   // 仅有 form_id 找不到 ContextTree 节点. 修复让 open auto-submit / submit 都在 output 暴露
   // 派生的 sub-window id (window_id), 让 link-btn 跳到真正仍在 context 的 search_window 等.
-  it("output.window_id 指向 auto-submit 派生的 search_window (link-btn 修复 2026-05-20)", async () => {
+  it("output.window_id 指向 auto-submit 派生的 search_window (link-btn 修复)", async () => {
     const dir = await makeGrepFixtureDir("grep-link-fix", { "a.ts": "needle here\n" });
     const thread = makeThread({ id: "t_grep_link_fix" });
     const rawOutput = await dispatchGrep(thread, { pattern: "needle", path: dir });

@@ -27,7 +27,7 @@
  *
  * URL：`?loop=N` 表示当前查看的 loopIndex；不传 = Latest。
  *
- * 退化模式（design §E）：debug 未启用 / loops 为空 → 顶部 banner + 一键启用 + 显示 events 时间序列。
+ * 退化模式：debug 未启用 / loops 为空 → 顶部 banner + 一键启用 + 显示 events 时间序列。
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";

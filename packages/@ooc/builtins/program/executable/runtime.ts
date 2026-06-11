@@ -12,7 +12,7 @@
  *   （线程内跨 exec 传值）语义上属于**调用现场**，是仅有的两个真 thread 依赖。
  *
  * 历史：旧版本支持 callMethod / function 子模式，调任意 window 上的命令。
- * 顶层 `exec` tool 上线后（plan exec-refactor），LLM 直接用 exec 调命令；
+ * 顶层 `exec` tool 上线后，LLM 直接用 exec 调命令；
  * program 只剩 shell/ts/js 三种语言模式。ts/js sandbox 的 `self.callMethod`
  * 仍保留，供脚本编排时多步调命令。
  */

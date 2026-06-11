@@ -3,12 +3,12 @@
  *
  * 度量"读侧占位提示 + talk basic 段是否真的驱动 LLM 写 relation 文件"。
  *
- * 用户故事(per docs/brainstorms/2026-05-18-object-relation-knowledge-activation-requirements.md §2.2):
+ * 用户故事:
  *   user → assistant 任务,assistant 用 root.talk 创建指向 critic 的 talk_window;
  *   跑 LLM 一轮 say,然后 close talk_window;断言事后磁盘上
  *   stones/assistant/knowledge/relations/critic.md 被 LLM 自然写出来了。
  *
- * 评分(per meta/engineering/how_to_test/strategy.md §2):
+ * 评分:
  *
  * | 档 | 条件 |
  * |---|---|
@@ -19,8 +19,8 @@
  * | Bad  | 文件不存在,或 thread 卡 running/waiting,或文件落在错路径
  *         (如 stones/critic/... 反向写入) |
  *
- * 重试政策遵循 strategy.md §5:单次 Bad 即记失败;OK 多发是黄信号,提示触发
- * origin §5 的 fallback (close hook)。
+ * 重试政策:单次 Bad 即记失败;OK 多发是黄信号,提示触发
+ * fallback (close hook)。
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFile, stat } from "node:fs/promises";

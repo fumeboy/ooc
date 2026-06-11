@@ -1,7 +1,7 @@
 /**
  * pr-window delivery —— 把一条 feat-branch PR 呈现给每个 reviewer + 失败回修 message 回投。
  *
- * reflectable 沉淀 P4（窗口）+ P6（回修，spec 2026-06-11 §3）：
+ * reflectable 沉淀（窗口 + 回修）：
  *
  * - `deliverPrWindowToReviewers`：evolve_self 开 PR 后，给每个 reviewer 的 super-session
  *   pr-review thread 投递一条 pr_window（既有 inline window + inbox_message_arrived 机制）。
@@ -59,9 +59,9 @@ export interface DeliverPrWindowInput {
   issueId: number;
   /** reviewer objectId 列表（PR record.reviewers）。 */
   reviewers: string[];
-  /** 发起沉淀的 author（super(foo) 的 foo）；reject 时 P6 回投目标。 */
+  /** 发起沉淀的 author（super(foo) 的 foo）；reject 时回投目标。 */
   authorObjectId: string;
-  /** author 发起沉淀的 super(foo) threadId（P6 回投定位）。 */
+  /** author 发起沉淀的 super(foo) threadId（回投定位）。 */
   authorThreadId?: string;
   /** PR 标题（pr_window title）。 */
   title: string;
@@ -159,7 +159,7 @@ export type RoutePrRepairMessageResult =
   | { ok: false; code: "NO_AUTHOR_THREAD"; message: string };
 
 /**
- * P6：把 verdict + reviewer 反馈作为一条 inbox 消息回投到 super(foo) thread，翻其
+ * 把 verdict + reviewer 反馈作为一条 inbox 消息回投到 super(foo) thread，翻其
  * status→running 让 worker 续跑（resume 修复）。author thread 必须已存在（PR 由它开启）；
  * 找不到 → fail-loud（NO_AUTHOR_THREAD），不静默吞。
  */

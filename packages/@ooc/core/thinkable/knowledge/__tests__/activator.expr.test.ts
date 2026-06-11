@@ -39,7 +39,7 @@ function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
 }
 
 describe("parseTrigger", () => {
-  // ── 新格式（2026-05-28 ooc-6 Object Unification） ───────────────────────
+  // ── 新格式 ───────────────────────
   test("object::<type>", () => {
     expect(parseTrigger("object::root")).toEqual({ kind: "object", objectType: "root" });
     expect(parseTrigger("object::talk")).toEqual({ kind: "object", objectType: "talk" });
@@ -278,7 +278,7 @@ describe("evaluateTrigger", () => {
     expect(evaluateTrigger(t, thread({ contextWindows: [talkW] }))).toBe(true);
   });
 
-  // ── window::root = always-on（harness reflectable 召回断裂回归）──
+  // ── window::root = always-on ──
   test("window::root always hits（root 是隐式父，从不进 contextWindows；契约文档化为『任何时候』）", () => {
     const t = parseTrigger("window::root");
     expect(t).toEqual({ kind: "object", objectType: "root" });
@@ -291,7 +291,7 @@ describe("evaluateTrigger", () => {
   });
 
   // ── object_id:: 新格式 ──────────────────────────────────────────
-  test("object_id::agent_alice hits when window with id=agent_alice is open (ooc-6 design)", () => {
+  test("object_id::agent_alice hits when window with id=agent_alice is open", () => {
     const t = parseTrigger("object_id::agent_alice");
     const objW: ContextWindow = {
       id: "agent_alice",

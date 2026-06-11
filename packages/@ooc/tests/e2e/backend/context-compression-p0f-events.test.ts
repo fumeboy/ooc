@@ -1,9 +1,6 @@
 /**
  * P0f — events 流 head/tail ring + 中段摘要 e2e。
  *
- * Design: docs/2026-05-25-context-compression-design.md §4.2 + §4.5
- * Meta:   meta/object.doc.ts:thinkable.children.context_budget.patches.events_ring
- *
  * 验证:
  * 1. 默认 fold 中段: head_ring (J=10) + tail_ring (K=40) 之外的 events 被 _foldedBy 标记
  * 2. 渲染层: 只保留 head + 1 条 summary + tail = 51 个渲染单元

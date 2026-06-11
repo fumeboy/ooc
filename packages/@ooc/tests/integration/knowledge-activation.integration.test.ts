@@ -111,7 +111,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
     );
     const systemContent = systemItem?.content ?? "";
     expect(systemContent).toContain("marker-7xq9");
-    // context-window 统一后（spec 2026-05-14），activator 命中的 knowledge 不再用单独的
+    // context-window 统一后，activator 命中的 knowledge 不再用单独的
     // <active_knowledge> 段，而是合成为 type=knowledge 的 ContextWindow，source=activator。
     expect(systemContent).toContain('type="knowledge"');
     expect(systemContent).toContain("<source>activator</source>");

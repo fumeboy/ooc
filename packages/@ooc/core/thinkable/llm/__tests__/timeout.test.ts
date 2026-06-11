@@ -35,7 +35,7 @@ describe("withLlmTimeout", () => {
   });
 });
 
-describe("resolveLlmTimeoutMs (任务级覆盖, 根因 #1)", () => {
+describe("resolveLlmTimeoutMs (任务级覆盖)", () => {
   it("任务级 override 生效 (合法正数优先于全局默认)", () => {
     const prev = process.env.OOC_LLM_TIMEOUT_MS;
     delete process.env.OOC_LLM_TIMEOUT_MS; // 确保全局是 120s 默认

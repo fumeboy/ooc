@@ -6,7 +6,7 @@
  * extendable 回答"OOC 如何吃下外部世界（外部 SaaS / CLI / SDK）"。
  *
  * 当前子目录：
- * - builtins/ 内置 OOC Objects（原 builtin windows，2026-05-28 ooc-6 Object Unification）
+ * - builtins/ 内置 OOC Objects（原 builtin windows）
  * - lark/    飞书 (Lark Suite) 集成；通过 lark-cli 子进程 + ContextWindow 类型注册
  *
  * 添加新外部集成时：

@@ -1,14 +1,6 @@
 /**
  * Window content hash + snapshot helpers — debug-only.
  *
- * 设计依据:
- *   - docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.1-3.3
- *   - docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1 (fileDiff)
- * 文档锚点:
- *   - meta/object.doc.ts:observable.children.debug_files.patches.windows_snapshot
- *   - meta/object.doc.ts:visible.children.loop_timeline.patches.windows_snapshot_data_source
- *   - meta/object.doc.ts:visible.children.loop_timeline.patches.type_dispatch_diff_renderer
- *
  * 不变量:
  *   - contentHash **不进** thread.json，只在 loop_NNNN.meta.json 的 windowsSnapshot 里
  *   - 算法 type-agnostic（统一 JSON hash），不为每个 window type 注册 hashContent
@@ -25,8 +17,6 @@ import type { ContextWindow, FileWindow } from "@ooc/core/executable/windows/_sh
 
 /**
  * file_window 的 diff 数据；用于前端 CodeMirror Merge 双侧渲染。
- *
- * 设计依据: docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1
  *
  * 字段语义：
  * - previousContent: 上一 loop 该 file 的内容（added 时为 ""；二进制 / 过大时也为 ""）
@@ -86,12 +76,6 @@ export function computeWindowContentHash(window: ContextWindow): string {
 
 /**
  * 单条 windowsSnapshot entry（落 loop_NNNN.meta.json）。
- *
- * shape 锚点:
- *   - docs/2026-05-26-loop-time-machine-with-window-diff-design.md § 3.2
- *   - docs/2026-05-27-type-dispatch-window-diff-view-design.md § 4.1 (fileDiff)
- *   - meta/object.doc.ts:observable.children.debug_files.patches.windows_snapshot
- *   - meta/object.doc.ts:visible.children.loop_timeline.patches.windows_snapshot_data_source
  *
  * 字段语义：
  * - id / type：等同源 window

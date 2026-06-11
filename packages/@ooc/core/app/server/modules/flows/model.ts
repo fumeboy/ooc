@@ -27,7 +27,7 @@ export const callMethodBody = t.Object({
 /**
  * 继续指定 thread 会话的请求体。
  *
- * collaborable § cross-object talk：
+ * collaborable cross-object talk：
  * - threadId/objectId 路径参数已移除：continueThread 现在固定走 user.root.talk_window
  *   再 deliverTalkMessage 到 callee；前端只需要给 sessionId + 文本 + 可选 targetWindowId
  */
@@ -39,7 +39,7 @@ export const continueThreadBody = t.Object({
 /**
  * Seed 一个新 session：建 session + user flow object + user 对 target 的初次 talk。
  *
- * collaborable § cross-object talk。
+ * collaborable cross-object talk。
  */
 export const seedSessionBody = t.Object({
   sessionId: t.String(),
@@ -59,8 +59,7 @@ export const addUserTalkWindowBody = t.Object({
 });
 
 /**
- * GET /api/flows/:sessionId/threads 的返回 shape（design:
- * docs/2026-05-26-session-threads-index-design.md §4.1）。
+ * GET /api/flows/:sessionId/threads 的返回 shape。
  *
  * 旧 shape 仅 `{ objectId, threadId }`；新版扩展为 thread metadata + 4 种关系字段，
  * 让前端 SessionThreadsIndex 能据此画分栏 + 关系。向后兼容：旧字段保留、新字段都是

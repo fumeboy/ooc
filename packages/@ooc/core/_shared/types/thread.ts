@@ -74,12 +74,10 @@ export interface StoneObjectRef {
 }
 
 /**
- * stone / flow 目录用来分隔嵌套子 Agent 的 marker 子目录名（B-tree 协议）。
+ * stone / flow 目录用来分隔嵌套子 Agent 的 marker 子目录名。
  *
  * 物理布局示例（stone 与 flow 形态对齐）：
  *   objectId = "parent/child" → stones/parent/children/child
- *
- * 详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
  */
 export const STONE_CHILDREN_SUBDIR = "children";
 
@@ -133,7 +131,7 @@ export function deriveStoneFromThread(threadRef: ThreadPersistenceRef): StoneObj
  *   旧 thread.json 没有 id 字段属于正常情况,渲染层会按数组下标 fallback。
  * - `_foldedBy`: 该事件已被某条 events_summary 折叠;渲染时跳过,实际数据仍在
  *   thread.events 中保留。下划线前缀但**保留**进 thread.json,
- *   因为它是 fold 状态的唯一持久化锚点。design §4.2。
+ *   因为它是 fold 状态的唯一持久化锚点。
  */
 export type ProcessEventCommon = {
   /** 事件稳定标识; events_summary 必填,其他 variants 可选。 */
@@ -264,9 +262,8 @@ export type ProcessEvent = ProcessEventCommon & (
       /**
        * 事件来源：context 压缩档位变化。
        *
-       * 由 compress tool / expand method / 后续 phase 的自然衰减 + emergency guard 触发,
-       * design: docs/2026-05-25-context-compression-design.md §F(silent-swallow ban) /
-       * §4.5 / §4.4。每次压缩档位切换写一条本事件,与现有 ProcessEvent 同序进 thread.json /
+       * 由 compress tool / expand method / 自然衰减 + emergency guard 触发。
+       * 每次压缩档位切换写一条本事件,与现有 ProcessEvent 同序进 thread.json /
        * debug 落盘 / contextSnapshot,LLM 视野中也可见。
        */
       category: "context_change";
@@ -285,7 +282,7 @@ export type ProcessEvent = ProcessEventCommon & (
       /**
        * 事件来源：runJob 单次跑满 workerMaxTicks 自然返回，且 thread.status 仍为 running。
        *
-       * 设计：meta/app.server.doc.ts § worker.scheduler_yielded。worker 出口在写完本事件后
+       * worker 出口在写完本事件后
        * 调 jobManager.createRunThreadJob 让自己再入队一次，让长任务跨 job 续跑。
        * LLM 下轮可见，区别于自然 done / paused / failed。
        */
@@ -300,7 +297,6 @@ export type ProcessEvent = ProcessEventCommon & (
       /**
        * 事件来源：events 流中段折叠后形成的摘要节点。
        *
-       * Design: docs/2026-05-25-context-compression-design.md §4.2 / §4.4
        * 由 LLM 在 compress(scope=events, summary=...) 调用中主动提供摘要文本。
        * 未来 emergency guard 也可触发本 event (scope="auto") — 那时 summary 是占位文本。
        *
@@ -327,12 +323,9 @@ export type ProcessEvent = ProcessEventCommon & (
       /**
        * 事件来源: thinkloop 在 dispatchToolCall 之前调 decidePermission 返回 "ask"。
        *
-       * Design: docs/2026-05-25-permission-model-design.md
-       * Meta:   meta/object.doc.ts:executable.children.permission.patches.approve_reject_path
-       *
-       * Q0b: 写完事件后 thread.status="paused"。
-       * Q0c: HTTP endpoint 写入 decided 字段 + 翻回 running; thinkloop 在 resume 路径
-       *      扫"最近一条 permission_ask"按 decided.action 处理:
+       * 写完事件后 thread.status="paused"。
+       * HTTP endpoint 写入 decided 字段 + 翻回 running; thinkloop 在 resume 路径
+       * 扫"最近一条 permission_ask"按 decided.action 处理:
        *        approve → 用 pendingCall 字段重放该 tool call (绕过 decidePermission)
        *        reject  → 写 permission_denied + 合成 function_call_output
        *
@@ -349,7 +342,7 @@ export type ProcessEvent = ProcessEventCommon & (
       /** exec 时目标 window id。 */
       windowId?: string;
       /**
-       * Q0c: HITL 审批决议。无 → 待审批; "approve" → 已批准 (thinkloop resume 时重放);
+       * HITL 审批决议。无 → 待审批; "approve" → 已批准 (thinkloop resume 时重放);
        * "reject" → 已拒绝 (thinkloop resume 时合成 denied + function_call_output)。
        */
       decided?: {
@@ -358,7 +351,7 @@ export type ProcessEvent = ProcessEventCommon & (
         reason?: string;
       };
       /**
-       * Q0c: 完整序列化的原 pending tool call。approve 路径用它直接 dispatchToolCall,
+       * 完整序列化的原 pending tool call。approve 路径用它直接 dispatchToolCall,
        * 不依赖 LLM 重新发起 (LLM 可能换 args 或干脆不发了)。
        *
        * 字段冗余 (toolCallId / method / windowId 已经在外层) 是为了一站式重建 LlmToolCall,
@@ -376,7 +369,7 @@ export type ProcessEvent = ProcessEventCommon & (
       /**
        * 事件来源: thinkloop 在 dispatchToolCall 之前调 decidePermission 返回 "deny"。
        *
-       * Design + meta 同 permission_ask。
+       * Design 同 permission_ask。
        *
        * 系统已拒绝该 tool call, 并合成了一条 function_call_output (在 thread.events
        * 紧邻位置) 让 LLM 看见拒绝原因 (silent-swallow ban + Deny 信息流不变量)。
@@ -411,7 +404,7 @@ export type ThreadMessage = {
   content: string;
   /** 创建时间戳，用于排序和调试，不承担强一致时钟语义。 */
   createdAt: number;
-  /** 消息来源；step 2 加入 talk 与外部用户对话；user 区分"控制面代用户派送的 talk"。 */
+  /** 消息来源；talk 用于外部用户对话；user 区分"控制面代用户派送的 talk"。 */
   source: "do" | "system" | "talk" | "user";
   /**
    * 消息归属的 window id；
@@ -441,8 +434,8 @@ export type ThreadStatus = "running" | "waiting" | "done" | "failed" | "paused";
  *
  * 重构：
  * - 删除 activeForms / windows / pinnedKnowledge / waitingType / awaitingChildren
- * - 新增 contextWindows（统一抽象）+ threadLocalData（program_window step 2 使用，先占位）
- * - status="waiting" 单独表达"等待 inbox 新消息"，不再细分 waitingType（spec § 等待语义的简化）
+ * - 新增 contextWindows（统一抽象）+ threadLocalData（program_window 使用，先占位）
+ * - status="waiting" 单独表达"等待 inbox 新消息"，不再细分 waitingType（等待语义的简化）
  */
 export type ThreadContext = {
   /** 线程唯一标识；同时用于 XML context 中的 thread id。 */
@@ -497,12 +490,12 @@ export type ThreadContext = {
    * 当前线程的所有 ContextWindow（flat 数组，层级通过 parentWindowId 表达）。
    *
    * 取代旧的 activeForms / windows / pinnedKnowledge 三套并列字段。
-   * 见 executable/windows/_shared/types.ts 与 spec § 模型骨架。
+   * 见 executable/windows/_shared/types.ts。
    */
   contextWindows: ContextWindow[];
   /**
    * thread-local 共享数据；program_window 的 ts/js exec 之间通过这里传值
-   * （spec § program_window 的"跨 exec 数据传递"段）。当前仅占位、不读不写。
+   * （program_window 的"跨 exec 数据传递"）。当前仅占位、不读不写。
    */
   threadLocalData?: Record<string, unknown>;
   /** end method 写入的结束原因。 */
@@ -535,14 +528,13 @@ export type ThreadContext = {
   /**
    * 入眠时刻 inbox 长度快照；scheduler 唤醒时对比当前 inbox.length 判断是否有新消息。
    * status="waiting" 时由 wait tool 写入；唤醒后由 scheduler 重置为 undefined。
-   * 见 spec § 等待语义的简化。
+   * 见等待语义的简化。
    */
   inboxSnapshotAtWait?: number;
   /**
    * status="waiting" 时由 wait tool 写入：本次 wait 引用的 IO 来源 window id。
    * 唤醒后由 scheduler 清空。observability/debug 用，不参与 wakeup 决策
    * （任何 inbox 新消息都唤醒）；未来可能据此做精确路由。
-   * 见 docs/superpowers/specs/2026-05-17-wait-requires-dependency-design.md。
    */
   waitingOn?: string;
   /**

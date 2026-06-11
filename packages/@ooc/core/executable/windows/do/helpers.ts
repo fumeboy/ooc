@@ -69,7 +69,7 @@ export function findThreadInScope(self: ThreadContext, targetId: string): Thread
 }
 
 /**
- * archive 子 thread 时的归还路径（plan §do_window.move 自动归还）：
+ * archive 子 thread 时的归还路径（do_window.move 自动归还）：
  *
  * 在切 child.status 之前，遍历 child.contextWindows
  * - 对每个 owner window（无 sharing 字段）：按 id 在父 thread.contextWindows 里查 lent_out 占位；

@@ -1,11 +1,11 @@
 /**
- * pr_window —— reviewer 评审窗口 + P4 渲染/method + P6 回修 + resume 集成测试。
+ * pr_window —— reviewer 评审窗口 + 渲染/method + 回修 + resume 集成测试。
  *
- * reflectable 沉淀 P4（窗口）+ P6（回修，spec 2026-06-11 §3）。覆盖：
+ * reflectable 沉淀（窗口 + 回修）。覆盖：
  * - PR window 渲染：intent / diff / paths / reviewers / approvals / verdict
- * - window method：approve（聚合 ready-to-merge + prAutoMerge 合入）/ reject（一票否决 + P6 回投）
+ * - window method：approve（聚合 ready-to-merge + prAutoMerge 合入）/ reject（一票否决 + 回投）
  * - deliverPrWindowToReviewers：每个 reviewer 的 super-session thread 出现 pr_window
- * - P6：reject → 回修 message 落 super(foo) inbox + status 翻 running
+ * - reject → 回修 message 落 super(foo) inbox + status 翻 running
  * - resume：reject 后 new_feat_branch(同 intent) 幂等重绑 feat 分支再 submit
  */
 import { mkdir, mkdtemp, rm, writeFile, readFile, stat } from "node:fs/promises";
@@ -101,7 +101,7 @@ function reviewerThread(baseDir: string, reviewerObjectId: string, threadId: str
   };
 }
 
-describe("pr_window 渲染（P4）", () => {
+describe("pr_window 渲染", () => {
   test("readable 渲染 intent / paths / reviewers / verdict / diff", async () => {
     const baseDir = await newWorld(["foo"]);
     const { issueId } = await openPr(baseDir, "foo", "Tighten foo self", [
@@ -155,7 +155,7 @@ describe("pr_window 渲染（P4）", () => {
   });
 });
 
-describe("pr_window method（P4）", () => {
+describe("pr_window method", () => {
   test("approve：唯一 reviewer approve → ready-to-merge + prAutoMerge 合入 main", async () => {
     const baseDir = await newWorld(["foo"], { prAutoMerge: true });
     const { issueId } = await openPr(baseDir, "foo", "land foo v2", [
@@ -182,7 +182,7 @@ describe("pr_window method（P4）", () => {
     expect((await readPrIssue(baseDir, issueId))?.status).toBe("closed");
   });
 
-  test("reject：一票否决 + P6 回修 message 投回 super(foo)", async () => {
+  test("reject：一票否决 + 回修 message 投回 super(foo)", async () => {
     const baseDir = await newWorld(["foo"]);
     // 先建 super(foo) thread（PR 由它发起；authorThreadId 指向它）
     const superFooThreadId = "t_superfoo";
@@ -215,7 +215,7 @@ describe("pr_window method（P4）", () => {
     expect(repairMsg).toBeDefined();
     expect(reloaded?.status).toBe("running");
 
-    // reflectable #4 回归（2026-06-11）：回修 message 必须给 LLM 可照抄的 method 动作序列
+    // 回修 message 必须给 LLM 可照抄的 method 动作序列
     // （带真实 intent），并明确禁止 curl/program 自查空转。
     expect(repairMsg!.content).toContain("new_feat_branch");
     expect(repairMsg!.content).toContain('share into supervisor land'); // 真实 intent，照抄即可
@@ -224,7 +224,7 @@ describe("pr_window method（P4）", () => {
   });
 });
 
-describe("deliverPrWindowToReviewers（P4 投递）", () => {
+describe("deliverPrWindowToReviewers（投递）", () => {
   test("每个 reviewer 的 super-session thread 出现 pr_window + inbox 事件", async () => {
     const baseDir = await newWorld(["foo", "bob"]);
     const { issueId, reviewers } = await openPr(baseDir, "foo", "share into bob", [
@@ -264,7 +264,7 @@ describe("deliverPrWindowToReviewers（P4 投递）", () => {
   });
 });
 
-describe("routePrRepairMessage（P6）", () => {
+describe("routePrRepairMessage", () => {
   test("author thread 缺失 → NO_AUTHOR_THREAD（fail-loud，不静默吞）", async () => {
     const baseDir = await newWorld(["foo"]);
     const r = await routePrRepairMessage({ baseDir, authorObjectId: "foo", authorThreadId: "nope", reason: "x" });
@@ -273,7 +273,7 @@ describe("routePrRepairMessage（P6）", () => {
   });
 });
 
-describe("P6 resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
+describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
   test("request_changes → 同 intent 幂等重绑 feat 分支（旧编辑仍在）→ 再 evolve_self 重开 PR", async () => {
     const { executeNewFeatBranch } = await import("@ooc/builtins/root/executable/method.new-feat-branch");
     const { executeEvolveSelf } = await import("@ooc/builtins/root/executable/method.evolve-self");
@@ -300,7 +300,7 @@ describe("P6 resume 回修循环（new_feat_branch 重绑 + re-submit）", () =>
     expect((fin1.reviewers as string[]).sort()).toEqual(["bob", "supervisor"]);
     expect(superFoo.persistence!.stonesBranch).toBeUndefined(); // 绑定已清
 
-    // bob request_changes → P6 回投 super(foo)
+    // bob request_changes → 回投 super(foo)
     const rc = await applyPrApproval({ baseDir, issueId, reviewerObjectId: "bob", action: "request-changes" });
     expect(rc.ok).toBe(true);
     if (rc.ok) {

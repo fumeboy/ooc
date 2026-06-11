@@ -5,7 +5,7 @@
  * Web 工程未安装 React Testing Library, 因此不做完整组件 DOM 渲染断言 — 同 LLMInputJsonViewer.test.ts
  * 风格, 只对外暴露的纯函数 + 组件契约 (props 形态 / 颜色 token / 提示语) 做断言。
  *
- * 覆盖 ≥4 用例 (plan §R0c-7):
+ * 覆盖 ≥4 用例:
  * 1. 正常加载: 3 loops + 8 events → events 被 partition 到 3 个 loop
  * 2. 退化模式: loops=[] + events=5 → partition 返回空 Map (主组件改走退化分支)
  * 3. 空状态: loops=[] + events=[] → partition 返回空 Map + 空 unassigned

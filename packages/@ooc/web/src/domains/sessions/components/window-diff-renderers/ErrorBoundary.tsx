@@ -1,7 +1,7 @@
 /**
  * DiffRendererErrorBoundary — 包住单个 window diff renderer。
  *
- * 设计原则（design § 3.4 + silent-swallow ban）：
+ * 设计原则（silent-swallow ban）：
  *   - renderer 抛错 → catch；console.warn 显式（含 windowType / windowId / message）
  *   - 渲染 FallbackJsonDiff 兜底（user 不会看到白屏；JSON 视图保留）
  *   - 不静默：UI 显示一行 "diff renderer error: <msg> — showing JSON fallback"
