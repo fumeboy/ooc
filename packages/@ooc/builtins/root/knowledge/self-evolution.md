@@ -52,8 +52,7 @@ export const window = {
       },
     },
   },
-};
-export const ui_methods = {};`
+};`
 })
 ```
 
