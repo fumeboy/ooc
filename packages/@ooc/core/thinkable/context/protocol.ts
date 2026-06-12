@@ -13,6 +13,7 @@ import type { ObjectRegistry } from "../../executable/windows/_shared/registry.j
 import { builtinRegistry } from "../../executable/windows/index.js";
 import { computeActivations, loadKnowledgeIndexFromDir } from "../knowledge/index.js";
 import type { KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
+import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { ThreadContext } from "./index.js";
 
@@ -23,6 +24,33 @@ function resolveRootKnowledgeDir(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** 剥离 markdown 顶部 `--- ... ---` frontmatter，返回正文。 */
+function stripFrontmatter(md: string): string {
+  if (!md.startsWith("---")) return md;
+  const close = md.indexOf("\n---", 3);
+  if (close === -1) return md;
+  const nl = md.indexOf("\n", close + 1);
+  return nl === -1 ? "" : md.slice(nl + 1);
+}
+
+/**
+ * user 的 readable —— inline UI token 协议（[[ui / file-link / follow-ups）的唯一家。
+ * user 不作完整 peer object 注入（object-windows 三处排除：它是真人占位、非可调 agent），
+ * 但「怎么跟 user 交互」的协议该投递给正在与 user 对话的 object——故按需注入为 protocol knowledge。
+ * 随框架包发布、不可变，首次读后 memoize（null = 解析失败/缺失，不重试）。
+ */
+let userReadableBody: string | null | undefined;
+function resolveUserReadableBody(): string | null {
+  if (userReadableBody !== undefined) return userReadableBody;
+  try {
+    const pkg = Bun.resolveSync("@ooc/builtins/user/package.json", process.cwd());
+    userReadableBody = stripFrontmatter(readFileSync(join(dirname(pkg), "readable.md"), "utf8")).trim() || null;
+  } catch {
+    userReadableBody = null;
+  }
+  return userReadableBody;
 }
 
 let syntheticIdCounter = 0;
@@ -153,6 +181,16 @@ export async function buildProtocolKnowledgeWindows(
     if (seen.has(path)) continue;
     seen.add(path);
     windows.push(makeKnowledgeWindow(path, buildCreatorReplyKnowledge(w), "protocol"));
+  }
+
+  // user 交互协议：object 有 target="user" 的 talk 通道时，注入 user 的 readable（inline UI token 协议）。
+  // user 不作完整 peer object 注入，但对话方需知道怎么向 user 发可交互消息（file-link / follow-ups）。
+  const hasUserTalk = (thread.contextWindows ?? []).some(
+    (w) => w.class === "talk" && (w as { target?: unknown }).target === "user",
+  );
+  if (hasUserTalk) {
+    const body = resolveUserReadableBody();
+    if (body) windows.push(makeKnowledgeWindow("internal/user/readable", body, "protocol"));
   }
 
   return windows;

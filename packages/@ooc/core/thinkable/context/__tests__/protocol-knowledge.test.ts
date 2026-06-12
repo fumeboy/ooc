@@ -88,6 +88,25 @@ describe("root builtin knowledge activation", () => {
     }
   });
 
+  it("有 target=user 的 talk 通道 → 注入 user readable（inline UI 协议）；object↔object talk 不注入", async () => {
+    const mkTalk = (target: string) =>
+      ({ id: `talk_${target}`, class: "talk", parentWindowId: "root", title: `talk ${target}`, status: "open", createdAt: 1, target } as any);
+    const withUser = makeThread({ id: "t_user_talk", extraWindows: [mkTalk("user")] });
+    const withPeer = makeThread({ id: "t_peer_talk", extraWindows: [mkTalk("agent_b")] });
+
+    const userOut = await buildProtocolKnowledgeWindows(withUser);
+    expect(paths(userOut)).toContain("internal/user/readable");
+    const ui = userOut.find((w) => (w as { path?: string }).path === "internal/user/readable") as { body?: string; source?: string };
+    expect(ui?.body).toContain("follow-ups"); // inline UI 协议正文确实投递
+    expect(ui?.body).toContain("[[ui");
+    expect(ui?.source).toBe("protocol");
+
+    // object↔object talk 不注入 user 协议
+    expect(paths(await buildProtocolKnowledgeWindows(withPeer))).not.toContain("internal/user/readable");
+    // 无 talk 通道也不注入
+    expect(paths(await buildProtocolKnowledgeWindows(makeThread({ id: "t_no_talk" })))).not.toContain("internal/user/readable");
+  });
+
   it("注入的 window source=protocol", async () => {
     const out = await buildProtocolKnowledgeWindows(makeThread({ id: "t_src" }));
     const core = out.find((w) => (w as { path?: string }).path === "interaction-core");
