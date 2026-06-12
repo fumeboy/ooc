@@ -154,7 +154,7 @@ export function ClientWithSourceToggle({
           <div className="p-4 text-sm text-[var(--muted-foreground)]" data-testid="source-no-visible">
             <p className="font-medium">该对象暂无自定义界面（visible）</p>
             <p className="mt-2 text-xs">
-              这个对象还没有写下自己的 <code>visible/index.tsx</code> —— 切到「已渲染」可看到它的对象名片（self / readme / knowledge）。
+              这个对象还没有写下自己的 <code>visible/index.tsx</code> —— 切到「已渲染」可看到它的对象名片（self / readable / knowledge）。
             </p>
           </div>
         )}

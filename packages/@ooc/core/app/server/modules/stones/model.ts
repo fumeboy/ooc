@@ -5,7 +5,7 @@ export const createStoneBody = t.Object({
   objectId: t.Optional(t.String()),
   name: t.Optional(t.String()),
   self: t.Optional(t.String()),
-  readme: t.Optional(t.String()),
+  readable: t.Optional(t.String()),
 });
 export const textBody = t.Object({ text: t.String() });
 export const codeBody = t.Object({ code: t.String() });

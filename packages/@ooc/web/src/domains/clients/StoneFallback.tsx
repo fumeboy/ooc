@@ -1,6 +1,6 @@
 /**
  * StoneFallback — 当一个 stone 没有自定义 `client/index.tsx`(或加载失败)时,
- * 替代原 "信息待产出..." 死区, 把已有的 self.md / readme.md / knowledge / 入口
+ * 替代原 "信息待产出..." 死区, 把已有的 self.md / readable.md / knowledge / 入口
  * 拼成一张"Object 名片", 让用户立刻看到这个 stone 是谁、能做什么。
  *
  * 设计哲学 (Supervisor): OOC stone 不是一段空 React 组件, 而是一个"有身份 / 有公开
@@ -8,7 +8,7 @@
  *
  * 数据来源 (没有任何新增 backend):
  *   - `GET /api/stones/<id>/self`         → 身份 (self.md)
- *   - `GET /api/stones/<id>/readme`       → 公开介绍 (readme.md)
+ *   - `GET /api/stones/<id>/readable`     → 公开介绍 (readable.md)
  *   - `GET /api/tree?scope=stones&path=<id>/knowledge` → 持续记忆目录概览 (children + 文件数)
  *   - `GET /api/flows`                    → 最近 session, 与 sessionThreads 交叉过滤
  *
@@ -34,10 +34,10 @@ type FlowSummary = { sessionId: string; title?: string; updatedAt?: number };
 
 /**
  * 上一轮 StoneFallback 在 stone 不存在(`/stones/nonexistent_xyz`)时
- * 仍然渲染完整 self/readme/knowledge 模板,让用户误以为 stone 存在。
+ * 仍然渲染完整 self/readable/knowledge 模板,让用户误以为 stone 存在。
  *
  * 修复策略: mount 时先 `GET /api/stones` 拉 list,根据 objectId 是否在列表里区分:
- *   - exists → 渲染原有 fallback (name card + self/readme/knowledge/entries)
+ *   - exists → 渲染原有 fallback (name card + self/readable/knowledge/entries)
  *   - !exists → 显示 "Stone not found" 卡片 + 返回 stones 列表的链接,**不**渲染空模板
  *
  * 不增加新 backend (现有 `/api/stones` 已能 cheap 判存在; per-stone GET 即使对
@@ -112,7 +112,7 @@ function StoneNotFoundCard({ objectId }: { objectId: string }) {
 function StoneFallbackBody({ objectId, loadError }: StoneFallbackProps) {
   const { displayName } = useDisplayName(objectId);
   const selfText = useStoneText(objectId, "self");
-  const readmeText = useStoneText(objectId, "readme");
+  const readableText = useStoneText(objectId, "readable");
   const knowledge = useKnowledgeTree(objectId);
   const recentSessions = useRecentSessionsForStone(objectId);
 
@@ -122,7 +122,7 @@ function StoneFallbackBody({ objectId, loadError }: StoneFallbackProps) {
         <h1 className="stone-fallback-title">{displayName || objectId}</h1>
         <code className="stone-fallback-id" title={objectId}>{objectId}</code>
         <p className="stone-fallback-tagline muted small">
-          OOC stone — 一个有身份 (self.md) / 公开介绍 (readme.md) / 持续记忆 (knowledge) / 可被对话的实体。
+          OOC stone — 一个有身份 (self.md) / 公开介绍 (readable.md) / 持续记忆 (knowledge) / 可被对话的实体。
         </p>
       </header>
 
@@ -141,13 +141,13 @@ function StoneFallbackBody({ objectId, loadError }: StoneFallbackProps) {
 
           <CollapsibleSection
             label="About / 介绍"
-            sourceHint={`stones/${objectId}/readme.md`}
+            sourceHint={`stones/${objectId}/readable.md`}
             defaultOpen
-            loading={readmeText.loading}
-            empty={!readmeText.loading && !readmeText.text}
-            emptyHint="readme.md 为空 — 还没有面向其他 Object 的公开自我介绍。"
+            loading={readableText.loading}
+            empty={!readableText.loading && !readableText.text}
+            emptyHint="readable.md 为空 — 还没有面向其他 Object 的公开自我介绍。"
           >
-            {readmeText.text && <MarkdownContent content={readmeText.text} />}
+            {readableText.text && <MarkdownContent content={readableText.text} />}
           </CollapsibleSection>
 
           <KnowledgeSummary objectId={objectId} state={knowledge} />
@@ -314,7 +314,7 @@ function EntryList({
 
 interface TextState { text: string; loading: boolean }
 
-function useStoneText(objectId: string, kind: "self" | "readme"): TextState {
+function useStoneText(objectId: string, kind: "self" | "readable"): TextState {
   const [state, setState] = useState<TextState>({ text: "", loading: true });
   useEffect(() => {
     let cancelled = false;
@@ -322,7 +322,7 @@ function useStoneText(objectId: string, kind: "self" | "readme"): TextState {
     const url =
       kind === "self"
         ? `/api/stones/${encodeURIComponent(objectId)}/self`
-        : `/api/stones/${encodeURIComponent(objectId)}/readme`;
+        : `/api/stones/${encodeURIComponent(objectId)}/readable`;
     requestJson<{ text?: string }>(url)
       .then((res) => {
         if (cancelled) return;

@@ -253,7 +253,7 @@ describe("app server routes", () => {
     expect(escapeBody.error.code).toBe("INVALID_INPUT");
   });
 
-  test("POST /api/stones creates object with self and readme content (data.json 已迁到 flow 层)", async () => {
+  test("POST /api/stones creates object with self and readable content (data.json 已迁到 flow 层)", async () => {
     const { app, baseDir } = await makeAppWithBaseDir();
 
     const response = await app.handle(
@@ -263,7 +263,7 @@ describe("app server routes", () => {
         body: JSON.stringify({
           name: "writer",
           self: "# Writer\nI write notes.",
-          readme: "# Writer README",
+          readable: "# Writer README",
         }),
       })
     );

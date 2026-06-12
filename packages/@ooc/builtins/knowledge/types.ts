@@ -15,7 +15,7 @@ import type { Viewport } from "@ooc/core/extendable/_shared/viewport.js";
  * - activator ：pools/objects/{id}/knowledge/*.md 经 intentPaths 命中激活的条目；
  *               同样合成、不持久化、不可 close；额外携带 presentation=full|summary。
  * - relation  ：thread.contextWindows 中存在 talk_window(target=peerId) 时,
- *               按 peerId 派生最多 2 条:peer 的 stones/{peer}/readme.md 与
+ *               按 peerId 派生最多 2 条:peer 的 stones/{peer}/readable.md 与
  *               自己的 pools/{self}/knowledge/relations/{peer}.md(后者缺失时
  *               合成占位 body 提示 LLM 写入)。同样不持久化、不可 close;由
  *               src/thinkable/knowledge/synthesizer.ts:deriveRelationKnowledge 派生。

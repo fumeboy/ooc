@@ -2,7 +2,7 @@
  * Inline UI component rendering — 解析消息文本中的 `[[ui{...}ui]]` token，
  * 渲染成可交互的小组件（file-link / follow-ups），与 Markdown 文本混排。
  *
- * 与 stones/main/user/readme.md 的语法约定保持一致；Agent 端只产 token 文本，
+ * 与 stones/main/user/readable.md 的语法约定保持一致；Agent 端只产 token 文本，
  * 前端集中 dispatch 渲染——不让 Agent 直接写 HTML，避免 XSS。
  */
 

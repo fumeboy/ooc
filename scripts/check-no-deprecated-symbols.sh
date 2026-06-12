@@ -44,6 +44,9 @@ declare -a FORBIDDEN_PATTERNS=(
   "ObjectTypeRegistrar"
   "createObjectTypeRegistrar"
   "typeRegistration"
+  # —— readme.md 退役（2026-06-12）：legacy readable.md 前身，端点/字段/磁盘文件名全迁 readable。
+  #    精确小写 `readme\.md`，不命中根 README.md（大写，grep 默认大小写敏感）。
+  "readme\\.md"
 )
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）
@@ -56,6 +59,7 @@ ALLOW_LIST=(
   "packages/@ooc/builtins/supervisor/knowledge/creating-objects.md"  # 建对象 knowledge 教「别写 llm_methods」需引用该字面量
   "scripts/check-no-deprecated-symbols.sh"
   "scripts/check-doc-deprecated-drift.sh"  # 文档漂移检查的 FORBIDDEN_PATTERNS 列了这些废弃符号字面量
+  "packages/@ooc/core/persistable/__tests__/stone.test.ts"  # 守门断言：writeReadable 不再写 readme.md，须引用该字面量
 )
 
 EXCLUDE_DIRS=(
@@ -64,6 +68,7 @@ EXCLUDE_DIRS=(
   ".ooc-world"
   ".ooc-world-test"
   "docs"  # plan 文件、归档 spec 内的描述合法
+  "dist"  # web 构建产物（minified bundle，含第三方 hast/rehype 字面量），非源码
 )
 
 is_allowed() {

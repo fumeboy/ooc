@@ -16,8 +16,10 @@ log
 skills-lock.json
 *.jpg
 *.jpeg
-web/dist/
-web/tsconfig.tsbuildinfo
+packages/@ooc/web/dist/
+packages/@ooc/web/tsconfig.tsbuildinfo
+# 根 web/ 是无源码的产物目录（dist + node_modules + tsbuildinfo；源码在 packages/@ooc/web/src）——整个忽略
+web/
 todo.md
 .idea
 .gitignore

@@ -246,7 +246,7 @@ async function resolveReadableForType(
     }
   } catch { /* continue */ }
 
-  // Step 3: readable.md static content (readReadable falls back to legacy readme.md internally)
+  // Step 3: readable.md static content
   try {
     const readableText = await readReadable(stoneRef);
     if (readableText && readableText.trim().length > 0) {
@@ -284,7 +284,7 @@ async function resolveObjectReadable(
     xmlElement(
       "readable",
       { source: "placeholder" },
-      [xmlText(`Object "${window.id}" 没有可渲染的 readable 或 readme 内容（包括 parentClass 继承链）。`)],
+      [xmlText(`Object "${window.id}" 没有可渲染的 readable 内容（包括 parentClass 继承链）。`)],
     ),
   ];
 }

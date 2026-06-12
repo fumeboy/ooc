@@ -2,7 +2,7 @@ import { mkdir, readdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { stoneDir, STONE_CHILDREN_SUBDIR, toJson, type StoneObjectRef } from "./common";
 import { selfFile } from "./stone-self";
-import { readableFile } from "./stone-readme";
+import { readableFile } from "./stone-readable";
 import { resolveBuiltinReadDir } from "./builtin-dir";
 
 export { stoneDir };

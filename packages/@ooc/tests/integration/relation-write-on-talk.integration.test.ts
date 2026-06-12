@@ -39,7 +39,7 @@ import { hasLlmEnv, llm, setupTempFlow } from "./_fixture";
 import { initContextWindows } from "@ooc/core/executable/windows";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
-const CRITIC_README = `
+const CRITIC_READABLE = `
 我是 critic。我从两个角度审视代码方案:
 
 1. **证据是否独立可复现**: 你说"通过"必须给出可验证的依据(测试名、command、断言)
@@ -76,11 +76,11 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
   });
 
   test("assistant writes relation file after talk with critic", async () => {
-    // 1) 建 assistant + critic stones + assistant pool;critic 的 readme 给 assistant 看
+    // 1) 建 assistant + critic stones + assistant pool;critic 的 readable 给 assistant 看
     await createStoneObject({ baseDir: tempRoot, objectId: "assistant" });
     await createStoneObject({ baseDir: tempRoot, objectId: "critic" });
     await createPoolObject({ baseDir: tempRoot, objectId: "assistant" });
-    await writeReadable({ baseDir: tempRoot, objectId: "critic" }, CRITIC_README);
+    await writeReadable({ baseDir: tempRoot, objectId: "critic" }, CRITIC_READABLE);
 
     // 2) 建 assistant root thread,挂初始 prompt
     const assistantFlow = await createFlowObject({

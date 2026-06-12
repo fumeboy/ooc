@@ -19,7 +19,7 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createStoneObject, stoneKnowledgeDir, stoneDir } from "./stone-object.js";
 import { writeSelf } from "./stone-self.js";
-import { writeReadable } from "./stone-readme.js";
+import { writeReadable } from "./stone-readable.js";
 import { resolveStoneIdentityRef, sessionUsesWorktree } from "./stone-worktree.js";
 import { isBuiltinObjectId, type StoneObjectRef } from "./common.js";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";

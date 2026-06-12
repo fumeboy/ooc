@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createStoneObject, stoneDir } from "../stone-object";
 import { readSelf, selfFile, writeSelf } from "../stone-self";
-import { readReadable, readableFile, writeReadable } from "../stone-readme";
+import { readReadable, readableFile, writeReadable } from "../stone-readable";
 import {
   executableIndexFile,
   readExecutableSource,

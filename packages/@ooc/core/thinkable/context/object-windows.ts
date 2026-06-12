@@ -160,7 +160,8 @@ export async function derivePeerObjectWindows(
   for (const w of talkWindows) {
     if (!w.target) continue;
     if (w.target === SUPER_ALIAS_TARGET) continue;
-    if (w.target === "user") continue;
+    // user 不再特殊排除：talk 过的对端对象（含 user）统一作 peer object window 进 context，
+    // 由既有 readable 渲染展示其名片（user 无可调方法 → 方法集空 → 不进 class 声明层，只露 readable）。
     const prev = peerEarliest.get(w.target);
     if (prev === undefined || w.createdAt < prev) peerEarliest.set(w.target, w.createdAt);
   }
@@ -191,9 +192,9 @@ export async function derivePeerObjectWindows(
       // 落 worktree 未合 main）——经 worktree ref 读它的 readable / executable，否则
       // readReadable/loadObjectWindow 落 main 找不到 → peer 类型注册不到 → 不可 talk。
       const peerStoneRef = await resolveStoneIdentityRef({ baseDir, sessionId, objectId: peerId }, "read");
-      const readme = await readReadable(peerStoneRef);
-      if (readme) {
-        const frontmatterMatch = readme.match(/^---\n([\s\S]*?)\n---/);
+      const readable = await readReadable(peerStoneRef);
+      if (readable) {
+        const frontmatterMatch = readable.match(/^---\n([\s\S]*?)\n---/);
         const titleMatch = frontmatterMatch?.[1].match(/^title:\s*(.+)$/m);
         if (titleMatch) title = titleMatch[1].trim();
       }

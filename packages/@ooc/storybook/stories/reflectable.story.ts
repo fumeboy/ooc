@@ -49,8 +49,8 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-REFL-03: 经 HTTP 改 readable（自修改对外呈现）
     {
       const content = "对外介绍：我能反思自己。";
-      const w = await putJson(app, `/api/stones/${id}/readme`, { text: content }, CONFIRM);
-      const g = await getJson(app, `/api/stones/${id}/readme`);
+      const w = await putJson(app, `/api/stones/${id}/readable`, { text: content }, CONFIRM);
+      const g = await getJson(app, `/api/stones/${id}/readable`);
       rec.ok("TC-REFL-03", "经 HTTP 改 readable（自修改对外呈现）",
         w.status === 200 && w.json?.ok === true && g.json?.text === content,
         `writeOk=${w.status === 200 && w.json?.ok}, text=${g.json?.text}`);
