@@ -75,7 +75,7 @@ export const L4_STORIES: Story[] = [
     layer: "collaborable",
     expectation: "cross-scope evolve 越界 → flows/super/issues/issue-<id>.json 出现",
     design: "collaborable：越自治区改动开 PR-Issue 待 Supervisor 评审。persistable/pr-issue.ts",
-    run: async () => skip("PR-Issue 由 super flow evolve_self cross-scope 触发，需 worker 编排（Tier B/e2e）"),
+    run: async () => skip("PR-Issue 由 super flow create_pr_and_invite_reviewers cross-scope 触发，需 worker 编排（Tier B/e2e）"),
   }),
 
   story({

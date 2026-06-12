@@ -9,7 +9,7 @@
  * persistence.stonesBranch（随 thread.json 持久化，跨 exec tick 存活）。
  *
  * 绑定生效后，super(foo) 用**普通 write_file / file_window.edit** 直接编辑该 feat worktree 下
- * 的文件（resolveStoneIdentityRef 见绑定即覆盖优先路由到 feat worktree）；编辑完调 evolve_self
+ * 的文件（resolveStoneIdentityRef 见绑定即覆盖优先路由到 feat worktree）；编辑完调 create_pr_and_invite_reviewers
  * finalize（commit + 开 PR + 清绑定）。
  *
  * 仅 super flow 可调（沉淀单元只在 super(foo) thread 上）。
@@ -18,7 +18,7 @@
  * super(foo) 收到回修 inbox message。此时再调 new_feat_branch(**同 intent**) 即可幂等
  * **重绑**该 feat 分支：同 intent → 同 slug → 同分支名 → git WORKTREE_EXISTS 视为成功，
  * 把分支重新绑回本 thread（request-changes 时旧 worktree 与编辑都还在，可继续改；reject
- * 后旧 worktree 已归档清理，从 main 重新派生空白副本重做）。re-edit 后再 evolve_self 重开 PR。
+ * 后旧 worktree 已归档清理，从 main 重新派生空白副本重做）。re-edit 后再 create_pr_and_invite_reviewers 重开 PR。
  */
 
 import type {
@@ -31,7 +31,7 @@ import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 const NEW_FEAT_BRANCH_TIP = `new_feat_branch 在 super flow 内开一个 feat 分支用于沉淀（沉淀第一步）。
 参数：intent（必填，沉淀意图，派生分支名）。
 开分支后本 thread 绑定该 feat worktree——之后用普通 write_file / file_window.edit 直接编辑
-（路径 stones/<id>/... 会自动落 feat worktree），编辑完调 evolve_self 提交并开 PR。`;
+（路径 stones/<id>/... 会自动落 feat worktree），编辑完调 create_pr_and_invite_reviewers 提交并开 PR。`;
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
@@ -41,6 +41,7 @@ export const newFeatBranchMethod: ObjectMethod = {
   description:
     "In super flow: open a feat branch worktree for sediment and bind it to this thread (edits go via plain write_file).",
   intents: ["new_feat_branch"],
+  for_reflectable: true,
   schema: {
     args: {
       intent: { type: "string", required: true, description: "沉淀意图（派生 feat 分支名）" },
@@ -78,7 +79,7 @@ export async function executeNewFeatBranch(
   if (thread.persistence.stonesBranch) {
     return JSON.stringify({
       ok: false,
-      note: `本 thread 已绑定 feat 分支 '${thread.persistence.stonesBranch}'（intent='${thread.persistence.sedimentIntent ?? ""}'）。先 evolve_self 提交它，再开新分支。`,
+      note: `本 thread 已绑定 feat 分支 '${thread.persistence.stonesBranch}'（intent='${thread.persistence.sedimentIntent ?? ""}'）。先 create_pr_and_invite_reviewers 提交它，再开新分支。`,
     });
   }
 
@@ -97,6 +98,6 @@ export async function executeNewFeatBranch(
     branch: r.branch,
     note:
       `已开 feat 分支 ${r.branch} 并绑定本 thread。现在用 write_file / file_window.edit 直接编辑 ` +
-      `stones/<id>/... 文件（自动落 feat worktree），编辑完调 evolve_self 提交并开 PR。`,
+      `stones/<id>/... 文件（自动落 feat worktree），编辑完调 create_pr_and_invite_reviewers 提交并开 PR。`,
   });
 }

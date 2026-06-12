@@ -3,9 +3,9 @@
  *
  * 地基不变量：
  * `session-<sid>` worktree 是纯运行时派生物，**永不合入 main**——旧 session→main 合入语义
- * （write_file → super flow evolve_self ff/PR 二元闸）已退役。沉淀进 canonical 走：
+ * （write_file → super flow create_pr_and_invite_reviewers ff/PR 二元闸）已退役。沉淀进 canonical 走：
  * - super flow 内 `new_feat_branch(intent)` 开 feat 分支并绑定 thread → 普通 write_file 直接
- *   编辑 feat worktree 下文件 → `evolve_self` finalize（commit + 开 PR + 清绑定），main 暂不变；
+ *   编辑 feat worktree 下文件 → `create_pr_and_invite_reviewers` finalize（commit + 开 PR + 清绑定），main 暂不变；
  * - 治理（resolve PR-Issue / rollback stone）经控制面 HTTP 端点，底层走 persistable 的
  *   resolvePrIssue / rollback（interim 合入通道，保留不动）；本测试直接调验证 git 协议。
  *
@@ -25,8 +25,8 @@ import {
   rollback,
   SUPERVISOR_OBJECT_ID,
 } from "@ooc/core/persistable";
-import { executeEvolveSelf } from "@ooc/builtins/root/executable/method.evolve-self";
-import { executeNewFeatBranch } from "@ooc/builtins/root/executable/method.new-feat-branch";
+import { executeCreatePrAndInviteReviewers } from "@ooc/core/reflectable/reflect-request/method.create-pr-and-invite-reviewers";
+import { executeNewFeatBranch } from "@ooc/core/reflectable/reflect-request/method.new-feat-branch";
 import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import { runRecoveryCheck } from "@ooc/core/app/server/bootstrap/recovery-check";
 import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
@@ -69,7 +69,7 @@ function mainSelf(baseDir: string, id: string): string {
 
 /**
  * super(foo) 沉淀全流程 helper：new_feat_branch → write_file ×N（直接编辑 feat worktree）→
- * evolve_self finalize。同一可变 thread 携 feat 绑定贯穿三步。返回 evolve_self 的解析结果。
+ * create_pr_and_invite_reviewers finalize。同一可变 thread 携 feat 绑定贯穿三步。返回 create_pr_and_invite_reviewers 的解析结果。
  */
 async function sediment(opts: {
   baseDir: string;
@@ -94,10 +94,10 @@ async function sediment(opts: {
       throw new Error(`write_file failed: ${(w as { error?: string }).error}`);
     }
   }
-  return JSON.parse((await executeEvolveSelf(ctx({}))) as string);
+  return JSON.parse((await executeCreatePrAndInviteReviewers(ctx({}))) as string);
 }
 
-describe("e2e: self-scope 沉淀（evolve_self → feat-branch PR → resolve merge）", () => {
+describe("e2e: self-scope 沉淀（create_pr_and_invite_reviewers → feat-branch PR → resolve merge）", () => {
   test("super(foo) 改自己 → 开 feat PR（reviewers={supervisor}）→ resolve merge → main 推进", async () => {
     const baseDir = await newWorld(["agent_of_x", "supervisor"]);
 

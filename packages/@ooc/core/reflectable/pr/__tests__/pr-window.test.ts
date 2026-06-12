@@ -219,7 +219,7 @@ describe("pr_window method", () => {
     // （带真实 intent），并明确禁止 curl/program 自查空转。
     expect(repairMsg!.content).toContain("new_feat_branch");
     expect(repairMsg!.content).toContain('share into supervisor land'); // 真实 intent，照抄即可
-    expect(repairMsg!.content).toContain("evolve_self");
+    expect(repairMsg!.content).toContain("create_pr_and_invite_reviewers");
     expect(repairMsg!.content).toMatch(/curl|program/); // 明示「不要 curl/program 自查」
   });
 });
@@ -274,9 +274,9 @@ describe("routePrRepairMessage", () => {
 });
 
 describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
-  test("request_changes → 同 intent 幂等重绑 feat 分支（旧编辑仍在）→ 再 evolve_self 重开 PR", async () => {
-    const { executeNewFeatBranch } = await import("@ooc/builtins/root/executable/method.new-feat-branch");
-    const { executeEvolveSelf } = await import("@ooc/builtins/root/executable/method.evolve-self");
+  test("request_changes → 同 intent 幂等重绑 feat 分支（旧编辑仍在）→ 再 create_pr_and_invite_reviewers 重开 PR", async () => {
+    const { executeNewFeatBranch } = await import("@ooc/core/reflectable/reflect-request/method.new-feat-branch");
+    const { executeCreatePrAndInviteReviewers } = await import("@ooc/core/reflectable/reflect-request/method.create-pr-and-invite-reviewers");
     const baseDir = await newWorld(["foo", "bob"]);
 
     // super(foo) thread（沉淀发起者）
@@ -293,8 +293,8 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
     await editInFeatWorktree(baseDir, branch, "objects/foo/self.md", "foo v2\n");
     await editInFeatWorktree(baseDir, branch, "objects/bob/readable.md", "bob touched by foo\n");
 
-    // ③ evolve_self → 开 PR（reviewers 含 bob + supervisor），清绑定
-    const fin1 = JSON.parse((await executeEvolveSelf({ thread: superFoo, args: {} } as never)) as string);
+    // ③ create_pr_and_invite_reviewers → 开 PR（reviewers 含 bob + supervisor），清绑定
+    const fin1 = JSON.parse((await executeCreatePrAndInviteReviewers({ thread: superFoo, args: {} } as never)) as string);
     expect(fin1.ok).toBe(true);
     const issueId = fin1.issueId as number;
     expect((fin1.reviewers as string[]).sort()).toEqual(["bob", "supervisor"]);
@@ -321,7 +321,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
 
     // re-edit + re-submit
     await editInFeatWorktree(baseDir, branch, "objects/foo/self.md", "foo v3 revised\n");
-    const fin2 = JSON.parse((await executeEvolveSelf({ thread: superFoo, args: {} } as never)) as string);
+    const fin2 = JSON.parse((await executeCreatePrAndInviteReviewers({ thread: superFoo, args: {} } as never)) as string);
     expect(fin2.ok).toBe(true);
     expect(fin2.issueId).toBeGreaterThan(issueId); // 重开新 PR
   });

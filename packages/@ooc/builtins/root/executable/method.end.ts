@@ -1,5 +1,6 @@
 import type { MethodExecutionContext, ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import type { ContextWindow, DoWindow, TalkWindow } from "@ooc/core/extendable/_shared/types.js";
+import type { ReflectRequestWindow } from "@ooc/core/reflectable/reflect-request/types.js";
 import { continueMethod } from "@ooc/core/executable/windows/do/method.continue.js";
 import { sayMethod } from "@ooc/core/executable/windows/talk/method.say.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
@@ -14,10 +15,17 @@ export const endMethod: ObjectMethod = {
   exec: (ctx) => executeEndMethod(ctx),
 };
 
-function findCreatorWindow(ctx: MethodExecutionContext): DoWindow | TalkWindow | undefined {
+function findCreatorWindow(
+  ctx: MethodExecutionContext,
+): DoWindow | TalkWindow | ReflectRequestWindow | undefined {
   const list = (ctx.thread?.contextWindows ?? []) as ContextWindow[];
   for (const w of list) {
-    if ((w.class === "do" || w.class === "talk") && w.isCreatorWindow === true) {
+    // talk + reflect_request 同形会话窗（super 反思 thread 的会话面），均经 creator 通道回报 caller。
+    // 用字面量判（非 isTalkLikeClass）以保 TS discriminant 收窄出 isCreatorWindow。
+    if (
+      (w.class === "do" || w.class === "talk" || w.class === "reflect_request") &&
+      w.isCreatorWindow === true
+    ) {
       return w;
     }
   }
@@ -57,7 +65,7 @@ async function autoReplyAndArchiveDo(
 
 async function autoReplyTalk(
   ctx: MethodExecutionContext,
-  creator: TalkWindow,
+  creator: TalkWindow | ReflectRequestWindow,
   result: string,
 ): Promise<void> {
   const thread = ctx.thread!;

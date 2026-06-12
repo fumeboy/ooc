@@ -4,7 +4,7 @@
  *
  * 地基不变量（用户拍板）：`session-<sid>` worktree 是纯运行时派生物，**永不合入
  * main**——session→main 合入语义（旧 tryMergeSelf self-scope ff / cross-scope→PR 二元闸 +
- * evolve_self）已退役。沉淀进 canonical 走 reflectable feat-branch PR 路径（见 stone-feat-branch.ts）。
+ * create_pr_and_invite_reviewers）已退役。沉淀进 canonical 走 reflectable feat-branch PR 路径（见 stone-feat-branch.ts）。
  *
  * stone 写落点：
  * - **HTTP 控制面写**（人类已决策）经 `httpDirectMainWrite` 直写 `stones/main/` 并 commit。

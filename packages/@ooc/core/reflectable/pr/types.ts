@@ -1,10 +1,10 @@
-import type { BaseContextWindow } from "../_shared/types.js";
+import type { BaseContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
 /**
  * PR window —— reviewer 看到的「一条待审 feat-branch PR」展示单元（collaborable 家族）。
  *
  * reflectable 沉淀（feat-branch PR 流程）：
- * super(foo) `evolve_self` 开 PR 后，给每个 reviewer 的 super-session thread 投递一条
+ * super(foo) `create_pr_and_invite_reviewers` 开 PR 后，给每个 reviewer 的 super-session thread 投递一条
  * pr_window；reviewer 在 thinkloop 里通过 pr_window 注册的 method（approve / reject /
  * request_changes）亲手批，底层走 approvePrIssue 聚合 + prAutoMerge 闸。
  *

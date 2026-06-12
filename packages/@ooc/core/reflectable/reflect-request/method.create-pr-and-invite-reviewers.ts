@@ -1,17 +1,21 @@
 /**
- * root.evolve_self method —— reflectable 沉淀的 finalizer（feat-branch PR 路径）。
+ * reflect_request.create_pr_and_invite_reviewers method —— reflectable 沉淀的 finalizer（feat-branch PR 路径）。
+ *
+ * 挂在 reflect_request window 上（super flow 反思会话面），标 for_reflectable（仅 super flow surface）。
+ * 旧名 evolve_self 已退役——名副其实：它就是 commit feat worktree → 算 reviewer 集 → createPrIssue
+ * → 投递 pr_window 给各 reviewer。
  *
  * 地基不变量（用户拍板）：`session-<sid>` worktree 是纯运行时派生物，**永不合入 main**。
  * 沉淀知识/功能进 canonical 要走「另起 feat 分支 → 直接编辑 → commit → PR → review → merge」。
  *
- * evolve_self 是沉淀**第三步（finalizer）**，**不再吃 edits 参数**。完整序列：
+ * 沉淀**第三步（finalizer）**，**不吃 edits 参数**。完整序列：
  *   1. new_feat_branch(intent)  —— 开 feat 分支并绑定本 thread。
  *   2. write_file / file_window.edit ×N —— 直接编辑 feat worktree 下文件（绑定覆盖优先路由）。
- *   3. evolve_self —— 读 thread 的 feat 绑定 → commit 该 feat worktree（署名 foo）→ 冒泡 reviewer
- *      → createPrIssue 开 PR → **清除绑定**。
+ *   3. create_pr_and_invite_reviewers —— 读 thread 的 feat 绑定 → commit 该 feat worktree（署名 foo）
+ *      → computeReviewerSet 冒泡 reviewer → createPrIssue 开 PR → 投递 pr_window → **清除绑定**。
  *
- * interim 合入：PR 仍由 supervisor 经既有 resolvePrIssue 单点 merge/reject；
- * reviewers 集只存储不强制执行（多 reviewer 审批待建）。
+ * 合入闸：reviewer 集**强制聚合执行**——`aggregatePrApproval` 要求全员 approve 才 ready-to-merge
+ * （reject 一票否决），再由 `.world.json prAutoMerge` 决定自动/人工合入（编排见 reflectable/pr/approval-flow.ts）。
  */
 
 import type {
@@ -19,22 +23,23 @@ import type {
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/method-types.js";
 import { commitAndOpenPr } from "@ooc/core/persistable/index.js";
-import { deliverPrWindowToReviewers } from "@ooc/core/executable/windows/pr/delivery.js";
+import { deliverPrWindowToReviewers } from "@ooc/core/reflectable/pr/delivery.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 
-const EVOLVE_SELF_TIP = `evolve_self 是 super flow 沉淀的 finalizer（feat 分支 → commit → PR）。
+const CREATE_PR_TIP = `create_pr_and_invite_reviewers 是 super flow 沉淀的 finalizer（feat 分支 → commit → PR）。
 前置：先 new_feat_branch(intent) 开分支绑定本 thread，再用 write_file / file_window.edit 直接编辑
-feat worktree 下文件（stones/<id>/...）。本方法读绑定、commit 你的编辑、开 PR 交 review 合入。
+feat worktree 下文件（stones/<id>/...）。本方法读绑定、commit 你的编辑、开 PR 邀请 reviewer 评审合入。
 参数：intent（可选，覆盖 new_feat_branch 时的沉淀意图作 PR 标题；缺省沿用绑定的 intent）。`;
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
-export const evolveSelfMethod: ObjectMethod = {
+export const createPrAndInviteReviewersMethod: ObjectMethod = {
   description:
-    "In super flow: finalize the bound feat branch (commit edits + open PR). Requires new_feat_branch first.",
-  intents: ["evolve_self"],
+    "In super flow: commit the bound feat branch, open a PR and invite the bubbled reviewer set. Requires new_feat_branch first.",
+  intents: ["create_pr_and_invite_reviewers"],
+  for_reflectable: true,
   schema: {
     args: {
       intent: {
@@ -44,24 +49,24 @@ export const evolveSelfMethod: ObjectMethod = {
       },
     },
   },
-  exec: (ctx) => executeEvolveSelf(ctx),
+  exec: (ctx) => executeCreatePrAndInviteReviewers(ctx),
 };
 
-export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<string | undefined> {
+export async function executeCreatePrAndInviteReviewers(ctx: MethodExecutionContext): Promise<string | undefined> {
   const thread = ctx.thread;
-  if (!thread) return "[evolve_self] 缺少 thread context。";
-  if (!thread.persistence) return "[evolve_self] thread 无 persistence。";
+  if (!thread) return "[create_pr_and_invite_reviewers] 缺少 thread context。";
+  if (!thread.persistence) return "[create_pr_and_invite_reviewers] thread 无 persistence。";
 
   const { baseDir, sessionId, objectId, stonesBranch, sedimentIntent } = thread.persistence;
   if (!isSuperSessionId(sessionId)) {
-    return `[evolve_self] 仅 super flow 内可用（当前 session='${sessionId}'）。请在业务 thread 里 talk(target="super") 触发 super flow 后再调。`;
+    return `[create_pr_and_invite_reviewers] 仅 super flow 内可用（当前 session='${sessionId}'）。请在业务 thread 里 talk(target="super") 触发 super flow 后再调。`;
   }
 
   // 无 feat 绑定 → 提示先 new_feat_branch（fail-loud）。
   if (!stonesBranch) {
     return JSON.stringify({
       ok: false,
-      note: EVOLVE_SELF_TIP,
+      note: CREATE_PR_TIP,
       missing: ["feat 分支绑定（先调 new_feat_branch(intent) 开分支并编辑）"],
     });
   }
@@ -71,7 +76,7 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
   if (!intent || !intent.trim()) {
     return JSON.stringify({
       ok: false,
-      note: EVOLVE_SELF_TIP,
+      note: CREATE_PR_TIP,
       missing: ["intent（绑定无 sedimentIntent 时须显式传）"],
     });
   }
@@ -86,7 +91,7 @@ export async function executeEvolveSelf(ctx: MethodExecutionContext): Promise<st
   });
   if (!r.ok) {
     // NO_CHANGES（还没编辑就 finalize）等错误保留绑定，让 super(foo) 继续编辑后重试。
-    return `[evolve_self:${r.code}] ${r.message}`;
+    return `[create_pr_and_invite_reviewers:${r.code}] ${r.message}`;
   }
 
   // 给每个 reviewer 的 super-session thread 投递一条 pr_window（reviewer 在 thinkloop

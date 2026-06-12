@@ -11,7 +11,7 @@ import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 
 const CREATE_OBJECT_TIP = `create_object 建一个全新对象的骨架（仅业务 session 可调）。
 参数：objectId（必填，新对象 id）、selfMd（必填）、readableMd（必填）、knowledge（可选 {filename: content}）。
-骨架落 session worktree，本 session 内即可用；session 是运行时派生物，永不合入 main——进 canonical 走独立 feat-branch PR（super flow evolve_self）。`;
+骨架落 session worktree，本 session 内即可用；session 是运行时派生物，永不合入 main——进 canonical 走独立 feat-branch PR（super flow create_pr_and_invite_reviewers）。`;
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
@@ -97,6 +97,6 @@ export async function executeCreateObject(ctx: MethodExecutionContext): Promise<
   return JSON.stringify({
     ok: true,
     objectId: r.objectId,
-    note: "已落 session worktree，本 session 内即可用。session 永不合入 main——进 canonical 走独立 feat-branch PR（super flow evolve_self）。",
+    note: "已落 session worktree，本 session 内即可用。session 永不合入 main——进 canonical 走独立 feat-branch PR（super flow create_pr_and_invite_reviewers）。",
   });
 }

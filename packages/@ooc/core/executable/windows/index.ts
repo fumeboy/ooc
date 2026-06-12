@@ -9,7 +9,7 @@
  * （registerObjectType / getObjectDefinition / listRegisteredObjectTypes /
  *  assertAllObjectDefinitionsRegistered / lookupMethod / lookupMethodEntry /
  *  lookupConstructor / resolveParentClassChain / resolveEffectiveVisibleType）。
- * 调用方应直接使用 builtinRegistry.registerExecutable(...) / registerReadable(...) 或 WorldRuntime.objects.*。
+ * 调用方应直接使用 builtinRegistry.registerExecutable(...) / registerReadable(...)。
  */
 
 export type {
@@ -82,8 +82,9 @@ import "@ooc/builtins/root";
 // do / talk 是所有 Object 的固有能力。
 import "./do/index.js";
 import "./talk/index.js";
-// pr_window —— reflectable 沉淀的 reviewer 评审窗口（collaborable 家族）。
-import "./pr/index.js";
+// reflectable 维度的 window 家族（pr 评审窗 + reflect_request 反思会话窗）——
+// 物理寄居 @ooc/core/reflectable/，经 barrel side-effect 注册到 builtinRegistry。
+import "@ooc/core/reflectable/index.js";
 
 // method_exec form 是 method 调用过程的临时载体（Object 内置特性）。
 import "./method_exec/index.js";

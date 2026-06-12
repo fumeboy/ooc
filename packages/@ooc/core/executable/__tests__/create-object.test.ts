@@ -8,7 +8,7 @@
  *  (b) main 仍无该对象（未合入）；
  *  (c) ALREADY_EXISTS（main 已存在 / 同 session 重复建）/ super-session 拒 / 非空校验 / 非法 id；
  *  (d) 地基不变量：session 新对象天生 ephemeral——session worktree 永不合入 main；
- *      进 canonical 走独立 feat-branch PR（super(foo) new_feat_branch + 直接编辑 + evolve_self）。
+ *      进 canonical 走独立 feat-branch PR（super(foo) new_feat_branch + 直接编辑 + create_pr_and_invite_reviewers）。
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -16,8 +16,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests, readSelf } from "@ooc/core/persistable";
 import { executeCreateObject } from "@ooc/builtins/root/executable/method.create-object";
-import { executeEvolveSelf } from "@ooc/builtins/root/executable/method.evolve-self";
-import { executeNewFeatBranch } from "@ooc/builtins/root/executable/method.new-feat-branch";
+import { executeCreatePrAndInviteReviewers } from "@ooc/core/reflectable/reflect-request/method.create-pr-and-invite-reviewers";
+import { executeNewFeatBranch } from "@ooc/core/reflectable/reflect-request/method.new-feat-branch";
 import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 
@@ -179,7 +179,7 @@ describe("create_object (建新对象原语)", () => {
     expect(builtin).toContain("[create_object:BUILTIN_CONFLICT]");
   });
 
-  test("(d) session 新对象 ephemeral；进 canonical 走独立 feat-branch PR（super(foo) new_feat_branch + 直接编辑 + evolve_self）", async () => {
+  test("(d) session 新对象 ephemeral；进 canonical 走独立 feat-branch PR（super(foo) new_feat_branch + 直接编辑 + create_pr_and_invite_reviewers）", async () => {
     const baseDir = await newWorld(["alice"]);
 
     // 业务 session s1：alice 建 report-writer（落 session worktree，永不合入）
@@ -195,7 +195,7 @@ describe("create_object (建新对象原语)", () => {
     await expect(stat(mainObjDir(baseDir, "report-writer"))).rejects.toMatchObject({ code: "ENOENT" });
 
     // 进 canonical = super(alice) 经 feat-branch PR 沉淀新对象（独立路径，不碰 session）。
-    // 同一可变 thread 携 feat 绑定贯穿 new_feat_branch → write_file → evolve_self。
+    // 同一可变 thread 携 feat 绑定贯穿 new_feat_branch → write_file → create_pr_and_invite_reviewers。
     const superThread = {
       persistence: { baseDir, objectId: "alice", sessionId: "super", threadId: "tS" } as Record<string, unknown>,
       contextWindows: [] as unknown[],
@@ -212,7 +212,7 @@ describe("create_object (建新对象原语)", () => {
       ctx({ path: "stones/report-writer/readable.md", content: "# report-writer\n自述\n" }),
     );
     // 新对象 ≠ alice 自治区 → reviewer 集含新对象 owner + supervisor。
-    const out = await executeEvolveSelf(ctx({}));
+    const out = await executeCreatePrAndInviteReviewers(ctx({}));
     const r = JSON.parse(out as string);
     expect(r.ok).toBe(true);
     expect(r.kind).toBe("pr-issue");

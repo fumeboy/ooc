@@ -97,7 +97,7 @@ export async function threadLlmInfraFailed(sid: string, objectId: string, thread
 /**
  * GET 一个 stone 的 self.md，带重试。
  *
- * 新模型（去 metaprog）下建对象 = 业务 session write_file 落 session worktree → super flow evolve_self
+ * 新模型（去 metaprog）下建对象 = 业务 session write_file 落 session worktree → super flow create_pr_and_invite_reviewers
  * 合入 main 才在 /api/stones 可见（有延迟，且 evolve 是发起 job 之后的独立 super flow job）。建对象类
  * 判据若 seed-job done 后立即 GET main 会假阴性。本 helper 重试等待 evolve 合入完成。
  * 仍 404 = 对象确实没合入 main（agent 没建/没 evolve，真问题）。
@@ -123,7 +123,7 @@ export async function getStoneSelfWithRetry(
  * function_call_output result 含 ok:true）。
  *
  * 用于建对象类判据：新模型（去 metaprog）下 create_object 落 session worktree、**不立即合入 main**
- * （需 super flow evolve_self），supervisor 常建完即 end 不 evolve → GET /api/stones/<id>(main) 404。
+ * （需 super flow create_pr_and_invite_reviewers），supervisor 常建完即 end 不 evolve → GET /api/stones/<id>(main) 404。
  * 「建对象能力达成」的正确判据 = create_object 成功（对象落 worktree），而非「已 evolve 合入 main」
  * （后者是单独的 persistable/reflectable 合入能力）。
  */

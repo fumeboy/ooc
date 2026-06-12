@@ -269,8 +269,8 @@ export async function commitAndOpenPr(
         code: "NO_CHANGES",
         message:
           `feat 分支 ${branch} 工作树无 stone 改动——先 write_file / file_window.edit 编辑 stone 路径 ` +
-          `（stones/<self>/...，objects/...）再 evolve_self。若你本次只往 pool 沉淀了知识/记忆 ` +
-          `（pools/...，write-through 已立即生效），则无需 evolve_self、也开不出 PR。`,
+          `（stones/<self>/...，objects/...）再 create_pr_and_invite_reviewers。若你本次只往 pool 沉淀了知识/记忆 ` +
+          `（pools/...，write-through 已立即生效），则无需 create_pr_and_invite_reviewers、也开不出 PR。`,
       } as const;
     }
 

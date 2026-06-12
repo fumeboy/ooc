@@ -15,7 +15,7 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 interface WaitCandidate {
   id: string;
-  class: "talk" | "do";
+  class: "talk" | "reflect_request" | "do";
   hint: string;
 }
 
@@ -27,22 +27,24 @@ function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
   for (const w of (thread.contextWindows ?? []) as ContextWindow[]) {
     // 每种 window 的"alive"状态不同——talk=open，do=running
     switch (w.class) {
-      case "talk": {
+      // talk + reflect_request 同形会话窗（reflect_request = super 反思 thread 的会话面）
+      case "talk":
+      case "reflect_request": {
         if (w.status !== "open") break;
         if (w.isCreatorWindow) {
           out.push({
             id: w.id,
-            class: "talk",
-            hint: `creator talk (target=${w.target}) — 等创建者发新消息`,
+            class: w.class,
+            hint: `creator ${w.class} (target=${w.target}) — 等创建者发新消息`,
           });
         } else if (hasOutgoingSayOnTalk(thread, w.id)) {
           out.push({
             id: w.id,
-            class: "talk",
-            hint: `自建 talk (target=${w.target}, 已 say 过) — 等对端回信`,
+            class: w.class,
+            hint: `自建 ${w.class} (target=${w.target}, 已 say 过) — 等对端回信`,
           });
         }
-        // 自建但未 say 过的 talk 不算合法候选——会在错误消息里单独点名
+        // 自建但未 say 过的会话窗不算合法候选——会在错误消息里单独点名
         break;
       }
       case "do": {
@@ -150,8 +152,8 @@ export async function handleWaitTool(
     );
   }
 
-  // R3: on 类型不合法（非 talk / 非 do）—— 这同时盖掉了 root/method_exec/file 等
-  if (target.class !== "talk" && target.class !== "do") {
+  // R3: on 类型不合法（非 talk / reflect_request / do）—— 这同时盖掉了 root/method_exec/file 等
+  if (target.class !== "talk" && target.class !== "reflect_request" && target.class !== "do") {
     // program window 给针对性提示:它是同步执行,结果已落在 history 里,不需要 wait
     const typeSpecificHint =
       target.class === "program"
@@ -167,10 +169,10 @@ export async function handleWaitTool(
     );
   }
 
-  // 类型已收窄到 talk | do。各自的"alive"状态不同，分别校验
-  if (target.class === "talk" && target.status !== "open") {
+  // 类型已收窄到 talk | reflect_request | do。各自的"alive"状态不同，分别校验
+  if ((target.class === "talk" || target.class === "reflect_request") && target.status !== "open") {
     return errorOutput(
-      `[wait] talk_window "${onRaw}" 状态是 ${target.status}（非 open），不能再等它产生 IO。\n` +
+      `[wait] ${target.class}_window "${onRaw}" 状态是 ${target.status}（非 open），不能再等它产生 IO。\n` +
         "当前合法候选：\n" +
         renderCandidates(candidates),
     );
@@ -183,8 +185,8 @@ export async function handleWaitTool(
     );
   }
 
-  // R4: 自建（非 creator）talk_window 且未 say 过 → 拒绝
-  if (target.class === "talk" && !target.isCreatorWindow && !hasOutgoingSayOnTalk(thread, target.id)) {
+  // R4: 自建（非 creator）会话窗且未 say 过 → 拒绝
+  if ((target.class === "talk" || target.class === "reflect_request") && !target.isCreatorWindow && !hasOutgoingSayOnTalk(thread, target.id)) {
     return errorOutput(
       `[wait] talk_window "${onRaw}" (target=${target.target}) 是你自建的，` +
         "但尚未 say 过任何消息——对端不知道有人在等回信。请先发出消息再 wait：\n" +
@@ -201,8 +203,8 @@ export async function handleWaitTool(
   thread.waitingOn = onRaw;
 
   const targetDesc =
-    target.class === "talk"
-      ? `creator/自建 talk (target=${target.target})`
+    target.class === "talk" || target.class === "reflect_request"
+      ? `creator/自建 ${target.class} (target=${target.target})`
       : `do (target_thread=${target.targetThreadId})`;
   const reasonSuffix = reason ? ` 原因：${reason}` : "";
   return successOutput(

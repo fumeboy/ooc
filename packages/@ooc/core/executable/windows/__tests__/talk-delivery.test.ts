@@ -228,11 +228,12 @@ describe("talk-delivery target='super' alias", () => {
         creatorSessionId: "web-test",
         persistence: { ...superFlow, threadId: "t_super_alice" },
       };
-      // creator window 类型由 init 决定：cross-session 同 object → 必须是 talk（非 do）
+      // creator window 类型由 init 决定：super 反思 thread（cross-session 同 object）→
+      // reflect_request（会话面 + 沉淀方法，复用 talk 的会话/回报机制；非 talk、非 do）。
       initContextWindows(superAlice, { creatorThreadId: "root", initialTaskTitle: "reflect" });
       const creator = superAlice.contextWindows.find((w) => (w as TalkWindow).isCreatorWindow);
       expect(creator).toBeDefined();
-      expect(creator!.class).toBe("talk"); // ← 修复核心：cross-session creator 不是 do
+      expect(creator!.class).toBe("reflect_request"); // ← super 反思会话面是 reflect_request
       expect((creator as TalkWindow).target).toBe("alice");
       expect((creator as TalkWindow).targetThreadId).toBe("root");
       await writeThread(superAlice);

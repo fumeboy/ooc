@@ -3,7 +3,7 @@
  *
  * 用户拍板：不再封装 edits 参数。super(foo) ①new_feat_branch 开 feat 分支并把绑定
  * 落 thread.persistence.stonesBranch ②用普通 write_file / file_window.edit 直接编辑 feat
- * worktree 下的文件 ③evolve_self 作 finalizer：commit + 开 PR + 清绑定。
+ * worktree 下的文件 ③create_pr_and_invite_reviewers 作 finalizer：commit + 开 PR + 清绑定。
  *
  * 本测试覆盖两层：
  *  1. **核心机制**：resolveStoneIdentityRef 携 stonesBranch → 路由 feat worktree（建之、

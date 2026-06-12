@@ -9,7 +9,7 @@
  *   1. memory 落 pools/<self>/knowledge/memory/<slug>.md 且含合法 frontmatter
  *      （reflectable.memory_layout 的 sediment write contract；pool 直写即时沉淀，无 PR）
  *   2. （若 super flow 沉淀 self.md）self.md 经 reflectable feat-branch PR 进 git
- *      （super flow new_feat_branch → 直接编辑 feat worktree → evolve_self commit + PR；resolve merge 后落 main）。
+ *      （super flow new_feat_branch → 直接编辑 feat worktree → create_pr_and_invite_reviewers commit + PR；resolve merge 后落 main）。
  *      地基不变量：session worktree 永不合入 main——沉淀走独立 feat 分支。
  *
  * 与 end-reflection-reminder.e2e.test.ts 的区别：那个测「业务 thread 调 end 时

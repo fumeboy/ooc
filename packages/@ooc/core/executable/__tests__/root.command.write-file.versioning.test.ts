@@ -80,7 +80,7 @@ function mainObjectsDir(baseDir: string): string {
 describe("write_file stone-versioning routing", () => {
   // worktree 统一模型：业务 session（sessionId="s"）对**自己 stone 自治区**的写
   // 不再即时 commit→main，而是落该 session 的 worktree（方案 A：`flows/s/objects/<id>/`）；
-  // main 不变，经 super flow evolve_self 合入才永久。下面 self-scope 测试断言 worktree 重定向。
+  // main 不变，经 super flow create_pr_and_invite_reviewers 合入才永久。下面 self-scope 测试断言 worktree 重定向。
   test("self-scope（业务 session）: 写 stones/<self>/self.md → 落 worktree，main 不变", async () => {
     const baseDir = await newWorld(["agent_of_x"]);
     const ctx = ctxFor(baseDir, "agent_of_x", {
@@ -142,8 +142,8 @@ describe("write_file stone-versioning routing", () => {
 
   test("super flow: write_file 写 stone 自治区 → fail-loud（非业务 session，无 worktree 落点），main 不变", async () => {
     // 去 metaprog：stone 写的两个落点是「业务 session worktree」（LLM 试验，
-    // 经 evolve_self 合入）与「HTTP 控制面直写 main」（人类已决策）。super flow 既非业务 session
-    // （sessionUsesWorktree("super")=false）也非 HTTP，其角色是 evolve_self 合入闸门、不是 stone
+    // 经 create_pr_and_invite_reviewers 合入）与「HTTP 控制面直写 main」（人类已决策）。super flow 既非业务 session
+    // （sessionUsesWorktree("super")=false）也非 HTTP，其角色是 create_pr_and_invite_reviewers 合入闸门、不是 stone
     // 作者——故 super session 内 write_file 写 stone 自治区 fail-loud，不再裸 commit main。
     const baseDir = await newWorld(["agent_of_x"]);
     const ctx = ctxFor(baseDir, "agent_of_x", {
@@ -340,7 +340,7 @@ describe("write_file stone-versioning routing", () => {
   });
 
   // reflectable 回归：feat 分支绑定生效时写 pool 路径 = write-through
-  // 立即生效、**不进本 PR**。此前静默直写无任何提示 → 随后 evolve_self 发现 feat 分支
+  // 立即生效、**不进本 PR**。此前静默直写无任何提示 → 随后 create_pr_and_invite_reviewers 发现 feat 分支
   // 无 stone 改动报 NO_CHANGES，LLM 困惑。断言：feat 绑定下写 pool 注入显式提示。
   test("feat 绑定下写 pools/ → 直写 + 注入 write-through 提示（不静默）", async () => {
     const baseDir = await newWorld(["agent_of_x"]);

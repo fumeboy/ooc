@@ -12,7 +12,7 @@
  *
  * 地基不变量：session worktree 是纯运行时派生物，**永不合入 main**——
  * 新对象本 session 内即可用（session-aware 读已支持），进 canonical 走独立 feat-branch PR
- * （super flow new_feat_branch → 直接编辑 → evolve_self）。本函数只负责落盘骨架到 worktree（fail-loud，不静默吞）。
+ * （super flow new_feat_branch → 直接编辑 → create_pr_and_invite_reviewers）。本函数只负责落盘骨架到 worktree（fail-loud，不静默吞）。
  */
 
 import { mkdir, stat, writeFile } from "node:fs/promises";

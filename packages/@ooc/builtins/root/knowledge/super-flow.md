@@ -55,33 +55,33 @@ canonical 权威自我，在 super flow 里走一条 **feat 分支 PR**（每次
 exec(method="new_feat_branch", args={ intent: "为什么/沉淀什么" })   # 从 main 派生 feat 分支并绑定本 thread
 exec(method="write_file", args={ path: "stones/<self>/self.md", content: … })  # 直接编辑 feat 分支下文件
 …（write_file / open_file+edit ×N，落 feat worktree，不是 session、不是 main）…
-exec(method="evolve_self")                                          # finalizer：commit feat 分支 + 开 PR
+exec(method="create_pr_and_invite_reviewers")                                          # finalizer：commit feat 分支 + 开 PR
 ```
 
 要点：
 - `new_feat_branch` 绑定后，你普通的 `write_file` / `file_window.edit` 就**直接落 feat 分支 worktree**
   （`stones/<id>/...` 路径自动路由过去）——这是 super flow 里唯一直接编辑 stone 身体的入口。
-- `evolve_self` 是 **finalizer，无内容参数**（intent 可选，缺省沿用 new_feat_branch 的）：它 commit 你
+- `create_pr_and_invite_reviewers` 是 **finalizer，无内容参数**（intent 可选，缺省沿用 new_feat_branch 的）：它 commit 你
   在 feat 分支上的编辑（署名你）→ 按变更触及谁的领地算出 reviewer 集 → 开 PR → 给每个 reviewer 投
-  pr_window。**忘了先 new_feat_branch 直接 evolve_self 会失败**（fail-loud 提示先开分支）。
+  pr_window。**忘了先 new_feat_branch 直接 create_pr_and_invite_reviewers 会失败**（fail-loud 提示先开分支）。
 - reviewer（含 supervisor，始终参与）在各自 thread 看到 pr_window，approve / reject / request_changes
   （评审协议见 pr-review 知识）。全 approve → 按 `.world.json prAutoMerge` 合入（缺省 false=人工确认）。
 - **被 reject / request-changes / 合入失败** → 一条 message 回投到你（super(foo)）的 thread，里面附了
   可逐字照抄的动作序列。照它走，**不要用 curl / program 自查空转**：
   1. `exec(method="new_feat_branch", args={ intent: "<message 里给的原 intent>" })` —— 同 intent 幂等重绑同一 feat 分支续修。
   2. `write_file` / `file_window.edit` 按反馈改 stone 路径（`stones/<self>/...`）。
-  3. `exec(method="evolve_self")` —— 重开/更新 PR 交 review。
+  3. `exec(method="create_pr_and_invite_reviewers")` —— 重开/更新 PR 交 review。
 
 ## 建 / 改对象
 
 - 改**已存在**对象（自己或别人）的文件：在上面的 feat 分支上 write_file 即可。变更越出你自己子树
-  （触及别人领地 / 新对象）→ `evolve_self` 算 reviewer 时自动把对应对象拉进 review，supervisor 恒在。
+  （触及别人领地 / 新对象）→ `create_pr_and_invite_reviewers` 算 reviewer 时自动把对应对象拉进 review，supervisor 恒在。
 - 建**全新**对象：业务 session 用 `create_object`（原子建骨架，不能裸 write_file）。新对象在本 session
   内即可用，但 session 不合入 main——进 canonical 同样走 feat 分支 PR（在 super flow 把新对象目录纳入 feat
-  分支后 evolve_self）。
+  分支后 create_pr_and_invite_reviewers）。
 - **新对象（仅 session 内、尚未 canonical）想 `talk(super)` 沉淀自己**：它自己还不在 main、当不了 PR 作者，
   所以这条 super flow 由它**最近的 canonical 祖先**代为发起（顶层新对象没有路径 parent → 由 supervisor 代发）。
-  即：祖先在 super flow 里 `new_feat_branch` → 把新对象目录写进 feat 分支 → `evolve_self` 开 PR 把它的首版沉淀进 main。
+  即：祖先在 super flow 里 `new_feat_branch` → 把新对象目录写进 feat 分支 → `create_pr_and_invite_reviewers` 开 PR 把它的首版沉淀进 main。
   你不必关心这层路由——照常 `talk(super)` 即可，系统自动选好代发者。
 
 ## supervisor 专属（你不是 supervisor 时跳过）

@@ -39,7 +39,7 @@ import { stat } from "node:fs/promises";
 import { notifyThreadActivated } from "../../../observable/index.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import { initContextWindows, injectPeerWindowsIfObjectThread } from "../_shared/init.js";
-import { isSuperSessionId, SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
+import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { creatorWindowIdOf, type TalkWindow } from "../_shared/types.js";
 
 export interface TalkDeliveryInput {
@@ -250,7 +250,8 @@ function resolveCalleeReplyToWindowId(
   callerObjectId: string,
 ): string {
   const windows = (calleeThread.contextWindows ?? []).filter(
-    (w): w is TalkWindow => w.class === "talk",
+    // talk + reflect_request 同形会话窗：callee 的 reflect_request creator 窗（super 反思）也参与回信归位。
+    (w): w is TalkWindow => isTalkLikeClass(w.class),
   );
   const byThreadId = windows.find((w) => w.targetThreadId === callerThreadId);
   if (byThreadId) return byThreadId.id;

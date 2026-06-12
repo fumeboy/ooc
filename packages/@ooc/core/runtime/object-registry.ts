@@ -37,7 +37,7 @@ export type {
 export { filterMethodsByVisibility };
 
 const RENDERABLE_VISIBLE_TYPES = new Set([
-  "root", "method_exec", "do", "todo", "talk", "pr", "program",
+  "root", "method_exec", "do", "todo", "talk", "pr", "reflect_request", "program",
   "file", "knowledge", "search", "skill_index",
   "feishu_chat", "feishu_doc", "plan",
 ]);
@@ -77,6 +77,7 @@ const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
   ["todo", { methods: {} }],
   ["talk", { methods: {} }],
   ["pr", { methods: {} }],
+  ["reflect_request", { methods: {} }],
   ["program", { methods: {} }],
   ["file", { methods: {} }],
   ["knowledge", { methods: {} }],

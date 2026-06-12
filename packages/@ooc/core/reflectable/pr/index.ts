@@ -12,13 +12,13 @@
  * supervisor 恒在 reviewer 集，故其评审入口（pr_window method + HTTP approve 端点）天然可用。
  */
 
-import { builtinRegistry, type OnCloseContext, type RenderContext } from "../_shared/registry.js";
-import type { ObjectMethod } from "../_shared/method-types.js";
+import { builtinRegistry, type OnCloseContext, type RenderContext } from "@ooc/core/executable/windows/_shared/registry.js";
+import type { ObjectMethod } from "@ooc/core/executable/windows/_shared/method-types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { readPrIssue, aggregatePrApproval } from "../../../persistable/index.js";
+import { readPrIssue, aggregatePrApproval } from "@ooc/core/persistable/index.js";
 import { applyPrApproval } from "./approval-flow.js";
 import type { PrWindow } from "./types.js";
-import type { PrApproveAction } from "../../../persistable/index.js";
+import type { PrApproveAction } from "@ooc/core/persistable/index.js";
 
 const MAX_DIFF_RENDER_BYTES = 8192;
 

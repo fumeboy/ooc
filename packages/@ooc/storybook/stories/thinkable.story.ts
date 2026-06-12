@@ -65,7 +65,7 @@ export async function runControlPlane(): Promise<StoryResult> {
           break;
         }
       }
-      const node = renderMethodsNode({ id: "f1", class: "file" } as never, builtinRegistry);
+      const node = renderMethodsNode({ id: "f1", class: "file" } as never, {} as never, builtinRegistry);
       const serialized = JSON.stringify(node);
       // description 文本片段须出现在渲染里——否则说明又退回只渲 name/paths
       const descRendered = descMethod !== "" && snippet.length > 0 && serialized.includes(snippet);

@@ -125,7 +125,7 @@ export {
 
 export { readSelf, selfFile, writeSelf } from "./stone-self";
 export {
-  // createObjectInSession: 在业务 session worktree 建新对象骨架（不 commit，evolve_self 合入）
+  // createObjectInSession: 在业务 session worktree 建新对象骨架（不 commit，create_pr_and_invite_reviewers 合入）
   createObjectInSession,
   type CreateObjectInSessionInput,
   type CreateObjectInSessionResult,

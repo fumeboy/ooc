@@ -1,7 +1,7 @@
 /**
- * L6 — Reflectable（super flow / evolve_self / memory）。
+ * L6 — Reflectable（super flow / create_pr_and_invite_reviewers / memory）。
  * 自我迭代：业务 session 是运行时试验层（worktree，永不合入 main）；进 canonical 走
- * super flow evolve_self → feat-branch PR（地基不变量）。
+ * super flow create_pr_and_invite_reviewers → feat-branch PR（地基不变量）。
  * feat-branch PR 沉淀 / 多 reviewer / memory 由 super flow 编排，需 worker → skip 归 Tier B；
  * 但「业务 session worktree 隔离 + main 不被污染」可经 ensureSessionWorktree 确定性单测。
  */
@@ -33,15 +33,15 @@ export const L6_STORIES: Story[] = [
   story({
     id: "L6-EVOLVE-FEAT-PR",
     layer: "reflectable",
-    expectation: "new_feat_branch → 直接编辑 feat worktree → evolve_self 开 feat-branch PR（reviewers={supervisor}），main 暂不变",
+    expectation: "new_feat_branch → 直接编辑 feat worktree → create_pr_and_invite_reviewers 开 feat-branch PR（reviewers={supervisor}），main 暂不变",
     design: "reflectable：沉淀走 feat 分支 PR。stone-feat-branch.ts:createFeatBranchWorktree + commitAndOpenPr（thread 携 feat 绑定，write_file 直接编辑）。需 super flow worker",
-    run: async () => skip("沉淀由 super flow 编排（new_feat_branch→编辑→evolve_self），需 worker（Tier B/e2e）"),
+    run: async () => skip("沉淀由 super flow 编排（new_feat_branch→编辑→create_pr_and_invite_reviewers），需 worker（Tier B/e2e）"),
   }),
 
   story({
     id: "L6-EVOLVE-CROSS-PR",
     layer: "reflectable",
-    expectation: "evolve_self 触及别人对象 → reviewer 集冒泡含别人 owner + supervisor",
+    expectation: "create_pr_and_invite_reviewers 触及别人对象 → reviewer 集冒泡含别人 owner + supervisor",
     design: "reflectable：越自治区改动 reviewer 冒泡。stone-feat-branch.ts:computeReviewerSet",
     run: async () => skip("cross-scope evolve 需 super flow 编排，控制面无 worker（Tier B/e2e）"),
   }),

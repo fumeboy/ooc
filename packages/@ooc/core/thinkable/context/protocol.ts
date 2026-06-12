@@ -145,7 +145,9 @@ export async function buildProtocolKnowledgeWindows(
   // creator-reply 协议：每个 creator do/talk window 一条，按 window id 去重。
   const seen = new Set<string>();
   for (const w of (thread.contextWindows ?? []) as ContextWindow[]) {
-    const isCreator = (w.class === "do" || w.class === "talk") && w.isCreatorWindow === true;
+    const isCreator =
+      (w.class === "do" || w.class === "talk" || w.class === "reflect_request") &&
+      w.isCreatorWindow === true;
     if (!isCreator) continue;
     const path = `internal/windows/${w.class}/creator-reply/${w.id}`;
     if (seen.has(path)) continue;

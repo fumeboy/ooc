@@ -22,7 +22,7 @@ import {
   resolvePrIssue,
   type PrApproveAction,
   type PrApprovalVerdict,
-} from "../../../persistable/index.js";
+} from "@ooc/core/persistable/index.js";
 import { routePrRepairMessage } from "./delivery.js";
 
 export interface ApplyPrApprovalInput {
@@ -73,7 +73,7 @@ function repairActionBlock(intent: string, editVerb: string): string {
     `1. exec(method="new_feat_branch", args={ intent: ${JSON.stringify(intent)} }) ` +
     `—— 同 intent 幂等重绑该 feat 分支续修。\n` +
     `2. 用 write_file / file_window.edit ${editVerb}（改 stone 路径 stones/<self>/...）。\n` +
-    `3. exec(method="evolve_self") —— 提交并重开/更新 PR 交 review。`
+    `3. exec(method="create_pr_and_invite_reviewers") —— 提交并重开/更新 PR 交 review。`
   );
 }
 

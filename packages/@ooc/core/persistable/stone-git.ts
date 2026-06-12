@@ -112,7 +112,7 @@ export function gitRevParse(repoDir: string, ref: string): GitResult<string> {
 /**
  * porcelain status 文本（caller 自行 parse）。空字符串表示工作树干净。
  * `--untracked-files=all` 把未跟踪**目录**展开成逐个文件（否则 git 折叠成 `dir/`），
- * 让 caller（evolve_self diff）能列到文件粒度。
+ * 让 caller（create_pr_and_invite_reviewers diff）能列到文件粒度。
  */
 export function gitStatus(repoDir: string): GitResult<string> {
   const r = runRaw(repoDir, ["status", "--porcelain", "--untracked-files=all"]);

@@ -3,7 +3,7 @@
  *
  * reflectable 沉淀（窗口 + 回修）：
  *
- * - `deliverPrWindowToReviewers`：evolve_self 开 PR 后，给每个 reviewer 的 super-session
+ * - `deliverPrWindowToReviewers`：create_pr_and_invite_reviewers 开 PR 后，给每个 reviewer 的 super-session
  *   pr-review thread 投递一条 pr_window（既有 inline window + inbox_message_arrived 机制）。
  *   thread id 由 (reviewerObjectId, issueId) 确定派生——同一 PR 重复投递幂等更新同一 thread，
  *   不堆叠重复窗口。supervisor 恒在 reviewer 集，故其评审入口天然可用。
@@ -23,11 +23,11 @@ import {
   readThread,
   writeThread,
   sessionMetadataFile,
-} from "../../../persistable/index.js";
-import { notifyThreadActivated } from "../../../observable/index.js";
+} from "@ooc/core/persistable/index.js";
+import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
-import { ROOT_WINDOW_ID } from "../_shared/types.js";
-import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
+import { ROOT_WINDOW_ID } from "@ooc/core/executable/windows/_shared/types.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
 import type { PrWindow } from "./types.js";
 
 /** pr_window 的稳定 id：同一 reviewer 看同一 PR 复用同一 window（幂等更新，不堆叠）。 */

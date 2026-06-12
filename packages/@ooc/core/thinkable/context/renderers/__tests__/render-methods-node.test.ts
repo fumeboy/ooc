@@ -10,7 +10,7 @@ import { renderMethodsNode } from "../xml.js";
  * 这是「测试全绿但功能没了」的盲区——迁移前后都缺此覆盖。
  */
 test("window method (set_viewport) still rendered in <commands> for file window", () => {
-  const node = renderMethodsNode({ id: "f1", class: "file" } as any, builtinRegistry);
+  const node = renderMethodsNode({ id: "f1", class: "file" } as any, {} as any, builtinRegistry);
   expect(node).not.toBeNull();
   const serialized = JSON.stringify(node);
   expect(serialized).toContain("set_viewport"); // window method
@@ -18,6 +18,32 @@ test("window method (set_viewport) still rendered in <commands> for file window"
 });
 
 test("talk window method (set_transcript_window) rendered in <commands>", () => {
-  const node = renderMethodsNode({ id: "t1", class: "talk" } as any, builtinRegistry);
+  const node = renderMethodsNode({ id: "t1", class: "talk" } as any, {} as any, builtinRegistry);
   expect(JSON.stringify(node)).toContain("set_transcript_window");
+});
+
+/**
+ * reflect_request（super flow 反思会话面）：复用 talk 的会话 method（say）+ 挂 reflectable
+ * 沉淀 method（new_feat_branch / create_pr_and_invite_reviewers，标 for_reflectable）。
+ * for_reflectable 门控：沉淀 method **仅在 super flow 下 surface**，业务 session 菜单不出现
+ * （取代旧的 root method「存在即有效」+ exec 内 isSuperSessionId 命令式拒绝）。
+ */
+test("reflect_request: for_reflectable methods gated to super flow; talk methods always shown", () => {
+  const rr = { id: "rr1", class: "reflect_request" } as any;
+
+  // 业务 session：reflectable 沉淀 method 被隐藏；普通会话 method（say）仍在
+  const biz = JSON.stringify(
+    renderMethodsNode(rr, { persistence: { sessionId: "biz-123" } } as any, builtinRegistry),
+  );
+  expect(biz).toContain("say"); // 复用 talk 会话 method
+  expect(biz).not.toContain("new_feat_branch");
+  expect(biz).not.toContain("create_pr_and_invite_reviewers");
+
+  // super flow：for_reflectable 沉淀 method 出现
+  const sup = JSON.stringify(
+    renderMethodsNode(rr, { persistence: { sessionId: "super" } } as any, builtinRegistry),
+  );
+  expect(sup).toContain("say");
+  expect(sup).toContain("new_feat_branch");
+  expect(sup).toContain("create_pr_and_invite_reviewers");
 });

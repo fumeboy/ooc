@@ -24,6 +24,8 @@ import {
   type TalkWindow,
 } from "./types.js";
 import { DEFAULT_TRANSCRIPT_VIEWPORT } from "./transcript-viewport.js";
+import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
+import type { ReflectRequestWindow } from "@ooc/core/reflectable/reflect-request/types.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {
   deriveStoneFromThread,
@@ -136,7 +138,11 @@ export function initContextWindows(
       } satisfies DoWindow)
     : ({
         id: creatorWindowId,
-        class: "talk",
+        // super 反思 thread（sessionId="super"）的会话面用 reflect_request —— 同形会话窗，
+        // 额外挂 new_feat_branch / create_pr_and_invite_reviewers 沉淀方法；普通跨对象 callee 用 talk。
+        class: isSuperSessionId(thread.persistence?.sessionId ?? "")
+          ? "reflect_request"
+          : "talk",
         parentWindowId: ROOT_WINDOW_ID,
         title: opts.initialTaskTitle,
         status: "open",
@@ -146,7 +152,7 @@ export function initContextWindows(
         conversationId: creatorWindowId,
         isCreatorWindow: true,
         transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
-      } satisfies TalkWindow);
+      } as TalkWindow | ReflectRequestWindow);
 
   thread.contextWindows = [creatorWindow, ...list];
 }

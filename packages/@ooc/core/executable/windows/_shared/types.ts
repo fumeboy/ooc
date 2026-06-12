@@ -45,7 +45,8 @@ export type { MethodExecWindow } from "../method_exec/types.js";
 export type { DoWindow } from "../do/types.js";
 export type { TodoWindow } from "@ooc/builtins/todo/types.js";
 export type { TalkWindow } from "../talk/types.js";
-export type { PrWindow } from "../pr/types.js";
+export type { PrWindow } from "@ooc/core/reflectable/pr/types.js";
+export type { ReflectRequestWindow } from "@ooc/core/reflectable/reflect-request/types.js";
 export type { ProgramWindow, ProgramExecRecord } from "@ooc/builtins/program/types.js";
 export type { FileWindow } from "@ooc/builtins/file/types.js";
 export type { KnowledgeWindow } from "@ooc/builtins/knowledge/types.js";
@@ -61,7 +62,8 @@ import type { MethodExecWindow } from "../method_exec/types.js";
 import type { DoWindow } from "../do/types.js";
 import type { TodoWindow } from "@ooc/builtins/todo/types.js";
 import type { TalkWindow } from "../talk/types.js";
-import type { PrWindow } from "../pr/types.js";
+import type { PrWindow } from "@ooc/core/reflectable/pr/types.js";
+import type { ReflectRequestWindow } from "@ooc/core/reflectable/reflect-request/types.js";
 import type { ProgramWindow } from "@ooc/builtins/program/types.js";
 import type { FileWindow } from "@ooc/builtins/file/types.js";
 import type { KnowledgeWindow } from "@ooc/builtins/knowledge/types.js";
@@ -86,6 +88,7 @@ export type ContextWindow =
   | TodoWindow
   | TalkWindow
   | PrWindow
+  | ReflectRequestWindow
   | ProgramWindow
   | FileWindow
   | KnowledgeWindow

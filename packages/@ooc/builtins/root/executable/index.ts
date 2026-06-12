@@ -20,8 +20,6 @@ import { programMethod } from "./method.program.js";
 import { talkMethod } from "./method.talk.js";
 import { todoMethod } from "./method.todo.js";
 import { writeFileMethod } from "./method.write-file.js";
-import { evolveSelfMethod } from "./method.evolve-self.js";
-import { newFeatBranchMethod } from "./method.new-feat-branch.js";
 import { createObjectMethod } from "./method.create-object.js";
 import { exampleMethod } from "./method.example.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
@@ -45,8 +43,8 @@ export const ROOT_METHODS: Record<string, ObjectMethod> = {
   write_file: writeFileMethod,
   glob: globMethod,
   grep: grepMethod,
-  new_feat_branch: newFeatBranchMethod,
-  evolve_self: evolveSelfMethod,
+  // new_feat_branch / create_pr_and_invite_reviewers 已移出 root —— 现挂在 reflect_request
+  // window（@ooc/core/reflectable/reflect-request），标 for_reflectable 仅 super flow surface。
   create_object: createObjectMethod,
   example: exampleMethod,
   open_feishu_chat: openFeishuChatMethod,

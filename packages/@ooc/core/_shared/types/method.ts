@@ -131,6 +131,14 @@ export interface ObjectMethod {
    * - false（默认）: 仅能被 LLM 通过 exec tool 调用
    */
   for_ui_access?: boolean;
+  /**
+   * 是否为 reflectable 沉淀方法——**仅在 super flow（反思 session）下 surface**。
+   * - true: 该方法只在 thread 处于 super session 时进入 LLM 方法菜单（renderMethodsNode 过滤）。
+   *   用于 reflect_request 上挂的 new_feat_branch / create_pr_and_invite_reviewers——业务 session
+   *   菜单不再出现它们（取代旧的 exec 内 isSuperSessionId 命令式拒绝；存在即有效）。
+   * - false（默认）: 不受 super-flow 门控。
+   */
+  for_reflectable?: boolean;
 }
 
 /**

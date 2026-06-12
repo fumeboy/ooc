@@ -14,7 +14,7 @@ import type { ObjectMethod } from "../_shared/method-types.js";
 import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import { stat } from "node:fs/promises";
 import { stoneDir, resolveStoneIdentityRef } from "../../../persistable/index.js";
-import { SUPER_ALIAS_TARGET } from "@ooc/core/_shared/types/constants.js";
+import { SUPER_ALIAS_TARGET, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -52,8 +52,9 @@ export function filterMessagesForTalkWindow(window: TalkWindow, thread: ThreadCo
   return messages;
 }
 
-/** talk_window 的 readable hook：target + transcript（按 windowId / replyToWindowId 过滤）。 */
-function renderTalkWindow(ctx: RenderContext): XmlNode[] {
+/** talk_window 的 readable hook：target + transcript（按 windowId / replyToWindowId 过滤）。
+ *  reflect_request 复用本 hook（同形会话窗），故 export。 */
+export function renderTalkWindow(ctx: RenderContext): XmlNode[] {
   const window = ctx.window as TalkWindow;
   const children: XmlNode[] = [
     xmlElement("target", {}, [xmlText(window.target)]),
@@ -122,7 +123,7 @@ const TALK_MESSAGE_TRUNCATE = 200;
  *
  * peer 取 window.target(目标 flow object id;"user" 也算合法 peer)。
  */
-function compressTalkWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
+export function compressTalkWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
   const window = ctx.window as TalkWindow;
   const messages = filterMessagesForTalkWindow(window, ctx.thread);
   const children: XmlNode[] = [
@@ -163,10 +164,11 @@ function compressTalkWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
   return children;
 }
 
-/** talk_window 的 onClose hook：creator talk_window 不可关闭。 */
-function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
-  if (ctx.window.class !== "talk") return;
-  // 窄化：ctx.window 契约层是 base ContextWindow；type==="talk" 守卫后 narrow 回 TalkWindow 读 isCreatorWindow。
+/** talk_window 的 onClose hook：creator talk_window 不可关闭。
+ *  reflect_request 同形会话窗复用本 hook（isTalkLikeClass 同时认 reflect_request creator 窗），故 export。 */
+export function onCloseTalkWindow(ctx: OnCloseContext): boolean | void {
+  if (!isTalkLikeClass(ctx.window.class)) return;
+  // 窄化：ctx.window 契约层是 base ContextWindow；talk-like 守卫后 narrow 回 TalkWindow 读 isCreatorWindow。
   const w = ctx.window as TalkWindow;
   if (w.isCreatorWindow) {
     ctx.thread.events.push({

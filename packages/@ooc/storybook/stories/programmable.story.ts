@@ -97,7 +97,7 @@ export async function runAgentNative(): Promise<StoryResult> {
     if (!infraDetail) {
       trace = await processTrace(sid, "supervisor", seed.threadId);
       // 新模型：create_object 落 session worktree（运行时派生物，永不合入 main）；进 canonical 走
-      // super flow evolve_self → feat-branch PR → resolve merge 才在 /api/stones(main) 可见。
+      // super flow create_pr_and_invite_reviewers → feat-branch PR → resolve merge 才在 /api/stones(main) 可见。
       const self = await getStoneSelfWithRetry(id);
       if (self.status === 200 && self.text.length > 20) {
         verified = true;
@@ -114,7 +114,7 @@ export async function runAgentNative(): Promise<StoryResult> {
   // LLM 端点 infra 抖动（超时/socket）= 非能力问题 → SKIP（rollupTier→OK），不计能力 Bad。
   const tcs = [{
     id: "AN-PROG-01",
-    name: "supervisor 经 write_file+evolve_self 亲手创建带身份+知识的对象",
+    name: "supervisor 经 write_file+create_pr_and_invite_reviewers 亲手创建带身份+知识的对象",
     status: (infraDetail ? "SKIP" : verified ? "PASS" : "FAIL") as "SKIP" | "PASS" | "FAIL",
     detail: infraDetail ? `LLM 端点 infra 抖动（非能力问题）：${infraDetail}` : detail,
   }];

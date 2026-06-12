@@ -11,7 +11,7 @@
  * （program shell $OOC_SELF_DIR）看得到完整 identity、读写都收敛到「一个目录」。
  *
  * 本文件只负责「解析 identity 目录 + lazy 建/检测 worktree」——不碰 commit/merge
- * （那是 super flow evolve_self 的事，复用 stone-versioning）。
+ * （那是 super flow create_pr_and_invite_reviewers 的事，复用 stone-versioning）。
  */
 
 import { readdir, rmdir, stat } from "node:fs/promises";

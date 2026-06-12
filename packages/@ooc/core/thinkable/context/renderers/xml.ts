@@ -35,6 +35,7 @@ import {
 import { builtinRegistry } from "../../../executable/windows/index.js";
 import { extractBasicDescription, conciseDescription } from "../../../executable/windows/_shared/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
+import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 import { loadObjectWindow } from "../../../runtime/server-loader.js";
 import { readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "../../../persistable/index.js";
 import {
@@ -76,15 +77,25 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
 const COMMAND_BRIEF_MAX = 80;
 const COMMAND_DESC_MAX = 200;
 
-export function renderMethodsNode(window: ContextWindow, registry: ObjectRegistry): XmlNode | null {
+export function renderMethodsNode(
+  window: ContextWindow,
+  thread: ThreadContext,
+  registry: ObjectRegistry,
+): XmlNode | null {
   // fail-soft：未注册 type（peer stone 后台注册中 / 新建对象未注册 / builtin 缺失）无 methods 节点。
   // registrar 契约即「render paths handle unregistered types gracefully」——此处坐实，避免 getObjectDefinition 抛崩 think loop。
   if (!registry.has(window.class)) return null;
   const def = registry.getObjectDefinition(window.class);
+  // for_reflectable 门控：标记的 reflectable 沉淀方法仅在 super flow（反思 session）下 surface。
+  // 非 super 时从菜单剔除（取代旧的 exec 内 isSuperSessionId 命令式拒绝 —— 存在即有效）。
+  const inSuperFlow = isSuperSessionId(thread.persistence?.sessionId ?? "");
+  const visibleObjectMethods = Object.keys(def.methods ?? {}).filter(
+    (n) => inSuperFlow || !def.methods?.[n]?.for_reflectable,
+  );
   // object method（控制 object，归 executable）+ window method（控制展示，归 readable）
   // 统一呈现给 LLM —— exec 入口相同，LLM 不需区分两类。
   const names = [
-    ...Object.keys(def.methods ?? {}),
+    ...visibleObjectMethods,
     ...Object.keys(def.windowMethods ?? {}),
   ];
   const isCompressed = (window.compressLevel ?? 0) >= 1;
@@ -270,7 +281,7 @@ async function renderWindowNode(
     }
   }
 
-  appendNode(children, renderMethodsNode(renderedWindow, registry));
+  appendNode(children, renderMethodsNode(renderedWindow, thread, registry));
 
   const subWindows = allWindows.filter((w) => w.parentWindowId === window.id);
   if (subWindows.length > 0) {

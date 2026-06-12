@@ -47,15 +47,15 @@ describe("executable methods", () => {
     for (const entry of Object.values(ROOT_METHODS)) {
       expect("openable" in entry).toBe(false);
     }
+    // new_feat_branch / create_pr_and_invite_reviewers 已移出 root —— 现挂 reflect_request window
+    // （@ooc/core/reflectable/reflect-request），标 for_reflectable 仅 super flow surface。
     expect(getOpenableMethods()).toEqual([
       "create_object",
       "do",
       "end",
-      "evolve_self",
       "example",
       "glob",
       "grep",
-      "new_feat_branch",
       "open_feishu_chat",
       "open_feishu_doc",
       "open_file",

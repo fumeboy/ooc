@@ -228,9 +228,9 @@ export async function executeFileWindowEdit(
       kind: "inject",
       text: onFeatBranch
         ? `[file_window.edit] 改动落在 feat 分支 worktree（${writePath}），main 未变。` +
-          `编辑完调 evolve_self 提交并开 PR 交 review 合入。`
+          `编辑完调 create_pr_and_invite_reviewers 提交并开 PR 交 review 合入。`
         : `[file_window.edit] 改动落在本 session 的 worktree（${writePath}），main 未变。` +
-          `经 super flow new_feat_branch + 直接编辑 + evolve_self 开 PR 合入 main 才永久生效。`,
+          `经 super flow new_feat_branch + 直接编辑 + create_pr_and_invite_reviewers 开 PR 合入 main 才永久生效。`,
     });
   }
 
@@ -352,18 +352,18 @@ const fileConstructor: ObjectMethod = {
         const isOwnStone = targetObjectId === authorObjectId;
         if (thread.events) {
           // feat 分支绑定下（reflectable 沉淀 super(foo) 直接编辑）：改动落 feat worktree，
-          // 经 evolve_self commit + 开 PR；与 business session worktree 文案区分。
+          // 经 create_pr_and_invite_reviewers commit + 开 PR；与 business session worktree 文案区分。
           const onFeatBranch = !!stonesBranch;
           thread.events.push({
             category: "context_change",
             kind: "inject",
             text: onFeatBranch
               ? `[write_file] ${path} 的改动落在 feat 分支 worktree（${wtTarget}），main 未变。` +
-                `继续 write_file / file_window.edit 编辑，编辑完调 evolve_self 提交并开 PR 交 review 合入。`
+                `继续 write_file / file_window.edit 编辑，编辑完调 create_pr_and_invite_reviewers 提交并开 PR 交 review 合入。`
               : isOwnStone
                 ? `[write_file] ${path} 的改动落在本 session 的 worktree（${wtTarget}），` +
                   `main 未变。本 session 内即时生效；要把它沉淀为正式身份，去 super flow 调 ` +
-                  `new_feat_branch + 直接编辑 + evolve_self 开 PR 合入 main 才永久生效。`
+                  `new_feat_branch + 直接编辑 + create_pr_and_invite_reviewers 开 PR 合入 main 才永久生效。`
                 : `[write_file] 你改/建了别人的对象 ${targetObjectId}（${path}），改动落在本 session 的 ` +
                   `worktree（${wtTarget}），main 未变。本 session 内即时生效；经 super flow new_feat_branch 沉淀时，` +
                   `因越出你的自治区将开 PR-Issue 等 Supervisor 评审后才合入 main。`,
@@ -395,7 +395,7 @@ const fileConstructor: ObjectMethod = {
         }
         // feat 分支绑定生效时，落在 stone 自治区**之外**
         // 的写（典型 pools/ 知识/记忆路径）是 write-through——立即生效、**不进本 PR**、
-        // 不在 feat worktree。此前静默无提示 → 随后 evolve_self 发现 feat 分支无 stone
+        // 不在 feat worktree。此前静默无提示 → 随后 create_pr_and_invite_reviewers 发现 feat 分支无 stone
         // 改动报 NO_CHANGES，LLM 不知为何。这里显式点破两通道，消除静默 + 困惑。
         if (thread.persistence?.stonesBranch && thread.events) {
           thread.events.push({
@@ -404,7 +404,7 @@ const fileConstructor: ObjectMethod = {
             text:
               `[write_file] 你在 feat 沉淀绑定（${thread.persistence.stonesBranch}）中，但 ${path} ` +
               `落在 stone 自治区之外，是 write-through 写——立即生效、不进本 PR、不在 feat 分支。` +
-              `若你只想沉淀知识/记忆（pool），写完即生效，无需 evolve_self（feat 分支无 stone 改动会报 NO_CHANGES）。` +
+              `若你只想沉淀知识/记忆（pool），写完即生效，无需 create_pr_and_invite_reviewers（feat 分支无 stone 改动会报 NO_CHANGES）。` +
               `若要改身体/身份并经 PR review 合入，请写 stone 路径 stones/<self>/...（objects/...）。`,
           });
         }
