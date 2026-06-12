@@ -38,7 +38,7 @@ import { readThread, writeThread, createFlowObject, createFlowSession, sessionMe
 import { stat } from "node:fs/promises";
 import { notifyThreadActivated } from "../../../observable/index.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
-import { initContextWindows, injectPeerWindowsIfObjectThread } from "../_shared/init.js";
+import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "../_shared/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { creatorWindowIdOf, type TalkWindow } from "../_shared/types.js";
 
@@ -161,6 +161,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
       initialTaskTitle: deriveCalleeThreadTitle(content),
     });
     await injectPeerWindowsIfObjectThread(calleeThread);
+    await injectMemberWindowsIfObjectThread(calleeThread);
 
     // 早些时候这里还 spawn 过一条 "回复创建者" todo 用作文本 nudge。
     // 现在结构性约束（wait 要求 on=合法 IO 来源 window）已接管它的作用——

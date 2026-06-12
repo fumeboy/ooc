@@ -12,6 +12,7 @@
     "objectId": "supervisor",
     "kind": "class",
     "type": "agent",
-    "instantiate_with_new_world": true
+    "instantiate_with_new_world": true,
+    "members": ["filesystem"]
   }
 }

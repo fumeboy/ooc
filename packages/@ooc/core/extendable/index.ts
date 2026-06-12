@@ -25,5 +25,6 @@ import "@ooc/builtins/search";
 import "@ooc/builtins/skill_index";
 import "@ooc/builtins/plan";
 import "@ooc/builtins/program";
+import "@ooc/builtins/filesystem";
 import "@ooc/builtins/root";
 import "./lark/index.js";

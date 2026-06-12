@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { threadDir, toJson, type FlowObjectRef, type ThreadPersistenceRef } from "./common";
 import type { ThreadContext } from "../thinkable/context";
-import { initContextWindows, injectPeerWindowsIfObjectThread } from "../executable/windows/_shared/init";
+import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "../executable/windows/_shared/init";
 import type { ObjectRegistry } from "../executable/windows/_shared/registry";
 import { builtinRegistry } from "../executable/windows/index.js";
 import { readContextRegistry } from "./flow-context-registry";
@@ -256,6 +256,8 @@ export async function readThread(
     });
     // peer window 注入：冷恢复时也补齐 sibling + children
     await injectPeerWindowsIfObjectThread(restored);
+    // member window 注入：冷恢复时也补齐 agent 声明持有的 tool-object 成员（如 filesystem）
+    await injectMemberWindowsIfObjectThread(restored);
     return restored;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;

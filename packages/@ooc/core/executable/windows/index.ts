@@ -62,7 +62,7 @@ export type {
 
 export { WindowManager } from "./_shared/manager.js";
 
-export { initContextWindows, injectPeerWindowsIfObjectThread } from "./_shared/init.js";
+export { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "./_shared/init.js";
 export type { InitContextWindowsOpts } from "./_shared/init.js";
 
 // root methods 的工具函数（仅服务 root level；非 root window 的 method 通过 object registry 查）

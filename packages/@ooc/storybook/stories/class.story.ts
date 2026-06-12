@@ -7,7 +7,9 @@
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { stoneDir as realStoneDir } from "@ooc/core/persistable";
+import { stoneDir as realStoneDir, resolveBuiltinReadDir } from "@ooc/core/persistable";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry";
+import { injectMemberWindowsIfObjectThread, WindowManager } from "@ooc/core/executable/windows";
 import { mkServer, postJson, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
@@ -61,6 +63,49 @@ export async function runControlPlane(): Promise<StoryResult> {
       });
       rec.ok("TC-CLASS-04", "class 不可交互：seedSession 拒绝 _builtin/ class 作为对话目标",
         r.status === 400 && /class/i.test(JSON.stringify(r.json)), `status=${r.status}, body=${JSON.stringify(r.json)?.slice(0, 100)}`);
+    }
+
+    // ─────────────── 组合（agent 像持有 data 一样持有 tool-object 成员）───────────────
+
+    // TC-COMP-01: filesystem 成员对象类注册（grep/glob/open_file/write_file + readable）
+    {
+      const def = builtinRegistry.getObjectDefinition("filesystem");
+      const ok = !!(def.methods?.grep && def.methods?.glob && def.methods?.open_file && def.methods?.write_file && def.readable);
+      rec.ok("TC-COMP-01", "filesystem 成员对象类注册：grep/glob/open_file/write_file + readable",
+        ok, `methods=${Object.keys(def.methods ?? {}).join(",")}`);
+    }
+
+    // TC-COMP-02: supervisor 类声明持有 filesystem 成员（ooc.members）
+    {
+      const dir = resolveBuiltinReadDir({ baseDir, objectId: "_builtin/supervisor" });
+      let members: unknown;
+      try { members = JSON.parse(readFileSync(join(dir!, "package.json"), "utf8"))?.ooc?.members; } catch { /* */ }
+      rec.ok("TC-COMP-02", "supervisor 类声明持有 filesystem 成员（ooc.members）",
+        Array.isArray(members) && (members as string[]).includes("filesystem"), `members=${JSON.stringify(members)}`);
+    }
+
+    // TC-COMP-03: 组合注入 —— supervisor thread 经类声明注入 filesystem member 窗（非持久化）
+    {
+      const thread: any = { id: "root", status: "running",
+        persistence: { baseDir, sessionId: "sb-comp", objectId: "supervisor", threadId: "root" }, contextWindows: [] };
+      await injectMemberWindowsIfObjectThread(thread);
+      const fsWin = thread.contextWindows.find((w: any) => w.class === "filesystem");
+      rec.ok("TC-COMP-03", "组合注入：supervisor thread 经类声明注入 filesystem member 窗（isMemberWindow 非持久化）",
+        !!fsWin && fsWin.isMemberWindow === true && fsWin.id === "filesystem", `win=${JSON.stringify(fsWin)?.slice(0, 120)}`);
+    }
+
+    // TC-COMP-04（机制命门）: exec(filesystem, grep) 经成员方法造出 search 对象
+    {
+      const thread: any = { id: "root", status: "running",
+        persistence: { baseDir, sessionId: "sb-comp", objectId: "supervisor", threadId: "root" },
+        contextWindows: [{ id: "filesystem", class: "filesystem", parentWindowId: "root",
+          title: "member: filesystem", status: "open", createdAt: Date.now(), isMemberWindow: true }] };
+      const mgr = WindowManager.fromThread(thread, builtinRegistry);
+      await mgr.openMethodExec({ thread, parentWindowId: "filesystem", method: "grep", title: "grep",
+        args: { pattern: "version", path: baseDir } });
+      const search = mgr.list().find((w) => w.class === "search");
+      rec.ok("TC-COMP-04", "组合机制命门：exec(filesystem, grep) 经成员方法造出 search 对象",
+        !!search, `windows=${mgr.list().map((w) => w.class).join(",")}`);
     }
   } finally {
     await srv.cleanup();

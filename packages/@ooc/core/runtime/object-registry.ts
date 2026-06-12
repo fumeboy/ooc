@@ -39,7 +39,7 @@ export { filterMethodsByVisibility };
 const RENDERABLE_VISIBLE_TYPES = new Set([
   "root", "method_exec", "do", "todo", "talk", "pr", "reflect_request", "program",
   "file", "knowledge", "search", "skill_index",
-  "feishu_chat", "feishu_doc", "plan",
+  "feishu_chat", "feishu_doc", "plan", "filesystem",
 ]);
 
 /**
@@ -88,6 +88,8 @@ const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
   ["plan", { methods: {} }],
   // example —— 标准对象定义样板（executable/index.ts + readable.ts 两维度分注册示范）。
   ["example", { methods: {} }],
+  // filesystem —— agent 组合持有的 tool-object 成员（grep/glob/open_file/write_file）。
+  ["filesystem", { methods: {} }],
 ];
 
 export class ObjectRegistry {

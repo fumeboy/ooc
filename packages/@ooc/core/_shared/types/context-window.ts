@@ -117,6 +117,13 @@ export interface BaseContextWindow {
    */
   isSelfWindow?: boolean;
   /**
+   * Member-facade 窗（agent 经组合声明持有的 tool-object 成员，如 filesystem）。
+   * 与 self 窗同理：由 injectMemberWindowsIfObjectThread 每次 thread 加载幂等重注入、
+   * 从类声明确定性重建、无独立 state.json，**不应持久化**——否则 thread-context.json 落死 _ref。
+   * 写盘端经 isNonPersistedWindow 统一剔除。
+   */
+  isMemberWindow?: boolean;
+  /**
    * Plain-string tip set by onFormChange. Only present on method_exec windows.
    * Rendered directly on the form; replaces the old guidance-window machinery.
    */
@@ -194,5 +201,5 @@ export function creatorWindowIdOf(threadId: string): string {
  * 写盘端用本谓词统一剔除。
  */
 export function isNonPersistedWindow(window: BaseContextWindow): boolean {
-  return window.isSelfWindow === true;
+  return window.isSelfWindow === true || window.isMemberWindow === true;
 }

@@ -1,0 +1,16 @@
+{
+  "name": "@ooc/builtins/filesystem",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*",
+    "./*.ts": "./*.ts",
+    "./*.tsx": "./*.tsx"
+  },
+  "ooc": {
+    "objectId": "_builtin/filesystem",
+    "kind": "builtin",
+    "type": "object"
+  }
+}

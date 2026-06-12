@@ -31,7 +31,13 @@ import {
   deriveStoneFromThread,
   discoverStoneHierarchicalPeers,
   isBuiltinObjectId,
+  readStoneClass,
+  resolveBuiltinReadDir,
+  stoneDir,
+  type StoneObjectRef,
 } from "../../../persistable/index.js";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 export interface InitContextWindowsOpts {
   /** thread 的 creator thread id；缺省 = SESSION_CREATOR_THREAD_ID（仅 root thread 适用）。 */
@@ -255,6 +261,89 @@ export async function injectPeerWindowsIfObjectThread(thread: ThreadContext): Pr
     // 位置：放在 self window 之后、creator window 之前；与 self window 同属
     // "Object 身份/环境层"。这里简单 push 到尾部即可——creator window 通常是
     // prepend，self window 也是 prepend；实际显示顺序由 XmlRenderer 按语义排序。
+    thread.contextWindows = [...list, ...newWindows];
+  }
+}
+
+// ── Member windows (agent 组合声明持有的 tool-object 成员) ──────────────────
+
+/**
+ * 读某对象**声明的成员**（组合：Object 像持有 data 一样持有 objects）。
+ *
+ * 来源优先级：实例自身 package.json 的 `ooc.members` → 其 class（`ooc.class`）的
+ * package.json `ooc.members`。成员声明在 class 上、实例经类链继承（与 method/knowledge 一致）：
+ * 如 supervisor 实例 → `_builtin/supervisor` class 声明 `members:["filesystem"]`。
+ *
+ * 返回成员的 **type/id 串**（如 "filesystem"）；读不到任何成员返回 []。
+ */
+async function readDeclaredMembers(ref: StoneObjectRef): Promise<string[]> {
+  const classId = await readStoneClass(ref);
+  const candidates: StoneObjectRef[] = [
+    ref,
+    ...(classId ? [{ baseDir: ref.baseDir, objectId: classId }] : []),
+  ];
+  for (const cand of candidates) {
+    const dir = resolveBuiltinReadDir(cand) ?? stoneDir(cand);
+    try {
+      const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8")) as {
+        ooc?: { members?: unknown };
+      };
+      const m = pkg?.ooc?.members;
+      if (Array.isArray(m) && m.length > 0) {
+        return m.filter((x): x is string => typeof x === "string" && x.length > 0);
+      }
+    } catch {
+      // 该候选无 package.json / 无 members → 试下一个
+    }
+  }
+  return [];
+}
+
+/**
+ * 组合注入 —— 把 agent 类声明持有的 tool-object 成员（如 filesystem）作为 first-class
+ * 可 exec 的 ContextWindow 注入 thread.contextWindows。
+ *
+ * 设计：成员是单例 builtin 类型（registry 已 seed + 全局注册，无需每轮 type 注册——
+ * 这点比 peer 注入更简单）。member 窗：
+ * - id = class = 成员 type 串（singleton：id 稳定 = type）
+ * - isMemberWindow=true → 非持久化（每轮 init 幂等重注入，不落 thread-context.json 死 _ref）
+ * - exec 路由不变：window_id="filesystem" → requireParent 命中 → registry.lookupMethod 解析其方法
+ *
+ * 幂等：已存在则跳过。IO 失败静默吞（debug log），不阻塞 thread 启动。
+ */
+export async function injectMemberWindowsIfObjectThread(thread: ThreadContext): Promise<void> {
+  const persistence = thread.persistence;
+  const selfId = persistence?.objectId;
+  if (!persistence || !selfId || selfId === "user") return;
+
+  let members: string[];
+  try {
+    members = await readDeclaredMembers(deriveStoneFromThread(persistence));
+  } catch (err) {
+    console.debug(
+      `[member-windows] read io_error self=${selfId} msg=${(err as Error).message}`,
+    );
+    return;
+  }
+  if (members.length === 0) return;
+
+  const list = thread.contextWindows ?? (thread.contextWindows = []);
+  const existingIds = new Set(list.map((w) => w.id));
+  const now = Date.now();
+  const newWindows: ContextWindow[] = [];
+  for (const memberType of members) {
+    if (existingIds.has(memberType)) continue;
+    newWindows.push({
+      id: memberType,
+      class: memberType as any,
+      parentWindowId: ROOT_WINDOW_ID,
+      title: `member: ${memberType}`,
+      status: "open",
+      createdAt: now,
+      isMemberWindow: true,
+    } as ContextWindow);
+  }
+  if (newWindows.length > 0) {
     thread.contextWindows = [...list, ...newWindows];
   }
 }
