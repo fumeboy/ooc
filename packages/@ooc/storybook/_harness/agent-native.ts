@@ -144,6 +144,30 @@ export async function calledMethodOk(sid: string, objectId: string, threadId: st
   return false;
 }
 
+/**
+ * 同 calledMethodOk，但额外断言该 exec 是**在指定 window 上**调用的（arguments.window_id===windowId）。
+ * 用于组合类判据：区分 agent 是否在 **成员对象窗**（如 filesystem）上调方法，而非 root 上的同名方法。
+ */
+export async function calledMethodOnWindowOk(
+  sid: string, objectId: string, threadId: string, windowId: string, method: string,
+): Promise<boolean> {
+  const r = await req("GET", `/api/flows/${sid}/${objectId}/threads/${threadId}`);
+  const events = (r.json?.events ?? []) as Array<{ kind?: string; toolName?: string; arguments?: any; output?: unknown }>;
+  for (let i = 0; i < events.length; i++) {
+    const e = events[i];
+    if (e.kind === "function_call" && e.toolName === "exec"
+      && e.arguments?.window_id === windowId && e.arguments?.method === method) {
+      for (let j = i + 1; j < events.length; j++) {
+        if (events[j].kind === "function_call_output") {
+          if (/"ok"\s*:\s*true/.test(String(events[j].output ?? ""))) return true;
+          break;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 export type VerifyCtx = { sid: string; threadId: string; execs: Array<{ cmd: string; args: any; msg?: string }>; lastSay: string };
 
 /**

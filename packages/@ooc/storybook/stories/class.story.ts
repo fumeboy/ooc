@@ -11,7 +11,7 @@ import { stoneDir as realStoneDir, resolveBuiltinReadDir } from "@ooc/core/persi
 import { builtinRegistry } from "@ooc/core/runtime/object-registry";
 import { injectMemberWindowsIfObjectThread, WindowManager } from "@ooc/core/executable/windows";
 import { mkServer, postJson, StoryRecorder } from "../_harness/control-plane";
-import { rollupTier, type StoryResult } from "../_harness/types";
+import { rollupTier, type StoryResult, type TcResult } from "../_harness/types";
 
 export async function runControlPlane(): Promise<StoryResult> {
   const rec = new StoryRecorder();
@@ -77,7 +77,7 @@ export async function runControlPlane(): Promise<StoryResult> {
 
     // TC-COMP-02: supervisor 类声明持有 filesystem 成员（ooc.members）
     {
-      const dir = resolveBuiltinReadDir({ baseDir, objectId: "_builtin/supervisor" });
+      const dir = resolveBuiltinReadDir({ objectId: "_builtin/supervisor" });
       let members: unknown;
       try { members = JSON.parse(readFileSync(join(dir!, "package.json"), "utf8"))?.ooc?.members; } catch { /* */ }
       rec.ok("TC-COMP-02", "supervisor 类声明持有 filesystem 成员（ooc.members）",
@@ -113,15 +113,40 @@ export async function runControlPlane(): Promise<StoryResult> {
   return { capability: "class", tier: "control-plane", tcs: rec.tcs, storyTier: rollupTier(rec.tcs) };
 }
 
-import { demoViaSupervisor } from "../_harness/agent-native";
+import { demoViaSupervisor, calledMethodOk, calledMethodOnWindowOk } from "../_harness/agent-native";
 
-/** Tier B —— agent-native：supervisor（class 实例）加载了 self.md 设计身份（非即兴演）。 */
+/**
+ * Tier B —— agent-native：
+ * 1) 身份复现：supervisor（class 实例）加载了 self.md 设计身份（非即兴演）。
+ * 2) 组合：agent 在真实 thinkloop 里**发现并调用 filesystem 成员对象**的 grep 方法
+ *    （window_id="filesystem"），证明组合机制 agent-native 可用。
+ */
 export async function runAgentNative(): Promise<StoryResult> {
   const tag = Math.floor(Date.now() / 1000) % 100000;
-  return demoViaSupervisor("class", `sb-an-class-${tag}`,
+
+  const identity = await demoViaSupervisor("class", `sb-an-class-${tag}`,
     "你好 supervisor，请用一两句话说明你是谁、你的核心职责是什么。",
     async ({ lastSay }) => {
       const ok = /中枢|总管|入口|接待|分发|守护/.test(lastSay);
       return { ok, detail: `身份复现：${lastSay.slice(0, 90)}` };
     });
+
+  const composition = await demoViaSupervisor("class", `sb-an-comp-${tag}`,
+    "你的 context 里有一个 filesystem 成员对象（一个 tool-object）。请用它的 grep 方法搜索包含 'OOC' 的内容，然后用一句话告诉我你用了哪个对象、命中了什么。",
+    async ({ sid, threadId, lastSay }) => {
+      const onFilesystem = await calledMethodOnWindowOk(sid, "supervisor", threadId, "filesystem", "grep");
+      const grepOk = onFilesystem || (await calledMethodOk(sid, "supervisor", threadId, "grep"));
+      const ok = onFilesystem; // 严格判据：必须在 filesystem 成员窗上调 grep
+      return { ok, detail: `onFilesystem=${onFilesystem} grepOk=${grepOk} say=${lastSay.slice(0, 80)}` };
+    });
+
+  const tcs: TcResult[] = [
+    { ...(identity.tcs[0] ?? { id: "", name: "class", status: "FAIL" as const }), id: "AN-CLASS-01" },
+    { ...(composition.tcs[0] ?? { id: "", name: "class", status: "FAIL" as const }), id: "AN-COMP-01",
+      name: "组合：agent 调用 filesystem 成员对象的 grep" },
+  ];
+  return {
+    capability: "class", tier: "agent-native", tcs, storyTier: rollupTier(tcs),
+    trace: [...(identity.trace ?? []), "── 组合 ──", ...(composition.trace ?? [])],
+  };
 }
