@@ -12,7 +12,8 @@
     "check:silent-swallow": "bash scripts/check-no-silent-swallow.sh",
     "check:deprecated-symbols": "bash scripts/check-no-deprecated-symbols.sh",
     "check:doc-drift": "bash scripts/check-doc-deprecated-drift.sh",
-    "verify": "bun run check:tsc && bun test packages/@ooc/core/ && bun run check:silent-swallow && bun run check:deprecated-symbols && bun run check:doc-drift",
+    "check:anchor-drift": "bash scripts/check-doc-anchor-drift.sh",
+    "verify": "bun run check:tsc && bun test packages/@ooc/core/ && bun run check:silent-swallow && bun run check:deprecated-symbols && bun run check:doc-drift && bun run check:anchor-drift",
     "dev": "bun run packages/@ooc/core/app/server/index.ts"
   },
   "devDependencies": {
