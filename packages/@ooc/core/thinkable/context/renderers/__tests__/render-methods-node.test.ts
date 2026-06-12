@@ -2,24 +2,24 @@ import { test, expect } from "bun:test";
 // 全量 boot builtin registry（避免模块求值期 assert 顺序坑，见线 B 报告偏离点 #1）
 import "@ooc/core/executable/windows/index.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
-import { renderMethodsNode } from "../xml.js";
+import { computeVisibleMethodSet } from "../xml.js";
 
 /**
- * 回归守卫：window method（控制展示，归 readable 的 windowMethods）迁出 methods 后，
- * 必须仍出现在给 LLM 的 <methods> 节点，否则 LLM 看不到 set_viewport（功能消失）。
- * 这是「测试全绿但功能没了」的盲区——迁移前后都缺此覆盖。
+ * computeVisibleMethodSet —— 算某 window class 的可见方法集（class 声明层用它声明一次）。
+ * 这些行为断言是从旧 renderMethodsNode 迁移来的资产：methods 已从实例搬去 <window_classes>，
+ * 但「set_viewport 仍可见 / 必填 arg eager / for_reflectable 门控」的契约不变，须继续守。
  */
-test("window method (set_viewport) still rendered in <commands> for file window", () => {
-  const node = renderMethodsNode({ id: "f1", class: "file" } as any, {} as any, builtinRegistry);
-  expect(node).not.toBeNull();
-  const serialized = JSON.stringify(node);
-  expect(serialized).toContain("set_viewport"); // window method
-  expect(serialized).toContain("reload");        // object method 仍在
+
+test("window method (set_viewport) + object method (reload) both in file class method set", () => {
+  const set = computeVisibleMethodSet({ id: "f1", class: "file" } as any, {} as any, builtinRegistry);
+  expect(set).not.toBeNull();
+  expect(set!.methodNames).toContain("set_viewport"); // window method（控展示）
+  expect(set!.methodNames).toContain("reload");        // object method 仍在
 });
 
-test("talk window method (set_transcript_window) rendered in <commands>", () => {
-  const node = renderMethodsNode({ id: "t1", class: "talk" } as any, {} as any, builtinRegistry);
-  expect(JSON.stringify(node)).toContain("set_transcript_window");
+test("talk class includes talk window method (set_transcript_window)", () => {
+  const set = computeVisibleMethodSet({ id: "t1", class: "talk" } as any, {} as any, builtinRegistry);
+  expect(set!.methodNames).toContain("set_transcript_window");
 });
 
 /**
@@ -27,14 +27,14 @@ test("talk window method (set_transcript_window) rendered in <commands>", () => 
  * say 的 msg 必填 → 出现；wait 可选 → 不进 eager（只在 form tip 出现）。
  */
 test("required args rendered as <arg> under <method> (say.msg eager, wait optional excluded)", () => {
-  const node = renderMethodsNode({ id: "t1", class: "talk" } as any, {} as any, builtinRegistry);
-  expect(node).not.toBeNull();
+  const set = computeVisibleMethodSet({ id: "t1", class: "talk" } as any, {} as any, builtinRegistry);
+  expect(set).not.toBeNull();
   // 找到 say 这个 method 节点
-  const sayMethod = (node as any).children.find(
+  const sayMethod = set!.methodNodes.find(
     (c: any) => c.kind === "element" && c.tag === "method" && c.attrs?.name === "say",
   );
   expect(sayMethod).toBeDefined();
-  const argNodes = (sayMethod.children ?? []).filter(
+  const argNodes = ((sayMethod as any).children ?? []).filter(
     (c: any) => c.kind === "element" && c.tag === "arg",
   );
   // 必填 msg 进 eager
@@ -56,18 +56,14 @@ test("reflect_request: for_reflectable methods gated to super flow; talk methods
   const rr = { id: "rr1", class: "reflect_request" } as any;
 
   // 业务 session：reflectable 沉淀 method 被隐藏；普通会话 method（say）仍在
-  const biz = JSON.stringify(
-    renderMethodsNode(rr, { persistence: { sessionId: "biz-123" } } as any, builtinRegistry),
-  );
-  expect(biz).toContain("say"); // 复用 talk 会话 method
-  expect(biz).not.toContain("new_feat_branch");
-  expect(biz).not.toContain("create_pr_and_invite_reviewers");
+  const biz = computeVisibleMethodSet(rr, { persistence: { sessionId: "biz-123" } } as any, builtinRegistry);
+  expect(biz!.methodNames).toContain("say"); // 复用 talk 会话 method
+  expect(biz!.methodNames).not.toContain("new_feat_branch");
+  expect(biz!.methodNames).not.toContain("create_pr_and_invite_reviewers");
 
   // super flow：for_reflectable 沉淀 method 出现
-  const sup = JSON.stringify(
-    renderMethodsNode(rr, { persistence: { sessionId: "super" } } as any, builtinRegistry),
-  );
-  expect(sup).toContain("say");
-  expect(sup).toContain("new_feat_branch");
-  expect(sup).toContain("create_pr_and_invite_reviewers");
+  const sup = computeVisibleMethodSet(rr, { persistence: { sessionId: "super" } } as any, builtinRegistry);
+  expect(sup!.methodNames).toContain("say");
+  expect(sup!.methodNames).toContain("new_feat_branch");
+  expect(sup!.methodNames).toContain("create_pr_and_invite_reviewers");
 });

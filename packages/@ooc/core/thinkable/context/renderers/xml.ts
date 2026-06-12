@@ -9,7 +9,7 @@
  *       <creator_thread_id>...</creator_thread_id>
  *       <parent_thread_id>...</parent_thread_id>
  *       <context_windows>
- *         <window id type status [sharing read_only]>
+ *         <window id class status [sharing read_only]>
  *           <title>...</title>
  *           ... type-specific content (readable / compressView)
  *           <commands hint="...">...</commands>
@@ -98,15 +98,25 @@ function renderRequiredArgNodes(schema: { args?: Record<string, import("@ooc/cor
   return nodes;
 }
 
-export function renderMethodsNode(
+/**
+ * 算某 window 的**可见方法集**并渲染成 `<method>` 节点。class 级事实（方法契约）——
+ * 与具体实例无关，因此抽成纯函数，供 class 声明层（renderWindowClassesNode）按 class 调用一次。
+ *
+ * 含 for_reflectable / inSuperFlow 门控、def.methods + def.windowMethods 合并、brief、必填 arg。
+ * compress 的 `expand` 提示**不**在此（那是实例态，贴 <compressed> 节点就地说）。
+ *
+ * fail-soft：未注册 class（peer stone 后台注册中 / 新建对象未注册 / builtin 缺失）返回 null。
+ *
+ * @returns `{ methodNodes, methodNames }`——methodNodes 为排好序的 `<method>` 节点，
+ *          methodNames 为同序方法名（供一致性断言/分组）。
+ */
+export function computeVisibleMethodSet(
   window: ContextWindow,
   thread: ThreadContext,
   registry: ObjectRegistry,
-): XmlNode | null {
-  // fail-soft：未注册 type（peer stone 后台注册中 / 新建对象未注册 / builtin 缺失）无 methods 节点。
-  // registrar 契约即「render paths handle unregistered types gracefully」——此处坐实，避免 getObjectDefinition 抛崩 think loop。
+): { methodNodes: XmlNode[]; methodNames: string[] } | null {
   if (!registry.has(window.class)) return null;
-  const def = registry.getObjectDefinition(window.class);
+  const def = registry.getObjectDefinition(window.class as never);
   // for_reflectable 门控：标记的 reflectable 沉淀方法仅在 super flow（反思 session）下 surface。
   // 非 super 时从菜单剔除（取代旧的 exec 内 isSuperSessionId 命令式拒绝 —— 存在即有效）。
   const inSuperFlow = isSuperSessionId(thread.persistence?.sessionId ?? "");
@@ -119,11 +129,9 @@ export function renderMethodsNode(
     ...visibleObjectMethods,
     ...Object.keys(def.windowMethods ?? {}),
   ];
-  const isCompressed = (window.compressLevel ?? 0) >= 1;
-  if (names.length === 0 && !isCompressed) return null;
   names.sort();
 
-  const children: XmlNode[] = names.map((name) => {
+  const methodNodes: XmlNode[] = names.map((name) => {
     const entry = def.methods?.[name] ?? def.windowMethods?.[name];
     // 优先展示语义描述（method 的 *_BASIC 知识），让 LLM 看懂每个 method 的含义；
     // 无描述时退回 paths 简述（仅别名，价值低）。
@@ -137,20 +145,60 @@ export function renderMethodsNode(
     return xmlElement("method", { name }, [xmlText(brief), ...argNodes]);
   });
 
-  if (isCompressed) {
-    children.push(
-      xmlElement("method", { name: "expand" }, [
-        xmlText("expand: 把本 window 从压缩态恢复为完整态(compressLevel → 0)"),
-      ]),
-    );
+  return { methodNodes, methodNames: names };
+}
+
+/**
+ * class 声明层：本轮 context 中出现过的每个 window class，方法契约在此**声明一次**——
+ * 取代旧的「每实例抄一遍 <methods>」（28% 纯重复）。实例 window 只带 `class=` 引用此声明。
+ *
+ * 收集 snapshot.windows（**展平含 sub_windows**，method_exec form 等子窗口的 class 也要进）。
+ * 分组 key = class 名；同 class 的多个实例**断言可见方法集一致**，不一致则 fail-soft 裂组
+ * （`<class name="X#2">`），既不抹掉差异也不崩。
+ *
+ * fail-soft：未注册 class 的实例不进声明层（其方法本就 null）。无任何可声明 class → 返回 null。
+ */
+function renderWindowClassesNode(
+  windows: ContextWindow[],
+  thread: ThreadContext,
+  registry: ObjectRegistry,
+): XmlNode | null {
+  // 按 class 名分组：每个 class 记录首次出现的方法集签名 + 节点。
+  // 同 class 的后续实例若签名不一致（未来 per-instance 门控可能引入）→ fail-soft 裂组为
+  // `<class name="X#2">`，既不抹掉差异也不崩。现状无 per-instance 门控，恒一致 → 不裂组。
+  interface ClassVariant {
+    name: string;
+    signature: string;
+    nodes: XmlNode[];
+  }
+  // class 名 → 已见变体列表（绝大多数情形长度 1）。
+  const byClass = new Map<string, ClassVariant[]>();
+  const ordered: ClassVariant[] = [];
+
+  for (const w of windows) {
+    const set = computeVisibleMethodSet(w, thread, registry);
+    if (!set) continue; // 未注册 class：无方法契约可声明
+    if (set.methodNames.length === 0) continue; // 无可见方法：不进声明层
+
+    const signature = set.methodNames.join(",");
+    const variants = byClass.get(w.class) ?? [];
+    if (variants.some((v) => v.signature === signature)) continue; // 同 class 同方法集：已声明，去重
+
+    const name = variants.length === 0 ? w.class : `${w.class}#${variants.length + 1}`;
+    const variant: ClassVariant = { name, signature, nodes: set.methodNodes };
+    variants.push(variant);
+    byClass.set(w.class, variants);
+    ordered.push(variant);
   }
 
+  if (ordered.length === 0) return null;
+
   return xmlElement(
-    "methods",
+    "window_classes",
     {
-      hint: `通过 exec(window_id="${window.id}", method="<name>", args={...}) 调用`,
+      hint: "exec(window_id, method, args={...})。每个 class 的方法对其全部实例可用",
     },
-    children,
+    ordered.map((v) => xmlElement("class", { name: v.name }, v.nodes)),
   );
 }
 
@@ -278,6 +326,14 @@ async function renderWindowNode(
     if (def?.compressView) {
       const typeChildren = await def.compressView(renderCtx, compressLevel);
       children.push(...typeChildren);
+      // expand 提示就地贴在压缩实例上（方法菜单已搬去 class 声明层，不再随实例渲染 expand method）。
+      children.push(
+        xmlElement(
+          "compressed",
+          { level: String(compressLevel) },
+          [xmlText(`本 window 处于压缩态(level=${compressLevel})。exec(window_id="${renderedWindow.id}", method="expand") 恢复完整内容。`)],
+        ),
+      );
     } else {
       children.push(
         xmlElement(
@@ -285,7 +341,7 @@ async function renderWindowNode(
           { level: String(compressLevel) },
           [
             xmlText(
-              `本 window 处于压缩态(level=${compressLevel}); type "${renderedWindow.class}" 未注册 compressView hook。通过 expand 命令恢复完整内容。`,
+              `本 window 处于压缩态(level=${compressLevel}); class "${renderedWindow.class}" 未注册 compressView hook。exec(window_id="${renderedWindow.id}", method="expand") 恢复完整内容。`,
             ),
           ],
         ),
@@ -305,7 +361,8 @@ async function renderWindowNode(
     }
   }
 
-  appendNode(children, renderMethodsNode(renderedWindow, thread, registry));
+  // 方法契约不再逐实例渲染：class 级声明一次在 <window_classes>（renderWindowClassesNode），
+  // 实例只带 class= 引用。compress 态的 expand 提示就地贴在上方 <compressed> 节点，不在此。
 
   const subWindows = allWindows.filter((w) => w.parentWindowId === window.id);
   if (subWindows.length > 0) {
@@ -317,7 +374,7 @@ async function renderWindowNode(
 
   const attrs: Record<string, string> = {
     id: window.id,
-    type: window.class,
+    class: window.class,
     status: window.status,
   };
   if (sharingState) {
@@ -401,6 +458,10 @@ export class XmlRenderer {
     const threadChildren: XmlNode[] = [];
     appendNode(threadChildren, optionalElement("creator_thread_id", threadForRender.creatorThreadId));
     appendNode(threadChildren, optionalElement("parent_thread_id", threadForRender.parentThreadId));
+
+    // class 声明层：本轮出现的每个 window class 的方法契约声明一次，插在 <context_windows> 之前。
+    // 实例 window 只带 class= 引用此声明，不再逐实例重复方法菜单。
+    appendNode(threadChildren, renderWindowClassesNode(windows, threadForRender, this.registry));
 
     const contextWindowsNode = await renderContextWindowsNode(windows, threadForRender, this.registry);
     if (contextWindowsNode) {

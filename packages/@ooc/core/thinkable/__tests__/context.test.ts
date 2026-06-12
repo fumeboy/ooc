@@ -280,9 +280,20 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain("<creator_thread_id>t_root</creator_thread_id>");
     expect(xml).toContain("<description>先处理 inbox</description>");
     expect(xml).toContain("<context_windows>");
-    expect(xml).toContain('type="do"');
-    expect(xml).toContain('type="plan"');
+    expect(xml).toContain('class="do"');
+    expect(xml).toContain('class="plan"');
     expect(xml).toContain("<is_creator_window>true</is_creator_window>");
+    // 方法契约在 class 声明层（<window_classes>）声明一次，实例 window 不再带 <methods>。
+    expect(xml).toContain("<window_classes");
+    // do class 的方法（continue/close…）在 <class name="do"> 内声明
+    const wcStart = xml.indexOf("<window_classes");
+    const wcEnd = xml.indexOf("</window_classes>");
+    const wcBlock = xml.slice(wcStart, wcEnd);
+    expect(wcBlock).toContain('<class name="do">');
+    expect(wcBlock).toContain('<class name="plan">');
+    // 负断言：实例 window 不含 <methods> 节点（菜单已搬走，不逐实例重复）
+    const cwStart = xml.indexOf("<context_windows>");
+    expect(xml.slice(cwStart)).not.toContain("<methods");
   });
 
   // guidance window 机制已整体退役（form 指引为 plain-string tip 直渲）；
@@ -305,7 +316,7 @@ describe("buildContext (ContextWindow model)", () => {
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
     expect(xml).toContain("<context>");
-    expect(xml).toContain('type="expert"'); // 未注册 peer 仍以占位/可用形式渲染
+    expect(xml).toContain('class="expert"'); // 未注册 peer 仍以占位/可用形式渲染
   });
 
   it("renders method_exec form result only when status=failed (四态机)", async () => {
@@ -323,9 +334,9 @@ describe("buildContext (ContextWindow model)", () => {
     });
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
-    expect(xml).toContain('id="f_open" type="method_exec" status="open"');
-    expect(xml).toContain('id="f_executing" type="method_exec" status="executing"');
-    expect(xml).toContain('id="f_failed" type="method_exec" status="failed"');
+    expect(xml).toContain('id="f_open" class="method_exec" status="open"');
+    expect(xml).toContain('id="f_executing" class="method_exec" status="executing"');
+    expect(xml).toContain('id="f_failed" class="method_exec" status="failed"');
 
     function sliceWindow(id: string): string {
       const start = xml.indexOf(`id="${id}"`);
@@ -355,10 +366,35 @@ describe("buildContext (ContextWindow model)", () => {
     });
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
-    expect(xml).toContain('type="todo"');
+    expect(xml).toContain('class="todo"');
     expect(xml).toContain("<content>记得加单测</content>");
     expect(xml).toContain("<activates_on>");
     expect(xml).toContain("<path>program.shell</path>");
+  });
+
+  it("class 声明层去重：多个同 class 实例 → <window_classes> 内只声明一个 <class>", async () => {
+    // 3 个 knowledge 实例（同 class、同方法集）应只产出 1 个 <class name="knowledge">，
+    // 而非旧版逐实例抄一份 <methods>（28% 重复的根因）。
+    const thread = makeThread({
+      id: "t_dup",
+      extraWindows: [
+        { id: "k1", class: "knowledge", parentWindowId: ROOT_WINDOW_ID, title: "k1", status: "open", createdAt: 1, path: "a", source: "explicit", body: "A" },
+        { id: "k2", class: "knowledge", parentWindowId: ROOT_WINDOW_ID, title: "k2", status: "open", createdAt: 1, path: "b", source: "explicit", body: "B" },
+        { id: "k3", class: "knowledge", parentWindowId: ROOT_WINDOW_ID, title: "k3", status: "open", createdAt: 1, path: "c", source: "explicit", body: "C" },
+      ] as ContextWindow[],
+    });
+    const messages = await buildContext(thread);
+    const xml = messages[0]!.content;
+    const wcBlock = xml.slice(xml.indexOf("<window_classes"), xml.indexOf("</window_classes>"));
+    // knowledge class 声明恰好一次（去重）
+    const occurrences = wcBlock.split('<class name="knowledge">').length - 1;
+    expect(occurrences).toBe(1);
+    // 三个实例都在 <context_windows> 出现，但都不带 <methods>
+    const cw = xml.slice(xml.indexOf("<context_windows>"));
+    expect(cw).toContain('id="k1"');
+    expect(cw).toContain('id="k2"');
+    expect(cw).toContain('id="k3"');
+    expect(cw).not.toContain("<methods");
   });
 
   it("filters do_window transcript by targetThreadId; top-level inbox excludes consumed messages", async () => {
@@ -514,7 +550,7 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     });
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
-    expect(xml).toContain('type="knowledge"');
+    expect(xml).toContain('class="knowledge"');
     expect(xml).toContain("<source>activator</source>");
     expect(xml).toContain("<presentation>summary</presentation>");
     expect(xml).toContain("<description>仅描述</description>");
@@ -540,7 +576,7 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     });
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
-    expect(xml).toContain('type="knowledge"');
+    expect(xml).toContain('class="knowledge"');
     expect(xml).toContain("<source>activator</source>");
     expect(xml).toContain("<presentation>full</presentation>");
     expect(xml).toContain("这是 full-doc 正文");

@@ -184,7 +184,7 @@ describe("plan_window — basic闭环", () => {
       thread,
       contextWindows: thread.contextWindows,
     });
-    expect(xml).toContain('type="plan"');
+    expect(xml).toContain('class="plan"');
     expect(xml).toContain("<title>P</title>");
     expect(xml).toContain("<description>desc</description>");
     expect(xml).toContain('<steps count="2">');

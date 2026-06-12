@@ -91,7 +91,7 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
     return [
       "# 子→父 reply 协议（你的 creator do_window）",
       "",
-      `你当前 thread 的 creator window 是 \`${window.id}\`（type=do_window，isCreatorWindow=true，不可被 close）。`,
+      `你当前 thread 的 creator window 是 \`${window.id}\`（class=do，isCreatorWindow=true，不可被 close）。`,
       "",
       "**想把结果 / 状态 / 中间进展带回父线程，唯一通道**：",
       "",
@@ -112,7 +112,7 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
   return [
     "# 子→父 reply 协议（你的 creator talk_window）",
     "",
-    `你当前 thread 的 creator window 是 \`${window.id}\`（type=talk_window，isCreatorWindow=true，不可被 close）。`,
+    `你当前 thread 的 creator window 是 \`${window.id}\`（class=talk，isCreatorWindow=true，不可被 close）。`,
     "",
     "**想给 caller 回信，唯一通道**：",
     "",

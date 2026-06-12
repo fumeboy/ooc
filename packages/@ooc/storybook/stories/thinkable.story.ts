@@ -42,16 +42,17 @@ export async function runControlPlane(): Promise<StoryResult> {
         (text ?? "").includes("会思考"), `selfLen=${(text ?? "").length}`);
     }
 
-    // TC-THINK-03: LLM input 的 <methods> 渲染 method 的语义 description（非仅 name/paths）。
+    // TC-THINK-03: class 声明层（<window_classes>/<class>）渲染 method 的语义 description（非仅 name/paths）。
     // 回归守卫：曾经只渲 paths.join(",")（≈ method 名），LLM 看不懂每个 method 含义。
+    // 方法菜单已从逐实例 <methods> 搬到 class 声明层一次（computeVisibleMethodSet）。
     {
       await import("@ooc/core/executable/windows/index.js"); // boot builtin registry
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
-      const { renderMethodsNode } = await import("@ooc/core/thinkable/context/renderers/xml");
+      const { computeVisibleMethodSet } = await import("@ooc/core/thinkable/context/renderers/xml");
       const { extractBasicDescription } = await import(
         "@ooc/core/executable/windows/_shared/method-description"
       );
-      // file window 的 method（含 windowMethods）里挑一个有 *_BASIC 描述的
+      // file class 的 method（含 windowMethods）里挑一个有 *_BASIC 描述的
       const def = builtinRegistry.getObjectDefinition("file");
       const all = { ...(def?.methods ?? {}), ...(def?.windowMethods ?? {}) };
       let descMethod = "";
@@ -60,18 +61,18 @@ export async function runControlPlane(): Promise<StoryResult> {
         const d = extractBasicDescription(entry as any);
         if (d && d.trim().length > 0) {
           descMethod = name;
-          // 折叠空白、去引号后取片段，与 renderMethodsNode 的 conciseDescription 对齐
+          // 折叠空白、去引号后取片段，与 conciseDescription 对齐
           snippet = d.replace(/\s+/g, " ").replace(/["\\]/g, "").trim().slice(0, 16);
           break;
         }
       }
-      const node = renderMethodsNode({ id: "f1", class: "file" } as never, {} as never, builtinRegistry);
-      const serialized = JSON.stringify(node);
-      // description 文本片段须出现在渲染里——否则说明又退回只渲 name/paths
+      const set = computeVisibleMethodSet({ id: "f1", class: "file" } as never, {} as never, builtinRegistry);
+      const serialized = JSON.stringify(set?.methodNodes ?? []);
+      // description 文本片段须出现在 class 声明的 method 节点里——否则说明又退回只渲 name/paths
       const descRendered = descMethod !== "" && snippet.length > 0 && serialized.includes(snippet);
       rec.ok(
         "TC-THINK-03",
-        "LLM input 的 <methods> 渲染 method 语义 description（非仅 name/paths，防回归）",
+        "class 声明层 <class> 渲染 method 语义 description（非仅 name/paths，防回归）",
         descRendered,
         `method=${descMethod || "<none-with-desc>"}, snippet=${JSON.stringify(snippet)}, rendered=${descRendered}`,
       );

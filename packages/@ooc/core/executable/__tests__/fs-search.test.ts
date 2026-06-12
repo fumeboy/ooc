@@ -59,7 +59,7 @@ describe("U1: SearchWindow type + render", () => {
     expect(id.startsWith("w_search_")).toBe(true);
   });
 
-  it("renders search_window with 3 grep matches into <window type=search kind=grep>", async () => {
+  it("renders search_window with 3 grep matches into <window class=search kind=grep>", async () => {
     const thread = makeThread({ id: "t_render_test" });
     const sw: SearchWindow = {
       id: "w_search_test",
@@ -80,7 +80,7 @@ describe("U1: SearchWindow type + render", () => {
     };
     thread.contextWindows = [sw];
     const xml = await renderContextXml({ thread, contextWindows: thread.contextWindows });
-    expect(xml).toContain('type="search"');
+    expect(xml).toContain('class="search"');
     expect(xml).toContain("<kind>grep</kind>");
     expect(xml).toContain('count="3"');
     expect(xml).toContain('truncated="false"');

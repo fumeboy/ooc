@@ -5,25 +5,20 @@ activates_on:
   "object::root": "show_content"
 ---
 
-root window 是每个 thread 隐含的根窗口。在它上面可用 `exec(method="<name>", title="…", args={…})`
-调用以下 method（args 给齐时部分 method 会立即提交，无需再 submit）：
+root window 是每个 thread 隐含的根窗口（`class=root`）。它支持的 method 及各自一句描述、必填参数，
+都在 `<window_classes>` 的 `<class name="root">` 里声明——本篇不复述那些 brief，只给**索引 + 何时用哪条**
+（class 声明层不承载的元信息）。
 
-| method | 作用 |
-|---|---|
-| do | 派生子线程（创建 child thread + do_window）|
-| talk | 与其它对象（含 user 与其它 flow object）持续会话；同一对象复用同一 talk_window |
-| program | 执行代码 / 调用 server 方法（创建 program_window）|
-| plan | 创建 / 就地更新 root plan_window |
-| todo | 登记可见待办 |
-| end | 标记 thread 完成 |
-| open_file | 把文件引入 context（创建 file_window；后续 set_range/reload）|
-| open_knowledge | 显式打开 stone knowledge doc（force-full 渲染）|
-| write_file | 创建 / 覆盖**已存在对象**的文件（写盘 + 自动 spawn file_window）|
-| create_object | 建一个**全新对象**的骨架（仅业务 session）|
-| example | 构造 example_window（对象定义样板）|
-| glob | 按 glob 匹配文件名（创建 search_window，可 open_match）|
-| grep | 按正则搜文件内容（创建 search_window，可 open_match）|
-| open_feishu_chat | 把飞书群聊 / 单聊作为 ContextWindow 引入 |
-| open_feishu_doc | 把飞书文档作为 ContextWindow 引入 |
+`exec(method="<name>", title="…", args={…})` 调用；args 给齐时部分 method 会立即提交，无需再 submit。
 
-每个 method 进入 exec 后，对应知识会自动激活；本表只是入口索引。
+何时用哪条：
+
+- 要**派活给子线程**（自己继续别的事 / 之后再 wait 回写）→ `do`。
+- 要**和别的对象（含 user、其它 flow object）持续对话** → `talk`；同一对象复用同一 talk_window，不要重复 open。
+- 要**跑代码 / 调 server 方法** → `program`。
+- 要**把任务拆成可见步骤** → `plan`；只记一条待办 → `todo`；本轮**收尾** → `end`。
+- 要**把文件 / 知识引入 context** → `open_file` / `open_knowledge`；**搜文件** → `glob`（按名）/ `grep`（按内容）。
+- 要**写盘**：改已存在对象的文件 → `write_file`；建**全新对象**骨架 → `create_object`（仅业务 session）。
+- 要**对象定义样板** → `example`；接入**飞书** → `open_feishu_chat` / `open_feishu_doc`。
+
+每个 method 进入 exec 后，对应知识会自动激活；本篇只是入口索引，具体参数看 form 提示。

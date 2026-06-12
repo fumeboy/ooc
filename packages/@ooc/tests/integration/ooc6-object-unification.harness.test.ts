@@ -469,8 +469,8 @@ describe("ooc-6 Object Unification harness cycle", () => {
 
     // Should contain do (creator), self, todo, and peer objects
     expect(xml).toContain("w_creator_t_main"); // creator do window
-    expect(xml).toContain('type="test_agent"'); // self window（ooc-6：id=class=objectId，custom: 前缀已移除）
-    expect(xml).toContain('type="todo"'); // todo object
+    expect(xml).toContain('class="test_agent"'); // self window（ooc-6：id=class=objectId，custom: 前缀已移除）
+    expect(xml).toContain('class="todo"'); // todo object
     expect(xml).toContain("Test Todo"); // todo content
     expect(xml).toContain("peer_agent"); // peer from stone hierarchy
     expect(xml).toContain("Peer Agent"); // peer title from readme

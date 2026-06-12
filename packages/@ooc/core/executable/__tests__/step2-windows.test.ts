@@ -139,7 +139,7 @@ describe("Step 2 window lifecycles", () => {
 
       const messages = await buildContext(thread);
       const xml = messages[0]?.content ?? "";
-      expect(xml).toContain('type="file"');
+      expect(xml).toContain('class="file"');
       expect(xml).toContain("alpha");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
@@ -178,7 +178,7 @@ describe("Step 2 window lifecycles", () => {
 
       const messages = await buildContext(thread);
       const xml = messages[0]?.content ?? "";
-      expect(xml).toContain('type="knowledge"');
+      expect(xml).toContain('class="knowledge"');
       // knowledge_window 自身渲染 + activator force-full 渲染各一次都包含正文
       expect(xml).toContain("手册正文内容");
     } finally {
