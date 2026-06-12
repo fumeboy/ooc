@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { continueThread, fetchJob, fetchSessionThreads, fetchThread, waitForJob } from "../domains/chat";
+import { continueThread, fetchJob, fetchSessionThreads, fetchThread, threadHasPendingPermission, waitForJob } from "../domains/chat";
 import { fetchFile, fetchTree, type FileTreeNode, type TreeScope } from "../domains/files";
 import { fetchFlows, flowTitle, pauseFlowSession, resumeFlowSession, type FlowSession } from "../domains/flows";
 import { fetchSelfFirstLine } from "../domains/objects";
@@ -357,7 +357,13 @@ export function AppShell() {
     setPauseBusy(true);
     patch({ error: undefined });
     try {
-      if (activeFlow?.paused) {
+      // resume 既看内存 pause 标记，也看 thread 是否「系统级」落盘 paused：进程重启会丢失
+      // 内存标记（activeFlow.paused=false），但 thread.status 仍 paused，此时仍须 resume
+      // 才能把卡死的 thread 重新入队。注意排除 HITL 审批 pause（有未决 permission_card）——
+      // 那种 paused 应由决议卡 approve/reject 推进，不能被 footer 误当 session pause 恢复。
+      const systemPaused = state.thread?.status === "paused" && !threadHasPendingPermission(state.thread);
+      const shouldResume = activeFlow?.paused || systemPaused;
+      if (shouldResume) {
         const result = await resumeFlowSession(activeSessionId);
         updateFlowPausedState(activeSessionId, result.paused);
         await Promise.all(result.jobIds.map((jobId) => waitForJob(jobId, fetchJob)));

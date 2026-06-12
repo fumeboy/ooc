@@ -630,3 +630,15 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
   // 再把连续同类 notice 折叠成一条 notice_group，去 thinkloop trace 的重复噪声（UI-6）。
   return groupConsecutiveNotices(groupConsecutiveToolLines(lines));
 }
+
+/**
+ * thread 是否正卡在 HITL 审批上（有未决 permission_card）。
+ *
+ * 这是区分两类 paused 的唯一可靠信号：HITL pause 一定先写 permission_ask 再 paused，
+ * 系统级 pause（session / global）一定不写 permission event。故「有未决 permission_card」
+ * ⟺「HITL 等审批」；仅凭 thread.status === "paused" 无法区分二者。
+ * 未决 = permission_card 且尚未 approve/reject（decided === undefined）。
+ */
+export function threadHasPendingPermission(thread?: ThreadContext): boolean {
+  return formatThread(thread).some((line) => line.kind === "permission_card" && !line.decided);
+}

@@ -5,13 +5,15 @@ import { LoaderCircle, SendHorizontal } from "lucide-react";
  * ChatComposer — 输入与发送。pause 按钮已搬至 RightPanel 的 right-footer
  * （pause 与 status pill 同栏展示，参见 RightPanel）。
  *
- * `paused` 现在表示 **thread 级** paused（thread.status === "paused"，HITL
- * 等审批中）—— textarea 在该状态下 disabled、placeholder 改为审批等待文案。
- * session 级 pause 由 footer 上的按钮独立控制，不再让 composer 跟随。
+ * `paused` 表示 thread 处于 paused（两类 pause 都 disable textarea）。
+ * `awaitingApproval` 单独区分「是 HITL 审批 pause」（有未决 permission_card），
+ * 仅用于切 placeholder 文案——只有此情况才提「审批 / 决议卡」；系统级 pause
+ * （session / global）走通用「已暂停」文案，不误导用户去找不存在的决议卡。
  */
 export function ChatComposer({
   disabled,
   paused = false,
+  awaitingApproval = false,
   /** 当前 thread 对方 objectId — 用于派生 placeholder（A4 fix），缺省时退回通用文案 */
   peerObjectId,
   /** 对方 displayName(从 self.md 第一行派生) — 优先用于 placeholder 文本; 缺省回退到 peerObjectId */
@@ -20,6 +22,7 @@ export function ChatComposer({
 }: {
   disabled?: boolean;
   paused?: boolean;
+  awaitingApproval?: boolean;
   peerObjectId?: string;
   peerDisplayName?: string;
   onSend: (text: string) => Promise<void>;
@@ -57,7 +60,11 @@ export function ChatComposer({
   const idlePlaceholder = peerLabel ? `回复 ${peerLabel}…` : "继续这个 thread…";
   // composer send 通道只支持 ⌘↵, 在 placeholder 末尾增加 hint, 与 send button title 共同消除
   // "新用户找不到发送方式" 的体验问题。
-  const placeholder = paused ? "thread 等待审批中，先在上方决议卡处理…" : `${idlePlaceholder}（⌘↵ 发送）`;
+  const placeholder = awaitingApproval
+    ? "thread 等待审批中，先在上方决议卡处理…"
+    : paused
+      ? "session 已暂停，恢复后继续…"
+      : `${idlePlaceholder}（⌘↵ 发送）`;
 
   return (
     <div className="chat-composer panel">

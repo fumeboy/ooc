@@ -5,9 +5,7 @@ node_modules/
 .ooc-world-test/
 .ooc-world/
 .ooc-world-*
-# .ooc-world-meta：OOC 自举 world（设计权威 = github.com/fumeboy/ooc-0）。原以 submodule 纳入，
-# 现已解除——改为独立 clone 落 .ooc-world-meta/stones/main（避免 submodule 丢改动）；整目录忽略。
-# 新环境拉取方式见 AGENT.md「进入项目时必读」。
+packages/@ooc/web/tsconfig.tsbuildinfo
 .claude/
 .agent_context/
 goal.md
