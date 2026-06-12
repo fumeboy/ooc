@@ -136,7 +136,7 @@ export {
   readReadable,
   readableFile,
   writeReadable,
-} from "./stone-readme";
+} from "./stone-readable";
 // stone-data 已删除：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
 export {
   readExecutableSource,

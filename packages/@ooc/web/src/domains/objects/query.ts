@@ -267,10 +267,10 @@ export function __resetDisplayNameCacheForTest() {
   inflight.clear();
 }
 
-/* ----------------------------- peer readme ----------------------------- */
+/* ----------------------------- peer readable ----------------------------- */
 
 /**
- * 取 stones/main/objects/<peerId>/readme.md 的全文（peer 公开自述）。
+ * 取 stones/main/objects/<peerId>/readable.md 的全文（peer 公开自述）。
  *
  * 用于：
  * - relation_window 详情面板展示对端身份介绍
@@ -279,15 +279,15 @@ export function __resetDisplayNameCacheForTest() {
  * 缓存策略与 displayName 同——TTL 30s + inflight 去重 + 进程内 LRU；
  * cache key 与 displayName 隔离避免互相打架。返回 null = 文件不存在 / fetch 失败。
  */
-const readmeCache = new Map<string, { text: string | null; expiresAt: number }>();
-const readmeInflight = new Map<string, Promise<string | null>>();
-const readmeSubscribers = new Set<() => void>();
+const readableCache = new Map<string, { text: string | null; expiresAt: number }>();
+const readableInflight = new Map<string, Promise<string | null>>();
+const readableSubscribers = new Set<() => void>();
 
-async function loadReadme(objectId: string): Promise<string | null> {
+async function loadReadable(objectId: string): Promise<string | null> {
   const now = Date.now();
-  const cached = readmeCache.get(objectId);
+  const cached = readableCache.get(objectId);
   if (cached && cached.expiresAt > now) return cached.text;
-  const existing = readmeInflight.get(objectId);
+  const existing = readableInflight.get(objectId);
   if (existing) return existing;
   const p = (async () => {
     let text: string | null = null;
@@ -297,30 +297,30 @@ async function loadReadme(objectId: string): Promise<string | null> {
     } else {
       try {
         const res = await requestJson<{ text?: string }>(
-          `/api/stones/${encodeURIComponent(objectId)}/readme`,
+          `/api/stones/${encodeURIComponent(objectId)}/readable`,
         );
         text = typeof res?.text === "string" ? res.text : null;
       } catch {
         text = null;
       }
     }
-    if (readmeCache.has(objectId)) readmeCache.delete(objectId);
-    readmeCache.set(objectId, { text, expiresAt: Date.now() + TTL_MS });
-    while (readmeCache.size > LRU_CAP) {
-      const oldest = readmeCache.keys().next().value;
+    if (readableCache.has(objectId)) readableCache.delete(objectId);
+    readableCache.set(objectId, { text, expiresAt: Date.now() + TTL_MS });
+    while (readableCache.size > LRU_CAP) {
+      const oldest = readableCache.keys().next().value;
       if (oldest === undefined) break;
-      readmeCache.delete(oldest);
+      readableCache.delete(oldest);
     }
-    readmeInflight.delete(objectId);
-    readmeSubscribers.forEach((fn) => fn());
+    readableInflight.delete(objectId);
+    readableSubscribers.forEach((fn) => fn());
     return text;
   })();
-  readmeInflight.set(objectId, p);
+  readableInflight.set(objectId, p);
   return p;
 }
 
-/** `usePeerReadme(objectId)` —— 取 peer 的 readme.md；未命中先返回 loading。 */
-export function usePeerReadme(objectId: string | undefined): {
+/** `usePeerReadable(objectId)` —— 取 peer 的 readable.md；未命中先返回 loading。 */
+export function usePeerReadable(objectId: string | undefined): {
   text: string | null;
   isLoading: boolean;
 } {
@@ -330,25 +330,25 @@ export function usePeerReadme(objectId: string | undefined): {
     if (!objectId) return;
     let cancelled = false;
     const sub = () => { if (!cancelled) forceUpdate((n) => n + 1); };
-    readmeSubscribers.add(sub);
-    const cached = readmeCache.get(objectId);
+    readableSubscribers.add(sub);
+    const cached = readableCache.get(objectId);
     if (!cached || cached.expiresAt < Date.now()) {
-      void loadReadme(objectId);
+      void loadReadable(objectId);
     }
     return () => {
       cancelled = true;
-      readmeSubscribers.delete(sub);
+      readableSubscribers.delete(sub);
     };
   }, [objectId]);
 
   if (!objectId) return { text: null, isLoading: false };
-  const cached = readmeCache.get(objectId);
+  const cached = readableCache.get(objectId);
   if (cached && cached.expiresAt > Date.now()) return { text: cached.text, isLoading: false };
   return { text: null, isLoading: true };
 }
 
-/** 测试用：清掉 readme 缓存。 */
-export function __resetReadmeCacheForTest() {
-  readmeCache.clear();
-  readmeInflight.clear();
+/** 测试用：清掉 readable 缓存。 */
+export function __resetReadableCacheForTest() {
+  readableCache.clear();
+  readableInflight.clear();
 }

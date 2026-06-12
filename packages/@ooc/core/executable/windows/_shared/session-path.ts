@@ -9,8 +9,8 @@
  * packages routing：
  * 当路径形如 `packages/<objectId>/...` 时，保持原样（bun workspace 把所有 objects
  * 都放在 packages/ 下，嵌套通过 children/ 物理目录分隔）。
- *   - 简单 objectId: `packages/supervisor/readme.md`
- *   - 嵌套 objectId: `packages/sentry/children/sentry_factor_dev/readme.md`
+ *   - 简单 objectId: `packages/supervisor/readable.md`
+ *   - 嵌套 objectId: `packages/sentry/children/sentry_factor_dev/readable.md`
  *
  * pools routing：当路径形如 `pools/<id>/...` 时，自动重写为
  * `pools/objects/<id>/...`：

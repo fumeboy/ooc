@@ -7,7 +7,7 @@
  * 只复用其**观察/评分纯函数**（layout 无关，见 stories 各自 import）。
  *
  * 关键约束（历史踩过的坑）：
- *  - 涉及 versioning 的写（self/readme/executable）**必经 HTTP API**（worktree commit）；
+ *  - 涉及 versioning 的写（self/readable/executable）**必经 HTTP API**（worktree commit）；
  *    直写磁盘未提交会和后续 worktree ff-merge 冲突。直写仅用于非 versioning 的热更（writeStoneFile）。
  */
 import { mkdtemp, rm } from "node:fs/promises";

@@ -192,9 +192,9 @@ export async function derivePeerObjectWindows(
       // 落 worktree 未合 main）——经 worktree ref 读它的 readable / executable，否则
       // readReadable/loadObjectWindow 落 main 找不到 → peer 类型注册不到 → 不可 talk。
       const peerStoneRef = await resolveStoneIdentityRef({ baseDir, sessionId, objectId: peerId }, "read");
-      const readme = await readReadable(peerStoneRef);
-      if (readme) {
-        const frontmatterMatch = readme.match(/^---\n([\s\S]*?)\n---/);
+      const readable = await readReadable(peerStoneRef);
+      if (readable) {
+        const frontmatterMatch = readable.match(/^---\n([\s\S]*?)\n---/);
         const titleMatch = frontmatterMatch?.[1].match(/^title:\s*(.+)$/m);
         if (titleMatch) title = titleMatch[1].trim();
       }

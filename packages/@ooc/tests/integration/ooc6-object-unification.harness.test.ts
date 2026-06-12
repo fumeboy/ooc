@@ -57,7 +57,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     // Create minimal world structure
     await mkdir(join(baseDir, "stones", "main", "objects", objectId), { recursive: true });
     await mkdir(join(baseDir, "stones", "main", "objects", peerId), { recursive: true });
-    // Write minimal self/readme for each
+    // Write minimal self/readable for each
     await writeFile(
       join(baseDir, "stones", "main", "objects", objectId, "self.md"),
       `---\ntitle: Test Agent\ndescription: A test agent for ooc-6 harness\n---\nI am a test agent.`,
@@ -154,7 +154,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
 
   // ── Point 4: Readable concept ───────────────────────────────────────────
   it("4: readable concept - objects render their readable content in XML", async () => {
-    // Create stone objects with readable (writeReadable = dual-write to readable.md + readme.md)
+    // Create stone objects with readable (writeReadable → readable.md)
     await createStoneObject({ baseDir, objectId: "readable_test" });
     await writeReadable(
       { baseDir, objectId: "readable_test" },
@@ -182,8 +182,8 @@ describe("ooc-6 Object Unification harness cycle", () => {
     // Render XML
     const xml = await renderContextXml({ thread, contextWindows: thread.contextWindows });
     expect(xml).toContain("<context");
-    expect(xml).toContain("Readable Test Object"); // from readme title
-    expect(xml).toContain("readable concept"); // from readme body
+    expect(xml).toContain("Readable Test Object"); // from readable title
+    expect(xml).toContain("readable concept"); // from readable body
   });
 
   // ── Point 7: Method visibility - commands per type ───────────────────────
@@ -367,7 +367,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     const peer = peerWindows.find((w) => w.id === peerId);
     expect(peer).toBeDefined();
     expect(peer!.class).toBe(peerId as any);
-    expect(peer!.title).toBe("Peer Agent"); // from readme title
+    expect(peer!.title).toBe("Peer Agent"); // from readable title
 
   });
 
@@ -473,6 +473,6 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(xml).toContain('class="todo"'); // todo object
     expect(xml).toContain("Test Todo"); // todo content
     expect(xml).toContain("peer_agent"); // peer from stone hierarchy
-    expect(xml).toContain("Peer Agent"); // peer title from readme
+    expect(xml).toContain("Peer Agent"); // peer title from readable
   });
 });

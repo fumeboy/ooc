@@ -26,7 +26,7 @@ import type { ContextWindow } from "../../context-snapshot";
 import { BUILTIN_VISIBLE } from "./builtin-visible-registry";
 import { endpoints } from "../../../../transport/endpoints";
 import { requestJson } from "../../../../transport/http";
-import { usePeerReadme } from "../../../objects";
+import { usePeerReadable } from "../../../objects";
 import { MarkdownContent } from "../../../../shared/ui/MarkdownContent";
 
 export type WindowVisibleKind =
@@ -55,7 +55,7 @@ const dynamicCache = new Map<string, WindowComp>();
 
 /**
  * 无 visible 时的回退：展示该 object/window 的 **readable 文本**（对外呈现文本，
- * 即该 object 的 readme，经 `/api/stones/<id>/readme` 取）。window 所属 object 的 id
+ * 经 `/api/stones/<id>/readable` 取）。window 所属 object 的 id
  * = `window.class`（与 resolveWindowVisibleKind 的 dynamic objectId 同源）。
  *
  * - readable 文本存在 → markdown 渲染。
@@ -64,7 +64,7 @@ const dynamicCache = new Map<string, WindowComp>();
  */
 function makeReadableFallback(jsonFallback: WindowComp): WindowComp {
   return function ReadableFallback({ window }: { window: ContextWindow }) {
-    const { text, isLoading } = usePeerReadme(window.class);
+    const { text, isLoading } = usePeerReadable(window.class);
     if (text && text.trim().length > 0) {
       return (
         <div className="llm-input-detail-body">

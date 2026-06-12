@@ -156,7 +156,7 @@ export function createStonesService({
    *
    * 校验由 route 层从 `X-Overwrite-Confirm: true` header 派生 boolean 传入。
    *
-   * 空文件等价于"未写过"：createStoneObject 现在预创 self.md / readme.md 空文件
+   * 空文件等价于"未写过"：createStoneObject 现在预创 self.md / readable.md 空文件
    * 作为 visibility-first 占位；这里把 size===0 视为等价 ENOENT 放行，对应 protection 的初衷
    * （避免覆盖用户已经写过的内容，空占位不算内容）。
    */
@@ -244,13 +244,13 @@ export function createStonesService({
       objectId,
       name,
       self,
-      readme,
+      readable,
       class: classId,
     }: {
       objectId?: string;
       name?: string;
       self?: string;
-      readme?: string;
+      readable?: string;
       /** ooc.class —— object 的继承父类（class 实例化时设置）。 */
       class?: string;
     }) {
@@ -258,8 +258,8 @@ export function createStonesService({
       // pool 骨架在 stones/ 之外（pools/objects/<id>/），与 git versioning 无关；
       // 提前建好，避免 worktree write 之后还要等 commit。
       await createPoolObject({ baseDir, objectId });
-      // stone 目录 + self.md + readme.md 全部经 worktree → commit → ff merge。
-      // 同一个 commit 涵盖 createStoneObject + 可选的 self/readme overwrite，避免拆分多个 commit。
+      // stone 目录 + self.md + readable.md 全部经 worktree → commit → ff merge。
+      // 同一个 commit 涵盖 createStoneObject + 可选的 self/readable overwrite，避免拆分多个 commit。
       const versioned = await runVersioned(objectId, `http:createStone ${objectId}`, async (branch) => {
         const wtRef = { baseDir, objectId, _stonesBranch: branch };
         await createStoneObject(wtRef, classId ? { class: classId } : undefined);
@@ -270,7 +270,7 @@ export function createStonesService({
         } else if (name !== undefined) {
           await writeSelf(wtRef, name);
         }
-        if (readme !== undefined) await writeReadable(wtRef, readme);
+        if (readable !== undefined) await writeReadable(wtRef, readable);
       });
       return {
         objectId,
@@ -297,14 +297,14 @@ export function createStonesService({
       });
       return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
     },
-    async getReadme({ objectId }: { objectId: string }) {
+    async getReadable({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
       return { text: (await readReadable(ref(objectId))) ?? "" };
     },
-    async putReadme({ objectId, text, confirmOverwrite = false }: { objectId: string; text: string; confirmOverwrite?: boolean }) {
+    async putReadable({ objectId, text, confirmOverwrite = false }: { objectId: string; text: string; confirmOverwrite?: boolean }) {
       await ensureStoneExists(objectId);
-      await ensureOverwriteAllowed(join(dir(objectId), "readable.md"), confirmOverwrite, { objectId, field: "readme" });
-      const versioned = await runVersioned(objectId, `http:putReadme ${objectId}`, async (branch) => {
+      await ensureOverwriteAllowed(join(dir(objectId), "readable.md"), confirmOverwrite, { objectId, field: "readable" });
+      const versioned = await runVersioned(objectId, `http:putReadable ${objectId}`, async (branch) => {
         await writeReadable({ baseDir, objectId, _stonesBranch: branch }, text);
       });
       return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged, prIssueId: versioned.prIssueId };
