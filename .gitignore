@@ -18,8 +18,8 @@ log
 skills-lock.json
 *.jpg
 *.jpeg
-web/dist/
-web/tsconfig.tsbuildinfo
+packages/@ooc/web/dist/
+packages/@ooc/web/tsconfig.tsbuildinfo
 todo.md
 .idea
 .gitignore
