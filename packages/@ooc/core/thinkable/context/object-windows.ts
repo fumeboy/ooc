@@ -160,7 +160,8 @@ export async function derivePeerObjectWindows(
   for (const w of talkWindows) {
     if (!w.target) continue;
     if (w.target === SUPER_ALIAS_TARGET) continue;
-    if (w.target === "user") continue;
+    // user 不再特殊排除：talk 过的对端对象（含 user）统一作 peer object window 进 context，
+    // 由既有 readable 渲染展示其名片（user 无可调方法 → 方法集空 → 不进 class 声明层，只露 readable）。
     const prev = peerEarliest.get(w.target);
     if (prev === undefined || w.createdAt < prev) peerEarliest.set(w.target, w.createdAt);
   }

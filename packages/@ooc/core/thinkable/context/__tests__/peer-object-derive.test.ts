@@ -78,6 +78,24 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     expect(result.length).toBe(0);
   });
 
+  it("derives user as peer object from talk_window (user 不再特殊排除，统一作 context window)", async () => {
+    const thread = makePeerThread("agent_self", [
+      {
+        id: "w_talk_user",
+        class: "talk",
+        parentWindowId: "root",
+        title: "talk to user",
+        status: "open",
+        createdAt: 100,
+        target: "user",
+        conversationId: "conv_u",
+      },
+    ]);
+    const result = await derivePeerObjectWindows(thread);
+    expect(result.map((w) => w.id)).toContain("user");
+    expect(result.find((w) => w.id === "user")?.class).toBe("user" as any);
+  });
+
   it("derives peer objects from sibling stones (default visibility)", async () => {
     await createStoneObject({ baseDir, objectId: "agent_sibling1" });
     await writeReadable(
