@@ -15,6 +15,7 @@
 import {
   deriveStoneFromThread,
   discoverStoneHierarchicalPeers,
+  readExecutableSource,
   readReadable,
   readStoneClass,
   resolveStoneIdentityRef,
@@ -24,6 +25,7 @@ import type { ObjectRegistry, ObjectDefinition } from "../../executable/windows/
 import { builtinRegistry } from "../../executable/windows/index.js";
 import type { ContextWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
 import { SUPER_ALIAS_TARGET } from "@ooc/core/_shared/types/constants.js";
+import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
 import { loadObjectWindow } from "../../runtime/server-loader.js";
 
 /**
@@ -66,6 +68,21 @@ async function registerStoneObjectType(
 }
 
 /**
+ * 渲染失败 self window 的 readable hook：把 code load 失败显式注入 self window，让 agent 在
+ * context 里看到「你的方法库没装上」而非以为方法不存在。fail-loud 的可见落点。
+ */
+function makeSelfLoadErrorReadable(selfId: string, message: string): ObjectDefinition["readable"] {
+  return () => [
+    xmlElement("executable_load_error", { object_id: selfId }, [
+      xmlText(
+        `你的 executable/index.ts 加载失败，因此本对象的所有自定义 method 当前都不可用——` +
+          `不要假装它们不存在、更不要据此编造结果。先修复 executable/index.ts 再调用。\n失败原因：${message}`,
+      ),
+    ]),
+  ];
+}
+
+/**
  * 动态注册 thread 自己的 Object 类型（stone-backed）。
  *
  * thread.persistence.objectId 是 thread 的 self window type，但 builtin registry 不认识 stone
@@ -89,8 +106,33 @@ export async function ensureSelfObjectTypeRegistered(
     const objWin = await loadObjectWindow(stoneRef);
     await registerStoneObjectType(registry, selfId, objWin, stoneRef);
   } catch (err) {
-    console.debug(`[object-windows] self register io_error self=${selfId} msg=${(err as Error).message}`);
-    registry.registerNewObjectType(selfId as any, { methods: {} });
+    const message = (err as Error).message;
+    // 区分两种失败：磁盘上有 executable/index.ts 但 load 抛错 = 真错误（broken import /
+    // 语法错 / top-level throw），不能静默当「无方法」兜底——否则 agent 以为方法不存在而编造。
+    // 磁盘上根本没有 executable/index.ts = 合法的纯 self.md/readable.md 对象，安静注空即可。
+    let hasExecutable = false;
+    try {
+      hasExecutable = (await readExecutableSource(stoneRef)) !== undefined;
+    } catch {
+      // intentional: 探测 executable 是否存在时的 IO 失败不应掩盖原始 load error；
+      // 视作「无法确认有文件」，保守按无 executable 处理（仅在原始 load 已失败的分支）。
+      hasExecutable = false;
+    }
+    if (hasExecutable) {
+      // fail-loud：文件存在却 load 失败。loud warn（不再是 console.debug 黑洞）+ 把错误注入
+      // self window 的 readable，让 agent 在 context 里直接看到方法库没装上。
+      console.warn(
+        `[object-windows] self executable LOAD FAILED self=${selfId} —— methods 不可用，已把错误注入 self window readable. msg=${message}`,
+      );
+      registry.registerNewObjectType(selfId as any, {
+        methods: {},
+        readable: makeSelfLoadErrorReadable(selfId, message),
+      });
+    } else {
+      // 无 executable/index.ts：合法的纯 self.md/readable.md 对象，空 methods 正确，安静注册。
+      console.debug(`[object-windows] self no executable self=${selfId} msg=${message}`);
+      registry.registerNewObjectType(selfId as any, { methods: {} });
+    }
   }
 }
 
