@@ -1,5 +1,7 @@
 /**
- * root.new_feat_branch method —— reflectable 沉淀的第一步（开 feat 分支）。
+ * reflect_request.new_feat_branch method —— reflectable 沉淀的第一步（开 feat 分支）。
+ *
+ * 挂在 reflect_request window 上（super flow 反思会话面），标 for_reflectable（仅 super flow surface）。
  *
  * 地基不变量（用户拍板）：`session-<sid>` worktree 永不合入 main；沉淀进 canonical 走
  * 「另起 feat 分支 → 直接编辑 → commit → PR」。
