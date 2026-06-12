@@ -77,6 +77,27 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
 const COMMAND_BRIEF_MAX = 80;
 const COMMAND_DESC_MAX = 200;
 
+/**
+ * 把 method schema 的**必填**参数渲染为 `<arg name type required[ enum]>description</arg>` 子节点。
+ * 只渲染 required===true 的参数（可选参数不进 eager）；无 schema / 无必填参数 → 空数组（行为同旧版仅 brief）。
+ * enum 作属性带上（治「猜值」）；fail-soft 不抛。
+ */
+function renderRequiredArgNodes(schema: { args?: Record<string, import("@ooc/core/_shared/types/intent.js").MethodArgSpec> } | undefined): XmlNode[] {
+  const args = schema?.args;
+  if (!args) return [];
+  const nodes: XmlNode[] = [];
+  for (const [name, spec] of Object.entries(args)) {
+    if (spec?.required !== true) continue;
+    const attrs: Record<string, string> = { name, type: spec.type, required: "true" };
+    if (spec.enum && spec.enum.length > 0) {
+      attrs.enum = spec.enum.map(String).join("|");
+    }
+    const desc = spec.description;
+    nodes.push(xmlElement("arg", attrs, desc ? [xmlText(desc)] : []));
+  }
+  return nodes;
+}
+
 export function renderMethodsNode(
   window: ContextWindow,
   thread: ThreadContext,
@@ -110,7 +131,10 @@ export function renderMethodsNode(
     const brief = desc
       ? conciseDescription(desc, COMMAND_DESC_MAX)
       : (entry?.description ?? (entry?.intents ?? [name]).join(", ")).slice(0, COMMAND_BRIEF_MAX);
-    return xmlElement("method", { name }, [xmlText(brief)]);
+    // 必填参数 eager 摆出完整契约（name+type+required+description[+enum]）治 false confidence：
+    // LLM 在决策点填 args 前就看到真相，不靠先验猜 key/值。可选参数不进 eager（走 form tip / brief 正文）。
+    const argNodes = renderRequiredArgNodes(entry?.schema);
+    return xmlElement("method", { name }, [xmlText(brief), ...argNodes]);
   });
 
   if (isCompressed) {

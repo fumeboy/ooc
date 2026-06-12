@@ -23,6 +23,30 @@ test("talk window method (set_transcript_window) rendered in <commands>", () => 
 });
 
 /**
+ * eager 必填参数契约：method 的必填参数渲染为 <arg name type required> 子节点，治 LLM 猜 key。
+ * say 的 msg 必填 → 出现；wait 可选 → 不进 eager（只在 form tip 出现）。
+ */
+test("required args rendered as <arg> under <method> (say.msg eager, wait optional excluded)", () => {
+  const node = renderMethodsNode({ id: "t1", class: "talk" } as any, {} as any, builtinRegistry);
+  expect(node).not.toBeNull();
+  // 找到 say 这个 method 节点
+  const sayMethod = (node as any).children.find(
+    (c: any) => c.kind === "element" && c.tag === "method" && c.attrs?.name === "say",
+  );
+  expect(sayMethod).toBeDefined();
+  const argNodes = (sayMethod.children ?? []).filter(
+    (c: any) => c.kind === "element" && c.tag === "arg",
+  );
+  // 必填 msg 进 eager
+  const msgArg = argNodes.find((a: any) => a.attrs?.name === "msg");
+  expect(msgArg).toBeDefined();
+  expect(msgArg.attrs.type).toBe("string");
+  expect(msgArg.attrs.required).toBe("true");
+  // 可选 wait 不进 eager
+  expect(argNodes.find((a: any) => a.attrs?.name === "wait")).toBeUndefined();
+});
+
+/**
  * reflect_request（super flow 反思会话面）：复用 talk 的会话 method（say）+ 挂 reflectable
  * 沉淀 method（new_feat_branch / create_pr_and_invite_reviewers，标 for_reflectable）。
  * for_reflectable 门控：沉淀 method **仅在 super flow 下 surface**，业务 session 菜单不出现

@@ -55,6 +55,25 @@ export function readable(ctx: RenderContext): XmlNode[] {
         })),
       });
     }
+    // <unknown_args> — 响亮回显 LLM 传了但不在 schema.args 里的 key（如把 say 的 msg 传成 content）。
+    // 不静默映射、不静默忽略：列出被忽略的 key + 本 method 接受的参数（必填标注），治 false confidence 的残余猜测面。
+    const known = new Set(Object.keys(form.schema.args));
+    const unknownArgs = Object.keys(form.accumulatedArgs).filter((k) => !known.has(k));
+    if (unknownArgs.length > 0) {
+      const accepted = Object.entries(form.schema.args)
+        .map(([name, spec]) => (spec.required ? `${name}(必填)` : name))
+        .join(", ");
+      children.push({
+        kind: "element",
+        tag: "unknown_args",
+        attrs: { ignored: unknownArgs.join(",") },
+        children: [{
+          kind: "text" as const,
+          value: `未知参数 ${unknownArgs.map((k) => `\`${k}\``).join("、")} 已忽略（未做静默映射）。本 method 接受：${accepted}。请用正确的参数名重新 refine。`,
+        }],
+      });
+    }
+
     // <next_steps> — derived from schema.required + fill_state
     const nextSteps = Object.entries(form.schema.args)
       .filter(([name, spec]) => {

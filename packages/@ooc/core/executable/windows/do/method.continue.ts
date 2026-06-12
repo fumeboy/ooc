@@ -47,7 +47,7 @@ async function executeDoWindowContinue(ctx: MethodExecutionContext): Promise<str
 }
 
 export const continueMethod: ObjectMethod = {
-  description: "Send another message to the thread on the other side of this do_window.",
+  description: "Send another message to the thread on the other side of this do_window (set wait=true to block until it writes back).",
   intents: ["continue.wait"],
   schema: {
     args: {

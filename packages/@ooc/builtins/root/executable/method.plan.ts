@@ -25,7 +25,7 @@ function hasAnyInput(args: Record<string, unknown>): boolean {
 }
 
 export const planMethod: ObjectMethod = {
-  description: "Create a plan window breaking a task into steps.",
+  description: "Create a plan window breaking a task into steps (pass plan text, or a steps list of { text, status? }).",
   intents: [PlanMethodPath.Plan],
   schema: {
     args: {

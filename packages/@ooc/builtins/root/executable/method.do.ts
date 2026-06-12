@@ -16,7 +16,7 @@ export enum DoMethodPath {
 }
 
 export const doMethod: ObjectMethod = {
-  description: "Fork a child thread with an initial message; produces a do_window for interaction.",
+  description: "Fork a child thread with an initial message; produces a do_window for interaction (set wait=true to block until the child writes back).",
   intents: [DoMethodPath.Wait],
   schema: {
     args: {

@@ -38,7 +38,7 @@ async function executeTalkWindowSay(ctx: MethodExecutionContext): Promise<string
 }
 
 export const sayMethod: ObjectMethod = {
-  description: "Send a message to the peer on the other side of this talk_window.",
+  description: "Send a message to the peer on the other side of this talk_window (set wait=true to block until the peer replies).",
   intents: ["say.wait"],
   schema: {
     args: {
