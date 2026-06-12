@@ -26,11 +26,9 @@
  */
 
 import * as lark from "@larksuiteoapi/node-sdk";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { ServerConfig } from "../../../app/server/bootstrap/config.js";
 import type { ThreadActivationRef } from "../../../observable/index.js";
-import { readWorldConfig } from "../../../persistable/index.js";
+import { readThread, readWorldConfig } from "../../../persistable/index.js";
 
 /** session 命名前缀；前端 sidebar 看到这条前缀的 session 知道是 lark inbound 起的。 */
 const LARK_SESSION_PREFIX = "lark-chat-";
@@ -375,32 +373,24 @@ async function doForwardToLark(ref: ThreadActivationRef): Promise<void> {
   const entry = state.routing.get(chatId);
   if (!entry) return;
 
-  const threadFile = join(
-    state.config.baseDir,
-    "flows",
-    ref.sessionId,
-    "objects",
-    "user",
-    "threads",
-    ref.threadId,
-    "thread.json",
-  );
-  let thread: unknown;
+  // inbox 是 per-message 目录存储（inbox-store），不在 thread.json 里——必须走
+  // readThread 才能拿到 merge 后的 thread.inbox；直读 thread.json 永远是 undefined。
+  let thread;
   try {
-    thread = JSON.parse(await readFile(threadFile, "utf8"));
+    thread = await readThread(
+      { baseDir: state.config.baseDir, sessionId: ref.sessionId, objectId: ref.objectId },
+      ref.threadId,
+    );
   } catch (err) {
-    // 静默：thread 文件可能短时间不存在（race），下次激活会重试
-    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      console.warn(
-        `[lark-event-relay] read ${threadFile} failed: ${(err as Error).message}`,
-      );
-    }
+    console.warn(
+      `[lark-event-relay] readThread ${ref.sessionId}/${ref.objectId}/${ref.threadId} failed: ${(err as Error).message}`,
+    );
     return;
   }
+  if (!thread) return; // thread 文件可能短时间不存在（race），下次激活会重试
 
-  const inbox = (thread as { inbox?: Record<string, unknown>[] }).inbox ?? [];
   const newMessages: { id: string; text: string }[] = [];
-  for (const m of inbox) {
+  for (const m of thread.inbox ?? []) {
     if (m.fromObjectId !== "supervisor") continue;
     const id = typeof m.id === "string" ? m.id : "";
     const content = typeof m.content === "string" ? m.content : "";
