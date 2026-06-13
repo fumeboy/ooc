@@ -11,11 +11,9 @@ import {
   openFeishuChatMethod,
   openFeishuDocMethod,
 } from "@ooc/core/extendable/lark/index.js";
-import { openKnowledgeMethod } from "./method.open-knowledge.js";
 import { planMethod } from "./method.plan.js";
 import { talkMethod } from "./method.talk.js";
 import { todoMethod } from "./method.todo.js";
-import { createObjectMethod } from "./method.create-object.js";
 import { exampleMethod } from "./method.example.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 
@@ -37,13 +35,11 @@ const AGENCY_METHODS: Record<string, ObjectMethod> = {
   end: endMethod,
 };
 
-// root **类**的 method —— 残留 misc（非 agency、非已迁成员的 file/program 工具）。
-// agency → _builtin/agent；grep/glob/open_file/write_file → filesystem；program → terminal。
-// root 不再是 god-object：agency 与文件/程序工具都已移出。open_knowledge/create_object/
-// example/feishu 暂留（后续可继续迁 world/knowledge/comms 成员）。
+// root **类**的 method —— 仅剩边缘 misc。decomposition 后归属：
+// agency(talk/do/plan/todo/end) → _builtin/agent；grep/glob/open_file/write_file → filesystem；
+// program → terminal；create_object → world；open_knowledge → knowledge_base。
+// 残留 example（教学样板）+ feishu（extendable 集成，grill 未列为成员/维度），暂留 root。
 export const ROOT_METHODS: Record<string, ObjectMethod> = {
-  open_knowledge: openKnowledgeMethod,
-  create_object: createObjectMethod,
   example: exampleMethod,
   open_feishu_chat: openFeishuChatMethod,
   open_feishu_doc: openFeishuDocMethod,

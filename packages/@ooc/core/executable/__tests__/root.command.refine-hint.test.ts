@@ -27,6 +27,7 @@ const MEMBER_OWNER: Record<string, string> = {
   grep: "filesystem",
   glob: "filesystem",
   program: "terminal",
+  open_knowledge: "knowledge_base",
 };
 
 /**

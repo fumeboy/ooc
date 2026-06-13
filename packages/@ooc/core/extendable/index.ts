@@ -27,5 +27,7 @@ import "@ooc/builtins/plan";
 import "@ooc/builtins/program";
 import "@ooc/builtins/filesystem";
 import "@ooc/builtins/terminal";
+import "@ooc/builtins/world";
+import "@ooc/builtins/knowledge_base";
 import "@ooc/builtins/root";
 import "./lark/index.js";

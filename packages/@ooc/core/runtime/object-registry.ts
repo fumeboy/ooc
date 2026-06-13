@@ -39,7 +39,7 @@ export { filterMethodsByVisibility };
 const RENDERABLE_VISIBLE_TYPES = new Set([
   "root", "method_exec", "do", "todo", "talk", "pr", "reflect_request", "program",
   "file", "knowledge", "search", "skill_index",
-  "feishu_chat", "feishu_doc", "plan", "filesystem", "terminal",
+  "feishu_chat", "feishu_doc", "plan", "filesystem", "terminal", "world", "knowledge_base",
 ]);
 
 /**
@@ -93,9 +93,12 @@ const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
   // （talk/do/...），只有自己的工具方法。Object/Agent 边界在类型层落实。
   ["filesystem", { methods: {}, parentClass: null }],
   ["terminal", { methods: {}, parentClass: null }],
+  // world（create_object/governance）/ knowledge_base（open_knowledge）—— 同为 tool-object 成员。
+  ["world", { methods: {}, parentClass: null }],
+  ["knowledge_base", { methods: {}, parentClass: null }],
   // _builtin/agent —— OOC Agent 基类：承载 agency（talk/do/plan/todo/end），由 root/executable
   // 在 load 期 registerExecutable 注入。具体 agent（supervisor）经 ooc.class 继承它。
-  // 隐式继承 root（拿 create_object/open_knowledge/example/feishu 等残留 misc，过渡态）。
+  // 隐式继承 root（拿 example/feishu 等残留 misc）。
   ["_builtin/agent", { methods: {} }],
 ];
 

@@ -46,6 +46,16 @@ const TERMINAL_WIN: ContextWindow = {
   isMemberWindow: true,
 } as ContextWindow;
 
+const KB_WIN: ContextWindow = {
+  id: "knowledge_base",
+  class: "knowledge_base",
+  parentWindowId: "root",
+  title: "member: knowledge_base",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+} as ContextWindow;
+
 /**
  * agency 方法（do/todo/...）已从 root 迁到 `_builtin/agent` 类。
  * 经 openMethodExec 直接调 agency 时须把 parentWindowId 指向一个 class 解析得到 `_builtin/agent` 的窗。
@@ -213,10 +223,12 @@ describe("Step 2 window lifecycles", () => {
       const thread = makeThread({
         id: "t",
         persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
+        extraWindows: [KB_WIN],
       });
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
       const opened = await mgr.openMethodExec({
         thread,
+        parentWindowId: "knowledge_base",
         method: "open_knowledge",
         title: "pin manual",
         args: { path: "manual" },

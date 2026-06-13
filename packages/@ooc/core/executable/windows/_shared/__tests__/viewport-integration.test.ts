@@ -13,7 +13,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { execRootMethod, WindowManager, builtinRegistry } from "../../index";
+import { WindowManager, builtinRegistry } from "../../index";
 import type { FileWindow, KnowledgeWindow } from "../types";
 import { createStoneObject, createPoolObject, poolKnowledgeDir } from "../../../../persistable";
 import { buildContext } from "../../../../thinkable/context";
@@ -49,6 +49,39 @@ async function openFileViaFilesystem(
     parentWindowId: "filesystem",
     method: "open_file",
     title: (args.title as string | undefined) ?? "open file",
+    args,
+  });
+  thread.contextWindows = mgr.toData();
+}
+
+/**
+ * open_knowledge 已从 root 移到 agent 组合持有的 knowledge_base tool-object 成员上：
+ * 经 knowledge_base 成员窗 openMethodExec("open_knowledge") 走真实派发链路。
+ */
+const KB_WIN: ContextWindow = {
+  id: "knowledge_base",
+  class: "knowledge_base",
+  parentWindowId: "root",
+  title: "member: knowledge_base",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+} as ContextWindow;
+
+/** 经 knowledge_base 成员窗 dispatch open_knowledge（替代旧 execRootMethod("open_knowledge")）。 */
+async function openKnowledgeViaMember(
+  thread: ReturnType<typeof makeThread>,
+  args: Record<string, unknown>,
+) {
+  if (!thread.contextWindows.some((w) => w.id === KB_WIN.id)) {
+    thread.contextWindows = [...thread.contextWindows, { ...KB_WIN, createdAt: Date.now() }];
+  }
+  const mgr = WindowManager.fromThread(thread, builtinRegistry);
+  await mgr.openMethodExec({
+    thread,
+    parentWindowId: "knowledge_base",
+    method: "open_knowledge",
+    title: (args.title as string | undefined) ?? "open knowledge",
     args,
   });
   thread.contextWindows = mgr.toData();
@@ -209,7 +242,7 @@ describe("viewport: knowledge_window integration", () => {
         id: "t",
         persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
       });
-      await execRootMethod("open_knowledge", { thread, args: { path: "longdoc", title: "long" } });
+      await openKnowledgeViaMember(thread, { path: "longdoc", title: "long" });
 
       const kw = thread.contextWindows.find(
         (w): w is KnowledgeWindow => w.class === "knowledge" && (w as KnowledgeWindow).source === "explicit",

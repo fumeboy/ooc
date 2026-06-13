@@ -345,10 +345,10 @@ describe("constructor pathway integration", () => {
     expect(err.classId).toBe("definitely-not-a-real-class");
   });
 
-  // ─── Test 6: resolveMethod chain — stub class with parentClass: "root" inherits "open_knowledge" ─
-  // (agency talk/do/... 已迁出 root 到 _builtin/agent；这里改用仍挂在 root 上的 delegator
-  //  open_knowledge 验证同一条 parentClass 链解析机制 —— 断言形态不变。)
-  test("Test 6: stub class with parentClass=\"root\" resolves \"open_knowledge\" via chain (smoke check at dispatch lookup)", async () => {
+  // ─── Test 6: resolveMethod chain — stub class with parentClass: "root" inherits "example" ─
+  // (agency talk/do/... 已迁到 _builtin/agent，open_knowledge/create_object 迁到成员对象；
+  //  这里改用仍挂在 root 上的 `example` 验证同一条 parentClass 链解析机制 —— 断言形态不变。)
+  test("Test 6: stub class with parentClass=\"root\" resolves \"example\" via chain (smoke check at dispatch lookup)", async () => {
     // Register a brand-new string that defaults to inheriting from root.
     const stubType = `__test_stub_inherits_root_${Date.now()}`;
     builtinRegistry.registerNewObjectType(stubType as never, {
@@ -357,24 +357,22 @@ describe("constructor pathway integration", () => {
       // undefined parentClass → defaults to "root" per resolveMethod
     });
 
-    // 1. Registry-level chain walk finds open_knowledge on root (a root-declared delegator method).
-    const resolved = builtinRegistry.resolveMethod(stubType, "open_knowledge");
+    // 1. Registry-level chain walk finds `example` on root (a root-declared method).
+    const resolved = builtinRegistry.resolveMethod(stubType, "example");
     expect(resolved).toBeDefined();
-    expect(resolved!.description).toContain("knowledge");
+    expect(resolved!.description).toBeTruthy();
 
     // 2. Manager-level dispatch lookup finds the same entry — declaringType is the ancestor (root)
     //    where the method is declared. This is the wiring that submit() consults.
-    const entry = builtinRegistry.lookupMethodEntry({ class: stubType as never }, "open_knowledge");
+    const entry = builtinRegistry.lookupMethodEntry({ class: stubType as never }, "example");
     expect(entry).toBeDefined();
     expect(entry!.declaringType).toBe("root");
-    expect(entry!.entry.kind).toBeUndefined(); // root.open_knowledge is the delegator
+    expect(entry!.entry.kind).toBeUndefined(); // root.example is a plain method
 
     // 3. End-to-end dispatch via openMethodExec on a stub-typed parent — verifies the wiring reaches
-    //    submit(). With the current strict-equality guard, manager will fail the form with a
-    //    [method-error] outcome (declaringType "root" !== parent.class stub). This still proves the
-    //    dispatch lookup walked the chain successfully; the failure surface is the guard, not the
-    //    chain walk. If the guard relaxes to "in chain" semantics, this test should
-    //    flip to expect autoSubmitted result without the [method-error] prefix.
+    //    exec. `example` has no onFormChange → fast-path execDirect → returns directResult (no form).
+    //    The mere fact openMethodExec returned (rather than throwing the "method not registered"
+    //    error at the lookup gate) proves the dispatch lookup walked the parentClass chain to root.
     const stubParent = {
       id: `w_stub_${Date.now()}`,
       class: stubType as never,
@@ -388,13 +386,13 @@ describe("constructor pathway integration", () => {
     const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: stubParent.id,
-      method: "open_knowledge",
-      title: "stub opens knowledge",
-      args: { path: "stub-doc" },
+      method: "example",
+      title: "stub opens example",
+      args: {},
     });
-    // openMethodExec already validated lookup succeeded (would throw otherwise) → chain walk worked.
-    // submit's guard then either lets it through (after a relaxation) or fails with [method-error].
-    expect(opened.formId).toBeDefined();
+    // Lookup succeeded (would throw otherwise) → chain walk reached root. example auto-execs.
+    expect(opened.autoSubmitted).toBe(true);
+    expect(opened.directResult).toBeDefined();
   });
 
   // ─── Test 7: self.class mismatch — method declared on X cannot run when self.class === Y ─

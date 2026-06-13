@@ -24,22 +24,20 @@ function callFormChange(
 }
 
 describe("executable methods", () => {
-  it("root type 只剩 misc method；agency 在 _builtin/agent，file/program 工具在成员", () => {
-    // root type 保留的 misc（非 agency、非 file/program 工具）
-    expect(Object.keys(ROOT_METHODS)).toContain("open_knowledge");
-    expect(Object.keys(ROOT_METHODS)).toContain("create_object");
+  it("root type 只剩边缘 misc；agency/工具全部迁出（agent/成员对象）", () => {
+    // root 残留：example（教学）+ feishu（extendable）
     expect(Object.keys(ROOT_METHODS)).toContain("example");
-    // agency（talk/do/plan/todo/end）已移到 _builtin/agent —— 不在 root type
-    expect(Object.keys(ROOT_METHODS)).not.toContain("talk");
-    expect(Object.keys(ROOT_METHODS)).not.toContain("do");
-    // 但经 _builtin/agent 类可解析到（agent 经 ooc.class 继承）
+    // agency → _builtin/agent；file/program → filesystem/terminal；create_object → world；
+    // open_knowledge → knowledge_base —— 全部不在 root type。
+    for (const moved of ["talk", "do", "plan", "todo", "end", "grep", "program", "open_file", "create_object", "open_knowledge"]) {
+      expect(Object.keys(ROOT_METHODS)).not.toContain(moved);
+    }
+    // 经各自归属解析得到：
     expect(builtinRegistry.resolveMethod("_builtin/agent", "talk")).toBeDefined();
-    expect(builtinRegistry.resolveMethod("_builtin/agent", "do")).toBeDefined();
-    // 文件/程序工具移出 root → filesystem/terminal 成员
-    expect(Object.keys(ROOT_METHODS)).not.toContain("program");
-    expect(Object.keys(ROOT_METHODS)).not.toContain("grep");
-    expect(Object.keys(ROOT_METHODS)).not.toContain("open_file");
-    expect(Object.keys(ROOT_METHODS)).not.toContain("defer");
+    expect(builtinRegistry.resolveMethod("filesystem", "grep")).toBeDefined();
+    expect(builtinRegistry.resolveMethod("terminal", "program")).toBeDefined();
+    expect(builtinRegistry.resolveMethod("world", "create_object")).toBeDefined();
+    expect(builtinRegistry.resolveMethod("knowledge_base", "open_knowledge")).toBeDefined();
   });
 
   it("should return sorted openable methods", () => {
@@ -57,16 +55,15 @@ describe("executable methods", () => {
     for (const entry of Object.values(ROOT_METHODS)) {
       expect("openable" in entry).toBe(false);
     }
-    // 文件/程序工具（grep/glob/open_file/write_file/program）移出 root → filesystem/terminal 成员。
-    // new_feat_branch / create_pr_and_invite_reviewers 挂 reflect_request window（reflectable）。
+    // getOpenableMethods = agent 经类链可达的 root-level 方法全集（agency + root misc）。
+    // 工具方法在成员窗（grep/program → filesystem/terminal；create_object → world；
+    // open_knowledge → knowledge_base），不在此列。
     expect(getOpenableMethods()).toEqual([
-      "create_object",
       "do",
       "end",
       "example",
       "open_feishu_chat",
       "open_feishu_doc",
-      "open_knowledge",
       "plan",
       "talk",
       "todo",
