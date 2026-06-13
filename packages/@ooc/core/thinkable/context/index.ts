@@ -68,6 +68,33 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
   if (event.category === "context_change" && event.kind === "inbox_message_arrived") {
     const inboxMessage = findInboxMessage(thread, event.msgId);
 
+    // attention 分层（2026-06-14）：会话内容只渲一次，message 流里的形态按 attention 分。
+    // - 归属本线程 **creator 窗**（与派活方的主对话，主要 attention）→ message 流出**全文**（此处往下走，强 attend）；
+    //   creator 窗在 context XML 里只渲句柄（renderTalkWindow/renderDoWindow 不内联 transcript）。
+    // - 归属 **sub/peer 窗**（次要 attention）→ message 流只出**新消息提示**（非全文，指向该窗）；
+    //   全文在该窗的 XML transcript 里渲一次。提示让 LLM 注意到"支路有新消息"，全文按需去窗里读。
+    if (inboxMessage) {
+      const windowId = resolveInboxWindowId(thread, inboxMessage);
+      if (windowId) {
+        const win = thread.contextWindows.find((w) => w.id === windowId);
+        const isCreatorWin = !!(win as { isCreatorWindow?: boolean } | undefined)?.isCreatorWindow;
+        if (win && !isCreatorWin) {
+          const fromKey = inboxMessage.fromObjectId ?? inboxMessage.fromThreadId;
+          return [
+            {
+              type: "message",
+              role: "system",
+              content:
+                `[context_change:inbox_message_arrived] msg_id=${event.msgId}` +
+                (inboxMessage.source ? ` source=${inboxMessage.source}` : "") +
+                (fromKey ? ` from=${fromKey}` : "") +
+                ` window_id=${windowId} (次要 attention：新消息已到，正文见该 window 的 transcript)`,
+            },
+          ];
+        }
+      }
+    }
+
     // header 行: KV 形式, 每个键只在有值时输出。
     // 关键 contract: header 与 body 之间用单个 \n 分隔 — claude-transport.ts 的
     // extractInboxContent 用第一个 \n 切分 header/body, 把 body 作为 user message,

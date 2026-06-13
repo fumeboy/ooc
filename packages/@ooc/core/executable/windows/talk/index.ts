@@ -60,12 +60,19 @@ export function renderTalkWindow(ctx: RenderContext): XmlNode[] {
     xmlElement("target", {}, [xmlText(window.target)]),
     xmlElement("conversation_id", {}, [xmlText(window.conversationId)]),
   ];
+  const messages = filterMessagesForTalkWindow(window, ctx.thread);
   // 与 do_window 渲染对齐：creator talk_window 必须暴露 is_creator_window=true，
   // 否则 LLM 无法识别"哪条 talk 是创建本 thread 的对端通道"。
   if (window.isCreatorWindow) {
     children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
+    // attention 分层（2026-06-14）：与 creator 的对话 = 主要 attention = 直接走 LLM message 流
+    // （inbox 事件 + say function_call）。本窗在 context XML 里只渲句柄（target + 消息计数 + 方法），
+    // **不内联 transcript**，避免与 message 流双渲。方法契约见 <window_classes>。
+    children.push(xmlElement("transcript_in_messages", { total: String(messages.length) },
+      [xmlText("与 creator 的对话在 LLM message 流（主要 attention），本窗不重复渲 transcript。")]));
+    return children;
   }
-  const messages = filterMessagesForTalkWindow(window, ctx.thread);
+
   // 展示状态从 window.state 读，向后兼容旧平铺字段。
   const viewport: TranscriptViewport =
     window.state?.transcriptViewport ?? window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;

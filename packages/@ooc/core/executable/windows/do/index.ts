@@ -62,10 +62,15 @@ function renderDoWindow(ctx: RenderContext): XmlNode[] {
   const children: XmlNode[] = [
     xmlElement("target_thread", {}, [xmlText(window.targetThreadId)]),
   ];
+  const transcriptMessages = filterMessagesForDoWindow(window, ctx.thread);
   if (window.isCreatorWindow) {
     children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
+    // attention 分层（2026-06-14）：与 creator（派活方）的对话 = 主要 attention = 走 LLM message 流。
+    // creator do_window 只渲句柄（target_thread + 消息计数 + 方法），**不内联 transcript**，避免双渲。
+    children.push(xmlElement("transcript_in_messages", { total: String(transcriptMessages.length) },
+      [xmlText("与 creator 的对话在 LLM message 流（主要 attention），本窗不重复渲 transcript。")]));
+    return children;
   }
-  const transcriptMessages = filterMessagesForDoWindow(window, ctx.thread);
   // 展示状态从 window.state 读，向后兼容旧平铺字段。
   const viewport: TranscriptViewport =
     window.state?.transcriptViewport ?? window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;

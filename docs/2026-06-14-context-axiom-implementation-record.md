@@ -37,8 +37,8 @@ commit `749c80f6`。推论二：compress 是"调整信息展示"的方法（与 
 
 | # | 事项 | 状态 | 卡点 |
 |---|---|---|---|
-| **1** | **会话内容双渲**（talk/do 窗 `<transcript>` 与原生事件/function_call 重复同一消息全文） | **分层设计已定，待实现** | 已定：talk 窗按 attention 分层——creator 对话→message 流(窗句柄)、sub/peer 对话→XML transcript（用户拍板）—— 详见第三节 |
-| 2 | transcript 包成"只挂 compress 的句柄窗"（S3 句柄部分） | 待实现 | 与 #1 同一改动单元；会话归 talk 窗（句柄）、动作日志归 transcript 句柄窗，都在 message 流、XML 只留句柄 |
+| **1** | **会话内容双渲**（talk/do 窗 `<transcript>` 与原生事件/function_call 重复同一消息全文） | **✅ 已实现+验证** | talk 窗按 attention 分层：creator→message 流全文(窗句柄)、sub/peer→XML transcript 全文(message 流出提示)。详见第三节 |
+| 2 | 线程自身**动作日志** transcript 包成句柄窗（推论 3） | 待实现 | 与 #1 同源；会话已归 talk 窗/message 流，剩动作日志(tool-call 记录)的句柄化 |
 | 3 | `open_knowledge` 在 `knowledge_base`（成员）与 `knowledge`（打开的知识窗）两个 class 重复（C1） | 未做 | 轻量；旧 root.open_knowledge 同时落到知识窗。可顺手收 |
 | 4 | do → talk（do = talk(target=self-new)，推论一/S4） | 未做 | **xlarge + 10 个未决设计抉择**（跨 session self-fork？调度同 job vs 跨 job？回报路径统一？share_windows？）。map 见 workflow `axiom-impl-surface-map`。本会话无 do 窗故 context.xml 不显 |
 
@@ -106,10 +106,11 @@ LLM 输入项实测结构（无原生 role=user/assistant 轮，会话全走 sys
 | 形态 | 对应对话 | 判据 | 渲染位置 | context XML |
 |---|---|---|---|---|
 | **主要 attention** | 与 **thread creator** 的对话（本线程主任务通道） | `isCreatorWindow === true` | **LLM Messages**（原生流，强 attend） | 仅窗**句柄 + methods** |
-| **次要 attention** | sub-thread / 其他支路对象（peer / 派生子线程）的对话 | 非 creator 的 talk/do 窗 | **context XML 内联 `<transcript>`**（背景/引用读） | transcript 在此 |
+| **次要 attention** | sub-thread / 其他支路对象（peer / 派生子线程）的对话 | 非 creator 的 talk/do 窗 | **全文** → context XML 内联 `<transcript>`（背景/引用读）；**新消息提示**（非全文，指向该窗）→ message 流 | transcript 在此 |
 
-**理据**：把"概念重要性"映射到"LLM attention 机制"——派活的 creator = 当前主线 = 原生 message 流（强 attend）；
-派生/咨询的 sub/peer = 支撑材料 = context XML transcript（弱 attend）。
+**理据**：把"概念重要性"映射到"LLM attention 机制"——派活的 creator = 当前主线 = 原生 message 流（强 attend，全文）；
+派生/咨询的 sub/peer = 支撑材料 = context XML transcript（弱 attend，全文在窗）。**但支路有新消息时仍在 message 流出一条
+轻量提示**（非全文，指向窗），让 LLM 注意到"支路动了"、按需去窗里读全文——兼顾 attention 触发与去重（用户 2026-06-14 补充）。
 
 **契合第一公理**：两层都"内容只渲一次"，只是位置按 attention 分：
 - creator 窗：内容外移到 message 流（渲一次），窗=句柄（方法挂载+在场）——与 self 窗（内容→instructions）同构。
@@ -117,13 +118,15 @@ LLM 输入项实测结构（无原生 role=user/assistant 轮，会话全走 sys
 
 这同时消解 A/B 纠结：**creator=B（句柄+message 流）、sub/peer=A（XML 内联）**。规则干净：本线程 creator 窗→主要；其余→次要。
 
-### 落地形态
+### 落地形态（**已实现 + 验证**，commit 见下）
 
-1. `renderTalkWindow` / `renderDoWindow`：按 `isCreatorWindow` 分支——creator 窗只渲句柄（target + status + meta + 方法），**不内联 `<transcript>`**；非 creator 窗保持现状（内联 transcript）。
-2. **creator 对话进 message 流**：入站（inbox 事件）+ 出站（say function_call）保持在 message-item 流（canonical 被 attend 副本）；creator 窗**不 consume** 这些 msg（让它们流到 message 流），不再与 XML 内联重复 → 消除双渲。
-3. **次要窗 consume 自己的 msg**：非 creator 窗渲 transcript 时 consume 其 msg（经 `consumedMessageIds`），不在 message 流重复 → 次要会话也只渲一次（在 XML）。
-4. 顺势把线程自身**动作日志** transcript 按推论 3 包成句柄窗（#2）。
-5. `set_transcript_window`：creator 窗句柄化后其 viewport 失去对象，但次要窗仍需（控其内联 transcript 长度）——保留于次要窗；creator 侧历史长度由 events-compress 管。
-6. 测试：新增「creator 对话只在 message 流、不在 XML」+「次要会话只在 XML、不在 message 流」+「同一 msg_id 全输入只出现一次」断言；reframe 现有测试。
+1. ✅ `renderTalkWindow` / `renderDoWindow`：`isCreatorWindow` → 只渲句柄（target + is_creator_window + `<transcript_in_messages total=N>` 指引 + 方法在 `<window_classes>`），**不内联 `<transcript>`**；非 creator 窗保持内联 transcript。
+2. ✅ `processEventToItems` 的 `inbox_message_arrived` 按归属窗 tier 分流：
+   - 归 **creator 窗** → 出**全文**（header + body，主要 attention）。
+   - 归 **非 creator 窗** → 出**新消息提示**（header + `(次要 attention：新消息已到，正文见该 window 的 transcript)`，**非全文**）。
+   - 无归属窗 → 出全文（直接 inbox，无窗承载）。
+3. ✅ 结果：creator 对话全文只在 message 流（窗=句柄）；sub/peer 对话全文只在窗 XML transcript，message 流仅一条提示——**同一消息全文只渲一次**。
+4. ✅ 单测 `attention-tiering.test.ts` 锁两层；live 会话 `_test_ctxcheck_*` 验 creator 窗句柄化 + 会话入 message 流。
+5. 待办：`set_transcript_window`（creator 窗句柄化后其 viewport 失对象，可清理；次要窗仍需）；线程自身动作日志 transcript 句柄窗（#2，未做）。
 
-> 风险：改 talk/do readable + consume 逻辑 + 真实会话回归。prompt-cache：creator 句柄化使 context XML 不随主对话膨胀，更稳定、利缓存。
+> prompt-cache：creator 句柄化使 context XML 不随主对话膨胀、更稳定、利缓存。门禁：core 919 / builtins 57 / storybook 63 全绿。
