@@ -26,7 +26,7 @@ import {
 } from "@ooc/core/persistable";
 import { executeCreatePrAndInviteReviewers } from "@ooc/core/reflectable/reflect-request/method.create-pr-and-invite-reviewers";
 import { executeNewFeatBranch } from "@ooc/core/reflectable/reflect-request/method.new-feat-branch";
-import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
+import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 
 let tempRoots: string[] = [];

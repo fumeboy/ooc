@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, test } from "bun:test";
 import { runOneExec } from "@ooc/builtins/program";
-import { executeProgramMethod } from "@ooc/builtins/root/executable/method.program";
+import { programExec as executeProgramMethod } from "@ooc/builtins/terminal/executable/index.js";
 import { executeProgramWindowExec } from "@ooc/builtins/program";
 import type { ProgramWindow } from "../windows/_shared/types";
 import { createStoneObject, writeExecutableSource, ensureStoneRepo, writeSelf } from "../../persistable";

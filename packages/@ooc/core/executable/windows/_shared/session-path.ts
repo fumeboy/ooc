@@ -18,8 +18,8 @@
  *   - 已经形如 `pools/objects/...` 的路径不重写。
  *
  * 注意：program(language="shell") 不走这里——shell 显式承诺"cwd 等于 OOC 进程的
- * 工作目录"，是 raw escape hatch（详见 src/executable/windows/root/method.program.ts 的
- * KNOWLEDGE）。
+ * 工作目录"，是 raw escape hatch（program 现为 terminal 成员，委托 program constructor；
+ * shell KNOWLEDGE 见 `@ooc/builtins/program` 构造器）。
  */
 
 import { existsSync } from "node:fs";

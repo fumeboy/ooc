@@ -25,7 +25,7 @@ import {
   __resetSerialQueueForTests,
 } from "@ooc/core/persistable";
 import { scanRunningThreads } from "@ooc/core/app/server/runtime/thread-query";
-import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
+import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
 import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
 
 let tempRoot: string | undefined;

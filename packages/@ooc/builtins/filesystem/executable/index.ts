@@ -28,6 +28,12 @@ const OPEN_FILE_TIP = `open_file 把文件内容作为 file_window 引入 contex
 const WRITE_FILE_TIP = `write_file 整文件覆盖。用于新建文件或完整重写；改已有文件局部请用 file_window.edit。
 参数：path（必填）、content（必填，完整文件内容，可为空串）。`;
 
+// 各方法的 exec = 委托到对应 constructor。导出供测试直接驱动（filesystem 是这些方法的唯一注册家）。
+export const grepExec = makeRootDelegator({ method: "grep", constructorKind: "search", objectLabel: "search_window", formMethod: "grep" });
+export const globExec = makeRootDelegator({ method: "glob", constructorKind: "search", objectLabel: "search_window", formMethod: "glob" });
+export const openFileExec = makeRootDelegator({ method: "open_file", constructorKind: "file", objectLabel: "file_window", formMethod: "open_file" });
+export const writeFileExec = makeRootDelegator({ method: "write_file", constructorKind: "file", objectLabel: "file_window", formMethod: "write_file" });
+
 const grepMethod: ObjectMethod = {
   description: "Search file contents by regex; results appear as a search window.",
   intents: ["grep"],
@@ -47,7 +53,7 @@ const grepMethod: ObjectMethod = {
       quick_exec_submit: hasPattern,
     };
   },
-  exec: makeRootDelegator({ method: "grep", constructorKind: "search", objectLabel: "search_window", formMethod: "grep" }),
+  exec: grepExec,
 };
 
 const globMethod: ObjectMethod = {
@@ -67,7 +73,7 @@ const globMethod: ObjectMethod = {
       quick_exec_submit: hasPattern,
     };
   },
-  exec: makeRootDelegator({ method: "glob", constructorKind: "search", objectLabel: "search_window", formMethod: "glob" }),
+  exec: globExec,
 };
 
 const openFileMethod: ObjectMethod = {
@@ -88,7 +94,7 @@ const openFileMethod: ObjectMethod = {
       quick_exec_submit: hasPath,
     };
   },
-  exec: makeRootDelegator({ method: "open_file", constructorKind: "file", objectLabel: "file_window", formMethod: "open_file" }),
+  exec: openFileExec,
 };
 
 const writeFileMethod: ObjectMethod = {
@@ -108,7 +114,7 @@ const writeFileMethod: ObjectMethod = {
       quick_exec_submit: ready,
     };
   },
-  exec: makeRootDelegator({ method: "write_file", constructorKind: "file", objectLabel: "file_window", formMethod: "write_file" }),
+  exec: writeFileExec,
 };
 
 builtinRegistry.registerExecutable("filesystem", {

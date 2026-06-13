@@ -53,36 +53,39 @@ const createObjectMethod: ObjectMethod = {
       quick_exec_submit: ready,
     };
   },
-  exec: async (ctx: MethodExecutionContext): Promise<string | undefined> => {
-    const thread = ctx.thread;
-    if (!thread) return "[create_object] 缺少 thread context。";
-    if (!thread.persistence) return "[create_object] thread 无 persistence。";
-    const { baseDir, sessionId, objectId: authorObjectId } = thread.persistence;
-    if (isSuperSessionId(sessionId) || !sessionId || !sessionId.trim()) {
-      return `[create_object] 仅业务 session 可建对象（当前 session='${sessionId ?? ""}'）。`;
-    }
-    const newObjectId = asString(ctx.args.objectId);
-    if (!newObjectId) return "[create_object] 缺少 objectId 参数。";
-    const selfMd = asString(ctx.args.selfMd);
-    if (selfMd === undefined) return "[create_object] 缺少 selfMd 参数。";
-    const readableMd = asString(ctx.args.readableMd);
-    if (readableMd === undefined) return "[create_object] 缺少 readableMd 参数。";
-    const knowledgeRaw = ctx.args.knowledge;
-    const knowledge = asKnowledge(knowledgeRaw);
-    if (knowledgeRaw != null && knowledge === undefined) {
-      return "[create_object] knowledge 必须是 { filename → string content } 形态。";
-    }
-    const r = await createObjectInSession({
-      baseDir, sessionId, authorObjectId, newObjectId, selfMd, readableMd,
-      ...(knowledge ? { knowledge } : {}),
-    });
-    if (!r.ok) return `[create_object:${r.code}] ${r.message}`;
-    return JSON.stringify({
-      ok: true,
-      objectId: r.objectId,
-      note: "已落 session worktree，本 session 内即可用。session 永不合入 main——进 canonical 走独立 feat-branch PR。",
-    });
-  },
+  exec: executeCreateObject,
 };
+
+// create_object 的 exec：建对象骨架落 session worktree。导出供测试直接驱动（world 是其唯一注册家）。
+export async function executeCreateObject(ctx: MethodExecutionContext): Promise<string | undefined> {
+  const thread = ctx.thread;
+  if (!thread) return "[create_object] 缺少 thread context。";
+  if (!thread.persistence) return "[create_object] thread 无 persistence。";
+  const { baseDir, sessionId, objectId: authorObjectId } = thread.persistence;
+  if (isSuperSessionId(sessionId) || !sessionId || !sessionId.trim()) {
+    return `[create_object] 仅业务 session 可建对象（当前 session='${sessionId ?? ""}'）。`;
+  }
+  const newObjectId = asString(ctx.args.objectId);
+  if (!newObjectId) return "[create_object] 缺少 objectId 参数。";
+  const selfMd = asString(ctx.args.selfMd);
+  if (selfMd === undefined) return "[create_object] 缺少 selfMd 参数。";
+  const readableMd = asString(ctx.args.readableMd);
+  if (readableMd === undefined) return "[create_object] 缺少 readableMd 参数。";
+  const knowledgeRaw = ctx.args.knowledge;
+  const knowledge = asKnowledge(knowledgeRaw);
+  if (knowledgeRaw != null && knowledge === undefined) {
+    return "[create_object] knowledge 必须是 { filename → string content } 形态。";
+  }
+  const r = await createObjectInSession({
+    baseDir, sessionId, authorObjectId, newObjectId, selfMd, readableMd,
+    ...(knowledge ? { knowledge } : {}),
+  });
+  if (!r.ok) return `[create_object:${r.code}] ${r.message}`;
+  return JSON.stringify({
+    ok: true,
+    objectId: r.objectId,
+    note: "已落 session worktree，本 session 内即可用。session 永不合入 main——进 canonical 走独立 feat-branch PR。",
+  });
+}
 
 builtinRegistry.registerExecutable("world", { methods: { create_object: createObjectMethod } });

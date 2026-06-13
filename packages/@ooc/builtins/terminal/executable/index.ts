@@ -18,7 +18,10 @@ import "@ooc/builtins/program";
 const PROGRAM_TIP = `program 执行 shell/ts/js 代码，返回 program_window（首次 exec 已跑完，结果进 history）。
 参数：language（shell/ts/js，必填）、code（字符串，必填）。`;
 
-const programMethod: ObjectMethod = {
+// program 的 exec = 委托到 program constructor。导出供测试直接驱动（terminal 是 program 的唯一注册家）。
+export const programExec = makeRootDelegator({ method: "program", constructorKind: "program", objectLabel: "program_window" });
+
+export const programMethod: ObjectMethod = {
   description: "Execute a shell/ts/js snippet; result appears as a program window.",
   // 粒度 intent 与 root.program 一致——驱动 program.shell/typescript/javascript 知识激活。
   intents: ["program.shell", "program.typescript", "program.javascript"],
@@ -40,7 +43,7 @@ const programMethod: ObjectMethod = {
     const ready = Boolean(lang && code);
     return { tip: ready ? `Running ${lang} program...` : PROGRAM_TIP, intents, quick_exec_submit: ready };
   },
-  exec: makeRootDelegator({ method: "program", constructorKind: "program", objectLabel: "program_window" }),
+  exec: programExec,
 };
 
 builtinRegistry.registerExecutable("terminal", {

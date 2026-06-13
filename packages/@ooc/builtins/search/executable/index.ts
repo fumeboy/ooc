@@ -24,7 +24,7 @@ import {
   runRipgrep,
   runJsFallback,
   type GrepHit,
-} from "@ooc/builtins/root/executable/method.grep.impl.js";
+} from "@ooc/builtins/search/grep-impl.js";
 
 const OPEN_MATCH_TIP = `search_window.open_match 在指定 match 对应的路径上 spawn 一个 file_window。
 参数：index（必填，整数，对应 search_window.matches[].index）。

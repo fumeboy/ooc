@@ -670,7 +670,7 @@ describe("U4: root.glob + search_window.open_match", () => {
 
 // ---------- U5: root.grep ----------
 
-import { runJsFallback } from "@ooc/builtins/root/executable/method.grep.impl";
+import { runJsFallback } from "@ooc/builtins/search/grep-impl";
 
 async function dispatchGrep(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
   ensureFsWindow(thread);
@@ -816,7 +816,7 @@ describe("U5: root.grep", () => {
 
 // ---------- U6: program anti-pattern note ----------
 
-import { programMethod } from "@ooc/builtins/root/executable/method.program";
+import { programMethod } from "@ooc/builtins/terminal/executable/index.js";
 
 describe("U6: program onFormChange returns tip", () => {
   it("program method tip guides LLM", () => {

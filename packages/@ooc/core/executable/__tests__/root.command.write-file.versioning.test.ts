@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
-import { executeWriteFileMethod } from "@ooc/builtins/root/executable/method.write-file";
+import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 
 let tempRoots: string[] = [];
