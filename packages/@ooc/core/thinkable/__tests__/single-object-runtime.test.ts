@@ -55,7 +55,18 @@ describe("single object runtime", () => {
       id: "root",
       status: "running",
       events: [],
-      contextWindows: [],
+      // agency 方法（plan/...）已从 root 迁到 `_builtin/agent` 类；exec 须经 agent 面窗调用。
+      contextWindows: [
+        {
+          id: "agent",
+          class: "_builtin/agent",
+          parentWindowId: "root",
+          title: "agent",
+          status: "open",
+          createdAt: Date.now(),
+          isMemberWindow: true,
+        } as unknown as ContextWindow,
+      ],
       persistence: { ...flowRef, threadId: "root" }
     };
 
@@ -71,6 +82,7 @@ describe("single object runtime", () => {
               name: "exec",
               arguments: {
                 title: "open plan",
+                window_id: "agent",
                 method: "plan",
                 description: "制定本对象执行计划",
                 args: { plan: "完成单 object 最小闭环" }

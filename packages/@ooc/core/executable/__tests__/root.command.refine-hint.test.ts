@@ -9,7 +9,6 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { ROOT_METHODS } from "@ooc/builtins/root";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 // side-effect：注册 filesystem / terminal 成员对象的 executable（grep/glob/open_file/write_file/program）。
 import "@ooc/builtins/filesystem";
@@ -30,11 +29,15 @@ const MEMBER_OWNER: Record<string, string> = {
   program: "terminal",
 };
 
-/** 先查 ROOT_METHODS（agency/misc 方法），再回退到成员对象（文件/程序工具）。 */
+/**
+ * 解析 target 方法：file/program 工具在成员对象（filesystem/terminal）；其余经 `_builtin/agent`
+ * 解析——agency(talk/do/plan/todo/end) 是 agent 基类自身的方法，misc(open_knowledge/...) 经
+ * _builtin/agent→root 链解析。
+ */
 function resolveTargetMethod(name: string): ObjectMethod | undefined {
   const owner = MEMBER_OWNER[name];
   if (owner) return builtinRegistry.resolveMethod(owner, name);
-  return ROOT_METHODS[name];
+  return builtinRegistry.resolveMethod("_builtin/agent", name);
 }
 
 const FORMS_KNOWLEDGE = readFileSync(

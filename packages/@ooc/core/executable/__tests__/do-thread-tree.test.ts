@@ -1,8 +1,24 @@
 import { describe, expect, it } from "bun:test";
 import { execRootMethod } from "../windows";
 import { WindowManager, builtinRegistry } from "../windows";
-import { creatorWindowIdOf, type DoWindow } from "../windows/_shared/types";
+import { creatorWindowIdOf, type ContextWindow, type DoWindow } from "../windows/_shared/types";
 import { makeThread } from "../../__tests__/make-thread";
+
+/**
+ * agency 方法（do）已从 root 迁到 `_builtin/agent` 类。
+ * 经 openMethodExec 直接调 do 时须把 parentWindowId 指向一个 class 解析得到 `_builtin/agent` 的窗。
+ * （execRootMethod 走 agency+misc 并集，仍可直接用，无需 agent 窗。）
+ */
+const AGENT_WIN = {
+  id: "agent",
+  class: "_builtin/agent",
+  parentWindowId: "root",
+  title: "agent",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+  // class="_builtin/agent" 是继承类、非 ContextWindow union discriminant → 经 unknown 转。
+} as unknown as ContextWindow;
 
 /**
  * do method 的 ContextWindow 行为验证。
@@ -103,10 +119,11 @@ describe("do method (ContextWindow model)", () => {
   });
 
   it("open(do, args={msg, wait:true}) 一次调用即完成 fork+wait（args 给齐时 open 立即提交 form）", async () => {
-    const parent = makeThread({ id: "t_parent" });
+    const parent = makeThread({ id: "t_parent", extraWindows: [AGENT_WIN] });
     const mgr = WindowManager.fromThread(parent, builtinRegistry);
     const opened = await mgr.openMethodExec({
       thread: parent,
+      parentWindowId: "agent",
       method: "do",
       title: "fork 子线程并等待",
       args: { msg: "处理告警", wait: true },

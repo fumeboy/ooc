@@ -265,7 +265,19 @@ describe("think", () => {
       id: "thread-5",
       status: "running",
       events: [],
-      contextWindows: []
+      // agency 方法（todo/...）已从 root 迁到 `_builtin/agent` 类；exec 须经 agent 面窗调用。
+      contextWindows: [
+        {
+          id: "agent",
+          class: "_builtin/agent",
+          parentWindowId: "root",
+          title: "agent",
+          status: "open",
+          createdAt: Date.now(),
+          isMemberWindow: true,
+          // class="_builtin/agent" 是继承类、非 ContextWindow union 的 discriminant 字面量 → 经 unknown 转。
+        } as unknown as ContextWindow,
+      ]
     };
 
     let round = 0;
@@ -280,6 +292,7 @@ describe("think", () => {
               name: "exec",
               arguments: {
                 title: "登记 thinkloop 集成待办",
+                window_id: "agent",
                 method: "todo",
                 args: {
                   content: "补充 thinkloop 集成测试"

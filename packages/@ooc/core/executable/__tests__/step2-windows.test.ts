@@ -46,6 +46,21 @@ const TERMINAL_WIN: ContextWindow = {
   isMemberWindow: true,
 } as ContextWindow;
 
+/**
+ * agency 方法（do/todo/...）已从 root 迁到 `_builtin/agent` 类。
+ * 经 openMethodExec 直接调 agency 时须把 parentWindowId 指向一个 class 解析得到 `_builtin/agent` 的窗。
+ */
+const AGENT_WIN = {
+  id: "agent",
+  class: "_builtin/agent",
+  parentWindowId: "root",
+  title: "agent",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+  // class="_builtin/agent" 是继承类、非 ContextWindow union discriminant → 经 unknown 转。
+} as unknown as ContextWindow;
+
 describe("Step 2 window lifecycles", () => {
   it("talk_window: root.talk creates window; say delivers cross-object; close releases", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-talk-"));
@@ -133,10 +148,11 @@ describe("Step 2 window lifecycles", () => {
   });
 
   it("todo_window: created via one-shot open (args complete → submit immediately); close via close tool", async () => {
-    const thread = makeThread({ id: "t_root" });
+    const thread = makeThread({ id: "t_root", extraWindows: [AGENT_WIN] });
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     await mgr.openMethodExec({
       thread,
+      parentWindowId: "agent",
       method: "todo",
       title: "buy milk",
       args: { content: "buy milk" },

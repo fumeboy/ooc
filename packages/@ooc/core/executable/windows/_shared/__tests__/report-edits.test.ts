@@ -28,7 +28,23 @@ import {
 } from "../../../../persistable";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../../persistable/common";
 import type { ThreadContext } from "../../../../thinkable/context";
+import type { ContextWindow } from "../types";
 import { dispatchToolCall } from "../../../tools";
+
+/**
+ * agency 方法（do/...）已从 root 迁到 `_builtin/agent` 类。
+ * 经 dispatch/exec 调 agency 时须把目标窗指向一个 class 解析得到 `_builtin/agent` 的窗。
+ */
+const AGENT_WIN = {
+  id: "agent",
+  class: "_builtin/agent",
+  parentWindowId: ROOT_WINDOW_ID,
+  title: "agent",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+  // class="_builtin/agent" 是继承类、非 ContextWindow union discriminant → 经 unknown 转。
+} as unknown as ContextWindow;
 
 async function exists(file: string): Promise<boolean> {
   try {
@@ -66,7 +82,7 @@ describe("reportStateEdit / reportContextEdit + dispatch wiring", () => {
       objectId: "agent_x",
       threadId: "t_main",
     };
-    thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
+    thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true, extraWindows: [AGENT_WIN] });
   });
 
   afterEach(async () => {
@@ -114,7 +130,7 @@ describe("reportStateEdit / reportContextEdit + dispatch wiring", () => {
     // open a real form via openMethodExec (parent=root, method=do; not auto-submit because no args.msg)
     await mgr.openMethodExec({
       thread,
-      parentWindowId: ROOT_WINDOW_ID,
+      parentWindowId: "agent",
       method: "do",
       title: "派生",
       description: "fork",
@@ -180,7 +196,7 @@ describe("reportStateEdit / reportContextEdit + dispatch wiring", () => {
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.class === "method_exec",

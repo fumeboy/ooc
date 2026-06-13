@@ -188,9 +188,14 @@ describe("ooc-6 Object Unification harness cycle", () => {
 
   // ── Point 7: Method visibility - commands per type ───────────────────────
   it("7: each object type has its own methods (commands) registered", () => {
-    // Root should have many commands (including add_todo_item / toggle_todo_item)
+    // root 已非 god-object：agency（talk/do/plan/todo/end）→ _builtin/agent，
+    // file/program 工具 → filesystem/terminal 成员。root type 只剩 misc。
     const rootDef = builtinRegistry.getObjectDefinition("root");
-    expect(Object.keys(rootDef.methods).length).toBeGreaterThan(5);
+    expect(rootDef.methods["open_knowledge"]).toBeDefined();
+    expect(rootDef.methods["create_object"]).toBeDefined();
+    // agency 在 _builtin/agent（具体 agent 经 ooc.class 继承）
+    expect(builtinRegistry.resolveMethod("_builtin/agent", "talk")).toBeDefined();
+    expect(builtinRegistry.resolveMethod("_builtin/agent", "do")).toBeDefined();
 
     // objectId type is no longer a separate builtin type (ooc-6); objects self-register
     // edit_relation method is now available on dynamically-registered object types

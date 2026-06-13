@@ -121,8 +121,8 @@ export async function runControlPlane(): Promise<StoryResult> {
       const tmProg = !!builtinRegistry.resolveMethod("terminal", "program");
       const fsNoTalk = !builtinRegistry.resolveMethod("filesystem", "talk");
       const tmNoDo = !builtinRegistry.resolveMethod("terminal", "do");
-      const agentHasTalk = !!builtinRegistry.resolveMethod("root", "talk"); // agency 仍在（agent 经链继承）
-      rec.ok("TC-COMP-05", "Object/Agent 边界：filesystem/terminal 有自己工具方法但无 agency(talk/do)，agency 仍属 agent",
+      const agentHasTalk = !!builtinRegistry.resolveMethod("_builtin/agent", "talk"); // agency 在 agent 基类
+      rec.ok("TC-COMP-05", "Object/Agent 边界：filesystem/terminal 有自己工具方法但无 agency(talk/do)，agency 属 _builtin/agent",
         fsGrep && tmProg && fsNoTalk && tmNoDo && agentHasTalk,
         `fsGrep=${fsGrep} tmProg=${tmProg} fsNoTalk=${fsNoTalk} tmNoDo=${tmNoDo} agentTalk=${agentHasTalk}`);
     }

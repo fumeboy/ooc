@@ -5,6 +5,21 @@ import { makeThread } from "../../__tests__/make-thread";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
 /**
+ * agency 方法（do/talk/plan/todo/end）已从 root 迁到 `_builtin/agent` 类。
+ * 经 exec 调 agency 时须把 window_id 指向一个 class 解析得到 `_builtin/agent` 的窗。
+ */
+const AGENT_WIN = {
+  id: "agent",
+  class: "_builtin/agent",
+  parentWindowId: "root",
+  title: "agent",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+  // class="_builtin/agent" 是继承类、非 ContextWindow union discriminant → 经 unknown 转。
+} as unknown as ContextWindow;
+
+/**
  * tools.test — 3 原语在 ContextWindow 模型下的行为验证。
  *
  * 覆盖：
@@ -30,12 +45,13 @@ describe("executable tools (ContextWindow model)", () => {
   });
 
   it("exec(method=plan) 创建 method_exec form 并预填 args（plan 缺 plan 文本时不会被立即提交）", async () => {
-    const thread = makeThread();
+    const thread = makeThread({ extraWindows: [AGENT_WIN] });
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
       arguments: {
         title: "制定计划",
+        window_id: "agent",
         method: "plan",
         description: "拆解迁移工作",
       },
@@ -52,12 +68,13 @@ describe("executable tools (ContextWindow model)", () => {
   });
 
   it("args 给齐时 exec 立即执行：plan 给齐 plan 字段一次到位执行", async () => {
-    const thread = makeThread();
+    const thread = makeThread({ extraWindows: [AGENT_WIN] });
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
       arguments: {
         title: "立刻设定计划",
+        window_id: "agent",
         method: "plan",
         args: { plan: "先 reshape，再迁移测试" },
       },
@@ -73,11 +90,11 @@ describe("executable tools (ContextWindow model)", () => {
   });
 
   it("MethodExecWindow.refine 累积 args 并刷新 intentPaths（do 加 wait 触发 do.wait path）", async () => {
-    const thread = makeThread();
+    const thread = makeThread({ extraWindows: [AGENT_WIN] });
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生子线程", method: "do", description: "fork" },
+      arguments: { title: "派生子线程", window_id: "agent", method: "do", description: "fork" },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
@@ -111,12 +128,12 @@ describe("executable tools (ContextWindow model)", () => {
   });
 
   it("MethodExecWindow.submit 失败时 form 保留 status=failed, 可 refine 复活", async () => {
-    const thread = makeThread();
+    const thread = makeThread({ extraWindows: [AGENT_WIN] });
     // do 缺 msg 直接 submit 会失败
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "method_exec")?.id ?? "";
     await dispatchToolCall(thread, {
@@ -131,11 +148,11 @@ describe("executable tools (ContextWindow model)", () => {
   });
 
   it("close 释放任意 window", async () => {
-    const thread = makeThread();
+    const thread = makeThread({ extraWindows: [AGENT_WIN] });
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {

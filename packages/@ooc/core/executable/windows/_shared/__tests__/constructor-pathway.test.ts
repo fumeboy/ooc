@@ -48,6 +48,21 @@ import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import { dispatchToolCall } from "../../../tools";
 import { builtinRegistry } from "../registry";
 
+/**
+ * agency 方法（talk/plan/...）已从 root 迁到 `_builtin/agent` 类。
+ * 经 dispatch 调 agency 时须把 parentWindowId 指向一个 class 解析得到 `_builtin/agent` 的窗。
+ */
+const AGENT_WIN = {
+  id: "agent",
+  class: "_builtin/agent",
+  parentWindowId: ROOT_WINDOW_ID,
+  title: "agent",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+  // class="_builtin/agent" 是继承类、非 ContextWindow union discriminant → 经 unknown 转。
+} as unknown as ContextWindow;
+
 async function exists(p: string): Promise<boolean> {
   try {
     await stat(p);
@@ -91,7 +106,7 @@ describe("constructor pathway integration", () => {
       sessionId: persistence.sessionId,
       objectId: persistence.objectId,
     });
-    thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
+    thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true, extraWindows: [AGENT_WIN] });
   });
 
   afterEach(async () => {
@@ -104,7 +119,7 @@ describe("constructor pathway integration", () => {
     // Drive the builtin feature via the auto-submit path on root.talk.
     const opened = await mgr.openMethodExec({
       thread,
-      parentWindowId: ROOT_WINDOW_ID,
+      parentWindowId: "agent",
       method: "talk",
       title: "open talk to peer",
       args: { target: "peer_alice", title: "hi alice" },
@@ -172,7 +187,7 @@ describe("constructor pathway integration", () => {
     // 任意 builtin feature 写都会触发 writeThreadContextSnapshot（遍历所有 window）。
     await mgr.openMethodExec({
       thread,
-      parentWindowId: ROOT_WINDOW_ID,
+      parentWindowId: "agent",
       method: "talk",
       title: "trigger ctx flush",
       args: { target: "peer_alice", title: "hi" },
@@ -195,7 +210,7 @@ describe("constructor pathway integration", () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     const opened = await mgr.openMethodExec({
       thread,
-      parentWindowId: ROOT_WINDOW_ID,
+      parentWindowId: "agent",
       method: "plan",
       title: "make a plan",
       args: { plan: "do the thing" },
@@ -330,8 +345,10 @@ describe("constructor pathway integration", () => {
     expect(err.classId).toBe("definitely-not-a-real-class");
   });
 
-  // ─── Test 6: resolveMethod chain — stub class with parentClass: "root" inherits "talk" ─
-  test("Test 6: stub class with parentClass=\"root\" resolves \"talk\" via chain (smoke check at dispatch lookup)", async () => {
+  // ─── Test 6: resolveMethod chain — stub class with parentClass: "root" inherits "open_knowledge" ─
+  // (agency talk/do/... 已迁出 root 到 _builtin/agent；这里改用仍挂在 root 上的 delegator
+  //  open_knowledge 验证同一条 parentClass 链解析机制 —— 断言形态不变。)
+  test("Test 6: stub class with parentClass=\"root\" resolves \"open_knowledge\" via chain (smoke check at dispatch lookup)", async () => {
     // Register a brand-new string that defaults to inheriting from root.
     const stubType = `__test_stub_inherits_root_${Date.now()}`;
     builtinRegistry.registerNewObjectType(stubType as never, {
@@ -340,17 +357,17 @@ describe("constructor pathway integration", () => {
       // undefined parentClass → defaults to "root" per resolveMethod
     });
 
-    // 1. Registry-level chain walk finds talk on root (this is what method-inheritance.test.ts also covers).
-    const resolved = builtinRegistry.resolveMethod(stubType, "talk");
+    // 1. Registry-level chain walk finds open_knowledge on root (a root-declared delegator method).
+    const resolved = builtinRegistry.resolveMethod(stubType, "open_knowledge");
     expect(resolved).toBeDefined();
-    expect(resolved!.description).toContain("talk");
+    expect(resolved!.description).toContain("knowledge");
 
     // 2. Manager-level dispatch lookup finds the same entry — declaringType is the ancestor (root)
     //    where the method is declared. This is the wiring that submit() consults.
-    const entry = builtinRegistry.lookupMethodEntry({ class: stubType as never }, "talk");
+    const entry = builtinRegistry.lookupMethodEntry({ class: stubType as never }, "open_knowledge");
     expect(entry).toBeDefined();
     expect(entry!.declaringType).toBe("root");
-    expect(entry!.entry.kind).toBeUndefined(); // root.talk is the delegator (not kind="constructor"; that's on the talk type)
+    expect(entry!.entry.kind).toBeUndefined(); // root.open_knowledge is the delegator
 
     // 3. End-to-end dispatch via openMethodExec on a stub-typed parent — verifies the wiring reaches
     //    submit(). With the current strict-equality guard, manager will fail the form with a
@@ -371,9 +388,9 @@ describe("constructor pathway integration", () => {
     const opened = await mgr.openMethodExec({
       thread,
       parentWindowId: stubParent.id,
-      method: "talk",
-      title: "stub talks alice",
-      args: { target: "peer_alice", title: "stub-to-alice" },
+      method: "open_knowledge",
+      title: "stub opens knowledge",
+      args: { path: "stub-doc" },
     });
     // openMethodExec already validated lookup succeeded (would throw otherwise) → chain walk worked.
     // submit's guard then either lets it through (after a relaxation) or fails with [method-error].

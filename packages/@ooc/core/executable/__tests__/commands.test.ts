@@ -24,13 +24,18 @@ function callFormChange(
 }
 
 describe("executable methods", () => {
-  it("should have method table with agency + misc methods (file/program tools moved to members)", () => {
-    expect(Object.keys(ROOT_METHODS)).toContain("talk");
-    expect(Object.keys(ROOT_METHODS)).toContain("do");
-    expect(Object.keys(ROOT_METHODS)).toContain("plan");
-    expect(Object.keys(ROOT_METHODS)).toContain("todo");
-    expect(Object.keys(ROOT_METHODS)).toContain("end");
-    // 文件/程序工具已移出 root → filesystem/terminal 成员对象（消除 god-object 冗余）。
+  it("root type 只剩 misc method；agency 在 _builtin/agent，file/program 工具在成员", () => {
+    // root type 保留的 misc（非 agency、非 file/program 工具）
+    expect(Object.keys(ROOT_METHODS)).toContain("open_knowledge");
+    expect(Object.keys(ROOT_METHODS)).toContain("create_object");
+    expect(Object.keys(ROOT_METHODS)).toContain("example");
+    // agency（talk/do/plan/todo/end）已移到 _builtin/agent —— 不在 root type
+    expect(Object.keys(ROOT_METHODS)).not.toContain("talk");
+    expect(Object.keys(ROOT_METHODS)).not.toContain("do");
+    // 但经 _builtin/agent 类可解析到（agent 经 ooc.class 继承）
+    expect(builtinRegistry.resolveMethod("_builtin/agent", "talk")).toBeDefined();
+    expect(builtinRegistry.resolveMethod("_builtin/agent", "do")).toBeDefined();
+    // 文件/程序工具移出 root → filesystem/terminal 成员
     expect(Object.keys(ROOT_METHODS)).not.toContain("program");
     expect(Object.keys(ROOT_METHODS)).not.toContain("grep");
     expect(Object.keys(ROOT_METHODS)).not.toContain("open_file");

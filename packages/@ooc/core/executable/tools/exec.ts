@@ -95,7 +95,14 @@ export async function handleExecTool(
     return errorOutput("exec 缺少 title 参数（所有 window 强制必填）。");
   }
   const description = (args.description as string | undefined) ?? title;
-  const windowId = (args.window_id as string | undefined) ?? ROOT_WINDOW_ID;
+  // exec 默认目标 = **agent 的 self 窗**（agency 已从 root 迁到 _builtin/agent；agent 的命令面是它自己，
+  // 不是泛 root）。self 窗（id=objectId，class 经 ooc.class 链解析 agency + root misc）存在时默认它；
+  // 否则回退 ROOT_WINDOW_ID（user / 无 self 窗的线程）。显式 window_id 始终优先。
+  const selfId = thread.persistence?.objectId;
+  const hasSelfWindow =
+    !!selfId && (thread.contextWindows ?? []).some((w) => w?.id === selfId);
+  const windowId =
+    (args.window_id as string | undefined) ?? (hasSelfWindow ? selfId! : ROOT_WINDOW_ID);
   const nestedArgs = getArgs(args);
 
   // 通用 expand method：

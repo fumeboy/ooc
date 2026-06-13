@@ -7,9 +7,9 @@
  *   - string（具名父类）→ 跳到该 class 继续查；环检测兜底
  */
 import { describe, expect, test } from "bun:test";
-// Side-effect import: ensures `root` is registered with ROOT_METHODS (talk/do/todo/...)
+// Side-effect import: ensures `root` is registered with ROOT_METHODS (open_knowledge/create_object/...; agency talk/do 已移到 _builtin/agent)
 // so resolveMethod chains can find them. Without this, the registry has the empty stub
-// from registry.ts:207 and "talk" lookups miss.
+// from registry.ts:207 and "open_knowledge" lookups miss.
 import "@ooc/builtins/root/executable/index.js";
 import { builtinRegistry } from "../registry";
 import type { ObjectMethod } from "../method-types";
@@ -26,10 +26,10 @@ const fakeMethod: ObjectMethod = {
 const stubReadable = () => [];
 
 describe("resolveMethod + parentClass chain", () => {
-  test("undefined parentClass → defaults to \"root\" → finds talk", () => {
+  test("undefined parentClass → defaults to \"root\" → finds open_knowledge", () => {
     const t = `__test_default_root_${Date.now()}`;
     builtinRegistry.registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
-    const found = builtinRegistry.resolveMethod(t, "talk");
+    const found = builtinRegistry.resolveMethod(t, "open_knowledge");
     expect(found).toBeDefined();
     expect(found?.description).toBeTruthy();
   });
@@ -37,14 +37,14 @@ describe("resolveMethod + parentClass chain", () => {
   test("explicit parentClass: null → no inheritance → not found", () => {
     const t = `__test_no_inherit_${Date.now()}`;
     builtinRegistry.registerNewObjectType(t as never, { methods: {}, parentClass: null, readable: stubReadable });
-    const found = builtinRegistry.resolveMethod(t, "talk");
+    const found = builtinRegistry.resolveMethod(t, "open_knowledge");
     expect(found).toBeUndefined();
   });
 
-  test("explicit parentClass: \"root\" → resolves talk via parent", () => {
+  test("explicit parentClass: \"root\" → resolves open_knowledge via parent", () => {
     const t = `__test_explicit_root_${Date.now()}`;
     builtinRegistry.registerNewObjectType(t as never, { methods: {}, parentClass: "root", readable: stubReadable });
-    const found = builtinRegistry.resolveMethod(t, "talk");
+    const found = builtinRegistry.resolveMethod(t, "open_knowledge");
     expect(found).toBeDefined();
     expect(found?.description).toBeTruthy();
   });
@@ -61,7 +61,7 @@ describe("resolveMethod + parentClass chain", () => {
     const b = `__test_cycle_b_${Date.now()}`;
     builtinRegistry.registerNewObjectType(a as never, { methods: {}, parentClass: b, readable: stubReadable });
     builtinRegistry.registerNewObjectType(b as never, { methods: {}, parentClass: a, readable: stubReadable });
-    const found = builtinRegistry.resolveMethod(a, "talk");
+    const found = builtinRegistry.resolveMethod(a, "open_knowledge");
     expect(found).toBeUndefined();
   });
 
@@ -74,7 +74,7 @@ describe("resolveMethod + parentClass chain", () => {
     });
     const local = builtinRegistry.resolveMethod(t, "my_local");
     expect(local).toBe(fakeMethod);
-    const inherited = builtinRegistry.resolveMethod(t, "talk");
+    const inherited = builtinRegistry.resolveMethod(t, "open_knowledge");
     expect(inherited).toBeDefined();
     expect(inherited?.description).toBeTruthy();
   });
@@ -82,13 +82,13 @@ describe("resolveMethod + parentClass chain", () => {
   test("lookupMethod (parent.class API) walks chain identically", () => {
     const t = `__test_via_window_${Date.now()}`;
     builtinRegistry.registerNewObjectType(t as never, { methods: {}, readable: stubReadable });
-    const found = builtinRegistry.lookupMethod({ class: t as never }, "talk");
+    const found = builtinRegistry.lookupMethod({ class: t as never }, "open_knowledge");
     expect(found).toBeDefined();
     expect(found?.description).toBeTruthy();
   });
 
   test("root itself: parentClass null prevents infinite loop", () => {
-    const found = builtinRegistry.resolveMethod("root", "talk");
+    const found = builtinRegistry.resolveMethod("root", "open_knowledge");
     expect(found).toBeDefined();
     const missing = builtinRegistry.resolveMethod("root", "no_method_at_all");
     expect(missing).toBeUndefined();

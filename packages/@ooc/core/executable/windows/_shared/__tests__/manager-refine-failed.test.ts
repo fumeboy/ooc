@@ -18,20 +18,35 @@ import { WindowManager } from "../manager";
 import { builtinRegistry } from "../registry";
 import { makeThread } from "../../../../__tests__/make-thread";
 import { dispatchToolCall } from "../../../tools";
-import type { MethodExecWindow } from "../types";
+import type { ContextWindow, MethodExecWindow } from "../types";
 import type { ThreadContext } from "../../../../thinkable/context";
+
+/**
+ * agency 方法（do）已从 root 迁到 `_builtin/agent` 类。
+ * 经 exec 调 agency 时须把 window_id 指向一个 class 解析得到 `_builtin/agent` 的窗。
+ */
+const AGENT_WIN = {
+  id: "agent",
+  class: "_builtin/agent",
+  parentWindowId: "root",
+  title: "agent",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+  // class="_builtin/agent" 是继承类、非 ContextWindow union discriminant → 经 unknown 转。
+} as unknown as ContextWindow;
 
 /**
  * 通过 exec tool 创建一个 do form (缺 msg, 不会 auto-submit), submit 让它进 failed。
  * 返回 thread + formId, 供测试继续操作。
  */
 async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string }> {
-  const thread = makeThread({ id: "t_refine_failed" });
+  const thread = makeThread({ id: "t_refine_failed", extraWindows: [AGENT_WIN] });
   // 1. open do form 不带 msg, 不会 auto-submit (do 需要 msg)
   await dispatchToolCall(thread, {
     id: "call_1",
     name: "exec",
-    arguments: { title: "派生", method: "do", description: "fork" },
+    arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
   });
   const form = thread.contextWindows.find(
     (w): w is MethodExecWindow => w.class === "method_exec",
@@ -48,11 +63,11 @@ async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string
 
 describe("manager.refine 支持 failed → open 复活", () => {
   it("open 状态 refine（参数未补齐）→ 仍 open + args 累积", async () => {
-    const thread = makeThread({ id: "t_open_refine" });
+    const thread = makeThread({ id: "t_open_refine", extraWindows: [AGENT_WIN] });
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.class === "method_exec",
@@ -105,11 +120,11 @@ describe("manager.refine 支持 failed → open 复活", () => {
   });
 
   it("executing 状态 refine → 返 false（不允许）", async () => {
-    const thread = makeThread({ id: "t_executing" });
+    const thread = makeThread({ id: "t_executing", extraWindows: [AGENT_WIN] });
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.class === "method_exec",
