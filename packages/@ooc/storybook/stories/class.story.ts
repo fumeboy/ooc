@@ -80,18 +80,21 @@ export async function runControlPlane(): Promise<StoryResult> {
       const dir = resolveBuiltinReadDir({ objectId: "_builtin/supervisor" });
       let members: unknown;
       try { members = JSON.parse(readFileSync(join(dir!, "package.json"), "utf8"))?.ooc?.members; } catch { /* */ }
-      rec.ok("TC-COMP-02", "supervisor 类声明持有 filesystem 成员（ooc.members）",
-        Array.isArray(members) && (members as string[]).includes("filesystem"), `members=${JSON.stringify(members)}`);
+      const m = Array.isArray(members) ? (members as string[]) : [];
+      rec.ok("TC-COMP-02", "supervisor 类声明持有 filesystem + terminal 成员（ooc.members）",
+        m.includes("filesystem") && m.includes("terminal"), `members=${JSON.stringify(members)}`);
     }
 
-    // TC-COMP-03: 组合注入 —— supervisor thread 经类声明注入 filesystem member 窗（非持久化）
+    // TC-COMP-03: 组合注入 —— supervisor thread 经类声明注入两个 member 窗（非持久化）
     {
       const thread: any = { id: "root", status: "running",
         persistence: { baseDir, sessionId: "sb-comp", objectId: "supervisor", threadId: "root" }, contextWindows: [] };
       await injectMemberWindowsIfObjectThread(thread);
       const fsWin = thread.contextWindows.find((w: any) => w.class === "filesystem");
-      rec.ok("TC-COMP-03", "组合注入：supervisor thread 经类声明注入 filesystem member 窗（isMemberWindow 非持久化）",
-        !!fsWin && fsWin.isMemberWindow === true && fsWin.id === "filesystem", `win=${JSON.stringify(fsWin)?.slice(0, 120)}`);
+      const tmWin = thread.contextWindows.find((w: any) => w.class === "terminal");
+      rec.ok("TC-COMP-03", "组合注入：supervisor thread 经类声明注入 filesystem + terminal member 窗（isMemberWindow 非持久化）",
+        !!fsWin && fsWin.isMemberWindow === true && !!tmWin && tmWin.isMemberWindow === true,
+        `members=${thread.contextWindows.filter((w: any) => w.isMemberWindow).map((w: any) => w.class).join(",")}`);
     }
 
     // TC-COMP-04（机制命门）: exec(filesystem, grep) 经成员方法造出 search 对象
@@ -107,6 +110,18 @@ export async function runControlPlane(): Promise<StoryResult> {
       const routed = !!search && search.kind === "grep" && (search.matches?.length ?? 0) > 0;
       rec.ok("TC-COMP-04", "组合机制命门：exec(filesystem, grep) 经成员方法真跑出 grep 命中（search.kind=grep, matches>0）",
         routed, `search=${search ? `kind=${search.kind} matches=${search.matches?.length}` : "none"}`);
+    }
+
+    // TC-COMP-05: Object/Agent 边界 —— tool-object 成员**不是 Agent**（有自己工具方法，无 agency）
+    {
+      const fsGrep = !!builtinRegistry.resolveMethod("filesystem", "grep");
+      const tmProg = !!builtinRegistry.resolveMethod("terminal", "program");
+      const fsNoTalk = !builtinRegistry.resolveMethod("filesystem", "talk");
+      const tmNoDo = !builtinRegistry.resolveMethod("terminal", "do");
+      const agentHasTalk = !!builtinRegistry.resolveMethod("root", "talk"); // agency 仍在（agent 经链继承）
+      rec.ok("TC-COMP-05", "Object/Agent 边界：filesystem/terminal 有自己工具方法但无 agency(talk/do)，agency 仍属 agent",
+        fsGrep && tmProg && fsNoTalk && tmNoDo && agentHasTalk,
+        `fsGrep=${fsGrep} tmProg=${tmProg} fsNoTalk=${fsNoTalk} tmNoDo=${tmNoDo} agentTalk=${agentHasTalk}`);
     }
   } finally {
     await srv.cleanup();

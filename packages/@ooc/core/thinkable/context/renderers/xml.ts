@@ -207,7 +207,7 @@ function renderWindowClassesNode(
 const BUILTIN_TYPES = new Set([
   "root", "method_exec", "do", "todo", "talk", "program",
   "file", "knowledge", "search", "skill_index",
-  "feishu_chat", "feishu_doc", "plan", "filesystem",
+  "feishu_chat", "feishu_doc", "plan", "filesystem", "terminal",
 ]);
 
 async function resolveReadableForType(

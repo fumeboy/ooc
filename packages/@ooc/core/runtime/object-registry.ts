@@ -39,7 +39,7 @@ export { filterMethodsByVisibility };
 const RENDERABLE_VISIBLE_TYPES = new Set([
   "root", "method_exec", "do", "todo", "talk", "pr", "reflect_request", "program",
   "file", "knowledge", "search", "skill_index",
-  "feishu_chat", "feishu_doc", "plan", "filesystem",
+  "feishu_chat", "feishu_doc", "plan", "filesystem", "terminal",
 ]);
 
 /**
@@ -88,8 +88,11 @@ const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
   ["plan", { methods: {} }],
   // example —— 标准对象定义样板（executable/index.ts + readable.ts 两维度分注册示范）。
   ["example", { methods: {} }],
-  // filesystem —— agent 组合持有的 tool-object 成员（grep/glob/open_file/write_file）。
-  ["filesystem", { methods: {} }],
+  // filesystem / terminal —— agent 组合持有的 tool-object 成员。
+  // parentClass:null（terminal，不继承 root）——tool-object **不是 Agent**：它没有 agency
+  // （talk/do/...），只有自己的工具方法。Object/Agent 边界在类型层落实。
+  ["filesystem", { methods: {}, parentClass: null }],
+  ["terminal", { methods: {}, parentClass: null }],
 ];
 
 export class ObjectRegistry {

@@ -54,6 +54,7 @@ export type { SearchWindow, SearchMatch } from "@ooc/builtins/search/types.js";
 export type { SkillIndexWindow, SkillEntry } from "@ooc/builtins/skill_index/types.js";
 export type { PlanWindow, PlanWindowStep } from "@ooc/builtins/plan/types.js";
 export type { FilesystemWindow } from "@ooc/builtins/filesystem/types.js";
+export type { TerminalWindow } from "@ooc/builtins/terminal/types.js";
 export type { FeishuChatWindow, FeishuChatMessage } from "../../../extendable/lark/feishu-chat/types.js";
 export type { FeishuDocWindow, FeishuDocBlock } from "../../../extendable/lark/feishu-doc/types.js";
 
@@ -72,6 +73,7 @@ import type { SearchWindow } from "@ooc/builtins/search/types.js";
 import type { SkillIndexWindow } from "@ooc/builtins/skill_index/types.js";
 import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import type { FilesystemWindow } from "@ooc/builtins/filesystem/types.js";
+import type { TerminalWindow } from "@ooc/builtins/terminal/types.js";
 import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/types.js";
 import type { FeishuDocWindow } from "../../../extendable/lark/feishu-doc/types.js";
 
@@ -99,4 +101,5 @@ export type ContextWindow =
   | FeishuChatWindow
   | FeishuDocWindow
   | PlanWindow
-  | FilesystemWindow;
+  | FilesystemWindow
+  | TerminalWindow;
