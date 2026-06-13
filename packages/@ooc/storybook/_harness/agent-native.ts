@@ -50,6 +50,32 @@ export async function continueTask(sessionId: string, text: string) {
   return { jobId: r.json?.jobId as string | undefined, raw: r };
 }
 
+/**
+ * 取某 thread 最近一轮 LLM input（debug 快照），用于观察 **context 组成**。
+ * 经 `/api/runtime/flows/:sid/:obj/threads/:tid/debug` 取 LlmInputDebugRecord。
+ * 返回：ctxXml（`<context>` system message 全文）+ messageStream（非 context 的 message item 内容串）+ 原始 items。
+ */
+export async function fetchContextXml(
+  sessionId: string, objectId: string, threadId: string,
+): Promise<{ ctxXml: string; messageStream: string[]; items: any[] }> {
+  const r = await req("GET", `/api/runtime/flows/${sessionId}/${objectId}/threads/${threadId}/debug`);
+  // 端点把记录包在 { input: LlmInputDebugRecord } 里；兼容直返两种形态。
+  const rec = r.json?.input ?? r.json;
+  const items: any[] = rec?.inputItems ?? [];
+  let ctxXml = "";
+  const messageStream: string[] = [];
+  for (const it of items) {
+    const c = it?.content;
+    if (it?.type === "message" && typeof c === "string") {
+      if (c.trimStart().startsWith("<context>")) ctxXml = c;
+      else messageStream.push(c);
+    } else if (it?.type === "function_call" || it?.type === "function_call_output") {
+      messageStream.push(JSON.stringify(it).slice(0, 4000));
+    }
+  }
+  return { ctxXml, messageStream, items };
+}
+
 /** 读某 thread 的 exec 事件（method + args + say 文本）。 */
 export async function threadExecs(sessionId: string, objectId: string, threadId: string): Promise<Array<{ cmd: string; args: any; msg?: string }>> {
   const r = await req("GET", `/api/flows/${sessionId}/${objectId}/threads/${threadId}`);
