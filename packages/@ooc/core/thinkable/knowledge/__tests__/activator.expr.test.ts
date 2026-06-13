@@ -355,6 +355,35 @@ describe("evaluateTrigger", () => {
     const f = form({ method: "program", parentWindowId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [f] }))).toBe(true);
   });
+
+  // ── method:: 沿 parentClass 类链匹配（agency 在 agent self 窗的激活）──
+  test("method:: 沿类链匹配：form 跑在 agent 子类自窗上，祖先 _builtin/agent / root 的 trigger 命中", async () => {
+    const { builtinRegistry } = await import("@ooc/core/extendable/_shared/registry.js");
+    const childType = `__test_agent_child_${Date.now()}`;
+    // 链：childType → _builtin/agent → root（_builtin/agent 默认 parentClass=root）
+    builtinRegistry.registerNewObjectType(childType as never, { methods: {}, parentClass: "_builtin/agent", readable: () => [] });
+    // agent 的 self 窗：class=objectId（这里用 childType 模拟具体 agent 类型）
+    const selfWin = { id: "self", class: childType, parentWindowId: "root", title: "self", status: "open", createdAt: 0 } as unknown as ContextWindow;
+    const talkForm = form({ id: "ftalk", method: "talk", parentWindowId: "self" });
+    const ctx = thread({ contextWindows: [selfWin, talkForm] });
+
+    // 祖先 trigger 命中（_builtin/agent 与 root 都在链上）
+    expect(evaluateTrigger(parseTrigger("method::_builtin/agent::talk"), ctx)).toBe(true);
+    expect(evaluateTrigger(parseTrigger("method::root::talk"), ctx)).toBe(true);
+    // 自身类型精确命中
+    expect(evaluateTrigger(parseTrigger(`method::${childType}::talk`), ctx)).toBe(true);
+    // 非祖先类型（filesystem 是 parentClass=null 的旁系）不命中
+    expect(evaluateTrigger(parseTrigger("method::filesystem::talk"), ctx)).toBe(false);
+  });
+
+  test("method:: 类链不误伤：create_object 跑在 world 成员窗（parentClass=null），仅 world 精确命中", () => {
+    const worldWin = { id: "world", class: "world", parentWindowId: "root", title: "world", status: "open", createdAt: 0 } as unknown as ContextWindow;
+    const createForm = form({ id: "fco", method: "create_object", parentWindowId: "world" });
+    const ctx = thread({ contextWindows: [worldWin, createForm] });
+    expect(evaluateTrigger(parseTrigger("method::world::create_object"), ctx)).toBe(true);
+    // world parentClass=null → root 非其祖先 → 旧 `method::root::create_object` 不再命中
+    expect(evaluateTrigger(parseTrigger("method::root::create_object"), ctx)).toBe(false);
+  });
 });
 
 describe("maxLevel", () => {

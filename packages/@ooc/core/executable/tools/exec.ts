@@ -4,7 +4,7 @@
  * 形态：
  *   exec(window_id?, method, args?, title, description?)
  *
- * - window_id 缺省 = "root"；root 上注册了今天 methods/ 目录的全部 method
+ * - window_id 缺省 = agent 的 self 窗（agency 所在）；工具方法在成员对象窗（filesystem/terminal/world/knowledge_base）
  * - method 必须是 target window 注册的某个 method 名
  * - args 齐全 + 不引入新 path/knowledge 时立即执行；否则创建 MethodExecWindow（form），
  *   LLM 后续通过 \`exec(<form_id>, "refine"|"submit", ...)\` 推进
@@ -25,7 +25,7 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 export const EXEC_TOOL: LlmTool = {
   name: "exec",
   description:
-    "在某 window 上调用一条 method。window_id 缺省为 root（即 root 上的全局 method）。" +
+    "在某 window 上调用一条 method。window_id 缺省为你自己（agent 的 self 窗，agency 所在）；工具方法在成员对象窗上。" +
     "若 args 齐全，立即执行并返回结果；若不齐全，会创建一个 method_exec form，" +
     "你可以通过后续 exec(form_id, \"refine\", args={...}) 累积参数、exec(form_id, \"submit\") 触发执行。",
   inputSchema: {
@@ -35,13 +35,16 @@ export const EXEC_TOOL: LlmTool = {
       window_id: {
         type: "string",
         description:
-          "目标 window 的 id；缺省 = root（当前 thread 的根 window）。也可指向已有的 method_exec form id 来调它的 refine/submit 命令。",
+          "目标 window 的 id；缺省 = 你自己（agent 的 self 窗，agency 命令所在）。" +
+          "工具方法在成员对象窗上：filesystem / terminal / world / knowledge_base —— 调它们的方法时 window_id 指向对应成员窗。" +
+          "也可指向已有的 method_exec form id 来调它的 refine/submit 命令。",
       },
       method: {
         type: "string",
-        // root 上可调的方法；非 root 的 window 上的方法（如 do_window.continue / 自定义 custom methods /
-        // method_exec.refine|submit）通过 enum 之外的 string 传入即可——schema 不强约束。
-        // 惰性 getter：避免 module-eval 期就访问 root 的 ROOT_METHODS（循环 import 下会 TDZ；
+        // self 窗（agency + root misc）上可调的方法；成员窗 / 其它 window 上的方法
+        // （filesystem.grep / terminal.program / do_window.continue / method_exec.refine|submit / custom）
+        // 通过 enum 之外的 string 传入即可——schema 不强约束，运行时按 window_id 路由。
+        // 惰性 getter：避免 module-eval 期就访问 ROOT_METHODS（循环 import 下会 TDZ；
         // EXEC_TOOL 是模块级 const，在 import 图某些加载顺序下 root/executable 尚未初始化完）。
         // 延迟到 schema 实际被序列化/读取时（彼时所有模块已加载）再计算。
         get enum() {
@@ -49,7 +52,9 @@ export const EXEC_TOOL: LlmTool = {
         },
         description:
           "要在 target window 上调用的 method 名。" +
-          "root 上典型有 do/talk/program/plan/end/todo/open_file/open_knowledge/write_file/glob/grep/create_object 等；" +
+          "你自己的 self 窗上有 agency：talk/do/plan/todo/end（+ example）。" +
+          "工具方法在成员对象窗上：filesystem 有 grep/glob/open_file/write_file；terminal 有 program；" +
+          "world 有 create_object；knowledge_base 有 open_knowledge —— 调用时 window_id 指向对应成员窗。" +
           "（super flow 反思会话窗 reflect_request 另挂 new_feat_branch / create_pr_and_invite_reviewers 沉淀方法）" +
           "其它 window 上注册的方法（如 do_window.continue / talk_window.say / form 自身的 refine/submit / custom 方法）" +
           "也通过本字段传入，运行时按 window_id 路由。",

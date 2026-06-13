@@ -2,7 +2,7 @@
 title: end 之前：考虑通过 super 沉淀经验
 description: 结束 thread 前想一下有没有值得带走的认知，有就走 super flow 沉淀
 activates_on:
-  "method::root::end": "show_content"
+  "method::_builtin/agent::end": "show_content"
 ---
 
 你正准备结束当前 thread。submit end 之前，想一秒：**本次工作产生了什么值得带走的东西？**

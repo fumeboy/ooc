@@ -1,7 +1,7 @@
 /**
  * file_window — 在 context 中显示某个文件的内容窗口。
  *
- * - 由 root.open_file / root.write_file 创建（args: path, lines?, columns?）
+ * - 由 filesystem 成员的 open_file / write_file 创建（args: path, lines?, columns?）
  *   open 时自动填默认 viewport = 0-200 行 / 0-200 字符（DEFAULT_VIEWPORT）
  * - 注册的 method：set_viewport / set_range / reload / edit / close
  *   - **set_viewport（推荐）**：精细化调整渲染窗口（line_start/line_end/column_start/column_end）

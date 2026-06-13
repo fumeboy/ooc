@@ -3,7 +3,7 @@ title: 自我演化——你能改自己的代码与知识
 description: 你能 write_file 改自己的 self.md / executable / visible / 记忆；身份/身体改动经 super flow feat 分支 PR 沉淀进 canonical
 activates_on:
   "object::root": "show_description"
-  "method::root::write_file": "show_content"
+  "method::filesystem::write_file": "show_content"
 ---
 
 OOC 中 Object 是自我演化的主体——你的能力由你 stone 目录下几类可写文件叠加而成。

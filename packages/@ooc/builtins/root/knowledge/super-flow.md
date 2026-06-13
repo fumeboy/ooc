@@ -39,7 +39,7 @@ activates_on:
 | trigger | 含义 |
 |---|---|
 | `object::<type>` | 该 type 的 window open 时命中（`object::root` 每个 thread 都有 = 任何时候）|
-| `method::<window_type>::<method>` | 在该 window 上开同名 method form 时命中（如 `method::root::talk`）|
+| `method::<window_type>::<method>` | 在该 window 上开同名 method form 时命中（如 `method::_builtin/agent::talk`）|
 | `super` | 仅在 super flow 命中 |
 
 `show_description` 命中露摘要，`show_content` 命中露全文；多 trigger 取 max。
