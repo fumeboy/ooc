@@ -25,6 +25,7 @@ import { closeMethod } from "./method.close.js";
 import { moveMethod } from "./method.move.js";
 import { setTranscriptWindowCommandForDo } from "./method.set-transcript-window.js";
 import { archiveDoWindowChild } from "./helpers.js";
+import { injectMemberWindowsIfObjectThread } from "../_shared/init.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   applyTranscriptViewport,
@@ -386,6 +387,11 @@ const doConstructor: ObjectMethod = {
       contextWindows: buildChildInitialWindows(childId, parent.id, initialTitle),
       persistence: deriveChildPersistence(parent, childId),
     };
+
+    // do-fork 子线程是同 object 的 sub-thread（persistence.objectId 不变）——
+    // 也应继承该 object 声明持有的 tool-object 成员（如 filesystem），否则子 agent 无法用工具。
+    // scheduler 直接驱动内存子线程、不走 readThread，故在此显式注入（IO 失败静默吞，不阻塞 fork）。
+    await injectMemberWindowsIfObjectThread(child);
 
     // 2) inbox/outbox + child event
     const message = makeDoMessage(parent.id, childId, content);

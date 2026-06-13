@@ -103,9 +103,10 @@ export async function runControlPlane(): Promise<StoryResult> {
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
       await mgr.openMethodExec({ thread, parentWindowId: "filesystem", method: "grep", title: "grep",
         args: { pattern: "version", path: baseDir } });
-      const search = mgr.list().find((w) => w.class === "search");
-      rec.ok("TC-COMP-04", "组合机制命门：exec(filesystem, grep) 经成员方法造出 search 对象",
-        !!search, `windows=${mgr.list().map((w) => w.class).join(",")}`);
+      const search = mgr.list().find((w) => w.class === "search") as any;
+      const routed = !!search && search.kind === "grep" && (search.matches?.length ?? 0) > 0;
+      rec.ok("TC-COMP-04", "组合机制命门：exec(filesystem, grep) 经成员方法真跑出 grep 命中（search.kind=grep, matches>0）",
+        routed, `search=${search ? `kind=${search.kind} matches=${search.matches?.length}` : "none"}`);
     }
   } finally {
     await srv.cleanup();
