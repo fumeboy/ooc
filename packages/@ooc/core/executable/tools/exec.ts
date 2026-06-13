@@ -21,6 +21,7 @@ import type { ContextWindow } from "../windows/_shared/types.js";
 import { builtinRegistry, getOpenableMethods, ROOT_WINDOW_ID, WindowManager } from "../windows/index.js";
 import type { ObjectRegistry } from "../windows/_shared/registry.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
+import { handleCompressTool } from "./compress.js";
 
 export const EXEC_TOOL: LlmTool = {
   name: "exec",
@@ -57,7 +58,8 @@ export const EXEC_TOOL: LlmTool = {
           "world 有 create_object；knowledge_base 有 open_knowledge —— 调用时 window_id 指向对应成员窗。" +
           "（super flow 反思会话窗 reflect_request 另挂 new_feat_branch / create_pr_and_invite_reviewers 沉淀方法）" +
           "其它 window 上注册的方法（如 do_window.continue / talk_window.say / form 自身的 refine/submit / custom 方法）" +
-          "也通过本字段传入，运行时按 window_id 路由。",
+          "也通过本字段传入，运行时按 window_id 路由。" +
+          "调整信息展示的通用方法（任意窗可用）：compress（折叠，args={scope:\"windows\"|\"events\",...}）/ expand（展开压缩窗）。",
       },
       description: {
         type: "string",
@@ -113,9 +115,17 @@ export async function handleExecTool(
   // 通用 expand method：
   // 任何 compressLevel ≥ 1 的 window 自动获得 expand,无需在 registry 里给每个 type 注册。
   // 在 exec 路径上拦截 method="expand" 并对 target window 做 level → 0 的切换;
-  // 落一条 context_compressed 事件,与 compress tool 同协议。
+  // 落一条 context_compressed 事件,与 compress method 同协议。
   if (method === "expand") {
     return handleExpandMethod(thread, windowId);
+  }
+
+  // 通用 compress method：compress 从顶层 tool 降为 exec 调用的方法（稳定原语回到 3 个 = exec/close/wait）。
+  // 与 expand 对称——调整信息展示是窗的方法，不是原语。复用 handleCompressTool 的全部逻辑：
+  //   exec(method="compress", args={scope:"windows", target_ids:[...], level?})  折叠指定窗
+  //   exec(method="compress", args={scope:"events", summary:"...", ...})         折叠事件流中段
+  if (method === "compress") {
+    return handleCompressTool(thread, nestedArgs);
   }
 
   const mgr = WindowManager.fromThread(thread, registry);

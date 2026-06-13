@@ -349,8 +349,9 @@ function buildBudgetWarningItem(
     content:
       `<context_budget_warning current="${currentTokens}" soft="${thresholds.soft}" hard="${thresholds.hard}"/>\n` +
       `当前估算 token 接近预算上限 (current=${currentTokens}, soft=${thresholds.soft}, hard=${thresholds.hard})。` +
-      `系统已按相关性把低相关窗口排除在 context 之外（见 <context_overflow>）。你可主动 compress(scope=windows, target_ids=[...]) ` +
-      `进一步精简，或继续推进任务。`,
+      `系统已按相关性把低相关窗口排除在 context 之外（见 <context_overflow>）。你可主动 ` +
+      `exec(method="compress", args={scope:"windows", target_ids:[...]}) 折叠窗口，或 ` +
+      `exec(method="compress", args={scope:"events", summary:"..."}) 折叠事件流，进一步精简；或继续推进任务。`,
   };
 }
 

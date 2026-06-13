@@ -3,7 +3,6 @@ import type { LlmTool, LlmToolCall } from "../thinkable/llm/types";
 import type { ObjectRegistry } from "./windows/_shared/registry";
 import { builtinRegistry } from "./windows/index.js";
 import { handleCloseTool } from "./tools/close";
-import { handleCompressTool } from "./tools/compress";
 import { buildAvailableTools } from "./tools/index";
 import { handleExecTool } from "./tools/exec";
 import { handleWaitTool } from "./tools/wait";
@@ -23,12 +22,11 @@ function errorToolOutput(tool: string, error: string) {
   return JSON.stringify({ ok: false, tool, error });
 }
 
-/** tool 名到 handler 的路由表；未实现的 tool 会转成 context_change 提示。 */
+/** tool 名到 handler 的路由表 —— 3 个稳定原语。compress 不在此：它是经 exec 调用的方法（exec.ts 拦截 method="compress"）。 */
 const TOOL_HANDLERS: Partial<Record<LlmToolCall["name"], ToolHandler>> = {
   exec: handleExecTool,
   close: handleCloseTool,
   wait: handleWaitTool,
-  compress: handleCompressTool,
 };
 
 /** 返回当前线程可暴露给 LLM 的工具定义。 */

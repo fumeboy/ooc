@@ -29,6 +29,12 @@ import "@ooc/core/executable/windows";
 const SESSION_PREFIX = "_test_thinkable_p0f_events";
 const ts = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
+// compress 不再是顶层 tool —— 经 exec(method="compress") 调用（exec.ts 拦截后转 handleCompressTool）。
+// 包装成与旧 compress tool 调用等价的 toolCall，输出 JSON 仍带 tool:"compress"。
+function compressCall(id: string, compressArgs: Record<string, unknown>) {
+  return { id, name: "exec" as const, arguments: { method: "compress", title: "compress", args: compressArgs } };
+}
+
 /** 构造一个简单可控的 text event,带稳定 id 便于断言。 */
 function mkTextEvent(idx: number): ProcessEvent {
   return {
@@ -49,15 +55,18 @@ describe("[p0f] context compression — compress(scope=events) + 渲染层 fold"
     const baselineEventsLen = thread.events.length;
     expect(baselineEventsLen).toBe(60);
 
-    // 调用 compress(scope=events) — 不提供 target_event_ids → 默认 fold 中段
+    // 调用 compress(scope=events) — 经 exec（compress 不再是顶层 tool）；不提供 target_event_ids → 默认 fold 中段
     const out = await dispatchToolCall(thread, {
       id: "call_compress_events_1",
-      name: "compress",
+      name: "exec",
       arguments: {
-        scope: "events",
-        summary: "earlier setup phase, including 3 file opens and 2 search runs",
-        quality_hint: "curated",
+        method: "compress",
         title: "fold middle events",
+        args: {
+          scope: "events",
+          summary: "earlier setup phase, including 3 file opens and 2 search runs",
+          quality_hint: "curated",
+        },
       },
     });
     const parsed = JSON.parse(out);
@@ -176,14 +185,10 @@ describe("[p0f] context compression — compress(scope=events) + 渲染层 fold"
         thread.events.push(mkTextEvent(i));
       }
 
-      const out = await dispatchToolCall(thread, {
-        id: "call_compress_events_persist",
-        name: "compress",
-        arguments: {
-          scope: "events",
-          summary: "persisted fold test",
-        },
-      });
+      const out = await dispatchToolCall(thread, compressCall("call_compress_events_persist", {
+        scope: "events",
+        summary: "persisted fold test",
+      }));
       const parsed = JSON.parse(out);
       expect(parsed.ok).toBe(true);
       const summaryId = parsed.summary_event_id as string;
@@ -229,15 +234,11 @@ describe("[p0f] context compression — compress(scope=events) + 渲染层 fold"
       "e_text_009",
     ];
 
-    const out = await dispatchToolCall(thread, {
-      id: "call_compress_events_targets",
-      name: "compress",
-      arguments: {
-        scope: "events",
-        summary: "explicit 5-event fold",
-        target_event_ids: targetIds,
-      },
-    });
+    const out = await dispatchToolCall(thread, compressCall("call_compress_events_targets", {
+      scope: "events",
+      summary: "explicit 5-event fold",
+      target_event_ids: targetIds,
+    }));
     const parsed = JSON.parse(out);
     expect(parsed.ok).toBe(true);
     expect(parsed.folded_count).toBe(5);
@@ -257,14 +258,10 @@ describe("[p0f] context compression — compress(scope=events) + 渲染层 fold"
     }
     const snapshotLen = thread.events.length;
 
-    const out = await dispatchToolCall(thread, {
-      id: "call_compress_events_missing_summary",
-      name: "compress",
-      arguments: {
-        scope: "events",
-        // summary 故意缺失
-      },
-    });
+    const out = await dispatchToolCall(thread, compressCall("call_compress_events_missing_summary", {
+      scope: "events",
+      // summary 故意缺失
+    }));
     const parsed = JSON.parse(out);
     expect(parsed.ok).toBe(false);
     expect(parsed.tool).toBe("compress");
@@ -282,15 +279,11 @@ describe("[p0f] context compression — compress(scope=events) + 渲染层 fold"
     }
     const snapshotLen = thread.events.length;
 
-    const out = await dispatchToolCall(thread, {
-      id: "call_compress_events_noncontiguous",
-      name: "compress",
-      arguments: {
-        scope: "events",
-        summary: "should fail",
-        target_event_ids: ["e_text_001", "e_text_002", "e_text_005"], // 跳跃,非连续
-      },
-    });
+    const out = await dispatchToolCall(thread, compressCall("call_compress_events_noncontiguous", {
+      scope: "events",
+      summary: "should fail",
+      target_event_ids: ["e_text_001", "e_text_002", "e_text_005"], // 跳跃,非连续
+    }));
     const parsed = JSON.parse(out);
     expect(parsed.ok).toBe(false);
     expect(parsed.error).toContain("连续");
@@ -307,14 +300,10 @@ describe("[p0f] context compression — compress(scope=events) + 渲染层 fold"
     }
     const snapshotLen = thread.events.length;
 
-    const out = await dispatchToolCall(thread, {
-      id: "call_compress_events_under_capacity",
-      name: "compress",
-      arguments: {
-        scope: "events",
-        summary: "too small",
-      },
-    });
+    const out = await dispatchToolCall(thread, compressCall("call_compress_events_under_capacity", {
+      scope: "events",
+      summary: "too small",
+    }));
     const parsed = JSON.parse(out);
     expect(parsed.ok).toBe(false);
     expect(parsed.error).toContain("无中段可 fold");

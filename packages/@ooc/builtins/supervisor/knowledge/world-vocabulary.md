@@ -26,13 +26,16 @@ activates_on:
 | **method_exec** | 调用某个 method 时产生的临时 form；累积参数后提交 | 由 `exec` 自动产生 |
 | **peer Object window** | 同 stone 的 sibling / level-1 children Object，**自动作为 first-class ContextWindow 注入到我的 contextWindows 中**，可直接 exec 其 object method | id = `<objectId>`，type = `<objectId>`，method 集合为该对象 `executable/index.ts` 中声明的 method |
 
-顶层全局 method（do / talk / program / plan / todo / end / open_file / open_knowledge /
-create_object / write_file …）挂在每个 thread 隐含的 **root window** 上——没有单独的"command 窗口"。
+method 按 Object/Agent/组合分布、不堆在一个 root window 上：agency（do/talk/plan/todo/end）在我的
+**self 窗**（agent 基类 `_builtin/agent`）；工具方法在我持有的**成员对象窗**（filesystem 的
+open_file/write_file/glob/grep、terminal 的 program、world 的 create_object、knowledge_base 的
+open_knowledge）。没有单独的"command 窗口"。
 
-作用在 window 上的稳定 tool 原语共 **4 个**（`OOC_TOOLS`）：`exec`（在某 window 上调一条 method，
-缺省 window = root）/ `close` / `wait`，外加 `compress`（管理 context）。`method_exec` form 上另有
-`refine` / `submit`（同样经 exec 调用）累积并提交参数。各 window 还有自己的 method（例如 talk 上有
-`say`，peer Object window 上就是它声明的 object method）。
+作用在 window 上的稳定 tool 原语共 **3 个**（`OOC_TOOLS`）：`exec`（在某 window 上调一条 method，
+缺省 window = 我自己的 self 窗）/ `close` / `wait`。`compress`（折叠窗口 / 事件流以省 token）与 `expand`
+不是原语，而是**经 exec 调用的通用展示方法**（`exec(method="compress", args={scope,...})`），与 file 窗的
+set_viewport 同类。`method_exec` form 上另有 `refine` / `submit`（同样经 exec 调用）累积并提交参数。各
+window 还有自己的 method（例如 talk 上有 `say`，peer Object window 上就是它声明的 object method）。
 
 > **peer exec vs talk 的边界**：
 > - 同 stone peer（我身边的 sibling / children）：默认直接 `exec(window_id="<objectId>", method="...")`
