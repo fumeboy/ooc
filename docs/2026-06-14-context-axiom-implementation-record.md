@@ -37,8 +37,8 @@ commit `749c80f6`。推论二：compress 是"调整信息展示"的方法（与 
 
 | # | 事项 | 状态 | 卡点 |
 |---|---|---|---|
-| **1** | **会话内容双渲**（talk/do 窗 `<transcript>` 与原生事件/function_call 重复同一消息全文） | **未做** | **设计抉择：会话内容"谁渲一次"** —— 详见第三节 |
-| 2 | transcript 包成"只挂 compress 的句柄窗"（S3 句柄部分） | 未做 | 与 #1 同一改动单元；S2 已让 compress-events 经 exec 有家，故句柄现在纯为一致性 + #1 去重载体 |
+| **1** | **会话内容双渲**（talk/do 窗 `<transcript>` 与原生事件/function_call 重复同一消息全文） | **方案 B 已定，待实现** | 已定：会话留 message 流、talk/do 窗退句柄（用户拍板，因 LLM 标准输入/attention）—— 详见第三节 |
+| 2 | transcript 包成"只挂 compress 的句柄窗"（S3 句柄部分） | 待实现 | 与 #1 同一改动单元；会话归 talk 窗（句柄）、动作日志归 transcript 句柄窗，都在 message 流、XML 只留句柄 |
 | 3 | `open_knowledge` 在 `knowledge_base`（成员）与 `knowledge`（打开的知识窗）两个 class 重复（C1） | 未做 | 轻量；旧 root.open_knowledge 同时落到知识窗。可顺手收 |
 | 4 | do → talk（do = talk(target=self-new)，推论一/S4） | 未做 | **xlarge + 10 个未决设计抉择**（跨 session self-fork？调度同 job vs 跨 job？回报路径统一？share_windows？）。map 见 workflow `axiom-impl-surface-map`。本会话无 do 窗故 context.xml 不显 |
 
@@ -96,20 +96,27 @@ LLM 输入项实测结构（无原生 role=user/assistant 轮，会话全走 sys
 - **优点**：talk 窗成纯方法挂载点（与 transcript 句柄窗的公理完全一致——内容外移到事件流）；线性流是 LLM 熟悉的顺序历史。
 - **代价**：多 peer 会话在事件流里交织、不按 peer 分组；丢"干净会话视图"，多对象协作时 LLM 要自己分辨消息归属。
 
-### 我的倾向（待你拍）
+### 决定：方案 B（用户 2026-06-14 拍板，决定性因素 = LLM 标准输入/attention）
 
-倾向 **方案 A**：talk/do 窗 transcript 为 canonical 会话视图，事件流里的 inbox/say **去重为标记**。理由：
-1. 与第一公理「窗是 context 的单元、信息只渲一次」最一致——会话天然属于"与某 peer 的那个窗"。
-2. 多 peer 分组消歧，是 OOC 多对象协作的刚需；线性事件流做不到。
-3. 事件流保留 LLM 的**非会话动作**（grep/program/create_object 调用与结果）——它的"操作历史"，与"会话内容"职责分离、互不重复。
+> 起初倾向 A（talk 窗 transcript canonical、事件去标记），但**被用户否定**：thread.events 本就处理成 LLM Input 的
+> **message items**（`[2]` inbox 事件、`[5]` say function_call 都是独立 item，被 LLM 标准 attention 覆盖）。
+> 若把会话内容留在 context XML（A）而从 message 流剥掉，等于**埋进大 system blob、与 LLM 标准输入不匹配、易丢 attention**。
+> 故反向：**会话内容只留 message 流，context XML 里的 talk/do 窗退成句柄**。
 
-**但有一个边角要在方案 A 内定清**：`say` function_call 既是"动作"又携"内容"。建议：function_call 保留（动作可见），但去重规则是"消息正文只在 transcript 出现一次"——say 的 args 在事件侧可缩为引用。这条细则决定去重是否彻底。
+**复核**：会话内容**已经在 message 流里**（`[2]` 入站事件全文、`[5]` 出站 say function_call 全文）。真正冗余的是
+`[0]` context XML 里 talk 窗 `<transcript>` 的**内联拷贝**。去掉它即同时满足：①去双渲；②匹配 LLM 标准输入、保 attention；
+③契合第一公理（talk 窗内容外移到 message 流，窗=方法挂载点+在场，与推论 3 transcript 句柄窗完全一致）。
 
-### 落地形态（方案 A 选定后）
+**职责切分（B 的本质）**：
+- **context XML（单条 system 环境快照，作引用读）**：窗结构 + 方法契约 + 非会话状态。**不含会话内容**。
+- **message-item 流（原生顺序，重点 attend）**：会话（入站事件 / 出站 say function_call）+ 动作（grep/program 等 function_call+output）。
 
-1. `processEventToItems`：`inbox_message_arrived` 不再吐全文，改吐"已投递 talk 窗 X（msg_id）"标记；被 talk/do 窗 transcript 覆盖的消息正文从事件项剔除。
-2. talk/do 窗 transcript 保持现状（canonical 会话视图）。
-3. 顺势把 transcript（线程自身 tool-call/动作日志）也按推论 3 包成句柄窗（#2）——会话内容归 talk 窗、动作日志归 transcript 窗，各渲一次。
-4. 测试：新增「同一 msg_id 在 LLM 输入只出现一次」的断言（锁死公理），reframe 依赖 inbox 全文的现有测试。
+### 落地形态（方案 B）
 
-> 风险：改 `processEventToItems` 影响每轮 LLM 输入结构，须真实会话回归 + 验证不退化对话质量（prompt-cache 结构稳定性）。
+1. talk/do 窗的 readable hook（`renderDoWindow`/`renderTalkWindow`）**不再内联 `<transcript><message>` 正文**，改渲句柄：peer/target + status + 轻量 meta（消息条数 / 最近一条 from 谁）+ 方法（say/wait/close/compress）。
+2. 会话内容保持在 message 流（`processEventToItems` 的 inbox 事件 + say function_call 不变）——**这是被 attend 的 canonical 副本**。
+3. 顺势把线程自身动作日志（transcript）按推论 3 包成**句柄窗**（#2）：会话+动作都在 message 流、context XML 只留句柄，各渲一次。
+4. `set_transcript_window`（per-talk-窗 viewport）与事件流 compress（折叠中段）职责重叠——B 下 talk 窗无内联 transcript，viewport 失去对象；待评估是否并入 events-compress（一处控历史长度）。
+5. 测试：新增「同一 msg_id / 同一消息正文在 LLM 输入只出现一次」断言（锁死公理）；reframe 依赖 talk 窗内联 transcript 的现有测试。
+
+> 风险：改 talk/do readable + 真实会话回归，验证句柄化后 LLM 仍能正确跟进多 peer 会话（attention 反而应更好——内容在原生 message 流而非 XML blob）。prompt-cache：context XML 变小且更稳定（不随每条消息膨胀），利于缓存。
