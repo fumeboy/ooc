@@ -19,6 +19,16 @@ import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import "@ooc/builtins/search";
 import "@ooc/builtins/file";
 
+// 缺参时的 refine-hint 文案——与原 root 同名方法逐字对齐，迁到成员对象后不丢 agent 引导。
+const GREP_TIP = `grep 按文件内容 regex 搜索，结果作为 search_window。
+参数：pattern（必填，regex）、path（可选，目录或文件）、glob（可选，文件名过滤）、case_insensitive（可选）。`;
+const GLOB_TIP = `glob 按文件名通配符查找文件，结果作为 search_window。
+参数：pattern（必填，glob 通配符，如 src/**/*.ts）、cwd（可选，搜索根目录）。`;
+const OPEN_FILE_TIP = `open_file 把文件内容作为 file_window 引入 context。
+参数：path（必填，文件路径）、lines（可选 [start,end]）、columns（可选 [start,end]）。`;
+const WRITE_FILE_TIP = `write_file 整文件覆盖。用于新建文件或完整重写；改已有文件局部请用 file_window.edit。
+参数：path（必填）、content（必填，完整文件内容，可为空串）。`;
+
 const grepMethod: ObjectMethod = {
   description: "Search file contents by regex; results appear as a search window.",
   intents: ["grep"],
@@ -32,7 +42,11 @@ const grepMethod: ObjectMethod = {
   },
   onFormChange(_change, { args }) {
     const hasPattern = typeof args.pattern === "string" && args.pattern.length > 0;
-    return { intents: [{ name: "grep" }], quick_exec_submit: hasPattern };
+    return {
+      tip: hasPattern ? `grepping for ${args.pattern}...` : GREP_TIP,
+      intents: [{ name: "grep" }],
+      quick_exec_submit: hasPattern,
+    };
   },
   exec: makeRootDelegator({ method: "grep", constructorKind: "search", objectLabel: "search_window", formMethod: "grep" }),
 };
@@ -48,7 +62,11 @@ const globMethod: ObjectMethod = {
   },
   onFormChange(_change, { args }) {
     const hasPattern = typeof args.pattern === "string" && args.pattern.length > 0;
-    return { intents: [{ name: "glob" }], quick_exec_submit: hasPattern };
+    return {
+      tip: hasPattern ? `globbing ${args.pattern}...` : GLOB_TIP,
+      intents: [{ name: "glob" }],
+      quick_exec_submit: hasPattern,
+    };
   },
   exec: makeRootDelegator({ method: "glob", constructorKind: "search", objectLabel: "search_window", formMethod: "glob" }),
 };
@@ -65,7 +83,11 @@ const openFileMethod: ObjectMethod = {
   },
   onFormChange(_change, { args }) {
     const hasPath = typeof args.path === "string" && args.path.length > 0;
-    return { intents: [{ name: "open_file" }], quick_exec_submit: hasPath };
+    return {
+      tip: hasPath ? `Opening file ${args.path}...` : OPEN_FILE_TIP,
+      intents: [{ name: "open_file" }],
+      quick_exec_submit: hasPath,
+    };
   },
   exec: makeRootDelegator({ method: "open_file", constructorKind: "file", objectLabel: "file_window", formMethod: "open_file" }),
 };
@@ -81,7 +103,11 @@ const writeFileMethod: ObjectMethod = {
   },
   onFormChange(_change, { args }) {
     const ready = typeof args.path === "string" && args.path.length > 0 && typeof args.content === "string";
-    return { intents: [{ name: "write_file" }], quick_exec_submit: ready };
+    return {
+      tip: ready ? `Writing ${args.path}...` : WRITE_FILE_TIP,
+      intents: [{ name: "write_file" }],
+      quick_exec_submit: ready,
+    };
   },
   exec: makeRootDelegator({ method: "write_file", constructorKind: "file", objectLabel: "file_window", formMethod: "write_file" }),
 };

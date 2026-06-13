@@ -1,8 +1,11 @@
 import { describe, it, expect } from "bun:test";
 import { ROOT_METHODS, getOpenableMethods, deriveRootIntentPaths } from "../windows";
-import { programMethod } from "@ooc/builtins/root/executable/method.program";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { Intent } from "@ooc/core/_shared/types/intent.js";
 import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
+
+// program 工具已从 root 移到 terminal 成员对象——经 registry 解析 terminal.program 测它。
+const programMethod = builtinRegistry.resolveMethod("terminal", "program")!;
 
 /**
  * Simulate onFormChange for a method and return the MethodExecuteForm.
@@ -21,16 +24,17 @@ function callFormChange(
 }
 
 describe("executable methods", () => {
-  it("should have method table with all methods", () => {
+  it("should have method table with agency + misc methods (file/program tools moved to members)", () => {
     expect(Object.keys(ROOT_METHODS)).toContain("talk");
     expect(Object.keys(ROOT_METHODS)).toContain("do");
-    expect(Object.keys(ROOT_METHODS)).toContain("program");
     expect(Object.keys(ROOT_METHODS)).toContain("plan");
     expect(Object.keys(ROOT_METHODS)).toContain("todo");
     expect(Object.keys(ROOT_METHODS)).toContain("end");
+    // 文件/程序工具已移出 root → filesystem/terminal 成员对象（消除 god-object 冗余）。
+    expect(Object.keys(ROOT_METHODS)).not.toContain("program");
+    expect(Object.keys(ROOT_METHODS)).not.toContain("grep");
+    expect(Object.keys(ROOT_METHODS)).not.toContain("open_file");
     expect(Object.keys(ROOT_METHODS)).not.toContain("defer");
-    expect(Object.keys(ROOT_METHODS)).not.toContain("return");
-    expect(Object.keys(ROOT_METHODS)).not.toContain("compact");
   });
 
   it("should return sorted openable methods", () => {
@@ -38,8 +42,9 @@ describe("executable methods", () => {
     expect(Array.isArray(openable)).toBe(true);
     expect(openable.length).toBeGreaterThan(0);
     expect(openable).toContain("talk");
-    expect(openable).toContain("program");
     expect(openable).toContain("todo");
+    expect(openable).not.toContain("program"); // 移到 terminal 成员
+    expect(openable).not.toContain("grep"); // 移到 filesystem 成员
     expect(openable).not.toContain("defer");
   });
 
@@ -47,24 +52,19 @@ describe("executable methods", () => {
     for (const entry of Object.values(ROOT_METHODS)) {
       expect("openable" in entry).toBe(false);
     }
-    // new_feat_branch / create_pr_and_invite_reviewers 已移出 root —— 现挂 reflect_request window
-    // （@ooc/core/reflectable/reflect-request），标 for_reflectable 仅 super flow surface。
+    // 文件/程序工具（grep/glob/open_file/write_file/program）移出 root → filesystem/terminal 成员。
+    // new_feat_branch / create_pr_and_invite_reviewers 挂 reflect_request window（reflectable）。
     expect(getOpenableMethods()).toEqual([
       "create_object",
       "do",
       "end",
       "example",
-      "glob",
-      "grep",
       "open_feishu_chat",
       "open_feishu_doc",
-      "open_file",
       "open_knowledge",
       "plan",
-      "program",
       "talk",
       "todo",
-      "write_file",
     ]);
   });
 
@@ -84,12 +84,13 @@ describe("executable methods", () => {
     expect(deriveRootIntentPaths("do", {})).toEqual(expect.arrayContaining(["do", "do.wait"]));
   });
 
-  it("program static intents include program.shell/typescript/javascript", () => {
-    const paths = deriveRootIntentPaths("program", {});
-    expect(paths).toContain("program");
-    expect(paths).toContain("program.shell");
-    expect(paths).toContain("program.typescript");
-    expect(paths).toContain("program.javascript");
+  it("terminal.program static intents include program.shell/typescript/javascript（program 已移到 terminal 成员）", () => {
+    // program 不再是 root intent
+    expect(deriveRootIntentPaths("program", {})).toEqual([]);
+    // 粒度 intent 现属 terminal 成员的 program 方法
+    expect(programMethod.intents).toContain("program.shell");
+    expect(programMethod.intents).toContain("program.typescript");
+    expect(programMethod.intents).toContain("program.javascript");
   });
 
   it("should return empty array for unknown method", () => {

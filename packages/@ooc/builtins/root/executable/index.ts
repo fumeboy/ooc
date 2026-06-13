@@ -7,19 +7,14 @@ import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import { doMethod } from "./method.do.js";
 import { endMethod } from "./method.end.js";
-import { globMethod } from "./method.glob.js";
-import { grepMethod } from "./method.grep.js";
 import {
   openFeishuChatMethod,
   openFeishuDocMethod,
 } from "@ooc/core/extendable/lark/index.js";
-import { openFileMethod } from "./method.open-file.js";
 import { openKnowledgeMethod } from "./method.open-knowledge.js";
 import { planMethod } from "./method.plan.js";
-import { programMethod } from "./method.program.js";
 import { talkMethod } from "./method.talk.js";
 import { todoMethod } from "./method.todo.js";
-import { writeFileMethod } from "./method.write-file.js";
 import { createObjectMethod } from "./method.create-object.js";
 import { exampleMethod } from "./method.example.js";
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
@@ -34,17 +29,15 @@ import "@ooc/builtins/todo";
 export const ROOT_METHODS: Record<string, ObjectMethod> = {
   talk: talkMethod,
   do: doMethod,
-  program: programMethod,
   plan: planMethod,
   todo: todoMethod,
   end: endMethod,
-  open_file: openFileMethod,
   open_knowledge: openKnowledgeMethod,
-  write_file: writeFileMethod,
-  glob: globMethod,
-  grep: grepMethod,
-  // new_feat_branch / create_pr_and_invite_reviewers 已移出 root —— 现挂在 reflect_request
-  // window（@ooc/core/reflectable/reflect-request），标 for_reflectable 仅 super flow surface。
+  // 文件/程序工具（grep / glob / open_file / write_file / program）已移出 root：它们的
+  // 唯一家是 agent 组合持有的 tool-object 成员 —— filesystem（grep/glob/open_file/write_file）
+  // 与 terminal（program）。agent 经成员窗 exec(filesystem,"grep") / exec(terminal,"program")。
+  // 消除 root↔成员 冗余；root 不再是文件/程序工具的 god-object。
+  // new_feat_branch / create_pr_and_invite_reviewers 挂在 reflect_request window（reflectable）。
   create_object: createObjectMethod,
   example: exampleMethod,
   open_feishu_chat: openFeishuChatMethod,

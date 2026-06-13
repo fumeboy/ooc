@@ -10,8 +10,32 @@ import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { ROOT_METHODS } from "@ooc/builtins/root";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+// side-effect：注册 filesystem / terminal 成员对象的 executable（grep/glob/open_file/write_file/program）。
+import "@ooc/builtins/filesystem";
+import "@ooc/builtins/terminal";
 import type { ObjectMethod } from "@ooc/core/executable/windows/_shared/method-types";
 import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
+
+/**
+ * 文件/程序工具已从 root 移到 agent 组合持有的 tool-object 成员上：
+ * filesystem（grep/glob/open_file/write_file）与 terminal（program）。
+ * 这些方法的 onFormChange 协议不随归属改变——经 registry 解析其成员对象后照测 refine-hint。
+ */
+const MEMBER_OWNER: Record<string, string> = {
+  write_file: "filesystem",
+  open_file: "filesystem",
+  grep: "filesystem",
+  glob: "filesystem",
+  program: "terminal",
+};
+
+/** 先查 ROOT_METHODS（agency/misc 方法），再回退到成员对象（文件/程序工具）。 */
+function resolveTargetMethod(name: string): ObjectMethod | undefined {
+  const owner = MEMBER_OWNER[name];
+  if (owner) return builtinRegistry.resolveMethod(owner, name);
+  return ROOT_METHODS[name];
+}
 
 const FORMS_KNOWLEDGE = readFileSync(
   join(dirname(Bun.resolveSync("@ooc/builtins/root/package.json", process.cwd())), "knowledge", "forms.md"),
@@ -55,8 +79,8 @@ const TARGETS = [
 
 function buildCases(): CmdCase[] {
   return TARGETS.map((name) => {
-    const cmd = ROOT_METHODS[name];
-    if (!cmd) throw new Error(`ROOT_METHODS missing: ${name}`);
+    const cmd = resolveTargetMethod(name);
+    if (!cmd) throw new Error(`method not resolvable (root or member): ${name}`);
     return { name, cmd, emptyArgs: {} };
   });
 }

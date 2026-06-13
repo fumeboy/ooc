@@ -15,10 +15,36 @@ import { createStoneObject, createPoolObject, poolKnowledgeDir } from "../../per
 import { buildContext } from "../../thinkable/context";
 import { clearKnowledgeLoaderCache } from "../../thinkable/knowledge";
 import { makeThread } from "../../__tests__/make-thread";
+import type { ContextWindow } from "../windows/_shared/types";
 
 /**
  * Step 2 各 window 类型的端到端最小覆盖：创建 → 后续命令 → close。
  */
+
+/**
+ * 文件/程序工具方法（open_file / program 等）已从 root 移到 agent 组合持有的
+ * tool-object 成员上：filesystem（grep/glob/open_file/write_file）与 terminal（program）。
+ * dispatch 经成员窗路由，故 thread.contextWindows 须含对应成员窗 requireParent 才命中。
+ */
+const FS_WIN: ContextWindow = {
+  id: "filesystem",
+  class: "filesystem",
+  parentWindowId: "root",
+  title: "member: filesystem",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+} as ContextWindow;
+
+const TERMINAL_WIN: ContextWindow = {
+  id: "terminal",
+  class: "terminal",
+  parentWindowId: "root",
+  title: "member: terminal",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+} as ContextWindow;
 
 describe("Step 2 window lifecycles", () => {
   it("talk_window: root.talk creates window; say delivers cross-object; close releases", async () => {
@@ -70,13 +96,20 @@ describe("Step 2 window lifecycles", () => {
     }
   });
 
-  it("program_window: root.program runs first exec; window.exec appends to history", async () => {
-    const thread = makeThread({ id: "t_root" });
+  it("program_window: terminal.program runs first exec; window.exec appends to history", async () => {
+    // program 已从 root 移到 agent 组合持有的 terminal tool-object 成员上；
+    // 经 terminal 成员窗 openMethodExec("program") 走真实派发链路。
+    const thread = makeThread({ id: "t_root", extraWindows: [TERMINAL_WIN] });
 
-    await execRootMethod("program", {
+    const mgr0 = WindowManager.fromThread(thread, builtinRegistry);
+    await mgr0.openMethodExec({
       thread,
+      parentWindowId: "terminal",
+      method: "program",
+      title: "first",
       args: { language: "shell", code: "echo first" },
     });
+    thread.contextWindows = mgr0.toData();
     const programWindow = thread.contextWindows.find(
       (w): w is ProgramWindow => w.class === "program",
     );
@@ -123,10 +156,12 @@ describe("Step 2 window lifecycles", () => {
     try {
       const file = join(tempRoot, "hello.txt");
       await writeFile(file, "alpha\nbeta\ngamma\n");
-      const thread = makeThread({ id: "t_root" });
+      // open_file 已从 root 移到 filesystem 成员上：经 filesystem 成员窗 dispatch。
+      const thread = makeThread({ id: "t_root", extraWindows: [FS_WIN] });
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
       const opened = await mgr.openMethodExec({
         thread,
+        parentWindowId: "filesystem",
         method: "open_file",
         title: "read hello",
         args: { path: file },

@@ -365,12 +365,36 @@ void mkdir;
 
 import { dispatchToolCall } from "../tools";
 
+/**
+ * filesystem 成员窗 —— grep/glob/open_file/write_file 已从 root 移到 agent 组合持有的
+ * filesystem tool-object 成员上。dispatch 经 exec(window_id="filesystem", method) 路由，
+ * 故 thread.contextWindows 须含此成员窗 requireParent 才命中。
+ */
+const FS_WIN = {
+  id: "filesystem",
+  class: "filesystem",
+  parentWindowId: "root",
+  title: "member: filesystem",
+  status: "open" as const,
+  createdAt: Date.now(),
+  isMemberWindow: true,
+};
+
+/** 幂等地把 filesystem 成员窗注入 thread（dispatch 前置）。 */
+function ensureFsWindow(thread: ReturnType<typeof makeThread>) {
+  if (!thread.contextWindows.some((w) => w.id === FS_WIN.id)) {
+    thread.contextWindows = [...thread.contextWindows, { ...FS_WIN, createdAt: Date.now() } as ContextWindow];
+  }
+}
+
 async function dispatchWriteFile(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
+  ensureFsWindow(thread);
   return dispatchToolCall(thread, {
     id: `call_${Math.random().toString(36).slice(2, 8)}`,
     name: "exec",
     arguments: {
       title: "write file",
+      window_id: "filesystem",
       method: "write_file",
       args,
     },
@@ -482,11 +506,13 @@ describe("U3: root.write_file", () => {
 import { dirname } from "node:path";
 
 async function dispatchGlob(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
+  ensureFsWindow(thread);
   return dispatchToolCall(thread, {
     id: `call_${Math.random().toString(36).slice(2, 8)}`,
     name: "exec",
     arguments: {
       title: "glob",
+      window_id: "filesystem",
       method: "glob",
       args,
     },
@@ -647,11 +673,13 @@ describe("U4: root.glob + search_window.open_match", () => {
 import { runJsFallback } from "@ooc/builtins/root/executable/method.grep.impl";
 
 async function dispatchGrep(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
+  ensureFsWindow(thread);
   return dispatchToolCall(thread, {
     id: `call_${Math.random().toString(36).slice(2, 8)}`,
     name: "exec",
     arguments: {
       title: "grep",
+      window_id: "filesystem",
       method: "grep",
       args,
     },

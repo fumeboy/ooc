@@ -19,6 +19,40 @@ import { createStoneObject, createPoolObject, poolKnowledgeDir } from "../../../
 import { buildContext } from "../../../../thinkable/context";
 import { clearKnowledgeLoaderCache } from "../../../../thinkable/knowledge";
 import { makeThread } from "../../../../__tests__/make-thread";
+import type { ContextWindow } from "../types";
+
+/**
+ * open_file 已从 root 移到 agent 组合持有的 filesystem tool-object 成员上：
+ * 经 filesystem 成员窗 openMethodExec("open_file") 走真实派发链路。
+ */
+const FS_WIN: ContextWindow = {
+  id: "filesystem",
+  class: "filesystem",
+  parentWindowId: "root",
+  title: "member: filesystem",
+  status: "open",
+  createdAt: Date.now(),
+  isMemberWindow: true,
+} as ContextWindow;
+
+/** 经 filesystem 成员窗 dispatch open_file（替代旧 execRootMethod("open_file")）。 */
+async function openFileViaFilesystem(
+  thread: ReturnType<typeof makeThread>,
+  args: Record<string, unknown>,
+) {
+  if (!thread.contextWindows.some((w) => w.id === FS_WIN.id)) {
+    thread.contextWindows = [...thread.contextWindows, { ...FS_WIN, createdAt: Date.now() }];
+  }
+  const mgr = WindowManager.fromThread(thread, builtinRegistry);
+  await mgr.openMethodExec({
+    thread,
+    parentWindowId: "filesystem",
+    method: "open_file",
+    title: (args.title as string | undefined) ?? "open file",
+    args,
+  });
+  thread.contextWindows = mgr.toData();
+}
 
 describe("viewport: file_window integration", () => {
   it("open_file 默认填 viewport 0-200/0-200", async () => {
@@ -27,7 +61,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "x.txt");
       await writeFile(file, "hello\n");
       const thread = makeThread({ id: "t" });
-      await execRootMethod("open_file", { thread, args: { path: file, title: "x" } });
+      await openFileViaFilesystem(thread, { path: file, title: "x" });
       const fw = thread.contextWindows.find((w): w is FileWindow => w.class === "file");
       expect(fw).toBeDefined();
       expect(fw!.state!.viewport).toEqual({
@@ -47,7 +81,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "small.txt");
       await writeFile(file, "alpha\nbeta\ngamma\n");
       const thread = makeThread({ id: "t" });
-      await execRootMethod("open_file", { thread, args: { path: file, title: "s" } });
+      await openFileViaFilesystem(thread, { path: file, title: "s" });
       const messages = await buildContext(thread);
       const xml = messages[0]?.content ?? "";
       expect(xml).toContain("alpha");
@@ -66,7 +100,7 @@ describe("viewport: file_window integration", () => {
       const content = Array.from({ length: 300 }, (_, i) => `LINE_${i}`).join("\n");
       await writeFile(file, content);
       const thread = makeThread({ id: "t" });
-      await execRootMethod("open_file", { thread, args: { path: file, title: "b" } });
+      await openFileViaFilesystem(thread, { path: file, title: "b" });
       const messages = await buildContext(thread);
       const xml = messages[0]?.content ?? "";
       expect(xml).toContain("LINE_0");
@@ -84,7 +118,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "f.txt");
       await writeFile(file, "x\n".repeat(500));
       const thread = makeThread({ id: "t" });
-      await execRootMethod("open_file", { thread, args: { path: file, title: "f" } });
+      await openFileViaFilesystem(thread, { path: file, title: "f" });
       const fw = thread.contextWindows.find((w): w is FileWindow => w.class === "file")!;
 
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
@@ -116,7 +150,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "f.txt");
       await writeFile(file, "a\n");
       const thread = makeThread({ id: "t" });
-      await execRootMethod("open_file", { thread, args: { path: file, title: "f" } });
+      await openFileViaFilesystem(thread, { path: file, title: "f" });
       const fw = thread.contextWindows.find((w): w is FileWindow => w.class === "file")!;
       const origViewport = { ...fw.state!.viewport! };
 
@@ -149,7 +183,7 @@ describe("viewport: file_window integration", () => {
       const file = join(tempRoot, "wide.txt");
       await writeFile(file, "x".repeat(500) + "\n");
       const thread = makeThread({ id: "t" });
-      await execRootMethod("open_file", { thread, args: { path: file, title: "w" } });
+      await openFileViaFilesystem(thread, { path: file, title: "w" });
       const messages = await buildContext(thread);
       const xml = messages[0]?.content ?? "";
       expect(xml).toContain("…(+300 more)");
