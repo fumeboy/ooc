@@ -90,3 +90,17 @@ export function deriveRootIntentPaths(
 }
 
 builtinRegistry.registerExecutable("root", { methods: ROOT_METHODS });
+
+// OOC Agent 基类能力：agency（talk/do/plan/todo/end）显式注册到 _builtin/agent。
+// 具体 agent（supervisor）经 ooc.class 继承 _builtin/agent → 从 agent 类（而非泛 root）拿到 agency，
+// 落实「Agent class 提供 talk/do」。本步**加法**——root 暂保留同名以兼容 exec 默认 root 路由；
+// 下一步（exec 默认改 agent self + 从 root 移除 agency）才完成命令面迁移。复用同一 method 对象。
+builtinRegistry.registerExecutable("_builtin/agent", {
+  methods: {
+    talk: talkMethod,
+    do: doMethod,
+    plan: planMethod,
+    todo: todoMethod,
+    end: endMethod,
+  },
+});

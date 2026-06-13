@@ -93,6 +93,10 @@ const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
   // （talk/do/...），只有自己的工具方法。Object/Agent 边界在类型层落实。
   ["filesystem", { methods: {}, parentClass: null }],
   ["terminal", { methods: {}, parentClass: null }],
+  // _builtin/agent —— OOC Agent 基类：承载 agency（talk/do/plan/todo/end），由 root/executable
+  // 在 load 期 registerExecutable 注入。具体 agent（supervisor）经 ooc.class 继承它。
+  // 隐式继承 root（拿 create_object/open_knowledge/example/feishu 等残留 misc，过渡态）。
+  ["_builtin/agent", { methods: {} }],
 ];
 
 export class ObjectRegistry {
@@ -292,6 +296,8 @@ export class ObjectRegistry {
   assertAllObjectDefinitionsRegistered(): void {
     const missing: string[] = [];
     for (const [type, def] of this.store) {
+      // _builtin/<id> 是继承类（agency / 成员声明等的载体），不作 window 渲染——不要求 readable hook。
+      if (type.startsWith("_builtin/")) continue;
       if (!def.readable) missing.push(type);
     }
     if (missing.length > 0) {
