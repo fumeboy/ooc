@@ -1,5 +1,5 @@
 {
-  "name": "@ooc/builtins/supervisor",
+  "name": "@ooc/builtins/agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,9 @@
     "./*.tsx": "./*.tsx"
   },
   "ooc": {
-    "objectId": "supervisor",
+    "objectId": "_builtin/agent",
     "kind": "class",
     "type": "agent",
-    "class": "_builtin/agent",
-    "instantiate_with_new_world": true
+    "members": ["filesystem", "terminal"]
   }
 }

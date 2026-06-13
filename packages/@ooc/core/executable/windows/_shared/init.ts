@@ -31,7 +31,6 @@ import {
   deriveStoneFromThread,
   discoverStoneHierarchicalPeers,
   isBuiltinObjectId,
-  readStoneClass,
   resolveBuiltinReadDir,
   stoneDir,
   type StoneObjectRef,
@@ -267,34 +266,47 @@ export async function injectPeerWindowsIfObjectThread(thread: ThreadContext): Pr
 
 // ── Member windows (agent 组合声明持有的 tool-object 成员) ──────────────────
 
+/** 读一个 stone/class 的 package.json，取 `ooc.members` 与 `ooc.class`（父类）。读不到返回 {}。 */
+async function readPkgMembersAndClass(
+  ref: StoneObjectRef,
+): Promise<{ members?: string[]; parentClass?: string }> {
+  const dir = resolveBuiltinReadDir(ref) ?? stoneDir(ref);
+  try {
+    const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8")) as {
+      ooc?: { members?: unknown; class?: unknown };
+    };
+    const m = pkg?.ooc?.members;
+    const c = pkg?.ooc?.class;
+    return {
+      members: Array.isArray(m) ? m.filter((x): x is string => typeof x === "string" && x.length > 0) : undefined,
+      parentClass: typeof c === "string" && c.length > 0 ? c : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 /**
  * 读某对象**声明的成员**（组合：Object 像持有 data 一样持有 objects）。
  *
- * 来源优先级：实例自身 package.json 的 `ooc.members` → 其 class（`ooc.class`）的
- * package.json `ooc.members`。成员声明在 class 上、实例经类链继承（与 method/knowledge 一致）：
- * 如 supervisor 实例 → `_builtin/supervisor` class 声明 `members:["filesystem"]`。
+ * 沿 **class 链** 自底向上找首个声明 `ooc.members` 的层（与 method/knowledge 继承一致）：
+ * 实例自身 → 其 `ooc.class` → 该 class 的 `ooc.class` → …。成员声明放在 agent 基类上、
+ * 具体 agent 经链继承：如 supervisor 实例 → `_builtin/supervisor` → `_builtin/agent`
+ * （声明 `members:["filesystem","terminal"]`）。环安全 + 深度上限 16。
  *
- * 返回成员的 **type/id 串**（如 "filesystem"）；读不到任何成员返回 []。
+ * 返回成员的 **type/id 串**（如 "filesystem"）；整条链都无声明返回 []。
  */
 async function readDeclaredMembers(ref: StoneObjectRef): Promise<string[]> {
-  const classId = await readStoneClass(ref);
-  const candidates: StoneObjectRef[] = [
-    ref,
-    ...(classId ? [{ baseDir: ref.baseDir, objectId: classId }] : []),
-  ];
-  for (const cand of candidates) {
-    const dir = resolveBuiltinReadDir(cand) ?? stoneDir(cand);
-    try {
-      const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8")) as {
-        ooc?: { members?: unknown };
-      };
-      const m = pkg?.ooc?.members;
-      if (Array.isArray(m) && m.length > 0) {
-        return m.filter((x): x is string => typeof x === "string" && x.length > 0);
-      }
-    } catch {
-      // 该候选无 package.json / 无 members → 试下一个
-    }
+  const seen = new Set<string>();
+  let cur: StoneObjectRef | undefined = ref;
+  let depth = 0;
+  while (cur && depth < 16) {
+    if (seen.has(cur.objectId)) break;
+    seen.add(cur.objectId);
+    const { members, parentClass } = await readPkgMembersAndClass(cur);
+    if (members && members.length > 0) return members;
+    cur = parentClass ? { baseDir: ref.baseDir, objectId: parentClass } : undefined;
+    depth++;
   }
   return [];
 }

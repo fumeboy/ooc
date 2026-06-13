@@ -18,8 +18,11 @@ import {
   readExecutableSource,
   readReadable,
   readStoneClass,
+  resolveBuiltinReadDir,
   resolveStoneIdentityRef,
 } from "../../persistable/index.js";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { ThreadContext } from "./index.js";
 import type { ObjectRegistry, ObjectDefinition } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
@@ -31,8 +34,10 @@ import { loadObjectWindow } from "../../runtime/server-loader.js";
 /**
  * 确保 `_builtin/<id>` 框架 class 已注册（供 instance 的 parentClass 链解析）。
  *
- * builtin class（如 supervisor）无 world 内 executable —— 注册为空 methods，缺省隐式继承 root，
- * 让 instance 的方法链 `instance → _builtin/<class> → root` 不断在未注册的 class 上。
+ * builtin class（如 supervisor）无 world 内 executable —— 注册为空 methods。
+ * **多跳链支持**：读该 builtin class 自身 `package.json` 的 `ooc.class`（父类）并设为 parentClass，
+ * 再递归注册祖先——使 `instance → _builtin/supervisor → _builtin/agent → root` 这样的链成立
+ * （无 `ooc.class` → parentClass 缺省 → 隐式 root）。已注册则跳过（幂等 + 环安全）。
  * 非 `_builtin/` 父类（普通 stone class）由各自注册路径负责，这里不处理。
  */
 function ensureBuiltinClassRegistered(
@@ -41,7 +46,20 @@ function ensureBuiltinClassRegistered(
 ): void {
   if (typeof parentClass !== "string" || !parentClass.startsWith("_builtin/")) return;
   if (registry.listRegisteredObjectTypes().includes(parentClass as any)) return;
-  registry.registerNewObjectType(parentClass as any, { methods: {} });
+  // 读该 builtin class 自身的 ooc.class（祖父类），支持 builtin class 多跳继承链。
+  let grandparent: string | undefined;
+  try {
+    const dir = resolveBuiltinReadDir({ objectId: parentClass });
+    if (dir) {
+      const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as { ooc?: { class?: unknown } };
+      const c = pkg?.ooc?.class;
+      if (typeof c === "string" && c.length > 0) grandparent = c;
+    }
+  } catch {
+    // 无 package.json / 无 ooc.class → parentClass 缺省 → 隐式 root
+  }
+  registry.registerNewObjectType(parentClass as any, { methods: {}, parentClass: grandparent });
+  if (grandparent) ensureBuiltinClassRegistered(registry, grandparent); // 递归注册祖先 builtin class
 }
 
 /**

@@ -75,14 +75,17 @@ export async function runControlPlane(): Promise<StoryResult> {
         ok, `methods=${Object.keys(def.methods ?? {}).join(",")}`);
     }
 
-    // TC-COMP-02: supervisor 类声明持有 filesystem 成员（ooc.members）
+    // TC-COMP-02: agent 基类声明成员 + supervisor 经 ooc.class 继承 agent（Object/Agent split 结构）
     {
-      const dir = resolveBuiltinReadDir({ objectId: "_builtin/supervisor" });
-      let members: unknown;
-      try { members = JSON.parse(readFileSync(join(dir!, "package.json"), "utf8"))?.ooc?.members; } catch { /* */ }
+      const agentDir = resolveBuiltinReadDir({ objectId: "_builtin/agent" });
+      const supDir = resolveBuiltinReadDir({ objectId: "_builtin/supervisor" });
+      let members: unknown; let supClass: unknown;
+      try { members = JSON.parse(readFileSync(join(agentDir!, "package.json"), "utf8"))?.ooc?.members; } catch { /* */ }
+      try { supClass = JSON.parse(readFileSync(join(supDir!, "package.json"), "utf8"))?.ooc?.class; } catch { /* */ }
       const m = Array.isArray(members) ? (members as string[]) : [];
-      rec.ok("TC-COMP-02", "supervisor 类声明持有 filesystem + terminal 成员（ooc.members）",
-        m.includes("filesystem") && m.includes("terminal"), `members=${JSON.stringify(members)}`);
+      rec.ok("TC-COMP-02", "agent 基类声明 filesystem+terminal 成员，supervisor 经 ooc.class 继承 _builtin/agent",
+        m.includes("filesystem") && m.includes("terminal") && supClass === "_builtin/agent",
+        `agentMembers=${JSON.stringify(members)} supClass=${JSON.stringify(supClass)}`);
     }
 
     // TC-COMP-03: 组合注入 —— supervisor thread 经类声明注入两个 member 窗（非持久化）
