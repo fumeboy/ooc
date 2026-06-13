@@ -1,27 +1,29 @@
-# 设计裁决：ContextWindow = 方法挂载点（第一公理）+ 三条收敛
+# 设计裁决：ContextWindow 的本质（第一公理）+ 三条收敛
 
 > 2026-06-14 · Supervisor 裁决 · status: 方向已定，待分阶段实现（**勿直接在 main 上手术**）
-> 上游：`docs/2026-06-12-…buffer-view-redesign.md`（被本裁决取代方向）；名词 grill 见 `tmp/context.md` + 会话记录。
+> 上游：`docs/2026-06-12-…buffer-view-redesign.md`（被本裁决取代方向）；名词 grill 见 `tmp/context.md`。
+> 第一公理经一次多视角提案 + 对抗验证收敛（workflow `context-window-axiom-grill`，全量窗分类学撞 4 个候选）——
+> 推翻了过程中两个错误直觉：①"窗=方法挂载点(method 为主)"、②"窗不能空方法"。下文是修订后版本。
 
 ---
 
 ## 0. 第一公理
 
-> **ContextWindow 首先是「方法挂载点」；内容展示是可选的第二面，且同一份信息在 LLM input 里只渲染一次。**
+> **每个 ContextWindow 恒带骨架 `id / class / title / status`（必有）；在骨架上向 LLM 投影两个各自独立、各自可缺的面——`content`（我此刻能看的）与 `method`（我此刻能做的）。谁都不是"主"。每一面渲在窗内还是窗外（self.md→instructions、历史→原生对话轮）由该面独立决定，且同一份信息只渲一次。两面都无业务产出时，窗退化为只剩骨架的导航锚——合法但信息最稀的边界态，不是被禁止的状态。**
 
-之前（含框架现状）的隐含假设是"窗 = 一块内容 + 它的方法"。这是错的。窗的**主**身份是 method mount；content 是**可有可无**的另一面：
+辨析（对抗验证修正了三处错觉）：
 
-| 窗 | 内容渲在哪 | 窗体现什么 |
-|---|---|---|
-| file / knowledge / search / program | 窗内（切片/正文/历史） | 内容 + 方法 |
-| **transcript** | 原生对话轮（窗外） | **只挂 compress** |
-| **self（agent 自窗）** | instructions（self.md，窗外） | **只挂 agency** |
+- **不变量是骨架，不是任一 facet**。`id/class/title/status` 强制必有（`BaseContextWindow`）；content/method 都可缺。所以"窗=方法挂载点"（本裁决初稿）和"窗=展示单元"（旧口径）都偏——两者都只是骨架上的**可选投影面**。
+- **content "空" 要分清**。渲染产物里 content 几乎从不真空（缺时落 placeholder，且 title 恒在）。用户纠正"正常不空"对，但真正的特例不是"空"而是"**内容外移**"——self.md 渲进 instructions、历史渲成原生对话轮，于是窗内无业务正文。**能外移的窗其实很少**（self、transcript/do/talk 的历史；grounding 一度把 file/program 等也误标为外移，实测都是窗内自渲）。
+- **method 真可缺**。`todo` / `skill_index`（有内容、无方法）、`user`（只有 readable.md 名片、无方法）是干净的单面窗——用户纠正②坐实。
+- **"两面俱空则不该存在" 是设计意图、非代码不变式**。代码无 prune，双空窗会 fail-soft 渲成纯骨架 + placeholder。故表述为"退化边界态"，不立无人执行的禁令。（验证中一度被当作"双空"旗舰例的 UserWindow 实为 content-only：grounding 看漏了 `builtins/user/readable.md`。**目前没有确认的双空窗**。）
+- **还有第三类面，但不暴露给 LLM**。`sub_windows`(层级) / `sharing`(跨 thread 借用快照) / `relevance`(预算来源) 是窗作为 **runtime 调度单元**的元数据，既非"给 LLM 看的 content"也非"可 exec 的 method"。公理只管 **LLM-facing 双面**；runtime 元数据另论，别混进来稀释 content/method 二元。
 
-公理的两个直接后果：
-- **窗可以没内容**（transcript / self）——空内容是对的，不是 bug。
-- **窗不能没它该有的方法**——这正是 A 问题（self 窗 agency 未渲）的判据：内容空合法，方法空是缺陷。
+**A 问题判据（再校正）**：不是"窗不能空方法"（todo/user 合法无方法），而是 **"窗必须投影它的 Object 实际拥有的面"**——self 窗的 Object 有经 `ooc.class` 继承来的 agency，那个 method 面**必须**渲；它现在缺，是 `computeVisibleMethodSet` 没走 parentClass 链的渲染 bug。todo 无方法是对的。
 
-一旦立住这条，下面三条收敛都是它的自然推论。
+**附带确认（强化推论 3 的必要性）**：do/talk 窗当前把 `<transcript>` **既渲在窗内、又进原生对话轮**——**双渲是现实存在的**，不是假想。所以"每份信息只渲一次"是真实清理项；推论 3 落地前 do/talk 本就违反它。
+
+下面三条收敛是这条公理在"投影面"层面的推论——都不触动"骨架 + 两可缺面"本身。
 
 ---
 
@@ -83,7 +85,7 @@
 ## 4. 收敛后的最小模型
 
 ```
-primitive:   ContextWindow（唯一；= 方法挂载点，内容可选）
+primitive:   ContextWindow（唯一；骨架恒在 + content/method 两可缺投影面）
 原语:        exec(window, method) · close · wait          ← 3 个
 开线程/通信: talk(target)  —— user / peer / self-new(=do) / super
 缩容:        各窗的 compress 方法（含 transcript 窗）
@@ -105,7 +107,7 @@ LLM 心智：从「exec/close/wait/compress + do + talk + 一堆"X 窗" + 一个
 
 ## 5. 这套收敛同时修掉的旧问题
 
-- **A（self 窗 agency 不可见）**：公理重定义"窗可空内容、不可空方法"→ 问题缩小为单一明确缺陷；根因（`computeVisibleMethodSet` 不走 parentClass 链）必须修，让 self 窗 surface 继承来的 agency。
+- **A（self 窗 agency 不可见）**：公理判据"窗须投影它的 Object 实际拥有的面"→ 问题是单一明确缺陷；根因（`computeVisibleMethodSet` 不走 parentClass 链）必须修，让 self 窗 surface 继承来的 agency。
 - **B（exec 缺省/方法挂哪 三个版本打架）**：随 do→talk + 公理回流 `interaction-core.md` / `world-vocabulary.md`（builtin + 对象树 seed）一次性统一。
 - **C3（3 vs 4 原语）**：compress→method 后明确是 **3**。
 - **C1（open_knowledge 双 class）/ C2（self 窗无 about）**：C2 由公理解释为"对的"；C1 顺手收。
