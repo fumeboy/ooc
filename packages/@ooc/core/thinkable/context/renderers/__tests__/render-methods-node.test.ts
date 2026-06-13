@@ -23,6 +23,38 @@ test("talk class includes talk window method (set_transcript_window)", () => {
 });
 
 /**
+ * S1（公理「窗须投影它的 Object 实际拥有的面」）：computeVisibleMethodSet 沿 parentClass 链合并方法。
+ * self 窗 class=objectId、自身无 methods、agency 继承自 _builtin/agent —— 必须 surface 出来。
+ */
+test("S1: agent 类窗沿链 surface 继承的 agency（_builtin/agent → root）", () => {
+  const agentWin = computeVisibleMethodSet({ id: "supervisor", class: "_builtin/agent" } as any, {} as any, builtinRegistry);
+  expect(agentWin).not.toBeNull();
+  for (const m of ["do", "talk", "plan", "todo", "end"]) {
+    expect(agentWin!.methodNames).toContain(m); // agency 在 _builtin/agent
+  }
+  expect(agentWin!.methodNames).toContain("example"); // root misc 经 _builtin/agent → root 链
+
+  // 具体 agent 子类（parentClass=_builtin/agent，对应 self 窗 class=objectId 的情形）同样 surface agency
+  const t = `__test_agent_self_${Date.now()}`;
+  builtinRegistry.registerNewObjectType(t as never, { methods: {}, parentClass: "_builtin/agent", readable: () => [] });
+  const selfWin = computeVisibleMethodSet({ id: t, class: t } as any, {} as any, builtinRegistry);
+  expect(selfWin!.methodNames).toContain("talk");
+  expect(selfWin!.methodNames).toContain("end");
+});
+
+test("S1 边界: tool-object 成员(parentClass=null) 不继承 agency；窗类型不继承 root misc", () => {
+  // filesystem 有自己的工具方法，但无 agency、不继承 root misc —— 它不是 Agent
+  const fsWin = computeVisibleMethodSet({ id: "filesystem", class: "filesystem" } as any, {} as any, builtinRegistry);
+  expect(fsWin!.methodNames).toContain("grep");
+  expect(fsWin!.methodNames).not.toContain("talk");
+  expect(fsWin!.methodNames).not.toContain("example");
+  // 窗类型（talk/file）parentClass:null —— 不被 root 的 example/feishu 污染
+  const talkWin = computeVisibleMethodSet({ id: "t1", class: "talk" } as any, {} as any, builtinRegistry);
+  expect(talkWin!.methodNames).not.toContain("example");
+  expect(talkWin!.methodNames).not.toContain("open_feishu_chat");
+});
+
+/**
  * eager 必填参数契约：method 的必填参数渲染为 <arg name type required> 子节点，治 LLM 猜 key。
  * say 的 msg 必填 → 出现；wait 可选 → 不进 eager（只在 form tip 出现）。
  */

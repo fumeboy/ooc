@@ -116,23 +116,42 @@ export function computeVisibleMethodSet(
   registry: ObjectRegistry,
 ): { methodNodes: XmlNode[]; methodNames: string[] } | null {
   if (!registry.has(window.class)) return null;
-  const def = registry.getObjectDefinition(window.class as never);
   // for_reflectable 门控：标记的 reflectable 沉淀方法仅在 super flow（反思 session）下 surface。
   // 非 super 时从菜单剔除（取代旧的 exec 内 isSuperSessionId 命令式拒绝 —— 存在即有效）。
   const inSuperFlow = isSuperSessionId(thread.persistence?.sessionId ?? "");
-  const visibleObjectMethods = Object.keys(def.methods ?? {}).filter(
-    (n) => inSuperFlow || !def.methods?.[n]?.for_reflectable,
-  );
-  // object method（控制 object，归 executable）+ window method（控制展示，归 readable）
-  // 统一呈现给 LLM —— exec 入口相同，LLM 不需区分两类。
-  const names = [
-    ...visibleObjectMethods,
-    ...Object.keys(def.windowMethods ?? {}),
-  ];
-  names.sort();
+
+  // 沿 parentClass 链合并可见方法（与 resolveMethod 同语义）：子类自声明覆盖父类同名。
+  // 这是公理「窗须投影它的 Object 实际拥有的面」的兑现——self 窗 class=objectId，自身无 methods、
+  // agency 继承自 _builtin/agent；不走链就漏掉它该有的 agency 面（A 问题根因）。
+  // object method（控制 object，归 executable）+ window method（控制展示，归 readable）统一呈现，
+  // exec 入口相同、LLM 不需区分两类。
+  const chain = [window.class as string, ...registry.resolveParentClassChain(window.class as never)];
+  type AnyMethod =
+    | import("@ooc/core/extendable/_shared/method-types.js").ObjectMethod
+    | import("@ooc/core/_shared/types/window-method.js").WindowMethod;
+  const merged = new Map<string, AnyMethod>();
+  for (const type of chain) {
+    let def: ReturnType<ObjectRegistry["getObjectDefinition"]>;
+    try {
+      def = registry.getObjectDefinition(type as never);
+    } catch {
+      continue;
+    }
+    for (const [name, entry] of Object.entries(def.methods ?? {})) {
+      if (merged.has(name)) continue; // 子类先到、覆盖父类同名
+      if (!inSuperFlow && entry?.for_reflectable) continue;
+      merged.set(name, entry);
+    }
+    for (const [name, entry] of Object.entries(def.windowMethods ?? {})) {
+      if (merged.has(name)) continue;
+      merged.set(name, entry);
+    }
+  }
+
+  const names = [...merged.keys()].sort();
 
   const methodNodes: XmlNode[] = names.map((name) => {
-    const entry = def.methods?.[name] ?? def.windowMethods?.[name];
+    const entry = merged.get(name);
     // 优先展示语义描述（method 的 *_BASIC 知识），让 LLM 看懂每个 method 的含义；
     // 无描述时退回 paths 简述（仅别名，价值低）。
     const desc = entry ? extractBasicDescription(entry) : undefined;

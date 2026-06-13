@@ -73,21 +73,25 @@ function resolveEffectiveParentClass(
 const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
   ["root", { methods: {}, parentClass: null }],
   ["method_exec", { methods: {}, parentClass: null }],
-  ["do", { methods: {} }],
-  ["todo", { methods: {} }],
-  ["talk", { methods: {} }],
-  ["pr", { methods: {} }],
-  ["reflect_request", { methods: {} }],
-  ["program", { methods: {} }],
-  ["file", { methods: {} }],
-  ["knowledge", { methods: {} }],
-  ["search", { methods: {} }],
-  ["skill_index", { methods: {} }],
-  ["feishu_chat", { methods: {} }],
-  ["feishu_doc", { methods: {} }],
-  ["plan", { methods: {} }],
+  // 窗类型（do/talk/file/...）是 ContextWindow 的【种类】，不是继承 root 的 Object/Agent——
+  // 各自的方法直接注册在自身 class 上，不该继承 root 的 misc（example/feishu）。
+  // 故全部 parentClass:null（与 root/method_exec/filesystem 一致）；否则 computeVisibleMethodSet
+  // 沿链合并方法时会把 example/feishu 污染到每个窗。只有 _builtin/agent 与 agent 对象继承 root。
+  ["do", { methods: {}, parentClass: null }],
+  ["todo", { methods: {}, parentClass: null }],
+  ["talk", { methods: {}, parentClass: null }],
+  ["pr", { methods: {}, parentClass: null }],
+  ["reflect_request", { methods: {}, parentClass: null }],
+  ["program", { methods: {}, parentClass: null }],
+  ["file", { methods: {}, parentClass: null }],
+  ["knowledge", { methods: {}, parentClass: null }],
+  ["search", { methods: {}, parentClass: null }],
+  ["skill_index", { methods: {}, parentClass: null }],
+  ["feishu_chat", { methods: {}, parentClass: null }],
+  ["feishu_doc", { methods: {}, parentClass: null }],
+  ["plan", { methods: {}, parentClass: null }],
   // example —— 标准对象定义样板（executable/index.ts + readable.ts 两维度分注册示范）。
-  ["example", { methods: {} }],
+  ["example", { methods: {}, parentClass: null }],
   // filesystem / terminal —— agent 组合持有的 tool-object 成员。
   // parentClass:null（terminal，不继承 root）——tool-object **不是 Agent**：它没有 agency
   // （talk/do/...），只有自己的工具方法。Object/Agent 边界在类型层落实。
