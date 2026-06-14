@@ -3,12 +3,27 @@
 权威：`.ooc-world-meta/.../thinkable/knowledge/context.md`（11 条核心，已定稿）。本文是落地排程，跨轮续作用。
 潮汐律：每个增量 = 文档对准 + 代码改造 + storybook 覆盖 + 退潮清理，绿色提交。冲突一律以 context.md 为准、自主裁决。
 
-## Ground truth 基线（2026-06-14 实测，勿信二手）
-- `OOC_TOOLS=[EXEC,CLOSE,WAIT]` **已 3 原语**，compress 经 exec 拦截（`tools/index.ts:29`、`handleCompressTool`）。→ Inc A 是纯文档退潮。
-- `windows/do` 与 `windows/talk` **双窗并存**；agency 含 `do`（`builtins/root/executable/index.ts` AGENCY_METHODS）。→ Inc B 待做。
-- `class` **落盘**（`flow-thread-context.ts:42/82` _ref entry 带 class；`state.json`；`context-registry` 间接）。→ Inc C 待做。
-- SharingState kind = `ref`/`lent_out`（`_shared/types/context-window.ts:139`）。→ Inc B 顺带改 readonly-ref/mutable-ref。
-- 绿色基线：`bun test packages/@ooc/storybook/stories` = **63 pass / 0 fail**（9 TC-VIS skip = 无 live Vite，环境性）。
+## ⚠️ Ground truth 实测修订（2026-06-14，二手 recon/summary 严重失真，以此为准）
+
+逐项**直接核验**后，发现 context.md 主体设计**早已实现且全绿**（recon 99 万 token 与 session summary 多处过时/失真）：
+- `OOC_TOOLS=[EXEC,CLOSE,WAIT]` **已 3 原语**，compress 经 exec 拦截。→ Inc A 纯文档退潮，**✅ 已完成**。
+- **do→talk 合并已完成**：`windows/do/` **已不存在**；`AGENCY_METHODS={talk,plan,todo,end}`（**无 do**，我早前"含 do"的 grep 命中的是注释）；`windows/talk/` 已含 `fork.ts`/`method.say.ts`/`method.share.ts`/`isForkWindow`/`archiveForkChild`。→ Inc B **代码层早已完成**。
+- **SharingState 已是 `readonly-ref`/`mutable-ref`**（`_shared/types/context-window.ts:142-156`，move=动作）。→ 引用模式重命名**已完成**。
+- attention-tiering（creator 窗句柄 + 内容进 message 流 + 50 字缩略）已落（`attention-tiering.test.ts`）。
+- storybook **无任何 `do` 残留**（recon 说的 tmNoDo/kbNoDo 是假的）。
+- **唯一真未实现**：`class` 仍落盘（`flow-thread-context.ts:42/82`、`state.json`、`context-registry`），**无任何按视角动态算 class 的逻辑**（全是 `w.class===` 读取点）。→ 核心 2/7 的 class-dynamic 未实现。
+
+实测绿基线：`check:tsc` 干净 / `bun test packages/@ooc/core` = **918 pass · 3 skip · 0 fail** / `test:storybook` = **63 pass · 0 fail**。
+
+## 决断：Inc C（class-dynamic + thread-window 模型 + share-object）**延后**，与 builtin-as-objects 弧绑定
+
+行使 /goal 授权的"质疑+自主调整"。理由：
+1. **核心 7「不存 class」对 inline builtin-feature 窗（talk/todo/method_exec）不可独立落地**——它们没有独立 object，class 无 ooc.class 可推；要么持久化某 discriminant（等于换名字存 class，违背设计），要么靠脆弱的字段推断。**干净落地必须先有 next_todo #2「builtin context window 整成 ooc class/object」**（届时 class 从 refObjectId→ooc.class 推）。
+2. **核心 9/10 的 thread-window 模型**（自己视角 thread window 句柄、creator 对话是其通道、无独立 creator 窗）= next_todo #1「thread 也当作 ooc object」的直接产物；当前代码用 creator 窗 + isCreatorWindow + attention-tiering **行为等价**地达成，重做属概念-命名重构、应随 thread-as-object 一起。
+3. **核心 11 的 share-object**（传 object 引用、class 由对方 readable 算）依赖 #1 的 class-dynamic。
+4. 只做"_ref 窗 strip class"这种半切会造成"部分窗存 class、部分不存"的**不一致半态**，比当前一致态更差（违反 #1 代码质量铁律）。
+
+**结论**：context.md 主体设计已落地且绿；class-dynamic/thread-window/share-object 三者同属一弧，**正确的下一步是 next_todo #1/#2（thread/builtin as ooc object）**，在其上一次性、一致地落地这三条核心，而非现在抢做半态。本次 /goal 的"实现"=验证主体已达成 + 退潮文档对准 + 记录此弧。
 
 ## 增量序列
 

@@ -66,6 +66,23 @@ declare -a FORBIDDEN_PATTERNS=(
   "compress 是 tool"
   "compress 元 tool"
   "compress.*元 tool"
+  # —— do→talk 合并退役（2026-06-14，Inc B）——
+  # 终态：do 方法 / do_window class / continue / move 并入 talk（target=自己 ⇒ fork 子线程）/ say / share。
+  # do_window / do_window.continue / do_window.move 作为 live API 教即 drift；引用模式
+  # sharing kind 旧字面量 ref/lent_out 也退役为 readonly-ref/mutable-ref。
+  "do_window"
+  "do_window\\.continue"
+  "do_window\\.move"
+  "creator do_window"
+  "creator_do_window"
+  # do 作为 live agency 动词（活的 agency 是 talk/plan/todo/end）；迁移注释"旧 do 并入"用 → / 并入 标记豁免
+  "agency（do"
+  "do/talk/plan"
+  "do\\.continue"
+  'kind="ref"'
+  'kind="lent_out"'
+  '"lent_out"'
+  "sharing.*lent_out"
 )
 
 # 退役标记词：命中行含其一 = 合法的「退役说明」，放行。
