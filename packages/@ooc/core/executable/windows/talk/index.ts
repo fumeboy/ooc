@@ -24,11 +24,8 @@ import { sayMethod } from "./method.say.js";
 import { waitMethod } from "./method.wait.js";
 import { closeMethod } from "./method.close.js";
 import { setTranscriptWindowCommandForTalk } from "./method.set-transcript-window.js";
-import {
-  DEFAULT_TRANSCRIPT_VIEWPORT,
-  applyTranscriptViewport,
-  type TranscriptViewport,
-} from "../_shared/transcript-viewport.js";
+import { DEFAULT_TRANSCRIPT_VIEWPORT } from "../_shared/transcript-viewport.js";
+import { renderTranscriptOrHandle } from "../_shared/conversation-render.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import type { TalkWindow } from "./types.js";
@@ -60,55 +57,10 @@ export function renderTalkWindow(ctx: RenderContext): XmlNode[] {
     xmlElement("target", {}, [xmlText(window.target)]),
     xmlElement("conversation_id", {}, [xmlText(window.conversationId)]),
   ];
+  // transcript-or-handle（creator 句柄 / 非 creator viewport+transcript）经共享 helper 渲染，
+  // 与 do_window 同一份逻辑（消除 attention 分层引入的重复）；talk 按 windowId 过滤 messages。
   const messages = filterMessagesForTalkWindow(window, ctx.thread);
-  // 与 do_window 渲染对齐：creator talk_window 必须暴露 is_creator_window=true，
-  // 否则 LLM 无法识别"哪条 talk 是创建本 thread 的对端通道"。
-  if (window.isCreatorWindow) {
-    children.push(xmlElement("is_creator_window", {}, [xmlText("true")]));
-    // attention 分层（2026-06-14）：与 creator 的对话 = 主要 attention = 直接走 LLM message 流
-    // （inbox 事件 + say function_call）。本窗在 context XML 里只渲句柄（target + 消息计数 + 方法），
-    // **不内联 transcript**，避免与 message 流双渲。方法契约见 <window_classes>。
-    children.push(xmlElement("transcript_in_messages", { total: String(messages.length) },
-      [xmlText("与 creator 的对话在 LLM message 流（主要 attention），本窗不重复渲 transcript。")]));
-    return children;
-  }
-
-  // 展示状态从 window.state 读，向后兼容旧平铺字段。
-  const viewport: TranscriptViewport =
-    window.state?.transcriptViewport ?? window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
-  const { visible, earlierCount } = applyTranscriptViewport(messages, viewport);
-
-  // 始终暴露 viewport 元数据节点（让 LLM 知道当前渲染窗口 + 是否有省略）
-  const viewportAttrs: Record<string, string> = { total: String(messages.length) };
-  if (typeof viewport.tail === "number") {
-    viewportAttrs.tail = String(viewport.tail);
-  } else if (
-    typeof viewport.rangeStart === "number" &&
-    typeof viewport.rangeEnd === "number"
-  ) {
-    viewportAttrs.range_start = String(viewport.rangeStart);
-    viewportAttrs.range_end = String(viewport.rangeEnd);
-  }
-  if (earlierCount > 0) {
-    viewportAttrs.earlier_omitted = String(earlierCount);
-  }
-  children.push(xmlElement("transcript_viewport", viewportAttrs));
-
-  if (visible.length > 0) {
-    children.push(
-      xmlElement(
-        "transcript",
-        {},
-        visible.map((m) =>
-          xmlElement("message", { id: m.id, source: m.source }, [
-            xmlElement("from_thread_id", {}, [xmlText(m.fromThreadId)]),
-            xmlElement("to_thread_id", {}, [xmlText(m.toThreadId)]),
-            xmlElement("content", {}, [xmlText(m.content)]),
-          ]),
-        ),
-      ),
-    );
-  }
+  children.push(...renderTranscriptOrHandle(window, messages));
   return children;
 }
 
