@@ -18,7 +18,7 @@ import {
   onCloseTalkWindow,
   filterMessagesForTalkWindow,
 } from "@ooc/core/executable/windows/talk/index.js";
-import { sayMethod } from "@ooc/core/executable/windows/talk/method.say.js";
+import { sayMethod } from "@ooc/builtins/thread/executable/method.say.js";
 import { waitMethod } from "@ooc/core/executable/windows/talk/method.wait.js";
 import { closeMethod } from "@ooc/core/executable/windows/talk/method.close.js";
 import { setTranscriptWindowCommandForTalk } from "@ooc/core/executable/windows/talk/method.set-transcript-window.js";

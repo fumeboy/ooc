@@ -25,7 +25,9 @@ import {
   type ContextWindow,
   type SharingState,
 } from "../_shared/types.js";
-import { sayMethod } from "./method.say.js";
+// say 是 thread 的行为（S3.2 归位）—— 真正逻辑落在 thread builtin；talk 的 say 是薄 delegation，
+// 共享同一 method 实例。LLM 仍在 talk_window 上 exec(window, "say")，落到这同一份逻辑。
+import { sayMethod } from "@ooc/builtins/thread/executable/method.say.js";
 import { waitMethod } from "./method.wait.js";
 import { closeMethod } from "./method.close.js";
 import { shareMethod } from "./method.share.js";
