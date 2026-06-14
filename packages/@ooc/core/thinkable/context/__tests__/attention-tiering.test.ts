@@ -55,4 +55,34 @@ describe("会话内容 attention 分层", () => {
     // message 流里有 peer 的"新消息提示"（指向窗、非全文）
     expect(nonCtxStream.some((c) => c.includes("m_peer") && c.includes("window_id=w_peer"))).toBe(true);
   });
+
+  it("通用性（非 user 特例）：creator 是 parent thread（do 窗）时同样句柄化、parent 对话进 message 流", async () => {
+    // do 子线程视角：它的 creator 窗是 do 窗，target=parent thread（不是 user）。
+    const DO_CREATOR = {
+      id: "w_do_creator", class: "do", targetThreadId: "t_parent", isCreatorWindow: true,
+      status: "running", createdAt: 1, title: "creator do",
+    } as unknown as ContextWindow;
+    const PARENT_FULL = "PARENT_INSTRUCTION_FULL_TEXT_xyz";
+    const thread = makeThread({
+      id: "t_child",
+      persistence: { baseDir: "/tmp/__ooc_tiering_test2", sessionId: "s", objectId: "agent", threadId: "t_child" },
+      extraWindows: [DO_CREATOR],
+    });
+    thread.inbox = [
+      { id: "m_parent", source: "do", content: PARENT_FULL, replyToWindowId: "w_do_creator", fromThreadId: "t_parent", toThreadId: "t_child", createdAt: 1 },
+    ] as any;
+    thread.events = [
+      { category: "context_change", kind: "inbox_message_arrived", msgId: "m_parent" },
+    ] as any;
+
+    const { input } = await buildInputItems(thread);
+    const messageItems = input.filter((i) => i.type === "message") as Array<{ content: string }>;
+    const ctxXml = messageItems.find((i) => i.content.startsWith("<context>"))!.content;
+    const nonCtxStream = messageItems.filter((i) => !i.content.startsWith("<context>")).map((i) => i.content);
+
+    // creator 是 parent thread（do 窗），仍句柄化：parent 指令全文进 message 流、do creator 窗不内联 transcript
+    expect(nonCtxStream.some((c) => c.includes(PARENT_FULL))).toBe(true);
+    expect(ctxXml).not.toContain(PARENT_FULL);
+    expect(ctxXml).toContain("transcript_in_messages"); // do creator 窗=句柄（判据是 isCreatorWindow，与 target 无关）
+  });
 });

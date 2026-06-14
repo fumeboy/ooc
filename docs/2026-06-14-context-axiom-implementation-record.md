@@ -112,6 +112,12 @@ LLM 输入项实测结构（无原生 role=user/assistant 轮，会话全走 sys
 派生/咨询的 sub/peer = 支撑材料 = context XML transcript（弱 attend，全文在窗）。**但支路有新消息时仍在 message 流出一条
 轻量提示**（非全文，指向窗），让 LLM 注意到"支路动了"、按需去窗里读全文——兼顾 attention 触发与去重（用户 2026-06-14 补充）。
 
+> **通用性（非 user 特例）**：判据是 `isCreatorWindow`，**与 creator 是 user 还是 parent thread 无关**。
+> 对称成立——supervisor 看 user creator（talk 窗）= 句柄 / user 对话进 message 流；**do 子线程看它的 parent creator
+> （do 窗，target=parent thread）同样 = 句柄 / parent 对话进 message 流**。即"任何线程都把创建它的派活方当主要 attention"，
+> 契合 OOC「user 也只是一个 flow object」。已实证（2026-06-14 子线程 context 检视：creator do 窗 transcript_in_messages、
+> 无内联 transcript；parent 指令在子线程 message 流全文）。
+
 **契合第一公理**：两层都"内容只渲一次"，只是位置按 attention 分：
 - creator 窗：内容外移到 message 流（渲一次），窗=句柄（方法挂载+在场）——与 self 窗（内容→instructions）同构。
 - 次要窗：内容在自己 XML transcript（渲一次），窗=内容+方法——正常窗。
