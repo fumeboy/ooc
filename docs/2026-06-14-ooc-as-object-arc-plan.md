@@ -48,3 +48,28 @@
 > 风险/纪律：① 每步保 `bun run verify` + `test:storybook` 绿、小步提交。② 新 builtin 包需 5 处接线 + **手动 `ln -s`**（避 `bun install` bnpm hang）。③ 退役符号往 `check-doc-deprecated-drift.sh` FORBIDDEN 加精确模式、全树回流。④ 两套 story 体系（gate `<cap>.story.ts` + catalog `L*.stories.ts`）都要扫。⑤ 同名陷阱：window 投影 class（不持久化）vs ooc.class 继承链（落 .flow.json，仍持久化）——勿混。
 
 > 执行建议：本弧每个增量都重，宜在**聚焦的新会话**逐个推进（本会话已极长）；A1 可先行（设计、低风险）。
+
+---
+
+## S3 thread-as-object 执行分解（2026-06-15，Explore 侦察 + 设计歧义裁决）
+
+现状：thread 是纯运行时 struct（`_shared/types/thread.ts` ThreadContext），say/wait/end 散在 talk 窗/tools/root；无 ThreadWindow 类型；持久化走 thread.json + thread-context.json + inbox-store/ 三档（非常规 state.json）。目标（thread.md/agent.md 核心 9）：thread = builtin ooc class 实例。
+
+**4 个设计歧义的裁决（依定稿文档，自主拍板）**：
+1. **say/wait/end 归属**：归 `thread` class（thread.md 核心 3 明列为 thread 行为）。thread window（自己视角）/ talk window（他者视角=远端 thread 投影）都是 thread 对象的视角投影、经类链拿到这些方法；say 的"自己视角向对方发 / 对方视角向自己发"双实现由"窗是 thread window 还是 talk window"+ 现有 fork/peer 路由承载。
+2. **thread 持久化**：S3 **保持现状三档**（不强行并 state.json）；其"特例化"在 S5 重表为 thread class 自己的 `persistable/index.ts` override（next_todo #1：把特例化变成 object 个性化能力），不是框架特判。
+3. **thread window vs talk window**：thread 自己视角投影 = thread window（句柄、内容进 message 流）；远端 thread 在我 context 的投影 = talk window。现 code 用 talk_window+creator_window+isCreatorWindow，S3 引入 thread window 作自我投影（衔接 context.md 核心 9/10）。
+4. **thread class 无 constructor**：对——thread 由 agency `talk` 创建、非 open() 构造。registerWindowClass 注册 thread 时**不带 constructor**（区别于 file/todo）。
+
+**子步分解（每步独立可验、保持绿；3 低风险类型对齐 / 3 中风险功能迁移 / 1 高风险持久化）**：
+- **S3.1（低）**：建 `builtins/thread` 包（package.json kind=class objectId=_builtin/thread、types.ts ThreadWindow、executable/index.ts registerWindowClass methods:{} skeleton、symlink）。验：tsc + registry 能查到 thread type，无行为变。
+- **S3.2（中）**：say 迁 thread class（talk/method.say.ts 核心逻辑 → thread.say，talk 窗 delegation 保留）。验：fork+peer say 通。blast：talk-delivery、talk-fork-thread-tree.test。
+- **S3.3（中）**：wait 迁 thread class（tools/wait.ts → thread.wait）。验：running→waiting→wakeup。blast：scheduler、wait.test。
+- **S3.4（中）**：end 迁 thread class（root/command.end.ts → thread.end）。验：status/endReason/endSummary。blast：worker、commands-execution.test。
+- **S3.5（低）**：thread readable + compressView hook（thread 自我视角渲染 + events 折叠）。
+- **S3.6（低-中）**：thread window 自我投影注入（talk-delivery/init 在 thread 自己 context 注入 thread window）；对接 S2 class 动态推导（thread window class 由 thread 对象 _builtin/thread 推出、不存储）。
+- **S3.7（高）**：持久化一致性评审/收尾（三档是否保留 + 文档明确；接 S5）。
+
+**与 S2 接口**：thread-as-object 后所有 thread 统一 class=`_builtin/thread`（thread 是跨对象的协作载体、say/wait/end 通用）；talk window 的 targetThreadId 指向的 thread，其 class 由 persistence.objectId/类型推出、不存储 class 字符串 → 这是 S2 class-dynamic 对 thread/talk 窗的落点。
+
+**执行建议**：S3.1 起逐子步派聚焦 sub-agent，每步 verify+storybook 绿、双库提交；S3.7 前做持久化设计评审。**勿一把梭**（240+ 测试 + 持久化契约，Big Bang 会卡）。
