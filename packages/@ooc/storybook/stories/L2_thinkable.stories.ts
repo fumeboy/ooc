@@ -38,7 +38,8 @@ export const L2_STORIES: Story[] = [
         "utf8",
       );
       check(md.length > 50, "root-methods.md 缺失");
-      check(/talk/.test(md) && /program/.test(md), "root-methods.md 未列出 talk/program");
+      // agency（talk）+ tool-object 成员方法（run = terminal/interpreter 跑代码，旧名 program 已退役）。
+      check(/talk/.test(md) && /\brun\b/.test(md), "root-methods.md 未列出 talk/run");
     },
   }),
 

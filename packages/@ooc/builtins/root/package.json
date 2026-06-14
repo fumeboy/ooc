@@ -14,6 +14,6 @@
   "ooc": {
     "objectId": "_builtin/root",
     "kind": "builtin",
-    "type": "agent"
+    "type": "object"
   }
 }

@@ -13,8 +13,8 @@ activates_on:
 
 **你自己（self 窗）的 agency：**
 
-- 要**派活给子线程**（自己继续别的事 / 之后再 wait 回写）→ `do`。
 - 要**和别的对象（含 user、其它 flow object）持续对话** → `talk`；同一对象复用同一 talk_window，不要重复 open。
+- 要**派活给子线程**（自己继续别的事 / 之后再 wait 回写）→ `talk(target=自己的 objectId)` fork 一条子线程。
 - 要**把任务拆成可见步骤** → `plan`；只记一条待办 → `todo`；本轮**收尾** → `end`。
 - 要**对象定义样板** → `example`。接入**飞书** → `open_feishu_chat` / `open_feishu_doc`。
 
@@ -22,8 +22,8 @@ activates_on:
 
 - `filesystem` 成员：把文件引入 context → `open_file`；**搜文件** → `glob`（按名）/ `grep`（按内容）；
   改已存在对象的文件 → `write_file`。
-- `terminal` 成员：跑代码 / 调 server 方法 → `program`。
+- `terminal` 成员：跑 bash → `run`。`interpreter` 成员：跑 ts/js → `run`。
 - `knowledge_base` 成员：把一篇 knowledge 引入 context → `open_knowledge`。
-- `world` 成员：建**全新对象**骨架 → `create_object`（仅业务 session）。
+- `runtime` 成员：建**全新对象**骨架 → `create_object`（仅业务 session）。
 
 每个 method 进入 exec 后，对应知识会自动激活；本篇只是入口索引，具体参数看 form 提示。
