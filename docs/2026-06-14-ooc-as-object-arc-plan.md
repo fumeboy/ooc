@@ -64,8 +64,8 @@
 **子步分解（每步独立可验、保持绿；3 低风险类型对齐 / 3 中风险功能迁移 / 1 高风险持久化）**：
 - **S3.1（低）**：建 `builtins/thread` 包（package.json kind=class objectId=_builtin/thread、types.ts ThreadWindow、executable/index.ts registerWindowClass methods:{} skeleton、symlink）。验：tsc + registry 能查到 thread type，无行为变。
 - **S3.2（中）**：say 迁 thread class（talk/method.say.ts 核心逻辑 → thread.say，talk 窗 delegation 保留）。验：fork+peer say 通。blast：talk-delivery、talk-fork-thread-tree.test。
-- **S3.3（中）**：wait 迁 thread class（tools/wait.ts → thread.wait）。验：running→waiting→wakeup。blast：scheduler、wait.test。
-- **S3.4（中）**：end 迁 thread class（root/command.end.ts → thread.end）。验：status/endReason/endSummary。blast：worker、commands-execution.test。
+- **S3.3（作废/质疑修正）**：~~wait 迁 thread.wait method~~ —— **作废**。`wait` 是 3 原语之一（顶层 tool `exec/close/wait`，见 context.md 派生能力 + thinkloop.md），**不是 method**；迁成 method 会破坏原语面。wait 本就作用于"当前正在跑的 thread"（设 status=waiting），语义已正确。thread.md 核心 3 列 wait 为 thread"行为"指它改 thread 状态、非指它是注册 method。S3.3 实为 no-op / 文档澄清，**不迁 wait**。
+- **S3.4（中，待评审）**：end 迁 thread class（end 现在 agency `_builtin/agent` 上、改/end 当前 thread）。**待细究 thread-vs-agency 归属**：倾向"say/end 是 thread 的 method、agent 经其 self/会话窗 exec 调用"（与 S3.2 say 共享窗模式一致），但 end 现属 agency（agent 才能 end）；落地前评审 agent 怎么 exec 到迁后的 thread.end（经 S3.6 thread window 自我投影）。验：status/endReason/endSummary。blast：worker、commands-execution.test。
 - **S3.5（低）**：thread readable + compressView hook（thread 自我视角渲染 + events 折叠）。
 - **S3.6（低-中）**：thread window 自我投影注入（talk-delivery/init 在 thread 自己 context 注入 thread window）；对接 S2 class 动态推导（thread window class 由 thread 对象 _builtin/thread 推出、不存储）。
 - **S3.7（高）**：持久化一致性评审/收尾（三档是否保留 + 文档明确；接 S5）。
