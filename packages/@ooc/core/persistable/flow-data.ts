@@ -1,5 +1,5 @@
 /**
- * Flow-layer data.json IO —— 承载 ProgramSelf.getData / setData 的读写（session 级临时数据，落 flow 层）。
+ * Flow-layer data.json IO —— 承载 InterpreterSelf.getData / setData 的读写（session 级临时数据，落 flow 层）。
  *
  * 路径形态：`{baseDir}/flows/{sessionId}/{objectId}/data.json`
  *
@@ -20,7 +20,7 @@ export function flowDataFile(ref: FlowObjectRef): string {
 
 /**
  * 读取 flow object 的 data.json：
- * - 文件不存在（ENOENT）返回空对象 `{}`（与 ProgramSelf.getData 行为一致）。
+ * - 文件不存在（ENOENT）返回空对象 `{}`（与 InterpreterSelf.getData 行为一致）。
  * - JSON 解析失败抛带 path 与 cause 的清晰错误，便于排查。
  * - 其它 IO 错误向上抛。
  */

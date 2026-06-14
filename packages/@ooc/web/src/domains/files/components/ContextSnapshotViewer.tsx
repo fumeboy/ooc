@@ -69,7 +69,8 @@ const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {
   do: Inbox,
   todo: ListChecks,
   talk: MessageSquare,
-  program: Play,
+  terminal_process: Play,
+  interpreter_process: Play,
   file: FileText,
   knowledge: ScrollText,
   search: Search,
@@ -570,21 +571,6 @@ function NodeDetail({
             value={e.code}
             editable={false}
             basicSetup={{ lineNumbers: true, foldGutter: true }}
-          />
-        )}
-        {e.function && (
-          <div className="llm-input-attr-row">
-            <span className="llm-input-attr-key">function</span>
-            <span className="llm-input-attr-value">{e.function}</span>
-          </div>
-        )}
-        {e.args !== undefined && (
-          <CodeMirror
-            className="code-editor is-readonly"
-            value={formatJson(e.args)}
-            editable={false}
-            extensions={[jsonLanguage()]}
-            basicSetup={{ lineNumbers: false, foldGutter: true }}
           />
         )}
         <pre className="llm-input-pre">{e.output}</pre>

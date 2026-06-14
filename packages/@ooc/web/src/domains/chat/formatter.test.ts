@@ -247,7 +247,7 @@ describe("formatThread: groupConsecutiveToolLines", () => {
           kind: "function_call",
           callId: "c1",
           toolName: "open",
-          arguments: { title: "汇总查询结果", method: "program" },
+          arguments: { title: "汇总查询结果", method: "run" },
         },
         {
           category: "tool_runtime",
@@ -259,7 +259,7 @@ describe("formatThread: groupConsecutiveToolLines", () => {
           output: JSON.stringify({
             ok: true,
             tool: "open",
-            message: "Form f_xyz 已创建（program）。",
+            message: "Form f_xyz 已创建（run）。",
             form_id: "f_xyz",
             auto_submitted: false,
           }),

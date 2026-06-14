@@ -9,7 +9,7 @@ export function readable(_ctx: RenderContext): XmlNode[] {
   return [
     xmlElement("about", {}, [
       xmlText(
-        "终端对象（agent 持有的成员）。program 运行 shell/ts/js——调它会造出 program 对象（执行 + history）。",
+        "终端对象（agent 持有的成员）。run 跑一段 bash 脚本——调它会造出 terminal_process（bash 子进程 + history）。",
       ),
     ]),
   ];

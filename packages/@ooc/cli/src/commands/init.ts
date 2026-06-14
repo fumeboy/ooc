@@ -123,7 +123,8 @@ export default async function init(argv: string[]): Promise<void> {
       "@ooc/builtins/todo": DEFAULT_OOC_VERSION,
       "@ooc/builtins/search": DEFAULT_OOC_VERSION,
       "@ooc/builtins/knowledge": DEFAULT_OOC_VERSION,
-      "@ooc/builtins/program": DEFAULT_OOC_VERSION,
+      "@ooc/builtins/terminal_process": DEFAULT_OOC_VERSION,
+      "@ooc/builtins/interpreter_process": DEFAULT_OOC_VERSION,
       "@ooc/builtins/skill_index": DEFAULT_OOC_VERSION,
     },
     devDependencies: {

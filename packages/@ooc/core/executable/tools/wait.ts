@@ -151,10 +151,10 @@ export async function handleWaitTool(
 
   // R3: on 类型不合法（非 talk / reflect_request）—— 这同时盖掉了 root/method_exec/file 等
   if (target.class !== "talk" && target.class !== "reflect_request") {
-    // program window 给针对性提示:它是同步执行,结果已落在 history 里,不需要 wait
+    // 进程 window 给针对性提示:它是同步执行,结果已落在 history 里,不需要 wait
     const typeSpecificHint =
-      target.class === "program"
-        ? `\nprogram_window 是同步执行的:exec 提交时 runOneExec 立即跑完,输出已在该 window.history 里;不存在"运行中"状态可等。直接读 program_window 的 history 即可。`
+      target.class === "terminal_process" || target.class === "interpreter_process"
+        ? `\n${target.class} 是同步执行的:exec 提交时立即跑完,输出已在该 window.history 里;不存在"运行中"状态可等。直接读它的 history 即可。`
         : "";
     return errorOutput(
       `[wait] on="${onRaw}" 指向的是 ${target.class} window，不能作为 IO 来源——` +

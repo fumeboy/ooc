@@ -12,6 +12,6 @@
     "objectId": "_builtin/agent",
     "kind": "class",
     "type": "agent",
-    "members": ["filesystem", "terminal", "world", "knowledge_base"]
+    "members": ["filesystem", "terminal", "interpreter", "runtime", "knowledge_base"]
   }
 }

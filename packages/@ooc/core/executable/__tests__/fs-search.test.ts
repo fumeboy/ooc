@@ -814,13 +814,13 @@ describe("U5: root.grep", () => {
   });
 });
 
-// ---------- U6: program anti-pattern note ----------
+// ---------- U6: terminal.run anti-pattern note ----------
 
-import { programMethod } from "@ooc/builtins/terminal/executable/index.js";
+import { runMethod } from "@ooc/builtins/terminal/executable/index.js";
 
-describe("U6: program onFormChange returns tip", () => {
-  it("program method tip guides LLM", () => {
-    const form = callFormChange(programMethod, { language: "shell", code: "ls" }, "open");
+describe("U6: terminal.run onFormChange returns tip", () => {
+  it("run method tip guides LLM", () => {
+    const form = callFormChange(runMethod, { code: "ls" }, "open");
     expect(typeof form.tip).toBe("string");
     expect(form.quick_exec_submit).toBe(true);
   });

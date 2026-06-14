@@ -45,13 +45,13 @@ export async function runControlPlane(): Promise<StoryResult> {
 
 import { demoViaSupervisor } from "../_harness/agent-native";
 
-/** Tier B —— agent-native：supervisor 用工具原语（glob/program 等）真实行动。 */
+/** Tier B —— agent-native：supervisor 用工具原语（glob/run 等）真实行动。 */
 export async function runAgentNative(): Promise<StoryResult> {
   const tag = Math.floor(Date.now() / 1000) % 100000;
   return demoViaSupervisor("executable", `sb-an-exec-${tag}`,
-    "请用一个工具（glob 或 program 都行）看看当前仓库根目录下有哪些 .md 文件，然后告诉我结果。",
+    "请用一个工具（glob 或 terminal.run 都行）看看当前仓库根目录下有哪些 .md 文件，然后告诉我结果。",
     async ({ execs }) => {
-      const tools = execs.map((e) => e.cmd).filter((c) => ["glob", "grep", "program", "open_file", "talk"].includes(c));
+      const tools = execs.map((e) => e.cmd).filter((c) => ["glob", "grep", "run", "open_file", "talk"].includes(c));
       return { ok: tools.length > 0, detail: `用到的 tool 原语：${JSON.stringify([...new Set(tools)])}` };
     });
 }

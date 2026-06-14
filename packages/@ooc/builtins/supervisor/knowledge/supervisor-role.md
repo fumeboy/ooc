@@ -54,7 +54,7 @@ activates_on:
 
 ### 不做什么（边界）
 
-- ✗ 不直接执行业务代码（开 program_window 让对应 Object 处理）
+- ✗ 不直接执行业务代码（让对应 Object 经其 terminal/interpreter 跑进程处理）
 - ✗ 不直接编辑 UI（派 visible 维度的 Agent）
 - ✗ 不强行修改其它 Object 的 stone（必须走 PR-Issue 流程）
 - ✗ 不尝试改写 Builtin Object（`user`、`root`、内置 Window 类型等）——它们由 OOC 代码仓版本化

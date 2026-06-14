@@ -83,8 +83,8 @@ export async function runControlPlane(): Promise<StoryResult> {
       try { members = JSON.parse(readFileSync(join(agentDir!, "package.json"), "utf8"))?.ooc?.members; } catch { /* */ }
       try { supClass = JSON.parse(readFileSync(join(supDir!, "package.json"), "utf8"))?.ooc?.class; } catch { /* */ }
       const m = Array.isArray(members) ? (members as string[]) : [];
-      rec.ok("TC-COMP-02", "agent 基类声明 filesystem+terminal+world+knowledge_base 四成员，supervisor 经 ooc.class 继承 _builtin/agent",
-        m.includes("filesystem") && m.includes("terminal") && m.includes("world") && m.includes("knowledge_base") && supClass === "_builtin/agent",
+      rec.ok("TC-COMP-02", "agent 基类声明 filesystem+terminal+interpreter+runtime+knowledge_base 五成员，supervisor 经 ooc.class 继承 _builtin/agent",
+        m.includes("filesystem") && m.includes("terminal") && m.includes("interpreter") && m.includes("runtime") && m.includes("knowledge_base") && supClass === "_builtin/agent",
         `agentMembers=${JSON.stringify(members)} supClass=${JSON.stringify(supClass)}`);
     }
 
@@ -96,10 +96,11 @@ export async function runControlPlane(): Promise<StoryResult> {
       const injected = (cls: string) => thread.contextWindows.find((w: any) => w.class === cls && w.isMemberWindow === true);
       const fsWin = injected("filesystem");
       const tmWin = injected("terminal");
-      const wdWin = injected("world");
+      const inWin = injected("interpreter");
+      const rtWin = injected("runtime");
       const kbWin = injected("knowledge_base");
-      rec.ok("TC-COMP-03", "组合注入：supervisor thread 经类声明注入 filesystem + terminal + world + knowledge_base member 窗（isMemberWindow 非持久化）",
-        !!fsWin && !!tmWin && !!wdWin && !!kbWin,
+      rec.ok("TC-COMP-03", "组合注入：supervisor thread 经类声明注入 filesystem + terminal + interpreter + runtime + knowledge_base member 窗（isMemberWindow 非持久化）",
+        !!fsWin && !!tmWin && !!inWin && !!rtWin && !!kbWin,
         `members=${thread.contextWindows.filter((w: any) => w.isMemberWindow).map((w: any) => w.class).join(",")}`);
     }
 
@@ -121,28 +122,29 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-COMP-05: Object/Agent 边界 —— tool-object 成员**不是 Agent**（有自己工具方法，无 agency）
     {
       const fsGrep = !!builtinRegistry.resolveMethod("filesystem", "grep");
-      const tmProg = !!builtinRegistry.resolveMethod("terminal", "program");
+      const tmRun = !!builtinRegistry.resolveMethod("terminal", "run");
+      const inRun = !!builtinRegistry.resolveMethod("interpreter", "run");
       const fsNoTalk = !builtinRegistry.resolveMethod("filesystem", "talk");
       const tmNoTalk = !builtinRegistry.resolveMethod("terminal", "talk");
       const agentHasTalk = !!builtinRegistry.resolveMethod("_builtin/agent", "talk"); // agency 在 agent 基类
-      rec.ok("TC-COMP-05", "Object/Agent 边界：filesystem/terminal 有自己工具方法但无 agency(talk)，agency 属 _builtin/agent",
-        fsGrep && tmProg && fsNoTalk && tmNoTalk && agentHasTalk,
-        `fsGrep=${fsGrep} tmProg=${tmProg} fsNoTalk=${fsNoTalk} tmNoTalk=${tmNoTalk} agentTalk=${agentHasTalk}`);
+      rec.ok("TC-COMP-05", "Object/Agent 边界：filesystem/terminal/interpreter 有自己工具方法但无 agency(talk)，agency 属 _builtin/agent",
+        fsGrep && tmRun && inRun && fsNoTalk && tmNoTalk && agentHasTalk,
+        `fsGrep=${fsGrep} tmRun=${tmRun} inRun=${inRun} fsNoTalk=${fsNoTalk} tmNoTalk=${tmNoTalk} agentTalk=${agentHasTalk}`);
     }
 
-    // TC-COMP-06: world / knowledge_base 成员 —— create_object / open_knowledge 迁出 root 落到工具对象上，
+    // TC-COMP-06: runtime / knowledge_base 成员 —— create_object / open_knowledge 迁出 root 落到工具对象上，
     //             同样不是 Agent（无 agency）。
     {
-      const wdCreate = !!builtinRegistry.resolveMethod("world", "create_object");
+      const rtCreate = !!builtinRegistry.resolveMethod("runtime", "create_object");
       const kbOpen = !!builtinRegistry.resolveMethod("knowledge_base", "open_knowledge");
-      const wdNoTalk = !builtinRegistry.resolveMethod("world", "talk");
+      const rtNoTalk = !builtinRegistry.resolveMethod("runtime", "talk");
       const kbNoTalk = !builtinRegistry.resolveMethod("knowledge_base", "talk");
       // root 类自身不再直接持有这些方法（已迁出）。
       const rootNoCreate = !builtinRegistry.getObjectDefinition("root").methods?.create_object;
       const rootNoOpenKn = !builtinRegistry.getObjectDefinition("root").methods?.open_knowledge;
-      rec.ok("TC-COMP-06", "world.create_object / knowledge_base.open_knowledge 迁出 root 落到工具对象，且无 agency",
-        wdCreate && kbOpen && wdNoTalk && kbNoTalk && rootNoCreate && rootNoOpenKn,
-        `wdCreate=${wdCreate} kbOpen=${kbOpen} wdNoTalk=${wdNoTalk} kbNoTalk=${kbNoTalk} rootNoCreate=${rootNoCreate} rootNoOpenKn=${rootNoOpenKn}`);
+      rec.ok("TC-COMP-06", "runtime.create_object / knowledge_base.open_knowledge 迁出 root 落到工具对象，且无 agency",
+        rtCreate && kbOpen && rtNoTalk && kbNoTalk && rootNoCreate && rootNoOpenKn,
+        `rtCreate=${rtCreate} kbOpen=${kbOpen} rtNoTalk=${rtNoTalk} kbNoTalk=${kbNoTalk} rootNoCreate=${rootNoCreate} rootNoOpenKn=${rootNoOpenKn}`);
     }
   } finally {
     await srv.cleanup();

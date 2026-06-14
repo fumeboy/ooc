@@ -8,7 +8,7 @@ import {
   creatorWindowIdOf,
   type FileWindow,
   type KnowledgeWindow,
-  type ProgramWindow,
+  type TerminalProcessWindow,
   type TalkWindow,
 } from "../windows/_shared/types";
 import { createStoneObject, createPoolObject, poolKnowledgeDir } from "../../persistable";
@@ -121,38 +121,38 @@ describe("Step 2 window lifecycles", () => {
     }
   });
 
-  it("program_window: terminal.program runs first exec; window.exec appends to history", async () => {
-    // program 已从 root 移到 agent 组合持有的 terminal tool-object 成员上；
-    // 经 terminal 成员窗 openMethodExec("program") 走真实派发链路。
+  it("terminal_process: terminal.run runs first exec; window.exec appends to history", async () => {
+    // 跑 bash 已从 root 移到 agent 组合持有的 terminal tool-object 成员上；
+    // 经 terminal 成员窗 openMethodExec("run") 走真实派发链路造出 terminal_process。
     const thread = makeThread({ id: "t_root", extraWindows: [TERMINAL_WIN] });
 
     const mgr0 = WindowManager.fromThread(thread, builtinRegistry);
     await mgr0.openMethodExec({
       thread,
       parentWindowId: "terminal",
-      method: "program",
+      method: "run",
       title: "first",
-      args: { language: "shell", code: "echo first" },
+      args: { code: "echo first" },
     });
     thread.contextWindows = mgr0.toData();
-    const programWindow = thread.contextWindows.find(
-      (w): w is ProgramWindow => w.class === "program",
+    const processWindow = thread.contextWindows.find(
+      (w): w is TerminalProcessWindow => w.class === "terminal_process",
     );
-    expect(programWindow).toBeDefined();
-    expect(programWindow!.history).toHaveLength(1);
-    expect(programWindow!.history[0]?.output).toContain("first");
+    expect(processWindow).toBeDefined();
+    expect(processWindow!.history).toHaveLength(1);
+    expect(processWindow!.history[0]?.output).toContain("first");
 
-    // 二次 exec 通过 program_window.exec
+    // 二次 exec 通过 terminal_process.exec
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     await mgr.openMethodExec({
       thread,
-      parentWindowId: programWindow!.id,
+      parentWindowId: processWindow!.id,
       method: "exec",
       title: "second",
-      args: { language: "shell", code: "echo second" },
+      args: { code: "echo second" },
     });
     thread.contextWindows = mgr.toData();
-    const reread = thread.contextWindows.find((w) => w.id === programWindow!.id) as ProgramWindow;
+    const reread = thread.contextWindows.find((w) => w.id === processWindow!.id) as TerminalProcessWindow;
     expect(reread.history).toHaveLength(2);
     expect(reread.history[1]?.output).toContain("second");
   });

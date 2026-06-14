@@ -92,16 +92,14 @@ type _ContextWindowUnion =
     }
   | {
       id: string;
-      class: "program";
+      class: "terminal_process" | "interpreter_process";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
       history: Array<{
         execId: string;
-        language: "shell" | "ts" | "js" | "function";
+        language: "shell" | "ts" | "js";
         code?: string;
-        function?: string;
-        args?: unknown;
         output: string;
         ok: boolean;
         startedAt: number;
@@ -313,7 +311,17 @@ export type ContextNodeData =
   | { kind: "window"; window: ContextWindow; transcript?: TranscriptEntry[] }
   | { kind: "message"; message: ThreadMessage; channel: "inbox" | "outbox" }
   | { kind: "event"; event: unknown; index: number }
-  | { kind: "exec"; exec: NonNullable<Extract<ContextWindow, { class: "program" }>>["history"][number] };
+  | { kind: "exec"; exec: ProcessExecEntry };
+
+/** 进程 window（terminal_process / interpreter_process）的单条 exec 记录。 */
+export type ProcessExecEntry = {
+  execId: string;
+  language: "shell" | "ts" | "js";
+  code?: string;
+  output: string;
+  ok: boolean;
+  startedAt: number;
+};
 
 // ---- 摘要工具 ----
 
@@ -345,7 +353,8 @@ function windowBadge(window: ContextWindow): string {
     case "do":           return "DO";
     case "todo":         return "TODO";
     case "talk":         return "TALK";
-    case "program":      return "PROG";
+    case "terminal_process":   return "TERM";
+    case "interpreter_process": return "INTERP";
     case "file":         return "FILE";
     case "knowledge":    return "KNOW";
     case "search":       return "SRCH";
@@ -375,7 +384,8 @@ function windowSummary(window: ContextWindow): string {
       return previewText(window.content);
     case "talk":
       return `→ ${window.target}`;
-    case "program":
+    case "terminal_process":
+    case "interpreter_process":
       return `${window.history.length} exec${window.history.length === 1 ? "" : "s"}`;
     case "file":
       return window.path + (window.lines ? ` [${window.lines.join("-")}]` : "");
@@ -418,8 +428,9 @@ function windowCharCount(window: ContextWindow): number {
     case "talk":
       n += window.target.length;
       break;
-    case "program":
-      for (const ex of window.history) n += (ex.code ?? ex.function ?? "").length + ex.output.length;
+    case "terminal_process":
+    case "interpreter_process":
+      for (const ex of window.history) n += (ex.code ?? "").length + ex.output.length;
       break;
     case "file":
       n += window.path.length;
@@ -521,14 +532,14 @@ function collectWindowConsumedMessageIds(snapshot: ContextSnapshot): Set<string>
   return consumed;
 }
 
-/** 构造单个 program exec 的子节点。 */
+/** 构造单个进程 exec 的子节点。 */
 function buildExecNode(
   parentId: string,
   depth: number,
-  exec: Extract<ContextWindow, { class: "program" }>["history"][number],
+  exec: ProcessExecEntry,
   index: number,
 ): ContextNode {
-  const headLine = exec.language === "function" ? `fn:${exec.function}` : `${exec.language}: ${(exec.code ?? "").split("\n")[0] ?? ""}`;
+  const headLine = `${exec.language}: ${(exec.code ?? "").split("\n")[0] ?? ""}`;
   return {
     id: `${parentId}:exec:${exec.execId}`,
     label: `[#${index}] ${headLine}`,
@@ -541,7 +552,7 @@ function buildExecNode(
   };
 }
 
-/** 构造单个 window 节点（含 sub_windows + program history）。
+/** 构造单个 window 节点（含 sub_windows + process history）。
  *
  * do/talk window 的 transcript（按窗口归纳的消息）不进入树的 children，
  * 而是挂到 data.transcript 上由右侧详情面板平铺渲染；
@@ -573,8 +584,8 @@ function buildWindowNode(
     messageCounts = { inbox: inboxN, outbox: outboxN };
   }
 
-  // program window 把 history 当作子节点展开
-  if (window.class === "program") {
+  // 进程 window 把 history 当作子节点展开
+  if (window.class === "terminal_process" || window.class === "interpreter_process") {
     window.history.forEach((exec, index) => {
       children.push(buildExecNode(window.id, depth + 1, exec, index));
     });
@@ -611,10 +622,11 @@ const WINDOW_TYPE_ORDER: ContextWindow["class"][] = [
   "method_exec",
   "do",
   "talk",
-  // plan 与 todo 同属行动结构，先于具体执行 (program/file/…) 渲染让用户先看到任务规划
+  // plan 与 todo 同属行动结构，先于具体执行 (terminal_process/file/…) 渲染让用户先看到任务规划
   "plan",
   "todo",
-  "program",
+  "terminal_process",
+  "interpreter_process",
   "file",
   "knowledge",
   "search",

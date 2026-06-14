@@ -20,13 +20,13 @@ describe.skipIf(!hasLlmEnv)("integration: plan-then-execute", () => {
     await cleanup();
   });
 
-  test("agent makes a plan then executes via program_window", async () => {
+  test("agent makes a plan then executes via terminal_process", async () => {
     const root = await makeRootThread(
       tempRoot,
       [
         "请先用 open(method=\"plan\", title=\"...\", args={ plan: \"数 src/ 下所有 .ts 文件总数\" }) 做一份计划（args 给齐时 open 会立即提交 form）。",
-        "然后用 open(method=\"program\", title=\"...\", args={ language: \"shell\", code: \"...\" }) 执行 shell；",
-        "结果会写进 program_window.history。读取后 open(method=\"end\", args={ summary: \"...\" }) 结束并把数字写进 summary。",
+        "然后用 open(method=\"run\", title=\"...\", args={ code: \"...\" }) 跑一段 bash；",
+        "结果会写进 terminal_process.history。读取后 open(method=\"end\", args={ summary: \"...\" }) 结束并把数字写进 summary。",
         "重要：args 给齐时 open 立即提交 form；不需要单独 wait。",
       ].join("\n"),
     );

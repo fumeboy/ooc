@@ -19,7 +19,6 @@ import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js"
 
 import "@ooc/builtins/file";
 import "@ooc/builtins/plan";
-import "@ooc/builtins/program";
 import "@ooc/builtins/knowledge";
 import "@ooc/builtins/search";
 import "@ooc/builtins/todo";
@@ -37,7 +36,7 @@ const AGENCY_METHODS: Record<string, ObjectMethod> = {
 
 // root **类**的 method —— 仅剩边缘 misc。decomposition 后归属：
 // agency(talk/plan/todo/end) → _builtin/agent；grep/glob/open_file/write_file → filesystem；
-// program → terminal；create_object → world；open_knowledge → knowledge_base。
+// run(bash) → terminal；run(ts/js) → interpreter；create_object → runtime；open_knowledge → knowledge_base。
 // 残留 example（教学样板）+ feishu（extendable 集成，grill 未列为成员/维度），暂留 root。
 export const ROOT_METHODS: Record<string, ObjectMethod> = {
   example: exampleMethod,
@@ -46,7 +45,7 @@ export const ROOT_METHODS: Record<string, ObjectMethod> = {
 };
 
 // agent 经类链可达的 **root-level 方法全集**（agency + root misc）——供 exec tool enum / 测试 helper。
-// 不含成员窗工具（grep/program 在 filesystem/terminal 成员窗上，window_classes 单独呈现）。
+// 不含成员窗工具（grep/run 在 filesystem/terminal/interpreter 成员窗上，window_classes 单独呈现）。
 const AGENT_SURFACE_METHODS: Record<string, ObjectMethod> = { ...AGENCY_METHODS, ...ROOT_METHODS };
 
 export function getOpenableMethods(): string[] {

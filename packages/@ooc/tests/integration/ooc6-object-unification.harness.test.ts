@@ -143,7 +143,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     // All builtin types should be registered (11 core types, custom removed in ooc-6)
     const expectedBuiltins: string[] = [
       "root", "method_exec", "todo", "file", "knowledge",
-      "search", "skill_index", "plan", "program",
+      "search", "skill_index", "plan", "terminal_process", "interpreter_process",
       "talk",
     ];
     for (const t of expectedBuiltins) {

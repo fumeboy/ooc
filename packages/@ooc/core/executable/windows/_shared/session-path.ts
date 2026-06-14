@@ -17,9 +17,9 @@
  *   - pools 不挂 branch（事实是单向积累的）。
  *   - 已经形如 `pools/objects/...` 的路径不重写。
  *
- * 注意：program(language="shell") 不走这里——shell 显式承诺"cwd 等于 OOC 进程的
- * 工作目录"，是 raw escape hatch（program 现为 terminal 成员，委托 program constructor；
- * shell KNOWLEDGE 见 `@ooc/builtins/program` 构造器）。
+ * 注意：terminal.run（bash）不走这里——bash 显式承诺"cwd 等于 OOC 进程的
+ * 工作目录"，是 raw escape hatch（terminal 委托 terminal_process 构造器；
+ * shell 实现见 `@ooc/builtins/terminal_process` 构造器）。
  */
 
 import { existsSync } from "node:fs";
@@ -49,7 +49,7 @@ export function resolveSessionPath(thread: ThreadContext | undefined, p: string)
 
   // 安全（harness executable 发现：`write_file{path:"../escape.txt"}` 写到 world 根之外，无拦截）：
   // data 原语（grep / glob / write_file / open_file / file_window.edit）不得读写 world 目录之外。
-  // `../` 相对逃逸 + world 外绝对路径一律拒绝；需 world 外操作请用 program(shell)（另设的 raw escape hatch，不走这里）。
+  // `../` 相对逃逸 + world 外绝对路径一律拒绝；需 world 外操作请用 terminal.run（bash）（另设的 raw escape hatch，不走这里）。
   const rel = relative(baseDir, resolved);
   if (rel === ".." || rel.startsWith(".." + sep) || isAbsolute(rel)) {
     // .world.json 可显式豁免该拦截（allowEscapeWorldFilePathLimit=true）：用于把宿主仓库

@@ -46,7 +46,9 @@ export type { TodoWindow } from "@ooc/builtins/todo/types.js";
 export type { TalkWindow } from "../talk/types.js";
 export type { PrWindow } from "@ooc/builtins/pr/types.js";
 export type { ReflectRequestWindow } from "@ooc/builtins/reflect_request/types.js";
-export type { ProgramWindow, ProgramExecRecord } from "@ooc/builtins/program/types.js";
+export type { TerminalProcessWindow } from "@ooc/builtins/terminal_process/types.js";
+export type { InterpreterProcessWindow } from "@ooc/builtins/interpreter_process/types.js";
+export type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";
 export type { FileWindow } from "@ooc/builtins/file/types.js";
 export type { KnowledgeWindow } from "@ooc/builtins/knowledge/types.js";
 export type { SearchWindow, SearchMatch } from "@ooc/builtins/search/types.js";
@@ -54,7 +56,8 @@ export type { SkillIndexWindow, SkillEntry } from "@ooc/builtins/skill_index/typ
 export type { PlanWindow, PlanWindowStep } from "@ooc/builtins/plan/types.js";
 export type { FilesystemWindow } from "@ooc/builtins/filesystem/types.js";
 export type { TerminalWindow } from "@ooc/builtins/terminal/types.js";
-export type { WorldWindow } from "@ooc/builtins/world/types.js";
+export type { InterpreterWindow } from "@ooc/builtins/interpreter/types.js";
+export type { RuntimeWindow } from "@ooc/builtins/runtime/types.js";
 export type { KnowledgeBaseWindow } from "@ooc/builtins/knowledge_base/types.js";
 export type { FeishuChatWindow, FeishuChatMessage } from "../../../extendable/lark/feishu-chat/types.js";
 export type { FeishuDocWindow, FeishuDocBlock } from "../../../extendable/lark/feishu-doc/types.js";
@@ -66,7 +69,8 @@ import type { TodoWindow } from "@ooc/builtins/todo/types.js";
 import type { TalkWindow } from "../talk/types.js";
 import type { PrWindow } from "@ooc/builtins/pr/types.js";
 import type { ReflectRequestWindow } from "@ooc/builtins/reflect_request/types.js";
-import type { ProgramWindow } from "@ooc/builtins/program/types.js";
+import type { TerminalProcessWindow } from "@ooc/builtins/terminal_process/types.js";
+import type { InterpreterProcessWindow } from "@ooc/builtins/interpreter_process/types.js";
 import type { FileWindow } from "@ooc/builtins/file/types.js";
 import type { KnowledgeWindow } from "@ooc/builtins/knowledge/types.js";
 import type { SearchWindow } from "@ooc/builtins/search/types.js";
@@ -74,7 +78,8 @@ import type { SkillIndexWindow } from "@ooc/builtins/skill_index/types.js";
 import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import type { FilesystemWindow } from "@ooc/builtins/filesystem/types.js";
 import type { TerminalWindow } from "@ooc/builtins/terminal/types.js";
-import type { WorldWindow } from "@ooc/builtins/world/types.js";
+import type { InterpreterWindow } from "@ooc/builtins/interpreter/types.js";
+import type { RuntimeWindow } from "@ooc/builtins/runtime/types.js";
 import type { KnowledgeBaseWindow } from "@ooc/builtins/knowledge_base/types.js";
 import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/types.js";
 import type { FeishuDocWindow } from "../../../extendable/lark/feishu-doc/types.js";
@@ -94,7 +99,8 @@ export type ContextWindow =
   | TalkWindow
   | PrWindow
   | ReflectRequestWindow
-  | ProgramWindow
+  | TerminalProcessWindow
+  | InterpreterProcessWindow
   | FileWindow
   | KnowledgeWindow
   | SearchWindow
@@ -104,5 +110,6 @@ export type ContextWindow =
   | PlanWindow
   | FilesystemWindow
   | TerminalWindow
-  | WorldWindow
+  | InterpreterWindow
+  | RuntimeWindow
   | KnowledgeBaseWindow;

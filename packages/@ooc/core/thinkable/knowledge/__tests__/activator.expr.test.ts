@@ -376,12 +376,12 @@ describe("evaluateTrigger", () => {
     expect(evaluateTrigger(parseTrigger("method::filesystem::talk"), ctx)).toBe(false);
   });
 
-  test("method:: 类链不误伤：create_object 跑在 world 成员窗（parentClass=null），仅 world 精确命中", () => {
-    const worldWin = { id: "world", class: "world", parentWindowId: "root", title: "world", status: "open", createdAt: 0 } as unknown as ContextWindow;
-    const createForm = form({ id: "fco", method: "create_object", parentWindowId: "world" });
-    const ctx = thread({ contextWindows: [worldWin, createForm] });
-    expect(evaluateTrigger(parseTrigger("method::world::create_object"), ctx)).toBe(true);
-    // world parentClass=null → root 非其祖先 → 旧 `method::root::create_object` 不再命中
+  test("method:: 类链不误伤：create_object 跑在 runtime 成员窗（parentClass=null），仅 runtime 精确命中", () => {
+    const runtimeWin = { id: "runtime", class: "runtime", parentWindowId: "root", title: "runtime", status: "open", createdAt: 0 } as unknown as ContextWindow;
+    const createForm = form({ id: "fco", method: "create_object", parentWindowId: "runtime" });
+    const ctx = thread({ contextWindows: [runtimeWin, createForm] });
+    expect(evaluateTrigger(parseTrigger("method::runtime::create_object"), ctx)).toBe(true);
+    // runtime parentClass=null → root 非其祖先 → 旧 `method::root::create_object` 不再命中
     expect(evaluateTrigger(parseTrigger("method::root::create_object"), ctx)).toBe(false);
   });
 });

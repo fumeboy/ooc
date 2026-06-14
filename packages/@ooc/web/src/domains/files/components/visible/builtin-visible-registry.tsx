@@ -7,7 +7,7 @@
  * 与 HANDLED_WINDOW_TYPES 硬编码集合。
  *
  * 收拢的组件：
- * - 8 个实存 builtin `visible/index.tsx`（file/knowledge/todo/search/skill_index/plan/program/root）
+ * - 实存 builtin `visible/index.tsx`（file/knowledge/todo/search/skill_index/plan/terminal_process/interpreter_process/root）
  * - method_exec（本地 ./MethodExecWindowDetail）
  * - 从 viewer 内联抽出的 feishu_chat / feishu_doc / do / talk
  *
@@ -23,7 +23,8 @@ import TodoWindowDetail from "@ooc/builtins/todo/visible/index";
 import SearchWindowDetail from "@ooc/builtins/search/visible/index";
 import SkillIndexWindowDetail from "@ooc/builtins/skill_index/visible/index";
 import PlanWindowDetail from "@ooc/builtins/plan/visible/index";
-import ProgramWindowDetail from "@ooc/builtins/program/visible/index";
+import TerminalProcessWindowDetail from "@ooc/builtins/terminal_process/visible/index";
+import InterpreterProcessWindowDetail from "@ooc/builtins/interpreter_process/visible/index";
 import RootWindowDetail from "@ooc/builtins/root/visible/index";
 import MethodExecWindowDetail from "../MethodExecWindowDetail";
 import FeishuChatWindowDetail from "./FeishuChatWindowDetail";
@@ -39,7 +40,8 @@ export const BUILTIN_VISIBLE: Record<string, ComponentType<{ window: ContextWind
   search: SearchWindowDetail as ComponentType<{ window: ContextWindow }>,
   skill_index: SkillIndexWindowDetail as ComponentType<{ window: ContextWindow }>,
   plan: PlanWindowDetail as ComponentType<{ window: ContextWindow }>,
-  program: ProgramWindowDetail as ComponentType<{ window: ContextWindow }>,
+  terminal_process: TerminalProcessWindowDetail as ComponentType<{ window: ContextWindow }>,
+  interpreter_process: InterpreterProcessWindowDetail as ComponentType<{ window: ContextWindow }>,
   root: RootWindowDetail as ComponentType<{ window: ContextWindow }>,
   method_exec: MethodExecWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   feishu_chat: FeishuChatWindowDetail,

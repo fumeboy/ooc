@@ -79,16 +79,14 @@ export type ContextWindow =
     }
   | {
       id: string;
-      class: "program";
+      class: "terminal_process" | "interpreter_process";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
       history: Array<{
         execId: string;
-        language: "shell" | "ts" | "js" | "function";
+        language: "shell" | "ts" | "js";
         code?: string;
-        function?: string;
-        args?: unknown;
         output: string;
         ok: boolean;
         startedAt: number;

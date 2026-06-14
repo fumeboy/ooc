@@ -12,7 +12,8 @@ import type { WindowDiffProps } from "./window-diff-props";
 import FileDiff from "@ooc/builtins/file/visible/diff";
 import KnowledgeDiff from "@ooc/builtins/knowledge/visible/diff";
 import SearchDiff from "@ooc/builtins/search/visible/diff";
-import ProgramDiff from "@ooc/builtins/program/visible/diff";
+import TerminalProcessDiff from "@ooc/builtins/terminal_process/visible/diff";
+import InterpreterProcessDiff from "@ooc/builtins/interpreter_process/visible/diff";
 import PlanDiff from "@ooc/builtins/plan/visible/diff";
 // 无 builtin 目录，web 本地:
 import TalkDiff from "./TalkDiff";
@@ -24,7 +25,8 @@ export const BUILTIN_DIFF: Record<string, ComponentType<WindowDiffProps>> = {
   file: FileDiff as ComponentType<WindowDiffProps>,
   knowledge: KnowledgeDiff as ComponentType<WindowDiffProps>,
   search: SearchDiff as ComponentType<WindowDiffProps>,
-  program: ProgramDiff as ComponentType<WindowDiffProps>,
+  terminal_process: TerminalProcessDiff as ComponentType<WindowDiffProps>,
+  interpreter_process: InterpreterProcessDiff as ComponentType<WindowDiffProps>,
   plan: PlanDiff as ComponentType<WindowDiffProps>,
   talk: TalkDiff as ComponentType<WindowDiffProps>,
   do: DoDiff as ComponentType<WindowDiffProps>,

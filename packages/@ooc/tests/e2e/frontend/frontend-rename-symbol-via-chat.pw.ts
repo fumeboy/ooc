@@ -81,14 +81,12 @@ test("F2 用户让 assistant 通过 chat 改文件 → fs 真改", async ({ page
     .map((e) => (e.arguments?.method as string) ?? "")
     .filter(Boolean);
   // LLM 实际 exec 时 args.method 是单段命令名（无 window-type 前缀）：
-  // file_window 上的 edit → "edit"，root 上的 write_file/program → "write_file"/"program"。
+  // file_window 上的 edit → "edit"，filesystem.write_file → "write_file"，terminal.run（bash）→ "run"。
   const usedFileWindowEdit = openCmds.includes("edit");
   const usedWriteFile = openCmds.includes("write_file");
   const usedShell = events.some((e) => {
     if (e.category !== "llm_interaction" || e.kind !== "function_call" || e.toolName !== "exec") return false;
-    if (e.arguments?.method !== "program") return false;
-    const lang = (e.arguments?.args?.language ?? e.arguments?.args?.lang) as string | undefined;
-    return lang === "shell";
+    return e.arguments?.method === "run";
   });
 
   // 观察孔 B（thread state）：thread.contextWindows 中有 type=file 的 window 即证明走过 file_window 路径。

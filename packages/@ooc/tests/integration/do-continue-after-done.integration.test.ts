@@ -24,9 +24,9 @@ describe.skipIf(!hasLlmEnv)("integration: do-continue-after-done", () => {
     const root = await makeRootThread(
       tempRoot,
       [
-        "请用 open(method=\"do\", title=\"任务A\", args={ msg: '请用 program(language=shell) 跑 find src/persistable -type f -name *.ts | wc -l 然后 end', wait: true }) 派生子线程。",
+        "请用 open(method=\"do\", title=\"任务A\", args={ msg: '请用 terminal 的 run 跑 bash find src/persistable -type f -name *.ts | wc -l 然后 end', wait: true }) 派生子线程。",
         "等子线程完成 task A（你会从 waiting 醒来），父线程的 contextWindows 中会有一个指向该子线程的 do_window。",
-        "然后通过 open(parent_window_id=<那个 do_window id>, method=\"continue\", args={ msg: '请再用 program(language=shell) 跑 find src/thinkable -type f -name *.ts | wc -l 然后 end', wait: true }) 追加 task B。",
+        "然后通过 open(parent_window_id=<那个 do_window id>, method=\"continue\", args={ msg: '请再用 terminal 的 run 跑 bash find src/thinkable -type f -name *.ts | wc -l 然后 end', wait: true }) 追加 task B。",
         "等 task B 也完成后（再次从 waiting 醒来），open(method=\"end\") 结束父线程。",
         "重要：你不在父线程跑 shell，只通过 do_window 派生/追加。",
       ].join("\n"),
@@ -41,7 +41,7 @@ describe.skipIf(!hasLlmEnv)("integration: do-continue-after-done", () => {
     const child = root.childThreads![childId]!;
     expect(child.status).toBe("done");
 
-    // 至少 2 次 program_window 创建（每次首 exec 都会写一条 form executed）
+    // 至少 2 次 terminal_process 创建（每次首 exec 都会写一条 form executed）
     expect(countFormExecutions(child)).toBeGreaterThanOrEqual(2);
   }, 240_000);
 });
