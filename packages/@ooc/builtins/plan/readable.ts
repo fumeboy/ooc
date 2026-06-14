@@ -1,5 +1,5 @@
+// 本文件只导出 readable / compressView / onClose hook；plan 类的单处声明（registerWindowClass）在 executable/index.ts。
 import {
-  builtinRegistry,
   type OnCloseContext,
   type RenderContext,
 } from "@ooc/core/extendable/_shared/registry.js";
@@ -39,7 +39,7 @@ export function readable(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
-function compressPlanWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
+export function compressPlanWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
   const w = ctx.window as PlanWindow;
   const total = w.steps.length;
   const done = w.steps.filter((s) => s.status === "done").length;
@@ -76,7 +76,7 @@ function compressPlanWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
  * 所以在这里显式遍历 contextWindows 找 parentPlanWindowId === self.id 的 plan_window，
  * 把它们也 close 掉。
  */
-function onClosePlanWindow(ctx: OnCloseContext): boolean | void {
+export function onClosePlanWindow(ctx: OnCloseContext): boolean | void {
   const w = ctx.window;
   if (w.class !== "plan") return;
   // sub plan_window 是通过 parentPlanWindowId 软链关联（不是 parentWindowId）;
@@ -88,10 +88,3 @@ function onClosePlanWindow(ctx: OnCloseContext): boolean | void {
     }
   }
 }
-
-// readable 维度自注册（readable + compressView + onClose + basicKnowledge）。
-builtinRegistry.registerReadable("plan", {
-  onClose: onClosePlanWindow,
-  readable,
-  compressView: compressPlanWindow,
-});

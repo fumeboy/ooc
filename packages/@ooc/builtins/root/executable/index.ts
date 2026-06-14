@@ -5,6 +5,7 @@
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import { readable } from "../readable.js";
 import { endMethod } from "./method.end.js";
 import {
   openFeishuChatMethod,
@@ -94,6 +95,15 @@ export function deriveRootIntentPaths(
   return [command, ...(entry.intents ?? [])];
 }
 
-builtinRegistry.registerExecutable("root", { methods: ROOT_METHODS });
+// root 类的单处声明：executable（ROOT_METHODS）+ readable + 可见性 flag。
+// root 是 BASE 锚点（默认 parentClass 终点），其 methods/readable/flag 在此合入。
+builtinRegistry.registerWindowClass({
+  type: "root",
+  methods: ROOT_METHODS,
+  readable,
+  renderableVisible: true,
+  builtinReadable: true,
+});
 // agency 只注册到 OOC Agent 基类（不在 root）；具体 agent 经 ooc.class 继承之。
+// _builtin/agent 是非渲染基类锚点：只注册方法表（无 readable / render flag）。
 builtinRegistry.registerExecutable("_builtin/agent", { methods: AGENCY_METHODS });

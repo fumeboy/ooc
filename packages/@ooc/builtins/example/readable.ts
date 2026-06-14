@@ -1,16 +1,17 @@
 /**
  * example —— readable 维度（标准对象定义样板的另一半）。
  *
- * 本文件拥有并**自注册**整个 readable 维度，经 registry 的 `registerReadable` 入口：
+ * 本文件**导出**整个 readable 维度的 hook：
  * - `readable`：把 example_window 渲染进 LLM context（业务数据 message 经 viewport 切片）。
  * - window method `set_viewport`：控制展示视口（写 state.viewport，不碰业务数据）。
  * - `compressView`：折叠/快照态渲染。
  *
  * 这三者都属于 readable 维度——与 executable 维度（object method / constructor，在
- * `executable/index.ts`）物理分离、分注册。本文件由 barrel `./index.ts` 的 side-effect import 加载。
+ * `executable/index.ts`）物理分离。example 类的**单处声明**（registerWindowClass：两维度一处合一）
+ * 在 `executable/index.ts`——这是所有 builtins 包的标准范式。
  */
 
-import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import { type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import {
   DEFAULT_VIEWPORT,
   applyViewport,
@@ -40,7 +41,7 @@ export function readable(ctx: RenderContext): XmlNode[] {
 }
 
 /** window method：调整展示视口（写 state.viewport）。复用通用 windowSetViewport 执行体。 */
-const setViewportMethod: WindowMethod = {
+export const setViewportMethod: WindowMethod = {
   kind: "window",
   description: "Adjust the viewport (line/column range) rendered for this example window.",
   intents: ["set_viewport"],
@@ -56,7 +57,7 @@ const setViewportMethod: WindowMethod = {
 };
 
 /** compressView hook：折叠/快照态只留元信息。 */
-function compressExampleWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
+export function compressExampleWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
   const window = ctx.window as ExampleWindow;
   return [
     xmlElement("example", { bump_count: String(window.bumpCount ?? 0) }),
@@ -66,11 +67,3 @@ function compressExampleWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
     }),
   ];
 }
-
-builtinRegistry.registerReadable("example", {
-  readable,
-  windowMethods: {
-    set_viewport: setViewportMethod,
-  },
-  compressView: compressExampleWindow,
-});

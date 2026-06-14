@@ -1,5 +1,5 @@
+// 本文件只导出 readable / onClose hook；skill_index 类的单处声明（registerWindowClass）在 executable/index.ts。
 import {
-  builtinRegistry,
   type OnCloseContext,
   type RenderContext,
 } from "@ooc/core/extendable/_shared/registry.js";
@@ -35,14 +35,8 @@ export function readable(ctx: RenderContext): XmlNode[] {
   ];
 }
 
-function onCloseSkillIndex(_ctx: OnCloseContext): boolean {
+export function onCloseSkillIndex(_ctx: OnCloseContext): boolean {
   // skill_index 是 protocol 派生 window；理论上不会被 close（不入 thread.json，每轮重建）
   // 即使被显式 close，也拒绝（与 root window 同级）
   return false;
 }
-
-// readable 维度自注册（readable + onClose + basicKnowledge）。
-builtinRegistry.registerReadable("skill_index", {
-  onClose: onCloseSkillIndex,
-  readable,
-});

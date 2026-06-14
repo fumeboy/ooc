@@ -9,10 +9,12 @@
  * - 从 `_shared` re-export 所有 hook/定义类型 + `filterMethodsByVisibility` 纯函数。
  *
  * 使用迁移指引：
- * - Builtin 注册：import { builtinRegistry } from "./registry.js";
- *   executable 维度 builtinRegistry.registerExecutable(...) + readable 维度 builtinRegistry.registerReadable(...)
+ * - Builtin 窗类型注册：import { builtinRegistry } from "./registry.js";
+ *   一处 builtinRegistry.registerWindowClass({ type, methods, parentClass, readable, ... })
+ *   （seed-if-absent + executable + readable 两维度 + 可见性 flag 合一）。
  * - 运行时查找：通过 builtinRegistry（think/exec/render 默认）或 WindowManager.registry
- * - 测试/独立场景：const reg = createObjectRegistry(); reg.registerExecutable(...) / reg.registerReadable(...)
+ * - 测试/独立场景：const reg = createObjectRegistry()（已 seedFrom builtinRegistry）；
+ *   要 seed 一个新测试类型走 reg.registerWindowClass(...)。
  */
 
 export type {

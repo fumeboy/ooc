@@ -11,6 +11,7 @@ import type { MethodExecutionContext, ObjectMethod } from "@ooc/core/extendable/
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import { createObjectInSession } from "@ooc/core/persistable/index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
+import { readable } from "../readable.js";
 
 const CREATE_OBJECT_TIP = `create_object 建一个全新对象的骨架（仅业务 session 可调）。
 参数：objectId（必填，新对象 id）、selfMd（必填）、readableMd（必填）、knowledge（可选 {filename: content}）。
@@ -88,4 +89,12 @@ export async function executeCreateObject(ctx: MethodExecutionContext): Promise<
   });
 }
 
-builtinRegistry.registerExecutable("world", { methods: { create_object: createObjectMethod } });
+// world 类的单处声明：executable（methods）+ readable + 可见性 flag。tool-object 成员，parentClass:null。
+builtinRegistry.registerWindowClass({
+  type: "world",
+  parentClass: null,
+  methods: { create_object: createObjectMethod },
+  readable,
+  renderableVisible: true,
+  builtinReadable: true,
+});

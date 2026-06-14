@@ -22,6 +22,7 @@ import type {
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import type { FileWindow } from "../types.js";
 import { DEFAULT_VIEWPORT } from "@ooc/core/extendable/_shared/viewport.js";
+import { readable, setRangeMethod, setViewportMethod, compressFileWindow } from "../readable.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -466,13 +467,24 @@ const fileConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerExecutable("file", {
+// file 类的单处声明：executable（methods + constructor）+ readable 维度
+// （readable + window methods set_range/set_viewport + compressView，定义在 ../readable.ts）+ 可见性 flag。
+// parentClass:null —— 窗类型，不继承 root。
+builtinRegistry.registerWindowClass({
+  type: "file",
+  parentClass: null,
   methods: {
     reload: reloadMethod,
     edit: editMethod,
     close: closeMethod,
     file: fileConstructor,
   },
+  readable,
+  windowMethods: {
+    set_range: setRangeMethod,
+    set_viewport: setViewportMethod,
+  },
+  compressView: compressFileWindow,
+  renderableVisible: true,
+  builtinReadable: true,
 });
-// readable 维度（registerReadable：readable + window methods set_range/set_viewport + compressView）
-// 在 ../readable.ts 自注册（asTuple 的 import 触发其加载）。

@@ -64,50 +64,28 @@ function resolveEffectiveParentClass(
 }
 
 /**
- * Base types seeded into every new ObjectRegistry. Map key 即 type。
+ * Base anchors seeded into every new ObjectRegistry. Map key 即 type。
  *
- * 每条携带可见性/readable flag（取代旧 module-level `RENDERABLE_VISIBLE_TYPES` /
- * xml.ts `BUILTIN_TYPES` 两个硬编码 Set）：
- * - `renderableVisible: true` —— 参与 resolveEffectiveVisibleType（旧 RENDERABLE_VISIBLE_TYPES 成员）。
- * - `builtinReadable: true` —— readable 走 builtin registry hook 短路（旧 BUILTIN_TYPES 成员，
- *   renderableVisible 的真子集；pr / reflect_request 可见但**不**短路，保留差异）。
- * example / _builtin/agent 两者皆不打——非渲染窗类型。
+ * **这里只留真正的基类**——不由某个自包含声明站点（builtins 包 / core window 站点）拥有，
+ * 而是被全 registry 当作 parentClass 解析锚点 / method 调用临时载体的三个类：
+ * - `root`：默认 parentClass 终点（resolveParentClassChain 把 `parentClass===undefined` 解析为 root）。
+ * - `method_exec`：method 调用过程的临时载体（Object 内置特性）。
+ * - `_builtin/agent`：OOC Agent 基类（承载 agency）。
+ *
+ * 三者均为 **minimal anchor**：只保证「type 存在、可做继承链终点」。methods / readable /
+ * renderableVisible / builtinReadable 等维度由各自的拥有站点经 `registerWindowClass`（或
+ * registerExecutable/registerReadable）在 side-effect import 时合入——与所有窗类型一视同仁。
+ *
+ * **窗类型不再在此硬编码**（旧表曾含 todo / talk / pr / reflect_request / program / file /
+ * knowledge / search / skill_index / feishu_chat / feishu_doc / plan / filesystem / terminal /
+ * world / knowledge_base / example）：
+ * 每个窗类型由其拥有的 builtins 包 / core 站点经 `registerWindowClass` 一处自声明
+ * （seed-if-absent + methods + readable + 可见性 flag + parentClass）。`createObjectRegistry()`
+ * / `__resetForTests()` 经 `seedFrom(builtinRegistry)` 拿到这些 side-effect 注册的窗类型。
  */
 const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
-  ["root", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["method_exec", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  // 窗类型（talk/file/...）是 ContextWindow 的【种类】，不是继承 root 的 Object/Agent——
-  // 各自的方法直接注册在自身 class 上，不该继承 root 的 misc（example/feishu）。
-  // 故全部 parentClass:null（与 root/method_exec/filesystem 一致）；否则 computeVisibleMethodSet
-  // 沿链合并方法时会把 example/feishu 污染到每个窗。只有 _builtin/agent 与 agent 对象继承 root。
-  ["todo", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["talk", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  // pr / reflect_request —— 可见类型（renderableVisible），但 readable **不**走 builtin 短路
-  // （builtinReadable 缺省）：沿继承链 / stone 反射解析，保留旧 BUILTIN_TYPES 不含此二者的差异。
-  ["pr", { methods: {}, parentClass: null, renderableVisible: true }],
-  ["reflect_request", { methods: {}, parentClass: null, renderableVisible: true }],
-  ["program", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["file", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["knowledge", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["search", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["skill_index", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["feishu_chat", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["feishu_doc", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["plan", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  // example —— 标准对象定义样板（executable/index.ts + readable.ts 两维度分注册示范）。
-  // 非渲染窗类型：renderableVisible / builtinReadable 皆缺省。
-  ["example", { methods: {}, parentClass: null }],
-  // filesystem / terminal —— agent 组合持有的 tool-object 成员。
-  // parentClass:null（terminal，不继承 root）——tool-object **不是 Agent**：它没有 agency
-  // （talk/plan/...），只有自己的工具方法。Object/Agent 边界在类型层落实。
-  ["filesystem", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["terminal", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  // world（create_object/governance）/ knowledge_base（open_knowledge）—— 同为 tool-object 成员。
-  ["world", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  ["knowledge_base", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
-  // _builtin/agent —— OOC Agent 基类：承载 agency（talk/plan/todo/end），由 root/executable
-  // 在 load 期 registerExecutable 注入。具体 agent（supervisor）经 ooc.class 继承它。
-  // 隐式继承 root（拿 example/feishu 等残留 misc）。非渲染窗类型：两 flag 皆缺省。
+  ["root", { methods: {}, parentClass: null }],
+  ["method_exec", { methods: {}, parentClass: null }],
   ["_builtin/agent", { methods: {} }],
 ];
 
@@ -129,7 +107,8 @@ export class ObjectRegistry {
    * consumedMessageIds）走 registerReadable。类型层即拒绝越界字段，
    * 避免两个维度的注册再挤进同一次调用（符号/职责膨胀）。
    *
-   * 只更新**已 seed 的 type**（BASE_TYPE_DEFINITIONS）；新 type 走 registerNewObjectType。
+   * 只更新**已存在的 type**（基类锚点 / 已被 registerWindowClass seed 的窗类型）；
+   * 要一处自声明一个新窗类型（含 seed-if-absent + 两维度 + flag）走 {@link registerWindowClass}。
    */
   registerExecutable(
     type: string,
@@ -163,11 +142,12 @@ export class ObjectRegistry {
    * builtinReadable）。把过去散落在 BASE_TYPE_DEFINITIONS seed、registerExecutable、
    * registerReadable、两个硬编码 Set 上的接线收敛到一处声明。
    *
-   * 与 {@link registerExecutable} / {@link registerReadable} 的差异：那两个要求 type 已 seed
+   * **各 builtins 包 / core window 站点的唯一注册入口**：一个包一处 `registerWindowClass({...})`，
+   * 在 side-effect import 时把自己 seed 进 builtinRegistry（窗类型不再硬编码在 BASE_TYPE_DEFINITIONS）。
+   *
+   * 与 {@link registerExecutable} / {@link registerReadable} 的差异：那两个要求 type 已存在
    * 且按维度分注册；本方法对**未 seed 的 type 先建空定义**再合入，故可一次性声明新 window class。
    * 未传字段保留 existing（与 mergeExistingDefinition 同语义），可重复调用增量补全。
-   *
-   * 本步（S0）不强制现有类型改用它——供后续 S1 迁移各 window class 用。
    */
   registerWindowClass(
     decl: { type: string } & Pick<
@@ -384,12 +364,19 @@ export class ObjectRegistry {
     return Array.from(this.store.entries()).map(([k, v]) => [k, { ...v }]);
   }
 
-  /** Empty the registry (tests only). */
+  /**
+   * Reset to base anchors + side-effect-registered builtin window classes (tests only).
+   *
+   * 先清空 + 重 seed 三个基类锚点，再 `seedFrom(builtinRegistry)` 把各 builtins 包 / core 站点
+   * 经 side-effect import 注册的窗类型（file/talk/search/…）拷回——与 {@link createObjectRegistry}
+   * 同语义。`builtinRegistry` 自身 reset 时不 seedFrom 自己（避免自合并）。
+   */
   __resetForTests(): void {
     this.store.clear();
     for (const [key, def] of BASE_TYPE_DEFINITIONS) {
       this.store.set(key as string, def);
     }
+    if (this !== builtinRegistry) this.seedFrom(builtinRegistry);
   }
 
   /** Copy all entries from another registry, merging methods/hooks. */
@@ -423,16 +410,18 @@ export class ObjectRegistry {
 
 
 /**
- * Module-level singleton holding builtin object type definitions (root, file,
- * plan, program, todo, search, knowledge, skill_index, talk, method_exec,
- * feishu_chat, feishu_doc).
+ * Module-level singleton holding builtin object type definitions
+ * （root / method_exec / _builtin/agent 基类锚点 + 各窗类型 file / plan / program / todo / search /
+ * knowledge / skill_index / talk / pr / reflect_request / feishu_chat / feishu_doc / filesystem /
+ * terminal / world / knowledge_base / …）.
  *
- * Builtin modules populate this via side-effect imports at module load time:
- * executable/index.ts 调 `builtinRegistry.registerExecutable("file", { methods })`，
- * readable.ts 调 `builtinRegistry.registerReadable("file", { readable, windowMethods, ... })`。
+ * Builtin modules / core window 站点 populate this via side-effect imports at module load time：
+ * 每个窗类型一处 `builtinRegistry.registerWindowClass({ type, methods, parentClass, readable, ... })`
+ * （seed-if-absent + 两维度 + 可见性 flag）。窗类型不再在 BASE_TYPE_DEFINITIONS 硬编码——只剩基类锚点。
  *
  * think / exec / render 默认就用这个 module-level registry（buildContext /
- * dispatchToolCall 不显式传 registry 时回退到它）。
+ * dispatchToolCall 不显式传 registry 时回退到它）。per-world / 测试经 createObjectRegistry()
+ * `seedFrom` 本 registry 拿到等价窗类型集合。
  *
  * Stone-backed user-defined types are NOT registered here at load time — they are
  * registered on demand by the render-time lazy ensure in
@@ -440,6 +429,18 @@ export class ObjectRegistry {
  */
 export const builtinRegistry = new ObjectRegistry();
 
+/**
+ * 建一份 per-world / per-test registry：先 seed 三个基类锚点（constructor），
+ * 再 `seedFrom(builtinRegistry)` 拷入各 builtins 包 / core 站点经 side-effect import 注册的
+ * **窗类型**（file/talk/search/plan/…）。
+ *
+ * 这是窗类型从 BASE_TYPE_DEFINITIONS 移出后的安全网：think/exec/render 默认用全局 builtinRegistry
+ * （已含全部窗类型），而 per-world / 测试用 createObjectRegistry() 经此拿到等价集合。
+ * 任何真实入口（buildServer / windows barrel）都在 createObjectRegistry 之前 load 完 builtins，
+ * 故 seedFrom 时 builtinRegistry 已就绪。
+ */
 export function createObjectRegistry(): ObjectRegistry {
-  return new ObjectRegistry();
+  const reg = new ObjectRegistry();
+  reg.seedFrom(builtinRegistry);
+  return reg;
 }

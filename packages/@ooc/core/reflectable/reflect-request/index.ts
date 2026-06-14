@@ -26,7 +26,12 @@ import type { TalkWindow } from "@ooc/core/executable/windows/talk/types.js";
 import { newFeatBranchMethod } from "./method.new-feat-branch.js";
 import { createPrAndInviteReviewersMethod } from "./method.create-pr-and-invite-reviewers.js";
 
-builtinRegistry.registerExecutable("reflect_request", {
+// reflect_request 类的单处声明：executable（会话 method + reflectable 沉淀 method）+ readable 维度
+// （复用 talk 的 readable / windowMethods / compressView / onClose / consumedMessageIds）+ 可见性 flag。
+// renderableVisible:true 但 **不** builtinReadable（与 pr 同——保留沿继承链/stone 解析的差异）。parentClass:null。
+builtinRegistry.registerWindowClass({
+  type: "reflect_request",
+  parentClass: null,
   methods: {
     // 会话 method（复用 talk）
     say: sayMethod,
@@ -38,8 +43,6 @@ builtinRegistry.registerExecutable("reflect_request", {
   },
   // 与 talk_window 一致：Object 内置特性，inline 进所属 thread 的 thread-context.json，不写独立 dir。
   isBuiltinFeature: true,
-});
-builtinRegistry.registerReadable("reflect_request", {
   windowMethods: {
     set_transcript_window: setTranscriptWindowCommandForTalk,
   },
@@ -48,4 +51,5 @@ builtinRegistry.registerReadable("reflect_request", {
   compressView: compressTalkWindow,
   consumedMessageIds: (ctx) =>
     filterMessagesForTalkWindow(ctx.window as TalkWindow, ctx.thread),
+  renderableVisible: true,
 });

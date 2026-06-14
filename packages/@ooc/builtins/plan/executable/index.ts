@@ -12,6 +12,7 @@ import {
   generateWindowId,
 } from "@ooc/core/extendable/_shared/types.js";
 import type { PlanWindow, PlanWindowStep } from "../types.js";
+import { readable, compressPlanWindow, onClosePlanWindow } from "../readable.js";
 
 import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
 import { isString } from "@ooc/builtins/_shared/executable/utils.js";
@@ -374,7 +375,11 @@ const planConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerExecutable("plan", {
+// plan 类的单处声明：executable（methods + constructor）+ readable 维度
+// （readable + compressView + onClose，定义在 ../readable.ts）+ 可见性 flag。parentClass:null。
+builtinRegistry.registerWindowClass({
+  type: "plan",
+  parentClass: null,
   methods: {
     update_plan: updatePlanMethod,
     add_step: addStepMethod,
@@ -385,4 +390,9 @@ builtinRegistry.registerExecutable("plan", {
     close: closeMethod,
     plan: planConstructor,
   },
+  readable,
+  compressView: compressPlanWindow,
+  onClose: onClosePlanWindow,
+  renderableVisible: true,
+  builtinReadable: true,
 });

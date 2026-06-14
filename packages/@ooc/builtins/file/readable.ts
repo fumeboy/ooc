@@ -1,5 +1,7 @@
+// 本文件只导出 readable / windowMethods / compressView hook；
+// file 类的单处声明（registerWindowClass）在 executable/index.ts。
 import { readFile } from "node:fs/promises";
-import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+import { type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import type { FileWindow } from "./types.js";
 import {
   DEFAULT_VIEWPORT,
@@ -87,7 +89,7 @@ export async function readable(ctx: RenderContext): Promise<XmlNode[]> {
   return children;
 }
 
-const setRangeMethod: WindowMethod = {
+export const setRangeMethod: WindowMethod = {
   kind: "window",
   description: "Adjust the visible line/column slice of this file window (legacy; prefer set_viewport).",
   schema: {
@@ -102,7 +104,7 @@ const setRangeMethod: WindowMethod = {
   exec: (ctx) => fileWindowSetRange(ctx),
 };
 
-const setViewportMethod: WindowMethod = {
+export const setViewportMethod: WindowMethod = {
   kind: "window",
   description: "Precisely adjust the rendered viewport (line/column window) of this file.",
   schema: {
@@ -139,7 +141,7 @@ export function fileWindowSetRange(ctx: WindowMethodExecutionContext): WindowMet
   };
 }
 
-async function compressFileWindow(
+export async function compressFileWindow(
   ctx: RenderContext,
   level: 1 | 2,
 ): Promise<XmlNode[]> {
@@ -169,12 +171,3 @@ async function compressFileWindow(
   );
   return children;
 }
-
-builtinRegistry.registerReadable("file", {
-  windowMethods: {
-    set_range: setRangeMethod,
-    set_viewport: setViewportMethod,
-  },
-  readable,
-  compressView: compressFileWindow,
-});

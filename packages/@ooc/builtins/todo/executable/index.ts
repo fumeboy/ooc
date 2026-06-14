@@ -3,6 +3,7 @@
  */
 
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import { readable } from "../readable.js";
 import type {
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/method-types.js";
@@ -64,9 +65,15 @@ const todoConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerExecutable("todo", {
+// todo 类的单处声明：executable（constructor）+ readable + 可见性 flag。parentClass:null（窗类型，不继承 root）。
+builtinRegistry.registerWindowClass({
+  type: "todo",
+  parentClass: null,
   methods: {
     todo: todoConstructor,
   },
   isBuiltinFeature: true,
+  readable,
+  renderableVisible: true,
+  builtinReadable: true,
 });

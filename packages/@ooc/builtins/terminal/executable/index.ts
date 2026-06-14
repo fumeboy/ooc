@@ -11,6 +11,7 @@
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import { readable } from "../readable.js";
 
 // side-effect：确保被委托的 program constructor 已注册。
 import "@ooc/builtins/program";
@@ -46,6 +47,13 @@ export const programMethod: ObjectMethod = {
   exec: programExec,
 };
 
-builtinRegistry.registerExecutable("terminal", {
+// terminal 类的单处声明：executable（methods）+ readable + 可见性 flag。
+// parentClass:null —— tool-object **不是 Agent**：无 agency（talk/plan/…），只有自己的工具方法。
+builtinRegistry.registerWindowClass({
+  type: "terminal",
+  parentClass: null,
   methods: { program: programMethod },
+  readable,
+  renderableVisible: true,
+  builtinReadable: true,
 });

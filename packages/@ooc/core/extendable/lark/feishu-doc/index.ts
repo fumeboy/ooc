@@ -452,7 +452,10 @@ function renderFeishuDoc(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
-builtinRegistry.registerExecutable("feishu_doc", {
+// feishu_doc 类的单处声明：executable（doc methods）+ readable + 可见性 flag。parentClass:null（窗类型）。
+builtinRegistry.registerWindowClass({
+  type: "feishu_doc",
+  parentClass: null,
   methods: {
     read: readMethod,
     search_in_doc: searchInDocMethod,
@@ -462,7 +465,7 @@ builtinRegistry.registerExecutable("feishu_doc", {
     attach_to_chat: attachToChatMethod,
     close: closeMethod,
   },
-});
-builtinRegistry.registerReadable("feishu_doc", {
   readable: renderFeishuDoc,
+  renderableVisible: true,
+  builtinReadable: true,
 });

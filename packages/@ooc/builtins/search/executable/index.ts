@@ -9,6 +9,7 @@ import type {
 import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import { readable, setResultsWindowCommandForSearch, compressSearchWindow } from "../readable.js";
 import { Glob } from "bun";
 import { isAbsolute, resolve } from "node:path";
 import {
@@ -106,13 +107,6 @@ export async function executeSearchOpenMatch(
   }
   return undefined;
 }
-
-builtinRegistry.registerExecutable("search", {
-  methods: {
-    close: closeMethod,
-    open_match: openMatchMethod,
-  },
-});
 
 // ─────────────────────────── constructor ──────────────────────────
 
@@ -239,11 +233,23 @@ const searchConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerExecutable("search", {
+// search 类的单处声明：executable（methods + glob/grep constructor）+ readable 维度
+// （readable + window method set_results_window + compressView，定义在 ../readable.ts）+ 可见性 flag。
+// parentClass:null —— 窗类型，不继承 root。
+builtinRegistry.registerWindowClass({
+  type: "search",
+  parentClass: null,
   methods: {
     close: closeMethod,
     open_match: openMatchMethod,
     glob: searchConstructor,
     grep: searchConstructor,
   },
+  readable,
+  windowMethods: {
+    set_results_window: setResultsWindowCommandForSearch,
+  },
+  compressView: compressSearchWindow,
+  renderableVisible: true,
+  builtinReadable: true,
 });

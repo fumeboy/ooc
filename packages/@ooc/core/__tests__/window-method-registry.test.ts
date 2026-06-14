@@ -7,8 +7,10 @@ const wm: WindowMethod = {
   exec: (ctx) => ({ ok: true, state: ctx.windowState }),
 };
 
-test("registerReadable keeps windowMethods on base type", () => {
+test("registerReadable keeps windowMethods on a registered window class", () => {
   const r = new ObjectRegistry();
+  // 窗类型经 registerWindowClass seed（不再预置于 BASE_TYPE_DEFINITIONS），再由维度 register 增量合入。
+  r.registerWindowClass({ type: "file", methods: {} });
   r.registerReadable("file", { windowMethods: { set_viewport: wm } });
   expect(r.getObjectDefinition("file")?.windowMethods?.set_viewport).toBeDefined();
 });
@@ -33,6 +35,7 @@ test("lookupWindowMethod on unknown type returns undefined (no throw)", () => {
 
 test("seedFrom key-merges windowMethods to per-world registry", () => {
   const src = new ObjectRegistry();
+  src.registerWindowClass({ type: "file", methods: {} });
   src.registerReadable("file", { windowMethods: { set_viewport: wm } });
   const world = new ObjectRegistry();
   world.seedFrom(src);
@@ -41,6 +44,7 @@ test("seedFrom key-merges windowMethods to per-world registry", () => {
 
 test("collision between object method and window method is rejected (split-call)", () => {
   const r = new ObjectRegistry();
+  r.registerWindowClass({ type: "file", methods: {} });
   // executable 维度先注册 set_viewport 为 object method；readable 维度再注册同名 window method → fail-loud。
   const om = { description: "test", intents: ["set_viewport"], exec: () => undefined } as any;
   r.registerExecutable("file", { methods: { set_viewport: om } });
@@ -51,6 +55,7 @@ test("collision between object method and window method is rejected (split-call)
 
 test("registerExecutable does not clobber readable dimension and vice versa", () => {
   const r = new ObjectRegistry();
+  r.registerWindowClass({ type: "file", methods: {} });
   const om = { description: "test", exec: () => undefined } as any;
   // 两个维度分注册，互不覆盖（任意先后顺序）。
   r.registerExecutable("file", { methods: { reload: om } });
@@ -60,6 +65,7 @@ test("registerExecutable does not clobber readable dimension and vice versa", ()
   expect(def?.methods?.reload).toBeDefined();
 
   const r2 = new ObjectRegistry();
+  r2.registerWindowClass({ type: "file", methods: {} });
   r2.registerReadable("file", { windowMethods: { set_viewport: wm } });
   r2.registerExecutable("file", { methods: { reload: om } });
   const def2 = r2.getObjectDefinition("file");

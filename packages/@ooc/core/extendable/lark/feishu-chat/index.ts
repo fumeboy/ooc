@@ -454,7 +454,10 @@ function formatMessageLine(m: FeishuChatMessage): string {
   return `${ts} ${kind}${m.sender} (${m.messageId.slice(-8)})${reply}: ${m.text}`;
 }
 
-builtinRegistry.registerExecutable("feishu_chat", {
+// feishu_chat 类的单处声明：executable（chat methods）+ readable + 可见性 flag。parentClass:null（窗类型）。
+builtinRegistry.registerWindowClass({
+  type: "feishu_chat",
+  parentClass: null,
   methods: {
     refresh: refreshMethod,
     search: searchMethod,
@@ -463,7 +466,7 @@ builtinRegistry.registerExecutable("feishu_chat", {
     subscribe: subscribeMethod,
     close: closeMethod,
   },
-});
-builtinRegistry.registerReadable("feishu_chat", {
   readable: renderFeishuChat,
+  renderableVisible: true,
+  builtinReadable: true,
 });

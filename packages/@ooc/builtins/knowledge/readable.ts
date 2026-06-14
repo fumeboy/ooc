@@ -1,5 +1,5 @@
+// 本文件只导出 readable / windowMethods / onClose hook；knowledge 类的单处声明（registerWindowClass）在 executable/index.ts。
 import {
-  builtinRegistry,
   type OnCloseContext,
   type RenderContext,
 } from "@ooc/core/extendable/_shared/registry.js";
@@ -94,7 +94,7 @@ export async function readable(ctx: RenderContext): Promise<XmlNode[]> {
   return children;
 }
 
-const setViewportMethod: WindowMethod = {
+export const setViewportMethod: WindowMethod = {
   kind: "window",
   description: "Adjust the viewport (line/column range) rendered for this knowledge window.",
   intents: ["set_viewport"],
@@ -117,7 +117,7 @@ const setViewportMethod: WindowMethod = {
 };
 
 /** 拒绝 close 非 explicit 来源的 knowledge_object（合成 window 不可关闭）。 */
-function onCloseKnowledgeWindow(ctx: OnCloseContext): boolean | void {
+export function onCloseKnowledgeWindow(ctx: OnCloseContext): boolean | void {
   if (ctx.window.class !== "knowledge") return;
   // narrowing: ctx.window 契约层是 base ContextWindow；type==="knowledge" 守卫后
   // narrow 回 KnowledgeWindow 以读 source/path（runtime 保证此 window 即 knowledge 实例）。
@@ -132,12 +132,3 @@ function onCloseKnowledgeWindow(ctx: OnCloseContext): boolean | void {
     return false;
   }
 }
-
-// readable 维度自注册（readable + window method set_viewport + onClose）。
-builtinRegistry.registerReadable("knowledge", {
-  windowMethods: {
-    set_viewport: setViewportMethod,
-  },
-  onClose: onCloseKnowledgeWindow,
-  readable,
-});

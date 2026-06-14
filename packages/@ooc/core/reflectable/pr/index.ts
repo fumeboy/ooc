@@ -163,7 +163,12 @@ const requestChangesMethod: ObjectMethod = {
   exec: (ctx) => execReview(ctx, "request-changes"),
 };
 
-builtinRegistry.registerExecutable("pr", {
+// pr 类的单处声明：executable（review methods）+ readable（readable + onClose）+ 可见性 flag。
+// renderableVisible:true 但 **不** builtinReadable —— pr 可见、却沿继承链/stone 反射解析 readable
+// （保留与其他 builtin 窗类型的差异，缺省 builtinReadable）。parentClass:null。
+builtinRegistry.registerWindowClass({
+  type: "pr",
+  parentClass: null,
   methods: {
     approve: approveMethod,
     reject: rejectMethod,
@@ -171,8 +176,7 @@ builtinRegistry.registerExecutable("pr", {
   },
   // pr_window 是系统投递的协作窗口 —— inline 进所属 thread 的 thread-context.json，不写独立 dir。
   isBuiltinFeature: true,
-});
-builtinRegistry.registerReadable("pr", {
   onClose: onClosePrWindow,
   readable: renderPrWindow,
+  renderableVisible: true,
 });

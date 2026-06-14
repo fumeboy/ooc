@@ -13,6 +13,7 @@
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import { readable } from "../readable.js";
 
 // side-effect：确保被委托的 search / file constructor 已注册（与 root 方法文件同样的保险）。
 import "@ooc/builtins/search";
@@ -117,11 +118,18 @@ const writeFileMethod: ObjectMethod = {
   exec: writeFileExec,
 };
 
-builtinRegistry.registerExecutable("filesystem", {
+// filesystem 类的单处声明：executable（methods）+ readable + 可见性 flag。
+// parentClass:null —— tool-object **不是 Agent**：无 agency，只有自己的工具方法。
+builtinRegistry.registerWindowClass({
+  type: "filesystem",
+  parentClass: null,
   methods: {
     grep: grepMethod,
     glob: globMethod,
     open_file: openFileMethod,
     write_file: writeFileMethod,
   },
+  readable,
+  renderableVisible: true,
+  builtinReadable: true,
 });

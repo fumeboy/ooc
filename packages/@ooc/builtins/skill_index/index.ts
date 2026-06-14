@@ -1,4 +1,4 @@
-import "./readable.js"; // side-effect: 加载 readable 维度（registerReadable）
-export * from "./executable/index.js"; // side-effect: 加载 executable 维度（registerExecutable）
+// executable/index.ts 单处声明整个 skill_index 类（registerWindowClass：methods + readable + onClose + flag）。
+export * from "./executable/index.js"; // side-effect: registerWindowClass
 export type * from "./types.js";
 export { default as WindowDetail } from "./visible/index.js";

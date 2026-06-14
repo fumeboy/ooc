@@ -1,4 +1,4 @@
-import "./readable.js"; // side-effect: 加载 readable 维度（registerReadable）
-export * from "./executable/index.js"; // side-effect: 加载 executable 维度（registerExecutable）
+// executable/index.ts 单处声明整个 program 类（registerWindowClass：methods + readable + windowMethods + flag）。
+export * from "./executable/index.js"; // side-effect: registerWindowClass
 export type * from "./types.js";
 export { default as WindowDetail } from "./visible/index.js";

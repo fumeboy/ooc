@@ -22,7 +22,10 @@ const setViewport: WindowMethod = {
 
 function fixture(initialState: unknown) {
   const registry = new ObjectRegistry();
-  registry.registerReadable("file", {
+  // 窗类型不再 seed 进 BASE_TYPE_DEFINITIONS——经 registerWindowClass 一处声明（seed-if-absent + windowMethods）。
+  registry.registerWindowClass({
+    type: "file",
+    methods: {},
     windowMethods: { set_viewport: setViewport },
   });
   const thread = makeThread({

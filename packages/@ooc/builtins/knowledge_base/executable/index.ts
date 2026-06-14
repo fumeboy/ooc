@@ -8,6 +8,7 @@
 import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { makeRootDelegator } from "@ooc/builtins/_shared/executable/delegator.js";
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
+import { readable } from "../readable.js";
 
 // side-effect：确保被委托的 knowledge constructor 已注册。
 import "@ooc/builtins/knowledge";
@@ -34,4 +35,12 @@ const openKnowledgeMethod: ObjectMethod = {
   exec: makeRootDelegator({ method: "open_knowledge", constructorKind: "knowledge", objectLabel: "knowledge_window" }),
 };
 
-builtinRegistry.registerExecutable("knowledge_base", { methods: { open_knowledge: openKnowledgeMethod } });
+// knowledge_base 类的单处声明：executable（methods）+ readable + 可见性 flag。tool-object 成员，parentClass:null。
+builtinRegistry.registerWindowClass({
+  type: "knowledge_base",
+  parentClass: null,
+  methods: { open_knowledge: openKnowledgeMethod },
+  readable,
+  renderableVisible: true,
+  builtinReadable: true,
+});

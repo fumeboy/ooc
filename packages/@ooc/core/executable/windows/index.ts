@@ -9,7 +9,7 @@
  * （registerObjectType / getObjectDefinition / listRegisteredObjectTypes /
  *  assertAllObjectDefinitionsRegistered / lookupMethod / lookupMethodEntry /
  *  lookupConstructor / resolveParentClassChain / resolveEffectiveVisibleType）。
- * 调用方应直接使用 builtinRegistry.registerExecutable(...) / registerReadable(...)。
+ * 调用方应直接使用 builtinRegistry.registerWindowClass(...)（一处声明一个窗类型）。
  */
 
 export type {
@@ -72,8 +72,8 @@ export {
   execRootMethod,
 } from "@ooc/builtins/root";
 
-// Side-effect imports: each window type module 通过 builtinRegistry.registerExecutable 注入 methods / hooks。
-// 这些 import 必须在 WindowManager 之后 load，确保使用时表已就绪。
+// Side-effect imports: each window type module 通过 builtinRegistry.registerWindowClass 一处声明
+// （seed-if-absent + methods + readable + 可见性 flag）。这些 import 必须在 WindowManager 之后 load，确保使用时表已就绪。
 //
 // root 必须最先 load。
 import "@ooc/builtins/root";

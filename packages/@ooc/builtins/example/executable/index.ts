@@ -14,6 +14,7 @@ import {
 } from "@ooc/core/extendable/_shared/types.js";
 import { isString } from "@ooc/builtins/_shared/executable/utils.js";
 import type { ExampleWindow } from "../types.js";
+import { readable, setViewportMethod, compressExampleWindow } from "../readable.js";
 
 const bumpMethod: ObjectMethod = {
   description: "Increment the example window's bump counter.",
@@ -57,10 +58,20 @@ const exampleConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerExecutable("example", {
+// example 类的单处声明：executable（methods + constructor）+ readable 维度
+// （readable + window method set_viewport + compressView，定义在 ../readable.ts）。
+// 非渲染窗类型：renderableVisible / builtinReadable 皆缺省。parentClass:null。
+builtinRegistry.registerWindowClass({
+  type: "example",
+  parentClass: null,
   methods: {
     bump: bumpMethod,
     close: closeMethod,
     example: exampleConstructor,
   },
+  readable,
+  windowMethods: {
+    set_viewport: setViewportMethod,
+  },
+  compressView: compressExampleWindow,
 });

@@ -9,7 +9,7 @@
  * 与 OOC core 的关系：
  * - feishu_chat / feishu_doc 仍然是一等 string（声明在 executable/windows/_shared/types.ts），
  *   本目录只提供它们的实现 + 注册逻辑。
- * - 注册通过 builtinRegistry.registerExecutable / registerReadable 完成；
+ * - 注册通过 builtinRegistry.registerWindowClass 一处声明完成（methods + readable + 可见性 flag）；
  *   本 barrel 的 side-effect import 触发注册，由 extendable/index.ts 进一步被 windows barrel 拉起。
  */
 

@@ -492,7 +492,11 @@ export const talkConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerExecutable("talk", {
+// talk 类的单处声明：executable（methods + constructor）+ readable 维度（readable + windowMethods +
+// compressView + onClose + consumedMessageIds）+ 可见性 flag。parentClass:null（窗类型，不继承 root）。
+builtinRegistry.registerWindowClass({
+  type: "talk",
+  parentClass: null,
   methods: {
     say: sayMethod,
     wait: waitMethod,
@@ -502,8 +506,6 @@ builtinRegistry.registerExecutable("talk", {
   },
   // talk_window 是 Object 内置特性 —— 不写独立 dir，状态 inline 进所属 thread 的 context.json。
   isBuiltinFeature: true,
-});
-builtinRegistry.registerReadable("talk", {
   windowMethods: {
     set_transcript_window: setTranscriptWindowCommandForTalk,
   },
@@ -513,4 +515,6 @@ builtinRegistry.registerReadable("talk", {
   // G4: registry 派发的去重 hook —— 复用 filterMessagesForTalkWindow。
   consumedMessageIds: (ctx) =>
     filterMessagesForTalkWindow(ctx.window as TalkWindow, ctx.thread),
+  renderableVisible: true,
+  builtinReadable: true,
 });

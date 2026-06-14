@@ -12,6 +12,7 @@ import {
   generateWindowId,
 } from "@ooc/core/extendable/_shared/types.js";
 import { runOneExec, type ProgramExecArgs } from "./runtime.js";
+import { readable, setHistoryWindowMethod } from "../readable.js";
 export { runOneExec, type ProgramExecArgs } from "./runtime.js";
 import type { ProgramWindow } from "../types.js";
 import { DEFAULT_HISTORY_VIEWPORT } from "./history-viewport.js";
@@ -162,10 +163,20 @@ const programConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerExecutable("program", {
+// program 类的单处声明：executable（methods + constructor）+ readable 维度
+// （readable + window method set_history_window，定义在 ../readable.ts）+ 可见性 flag。parentClass:null。
+builtinRegistry.registerWindowClass({
+  type: "program",
+  parentClass: null,
   methods: {
     exec: execMethod,
     close: closeMethod,
     program: programConstructor,
   },
+  readable,
+  windowMethods: {
+    set_history_window: setHistoryWindowMethod,
+  },
+  renderableVisible: true,
+  builtinReadable: true,
 });

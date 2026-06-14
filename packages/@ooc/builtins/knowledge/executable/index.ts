@@ -19,6 +19,7 @@ import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
 import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
 
 import { basenameOfPath } from "@ooc/builtins/_shared/executable/utils.js";
+import { readable, setViewportMethod, onCloseKnowledgeWindow } from "../readable.js";
 
 const reloadMethod: ObjectMethod = {
   description: "Force knowledge re-activation next turn (loader auto-invalidates by mtime; this is a semantic hint).",
@@ -93,10 +94,21 @@ const knowledgeConstructor: ObjectMethod = {
   },
 };
 
-builtinRegistry.registerExecutable("knowledge", {
+// knowledge 类的单处声明：executable（methods + constructor）+ readable 维度
+// （readable + window method set_viewport + onClose，定义在 ../readable.ts）+ 可见性 flag。parentClass:null。
+builtinRegistry.registerWindowClass({
+  type: "knowledge",
+  parentClass: null,
   methods: {
     reload: reloadMethod,
     close: closeMethod,
     open_knowledge: knowledgeConstructor,
   },
+  readable,
+  windowMethods: {
+    set_viewport: setViewportMethod,
+  },
+  onClose: onCloseKnowledgeWindow,
+  renderableVisible: true,
+  builtinReadable: true,
 });

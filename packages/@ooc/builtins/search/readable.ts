@@ -1,4 +1,6 @@
-import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+// 本文件只导出 readable / windowMethods / compressView hook；
+// search 类的单处声明（registerWindowClass）在 executable/index.ts。
+import { type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import type { SearchWindow } from "./types.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import {
@@ -72,7 +74,7 @@ export function readable(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
-const setResultsWindowCommandForSearch: WindowMethod = {
+export const setResultsWindowCommandForSearch: WindowMethod = {
   kind: "window",
   description: "Adjust which portion of the search matches are rendered (tail N or fixed range).",
   intents: ["set_results_window"],
@@ -98,7 +100,7 @@ const setResultsWindowCommandForSearch: WindowMethod = {
  * - Level 1 (folded):  kind + query + matches.count + 前 3 条 match 预览(仅 path + line)
  * - Level 2 (snapshot): kind + query + matches.count
  */
-function compressSearchWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
+export function compressSearchWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
   const window = ctx.window as SearchWindow;
   const children: XmlNode[] = [
     xmlElement("kind", {}, [xmlText(window.kind)]),
@@ -130,12 +132,3 @@ function compressSearchWindow(ctx: RenderContext, level: 1 | 2): XmlNode[] {
   );
   return children;
 }
-
-// readable 维度自注册（readable + window method set_results_window + compressView + basicKnowledge）。
-builtinRegistry.registerReadable("search", {
-  windowMethods: {
-    set_results_window: setResultsWindowCommandForSearch,
-  },
-  readable,
-  compressView: compressSearchWindow,
-});

@@ -15,9 +15,11 @@ export const L3_STORIES: Story[] = [
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const reg = createObjectRegistry();
+      // 新窗类型经 registerWindowClass seed（不再预置于 BASE），再由维度入口增量合入。
+      reg.registerWindowClass({ type: "t_reg_exec", methods: {} });
       const m = { paths: ["x"], intent: () => [], exec: () => undefined } as any;
-      reg.registerExecutable("file", { methods: { x: m } });
-      check(!!reg.getObjectDefinition("file").methods.x, "registerExecutable 未注册 method");
+      reg.registerExecutable("t_reg_exec", { methods: { x: m } });
+      check(!!reg.getObjectDefinition("t_reg_exec").methods.x, "registerExecutable 未注册 method");
     },
   }),
 
@@ -29,11 +31,12 @@ export const L3_STORIES: Story[] = [
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const reg = createObjectRegistry();
+      reg.registerWindowClass({ type: "t_reg_readable", methods: {} });
       const wm = { paths: ["set_viewport"], intent: () => [], exec: (c: any) => ({ ok: true, state: c.windowState }) } as any;
       const om = { paths: ["reload"], intent: () => [], exec: () => undefined } as any;
-      reg.registerReadable("file", { windowMethods: { set_viewport: wm } });
-      reg.registerExecutable("file", { methods: { reload: om } });
-      const def = reg.getObjectDefinition("file");
+      reg.registerReadable("t_reg_readable", { windowMethods: { set_viewport: wm } });
+      reg.registerExecutable("t_reg_readable", { methods: { reload: om } });
+      const def = reg.getObjectDefinition("t_reg_readable");
       check(!!def.windowMethods?.set_viewport, "readable 维度被覆盖");
       check(!!def.methods.reload, "executable 维度被覆盖");
     },
@@ -47,11 +50,12 @@ export const L3_STORIES: Story[] = [
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const reg = createObjectRegistry();
+      reg.registerWindowClass({ type: "t_collision", methods: {} });
       const om = { paths: ["set_viewport"], intent: () => [], exec: () => undefined } as any;
       const wm = { paths: ["set_viewport"], intent: () => [], exec: (c: any) => ({ ok: true, state: c.windowState }) } as any;
-      reg.registerExecutable("file", { methods: { set_viewport: om } });
+      reg.registerExecutable("t_collision", { methods: { set_viewport: om } });
       let threw = false;
-      try { reg.registerReadable("file", { windowMethods: { set_viewport: wm } }); } catch { threw = true; }
+      try { reg.registerReadable("t_collision", { windowMethods: { set_viewport: wm } }); } catch { threw = true; }
       check(threw, "method↔windowMethod 同名未 fail-loud");
     },
   }),

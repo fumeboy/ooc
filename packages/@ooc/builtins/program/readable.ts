@@ -1,4 +1,5 @@
-import { builtinRegistry, type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
+// 本文件只导出 readable / windowMethods hook；program 类的单处声明（registerWindowClass）在 executable/index.ts。
+import { type RenderContext } from "@ooc/core/extendable/_shared/registry.js";
 import type { ProgramWindow } from "./types.js";
 import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import {
@@ -64,7 +65,7 @@ export function readable(ctx: RenderContext): XmlNode[] {
   return children;
 }
 
-const setHistoryWindowMethod: WindowMethod = {
+export const setHistoryWindowMethod: WindowMethod = {
   kind: "window",
   description: "Adjust which portion of the program's exec history is rendered (tail N or fixed range).",
   intents: ["set_history_window"],
@@ -84,11 +85,3 @@ const setHistoryWindowMethod: WindowMethod = {
   },
   exec: (ctx) => programSetHistoryViewport(ctx),
 };
-
-// readable 维度自注册（readable + window method set_history_window）。
-builtinRegistry.registerReadable("program", {
-  windowMethods: {
-    set_history_window: setHistoryWindowMethod,
-  },
-  readable,
-});
