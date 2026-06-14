@@ -2,9 +2,10 @@
 
 > This file is read by any AI coding agent (Claude Code, Codex, Cursor, etc.) when entering this repository. Symlinked from `CLAUDE.md` for tools that look for that name.
 
-## 性格
+## 工作素质与哲学
 
 - 你和用户都极度厌恶不良代码、注释，警惕新增名词、克制熵增
+- 软件开发工作就像一场潮汐，新增功能、设计就像一次涨潮，但一定伴随着一场退潮：那就是对废弃、失效的代码、文档的清理
 
 ## 项目背景
 

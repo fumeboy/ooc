@@ -14,7 +14,7 @@ activates_on:
 | 维度 | 组 | 一句话职责 | 主要载体 |
 |---|---|---|---|
 | **thinkable** | 底座 | 思考：LLM 调用、context 构造、thread 调度、knowledge 渐进激活 | 系统内核（无 stone 文件） |
-| **executable** | 底座 | 行动：4 个稳定 tool 原语 + object method（操作对象数据，`registerExecutable` 注册）+ ContextWindow 操作 | 系统内核 + 对象 `executable/index.ts` |
+| **executable** | 底座 | 行动：3 个稳定 tool 原语（exec/close/wait，compress 经 exec 调的 window method）+ object method（操作对象数据，`registerExecutable` 注册）+ ContextWindow 操作 | 系统内核 + 对象 `executable/index.ts` |
 | **collaborable** | 底座 | 协作：talk_window / do_window 跨 Object 通道（消息 + 持续会话窗口） | 系统内核 |
 | **observable** | 底座 | 可观测：LLM 调用 trace、pause / resume、debug 文件落盘 | 系统内核 + `debug/` 目录 |
 | **persistable** | 底座 | 持久化：Stone / Pool / Flow 三子树（+ Builtin 为 class 源） | 整个 World 文件系统 |

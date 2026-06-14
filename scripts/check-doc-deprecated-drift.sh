@@ -55,6 +55,17 @@ declare -a FORBIDDEN_PATTERNS=(
   "ObjectTypeRegistrar"
   "object-type-registrar"
   "WorldRuntime\\.objects"
+  # —— 4 原语 / compress-是-tool 旧表述退役（2026-06-14）——
+  # 终态：稳定原语恒为 3 个 exec/close/wait；compress 是经 exec 调的 window method、非原语。
+  # 注意：「四件套」在 class 维度专指 builtin 五件套文件形态，不在此处禁（勿裸 grep 该词）。
+  "4 个基础 tool"
+  "4 个稳定 tool 原语"
+  "4 个稳定接口"
+  "exec/close/wait/compress"
+  "OOC_TOOLS = \\[EXEC, CLOSE, WAIT, COMPRESS\\]"
+  "compress 是 tool"
+  "compress 元 tool"
+  "compress.*元 tool"
 )
 
 # 退役标记词：命中行含其一 = 合法的「退役说明」，放行。
