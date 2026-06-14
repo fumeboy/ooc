@@ -1,6 +1,6 @@
 # OOC-as-Object 重构弧 —— 设计 + 增量序列（2026-06-14）
 
-来源：用户 `2026-06-14-next_todo.md` 路线图（#1-#5）+ 本会话裁决「context.md 的 class-dynamic/thread-window/share-object 三条核心延后、绑此弧落地」（见 [[project_context_redesign]] / `docs/2026-06-14-context-redesign-impl-plan.md`）。
+来源：用户 `2026-06-14-next_todo.md` 路线图（#1-#5）+ 本会话裁决「.ooc-world-meta/stones/main/objects/supervisor/children/thinkable/knowledge/context.md 的 class-dynamic/thread-window/share-object 三条核心延后、绑此弧落地」（见 [[project_context_redesign]] / `docs/2026-06-14-context-redesign-impl-plan.md`）。
 一句话目标（用户原话）：让 OOC 更好地表达**从 OOP 继承而来的面向对象哲学与表达力**。
 
 ## 接地的现状（2026-06-14 实测）

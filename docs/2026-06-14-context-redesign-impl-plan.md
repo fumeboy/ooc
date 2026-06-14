@@ -30,7 +30,7 @@
 ### Inc A — compress 3 原语（纯文档退潮）✅做中
 代码已 3 原语。对准对象树文档（仍写"4 原语/compress 是 tool"）：
 - executable/self.md（L7/15/23/55）、executable/knowledge/tool-primitives.md（整篇）、executable/readable.md（L1）、
-  thinkable/self.md（L59）、thinkable/knowledge/thread-and-thinkloop.md（L41-46/L58）。
+  thinkable/self.md（L59）、thinkable/knowledge/thinkloop.md（原 thread-and-thinkloop.md，已拆 thread.md + thinkloop.md）。
 - 改：稳定原语恒 3 个 exec/close/wait；compress = window method（经 exec 调，与 file 窗 set_viewport 同类）。
 - doc-drift：往 `scripts/check-doc-deprecated-drift.sh` FORBIDDEN 加"4 原语/compress.*tool"类精确模式。
 - storybook 注释（executable.story.ts L5、executable tests.md L9/24）改 3 原语。
@@ -41,7 +41,7 @@ context.md 核心 9/11 + 迁移映射 3.7。
   agency 删 `do`（builtins/root AGENCY_METHODS、agent/self.md、object-registry _builtin/agent）；continue→say；
   do_window.move → talk 上的 share；SharingState `ref`/`lent_out` → `readonly-ref`/`mutable-ref`，move=动作；
   share 传 object 引用（非整窗冻结快照）。
-- 文档：collaborable/self.md+cross-object-talk.md+inbox-outbox-delivery.md、thinkable/thread-and-thinkloop.md、
+- 文档：collaborable/self.md+cross-object-talk.md+inbox-outbox-delivery.md、thinkable/{thread,thinkloop}.md、
   executable/self.md+root-methods-and-forms.md+permission.md、readable/self.md。
 - 测试：~19 处 do/do_window/continue/move 测试 reframe。
 - 注意：creator window 模型（init.ts isCreatorWindow 注入/拒 close/reply 归属）→ "thread window 的 creator 通道"语义（与 Inc C 联动）。
