@@ -12,12 +12,16 @@
  * supervisor 恒在 reviewer 集，故其评审入口（pr_window method + HTTP approve 端点）天然可用。
  */
 
-import { builtinRegistry, type OnCloseContext, type RenderContext } from "@ooc/core/executable/windows/_shared/registry.js";
-import type { ObjectMethod } from "@ooc/core/executable/windows/_shared/method-types.js";
+import {
+  builtinRegistry,
+  type OnCloseContext,
+  type RenderContext,
+} from "@ooc/core/extendable/_shared/registry.js";
+import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { readPrIssue, aggregatePrApproval } from "@ooc/core/persistable/index.js";
-import { applyPrApproval } from "./approval-flow.js";
-import type { PrWindow } from "./types.js";
+import { applyPrApproval } from "../approval-flow.js";
+import type { PrWindow } from "../types.js";
 import type { PrApproveAction } from "@ooc/core/persistable/index.js";
 
 const MAX_DIFF_RENDER_BYTES = 8192;
@@ -90,7 +94,7 @@ function onClosePrWindow(ctx: OnCloseContext): boolean | void {
     category: "context_change",
     kind: "inject",
     text: `[close 拒绝] pr_window "${ctx.window.id}" 是系统投递的待审 PR，请用 approve / reject / request_changes 行使评审，而非 close。`,
-    source: "executable/windows/pr#onClosePrWindow",
+    source: "builtins/pr#onClosePrWindow",
     errorCode: "pr_window_close_rejected",
   });
   return false;

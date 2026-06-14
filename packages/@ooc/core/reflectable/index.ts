@@ -1,15 +1,18 @@
 /**
- * reflectable —— OOC reflectable 维度在 core 的 window 家族（交互面/前门）。
+ * reflectable —— 按 reflectable 概念查代码的**源码索引**（非实现）。
  *
- * 寄居于此的是 reflectable 的**交互面**（window class 注册），不是其存储层——
- * stone/pool 的 git versioning、PR-Issue 持久化、reviewer 冒泡纯函数仍在 `@ooc/core/persistable`，
- * reflectable 的 window 只渲染/驱动它们（face，非 god-object）。
+ * reflectable 维度的 builtin 窗类已物理迁出 core，成为正式 ooc class 包：
+ *   - `@ooc/builtins/reflect_request`：super flow 反思会话面 + 沉淀方法
+ *     （new_feat_branch / create_pr_and_invite_reviewers）。
+ *   - `@ooc/builtins/pr`：reviewer 评审窗（approve / reject / request_changes）+ 投递 / 审批编排
+ *     （deliverPrWindowToReviewers / applyPrApproval / routePrRepairMessage）。
  *
- * - `reflect-request/`：super flow 反思会话面 + 沉淀方法（new_feat_branch / create_pr_and_invite_reviewers）。
- * - `pr/`：reviewer 评审窗（approve / reject / request_changes）。
+ * 存储层（stone/pool 的 git versioning、PR-Issue 持久化、reviewer 冒泡纯函数）仍在
+ * `@ooc/core/persistable`——reflectable 的 window 只渲染/驱动它们（face，非 god-object）。
  *
- * 经 side-effect import 注册到 builtinRegistry；由 executable/windows/index.ts 引入本 barrel。
+ * 此 barrel 仅作 side-effect 索引：re-export 两个 builtin 包以触发 registerWindowClass。
+ * 由 executable/windows/index.ts 引入，保证 side-effect 注册在 load 期触发。
  */
 
-import "./pr/index.js";
-import "./reflect-request/index.js";
+export * from "@ooc/builtins/pr/index.js"; // side-effect: registerWindowClass("pr")
+export * from "@ooc/builtins/reflect_request/index.js"; // side-effect: registerWindowClass("reflect_request")

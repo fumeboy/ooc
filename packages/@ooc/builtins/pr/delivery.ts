@@ -26,7 +26,7 @@ import {
 } from "@ooc/core/persistable/index.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
-import { ROOT_WINDOW_ID } from "@ooc/core/executable/windows/_shared/types.js";
+import { ROOT_WINDOW_ID } from "@ooc/core/extendable/_shared/types.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
 import type { PrWindow } from "./types.js";
 

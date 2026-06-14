@@ -275,8 +275,8 @@ describe("routePrRepairMessage", () => {
 
 describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
   test("request_changes → 同 intent 幂等重绑 feat 分支（旧编辑仍在）→ 再 create_pr_and_invite_reviewers 重开 PR", async () => {
-    const { executeNewFeatBranch } = await import("@ooc/core/reflectable/reflect-request/method.new-feat-branch");
-    const { executeCreatePrAndInviteReviewers } = await import("@ooc/core/reflectable/reflect-request/method.create-pr-and-invite-reviewers");
+    const { executeNewFeatBranch } = await import("@ooc/builtins/reflect_request/method.new-feat-branch");
+    const { executeCreatePrAndInviteReviewers } = await import("@ooc/builtins/reflect_request/method.create-pr-and-invite-reviewers");
     const baseDir = await newWorld(["foo", "bob"]);
 
     // super(foo) thread（沉淀发起者）

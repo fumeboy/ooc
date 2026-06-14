@@ -24,7 +24,7 @@ import {
 } from "./types.js";
 import { DEFAULT_TRANSCRIPT_VIEWPORT } from "./transcript-viewport.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
-import type { ReflectRequestWindow } from "@ooc/core/reflectable/reflect-request/types.js";
+import type { ReflectRequestWindow } from "@ooc/builtins/reflect_request/types.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {
   deriveStoneFromThread,

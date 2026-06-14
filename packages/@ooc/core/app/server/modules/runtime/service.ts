@@ -28,7 +28,7 @@ import {
   type PrIssueRecord,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
-import { applyPrApproval } from "@ooc/core/reflectable/pr/approval-flow";
+import { applyPrApproval } from "@ooc/builtins/pr/approval-flow";
 import type { ListLoopsResponse, LoopListEntry, LoopMeta } from "./model";
 import { readLlmEnv } from "@ooc/core/thinkable/llm/env";
 import type { PauseStore } from "../../runtime/pause-store";

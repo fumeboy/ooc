@@ -1,6 +1,6 @@
 import type { MethodExecutionContext, ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
 import type { ContextWindow, TalkWindow } from "@ooc/core/extendable/_shared/types.js";
-import type { ReflectRequestWindow } from "@ooc/core/reflectable/reflect-request/types.js";
+import type { ReflectRequestWindow } from "@ooc/builtins/reflect_request/types.js";
 import { sayMethod } from "@ooc/core/executable/windows/talk/method.say.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 

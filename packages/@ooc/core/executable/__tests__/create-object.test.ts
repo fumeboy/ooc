@@ -16,8 +16,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests, readSelf } from "@ooc/core/persistable";
 import { executeCreateObject } from "@ooc/builtins/world/executable/index.js";
-import { executeCreatePrAndInviteReviewers } from "@ooc/core/reflectable/reflect-request/method.create-pr-and-invite-reviewers";
-import { executeNewFeatBranch } from "@ooc/core/reflectable/reflect-request/method.new-feat-branch";
+import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/reflect_request/method.create-pr-and-invite-reviewers";
+import { executeNewFeatBranch } from "@ooc/builtins/reflect_request/method.new-feat-branch";
 import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
 

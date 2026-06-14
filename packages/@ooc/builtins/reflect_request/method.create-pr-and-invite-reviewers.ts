@@ -15,7 +15,7 @@
  *      → computeReviewerSet 冒泡 reviewer → createPrIssue 开 PR → 投递 pr_window → **清除绑定**。
  *
  * 合入闸：reviewer 集**强制聚合执行**——`aggregatePrApproval` 要求全员 approve 才 ready-to-merge
- * （reject 一票否决），再由 `.world.json prAutoMerge` 决定自动/人工合入（编排见 reflectable/pr/approval-flow.ts）。
+ * （reject 一票否决），再由 `.world.json prAutoMerge` 决定自动/人工合入（编排见 @ooc/builtins/pr/approval-flow.ts）。
  */
 
 import type {
@@ -23,7 +23,7 @@ import type {
   ObjectMethod,
 } from "@ooc/core/extendable/_shared/method-types.js";
 import { commitAndOpenPr } from "@ooc/core/persistable/index.js";
-import { deliverPrWindowToReviewers } from "@ooc/core/reflectable/pr/delivery.js";
+import { deliverPrWindowToReviewers } from "@ooc/builtins/pr/delivery.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 
 const CREATE_PR_TIP = `create_pr_and_invite_reviewers 是 super flow 沉淀的 finalizer（feat 分支 → commit → PR）。

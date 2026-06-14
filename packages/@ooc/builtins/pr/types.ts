@@ -1,4 +1,4 @@
-import type { BaseContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
 
 /**
  * PR window —— reviewer 看到的「一条待审 feat-branch PR」展示单元（collaborable 家族）。

@@ -80,8 +80,9 @@ import "@ooc/builtins/root";
 
 // talk 是所有 Agent 的固有能力（统一 peer 会话 + fork 子线程两形态）。
 import "./talk/index.js";
-// reflectable 维度的 window 家族（pr 评审窗 + reflect_request 反思会话窗）——
-// 物理寄居 @ooc/core/reflectable/，经 barrel side-effect 注册到 builtinRegistry。
+// reflectable 维度的 builtin 窗类（pr 评审窗 + reflect_request 反思会话窗）——
+// 已迁出 core 成正式 ooc class 包（@ooc/builtins/{pr,reflect_request}）；经
+// reflectable/index 源码索引 re-export 触发 side-effect 注册到 builtinRegistry。
 import "@ooc/core/reflectable/index.js";
 
 // method_exec form 是 method 调用过程的临时载体（Object 内置特性）。
