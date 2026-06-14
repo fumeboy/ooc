@@ -80,6 +80,9 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
         const isCreatorWin = !!(win as { isCreatorWindow?: boolean } | undefined)?.isCreatorWindow;
         if (win && !isCreatorWin) {
           const fromKey = inboxMessage.fromObjectId ?? inboxMessage.fromThreadId;
+          // 次要 attention 缩略：window 收到新消息 + 正文前 50 字预览（全文在该窗 transcript）。
+          const preview = (inboxMessage.content ?? "").replace(/\s+/g, " ").trim();
+          const previewText = preview.length > 50 ? `${preview.slice(0, 50)}…` : preview;
           return [
             {
               type: "message",
@@ -88,7 +91,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
                 `[context_change:inbox_message_arrived] msg_id=${event.msgId}` +
                 (inboxMessage.source ? ` source=${inboxMessage.source}` : "") +
                 (fromKey ? ` from=${fromKey}` : "") +
-                ` window_id=${windowId} (次要 attention：新消息已到，正文见该 window 的 transcript)`,
+                ` window_id=${windowId} —— ${windowId} 收到新消息 "${previewText}"（次要 attention，全文见该 window 的 transcript）`,
             },
           ];
         }

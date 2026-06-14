@@ -20,7 +20,9 @@ const PEER_WIN = {
 } as unknown as ContextWindow;
 
 const CREATOR_FULL = "CREATOR_MESSAGE_FULL_TEXT_xyz";
-const PEER_FULL = "PEER_MESSAGE_FULL_TEXT_xyz";
+// >50 字，确保次要窗的 message 流缩略只含前 50 字预览、不含全文尾部 sentinel。
+const PEER_FULL = "PEER_HEAD_0123456789_0123456789_0123456789_0123456789_PEER_TAIL_SENTINEL";
+const PEER_TAIL = "PEER_TAIL_SENTINEL"; // 仅出现在全文(>50 字处)，用于断言"全文不在 message 流"
 
 describe("会话内容 attention 分层", () => {
   it("creator 对话全文进 message 流、不在 context XML；peer 对话全文在 XML transcript、message 流只出提示", async () => {
@@ -49,11 +51,11 @@ describe("会话内容 attention 分层", () => {
     // creator 窗渲句柄（含 transcript_in_messages 指引、不内联 transcript 正文）
     expect(ctxXml).toContain("transcript_in_messages");
 
-    // peer（次要 attention）：全文在 context XML（窗 transcript）、不在 message 流
+    // peer（次要 attention）：全文在 context XML（窗 transcript）；message 流只出缩略提示（前 50 字预览，不含全文尾部）
     expect(ctxXml).toContain(PEER_FULL);
-    expect(nonCtxStream.some((c) => c.includes(PEER_FULL))).toBe(false);
-    // message 流里有 peer 的"新消息提示"（指向窗、非全文）
-    expect(nonCtxStream.some((c) => c.includes("m_peer") && c.includes("window_id=w_peer"))).toBe(true);
+    expect(nonCtxStream.some((c) => c.includes(PEER_TAIL))).toBe(false); // 全文尾部(>50 字处)不进 message 流
+    // message 流里有 peer 的"新消息提示"：指向窗 + 前 50 字预览
+    expect(nonCtxStream.some((c) => c.includes("window_id=w_peer") && c.includes("收到新消息") && c.includes("PEER_HEAD"))).toBe(true);
   });
 
   it("通用性（非 user 特例）：creator 是 parent thread（do 窗）时同样句柄化、parent 对话进 message 流", async () => {
