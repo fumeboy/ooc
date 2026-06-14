@@ -66,19 +66,19 @@ export const addUserTalkWindowBody = t.Object({
  * 可选 / 空数组退化，老前端不会因为多字段而炸。
  */
 export type ThreadShareInfo = {
-  /** 本 thread 持有的、由别处借进来的只读 ref window。 */
+  /** 本 thread 持有的、由别处借进来的只读引用窗（readonly-ref）。 */
   holding: Array<{
     windowId: string;
-    kind: "ref";
-    /** sharing.ownerThreadId（来自 SharingState.ref）。 */
+    kind: "readonly-ref";
+    /** sharing.ownerThreadId（来自 SharingState.readonly-ref）。 */
     ownerThreadId?: string;
     /** sharing 未持久化 ownerObjectId；当前永远 undefined（design 预留位）。 */
     ownerObjectId?: string;
   }>;
-  /** 本 thread 持有的、已借出给别处的 window（自己保留 freeze snapshot）。 */
+  /** 本 thread 曾持有、已 move 给别处的 window（自己降为只读 shadow，保留 freeze snapshot）。 */
   lentOut: Array<{
     windowId: string;
-    /** sharing.borrowerThreadId（来自 SharingState.lent_out）。 */
+    /** sharing.borrowerThreadId（来自 SharingState.mutable-ref shadow）。 */
     borrowerThreadId?: string;
     /** sharing 未持久化 borrowerObjectId；当前永远 undefined（design 预留位）。 */
     borrowerObjectId?: string;

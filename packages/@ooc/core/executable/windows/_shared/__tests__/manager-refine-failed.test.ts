@@ -5,12 +5,15 @@
  * quick_exec_submit=true（参数已补齐），manager.refine 会 await 自动 submit——
  * 成功 → form 自动移除；失败 → form 落 failed 带 result。
  *
+ * fixture：talk(target=自己) fork 形态——缺 msg 时不会 auto-submit；submit 失败（缺 msg）。
+ * 补齐 msg 后自动 submit 成功。
+ *
  * 验证 manager 状态机:
  * 1. open 状态 refine（参数未补齐）→ 仍 open + args 累积
  * 2. failed 状态 refine（参数未补齐）→ 复活回 open + args 累积 + result 清空
- * 3. failed 状态 refine（参数补齐）→ 复活 + 自动 submit → success → form 移除
- * 4. failed 状态直接 submit → 抛错（要求先 refine）
- * 5. executing 状态 refine → 返 false（不允许）
+ * 3. failed 状态直接 submit → 抛错（要求先 refine）
+ * 4. executing 状态 refine → 返 false（不允许）
+ * 5. 复活路径完整验证
  */
 
 import { describe, expect, it } from "bun:test";
@@ -20,9 +23,18 @@ import { makeThread } from "../../../../__tests__/make-thread";
 import { dispatchToolCall } from "../../../tools";
 import type { ContextWindow, MethodExecWindow } from "../types";
 import type { ThreadContext } from "../../../../thinkable/context";
+import type { ThreadPersistenceRef } from "../../../../persistable/common";
+
+const SELF = "alice";
+const persistenceOf = (threadId: string): ThreadPersistenceRef => ({
+  baseDir: "/tmp/__test__",
+  sessionId: "s_test",
+  objectId: SELF,
+  threadId,
+});
 
 /**
- * agency 方法（do）已从 root 迁到 `_builtin/agent` 类。
+ * agency 方法（talk）已从 root 迁到 `_builtin/agent` 类。
  * 经 exec 调 agency 时须把 window_id 指向一个 class 解析得到 `_builtin/agent` 的窗。
  */
 const AGENT_WIN = {
@@ -36,23 +48,27 @@ const AGENT_WIN = {
   // class="_builtin/agent" 是继承类、非 ContextWindow union discriminant → 经 unknown 转。
 } as unknown as ContextWindow;
 
+function makeAgentThread(id: string): ThreadContext {
+  return makeThread({ id, persistence: persistenceOf(id), extraWindows: [AGENT_WIN] });
+}
+
 /**
- * 通过 exec tool 创建一个 do form (缺 msg, 不会 auto-submit), submit 让它进 failed。
+ * 通过 exec tool 创建一个 talk fork form (target=自己、缺 msg, 不会 auto-submit), submit 让它进 failed。
  * 返回 thread + formId, 供测试继续操作。
  */
 async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string }> {
-  const thread = makeThread({ id: "t_refine_failed", extraWindows: [AGENT_WIN] });
-  // 1. open do form 不带 msg, 不会 auto-submit (do 需要 msg)
+  const thread = makeAgentThread("t_refine_failed");
+  // 1. open talk fork form：target=自己但缺 msg → 不会 auto-submit
   await dispatchToolCall(thread, {
     id: "call_1",
     name: "exec",
-    arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
+    arguments: { title: "派生", window_id: "agent", method: "talk", description: "fork", args: { target: SELF } },
   });
   const form = thread.contextWindows.find(
     (w): w is MethodExecWindow => w.class === "method_exec",
   );
-  if (!form) throw new Error("expected method_exec form created (do with no msg)");
-  // 2. submit → 失败 (do 缺 msg → form 进 failed)
+  if (!form) throw new Error("expected method_exec form created (talk fork with no msg)");
+  // 2. submit → 失败 (fork 缺 msg → form 进 failed)
   await dispatchToolCall(thread, {
     id: "call_2",
     name: "exec",
@@ -63,11 +79,11 @@ async function makeFailedForm(): Promise<{ thread: ThreadContext; formId: string
 
 describe("manager.refine 支持 failed → open 复活", () => {
   it("open 状态 refine（参数未补齐）→ 仍 open + args 累积", async () => {
-    const thread = makeThread({ id: "t_open_refine", extraWindows: [AGENT_WIN] });
+    const thread = makeAgentThread("t_open_refine");
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "talk", description: "fork", args: { target: SELF } },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.class === "method_exec",
@@ -92,7 +108,7 @@ describe("manager.refine 支持 failed → open 复活", () => {
     );
     expect(failed?.status).toBe("failed");
     expect(failed?.result).toBeDefined();
-    expect(failed?.result).toContain("[do] 缺少 msg");
+    expect(failed?.result).toContain("缺少 msg");
 
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     // wait 不补齐 msg → 复活到 open 但不自动 submit
@@ -120,11 +136,11 @@ describe("manager.refine 支持 failed → open 复活", () => {
   });
 
   it("executing 状态 refine → 返 false（不允许）", async () => {
-    const thread = makeThread({ id: "t_executing", extraWindows: [AGENT_WIN] });
+    const thread = makeAgentThread("t_executing");
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "talk", description: "fork", args: { target: SELF } },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.class === "method_exec",

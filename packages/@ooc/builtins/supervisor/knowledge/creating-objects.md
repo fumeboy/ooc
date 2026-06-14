@@ -20,7 +20,7 @@ activates_on:
 
 **不应当创建**：
 - 现有 Object 能处理（先派 talk，别先建新的）
-- 一次性任务（用 do_window 派 thread 即可，不必建 stone）
+- 一次性任务（用 talk(target=自己) fork 一条子线程即可，不必建 stone）
 - 需求模糊到无法定义身份与边界（先与用户对齐再建）
 - 想复制 / 修改 Builtin Object 的行为：Builtin 由 OOC 发版升级，不通过创建 Stone 副本绕过
 

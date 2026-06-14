@@ -1,5 +1,5 @@
 /**
- * transcript viewport 协议 — talk_window / do_window 共享的"持续对话窗口节流"控制。
+ * transcript viewport 协议 — talk_window（peer 会话 + fork 子窗）的"持续对话窗口节流"控制。
  *
  * 纯类型 + 纯函数（`TranscriptViewport` / `mergeTranscriptViewport` /
  * `applyTranscriptViewport` / …）已迁入 canonical 源
@@ -18,16 +18,16 @@ import {
 export * from "../../../_shared/types/viewport.js";
 
 /**
- * talk_window / do_window 共享的 set_transcript_window 执行体（window method）。
+ * talk_window（peer 会话 + fork 子窗统一）的 set_transcript_window 执行体（window method）。
  *
  * 读 ctx.windowState.transcriptViewport，校验+合并，返回新 WindowDisplayState（immutable）。
  * 不再 mutate ctx.self —— manager 命中 windowMethod 时把返回的 state 写回 window.state。
  *
- * @param expectedTypes 仅用于错误文案 label（talk / do）。
+ * @param expectedTypes 仅用于错误文案 label（talk）。
  */
 export function windowSetTranscriptViewport(
   ctx: WindowMethodExecutionContext,
-  expectedTypes: Array<"talk" | "do">,
+  expectedTypes: Array<"talk">,
 ): WindowMethodOutcome {
   const label = expectedTypes[0] ?? "transcript";
   if (!hasAnyTranscriptViewportField(ctx.args)) {

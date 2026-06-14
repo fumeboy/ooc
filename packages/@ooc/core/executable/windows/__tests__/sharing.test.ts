@@ -1,11 +1,11 @@
 /**
- * sharing.test — do_window.move + sharing 状态守门测试。
+ * sharing.test — talk_window.share + sharing 状态守门测试（旧 do_window.move 并入 talk）。
  *
  * 覆盖：
- * - root.do.share_windows: ref / move 模式的初始分享
- * - do_window.move 命令: ref / move / 归还路径
+ * - talk.share_windows: readonly-ref / move 模式的初始传递
+ * - talk_window.share 命令: readonly-ref / move / 归还路径
  * - manager 守门：sharing 状态 window 上 exec 拒绝
- * - archiveDoWindowChild 自动归还 borrowed owners
+ * - archiveForkChild 自动归还 borrowed owners
  */
 
 import { describe, expect, it } from "bun:test";
@@ -14,7 +14,27 @@ import { dispatchToolCall } from "../../tools";
 import { WindowManager, builtinRegistry } from "../../windows";
 import { makeThread } from "../../../__tests__/make-thread";
 import type { ThreadContext } from "../../../thinkable/context";
-import type { ContextWindow, DoWindow, FileWindow } from "../_shared/types";
+import type { ThreadPersistenceRef } from "../../../persistable/common";
+import type { ContextWindow, TalkWindow, FileWindow } from "../_shared/types";
+
+const SELF = "alice";
+const persistenceOf = (threadId: string): ThreadPersistenceRef => ({
+  baseDir: "/tmp/__test__",
+  sessionId: "s_test",
+  objectId: SELF,
+  threadId,
+});
+
+/** fork 形态 talk 入参（target=自己）。 */
+const forkArgs = (msg: string, extra: Record<string, unknown> = {}) => ({
+  target: SELF,
+  msg,
+  ...extra,
+});
+
+function makeParent(id: string): ThreadContext {
+  return makeThread({ id, persistence: persistenceOf(id) });
+}
 
 function findChild(parent: ThreadContext): ThreadContext {
   const childId = (parent.childThreadIds ?? [])[0];
@@ -22,9 +42,11 @@ function findChild(parent: ThreadContext): ThreadContext {
   return (parent.childThreads ?? {})[childId]!;
 }
 
-function findDoWindow(thread: ThreadContext): { id: string } {
-  const win = (thread.contextWindows ?? []).find((w) => w.class === "do" && !(w as DoWindow).isCreatorWindow);
-  if (!win) throw new Error("expected do_window in parent");
+function findForkWindow(thread: ThreadContext): { id: string } {
+  const win = (thread.contextWindows ?? []).find(
+    (w) => w.class === "talk" && (w as TalkWindow).isForkWindow && !(w as TalkWindow).isCreatorWindow,
+  );
+  if (!win) throw new Error("expected fork window in parent");
   return { id: win.id };
 }
 
@@ -40,17 +62,16 @@ function makeFileWindowFixture(thread: ThreadContext, id: string, path: string):
   thread.contextWindows = [...(thread.contextWindows ?? []), fileWindow];
 }
 
-describe("root.do.share_windows", () => {
-  it("ref mode: 子获得 sharing.kind=ref placeholder + snapshot；父保留 owner", async () => {
-    const parent = makeThread({ id: "parent" });
+describe("talk.share_windows", () => {
+  it("readonly-ref mode: 子获得 sharing.kind=readonly-ref placeholder + snapshot；父保留 owner", async () => {
+    const parent = makeParent("parent");
     makeFileWindowFixture(parent, "w_file_1", "/tmp/a.txt");
 
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: {
-        msg: "看 /tmp/a.txt",
-        share_windows: [{ window_id: "w_file_1", mode: "ref" }],
-      },
+      args: forkArgs("看 /tmp/a.txt", {
+        share_windows: [{ window_id: "w_file_1", mode: "readonly-ref" }],
+      }),
     });
 
     // 父保留 owner（无 sharing 字段）
@@ -58,33 +79,32 @@ describe("root.do.share_windows", () => {
     expect(parentFile).toBeDefined();
     expect(parentFile?.sharing).toBeUndefined();
 
-    // 子拿到 ref placeholder + snapshot
+    // 子拿到 readonly-ref placeholder + snapshot
     const child = findChild(parent);
     const childFile = (child.contextWindows ?? []).find((w) => w.id === "w_file_1");
     expect(childFile).toBeDefined();
-    expect(childFile?.sharing?.kind).toBe("ref");
-    if (childFile?.sharing?.kind === "ref") {
+    expect(childFile?.sharing?.kind).toBe("readonly-ref");
+    if (childFile?.sharing?.kind === "readonly-ref") {
       expect(childFile.sharing.ownerThreadId).toBe(parent.id);
       expect(childFile.sharing.snapshot.id).toBe("w_file_1");
       expect(childFile.sharing.snapshot.sharing).toBeUndefined();
     }
   });
 
-  it("move mode: 父变 lent_out（含 snapshot）；子获得完整 owner", async () => {
-    const parent = makeThread({ id: "parent" });
+  it("move mode: 父降 mutable-ref shadow（含 snapshot）；子获得完整 owner", async () => {
+    const parent = makeParent("parent");
     makeFileWindowFixture(parent, "w_file_2", "/tmp/b.txt");
 
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: {
-        msg: "改 /tmp/b.txt",
+      args: forkArgs("改 /tmp/b.txt", {
         share_windows: [{ window_id: "w_file_2", mode: "move" }],
-      },
+      }),
     });
 
-    // 父变 lent_out
+    // 父变 mutable-ref shadow
     const parentFile = (parent.contextWindows ?? []).find((w) => w.id === "w_file_2");
-    expect(parentFile?.sharing?.kind).toBe("lent_out");
+    expect(parentFile?.sharing?.kind).toBe("mutable-ref");
 
     // 子拿到完整 owner（无 sharing）
     const child = findChild(parent);
@@ -96,12 +116,12 @@ describe("root.do.share_windows", () => {
 });
 
 describe("WindowManager sharing 守门", () => {
-  it("拒绝在 ref 状态 window 上 exec 命令（除 close）", async () => {
-    const parent = makeThread({ id: "parent" });
+  it("拒绝在 readonly-ref 状态 window 上 exec 命令（除 close）", async () => {
+    const parent = makeParent("parent");
     makeFileWindowFixture(parent, "w_file_3", "/tmp/c.txt");
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: { msg: "看", share_windows: [{ window_id: "w_file_3", mode: "ref" }] },
+      args: forkArgs("看", { share_windows: [{ window_id: "w_file_3", mode: "readonly-ref" }] }),
     });
 
     const child = findChild(parent);
@@ -113,15 +133,15 @@ describe("WindowManager sharing 守门", () => {
         method: "edit",
         title: "尝试编辑",
       }),
-    ).rejects.toThrow(/只读 ref/);
+    ).rejects.toThrow(/readonly-ref/);
   });
 
-  it("拒绝在 lent_out 状态 window 上 exec 任何命令", async () => {
-    const parent = makeThread({ id: "parent" });
+  it("拒绝在 mutable-ref shadow 状态 window 上 exec 任何命令", async () => {
+    const parent = makeParent("parent");
     makeFileWindowFixture(parent, "w_file_4", "/tmp/d.txt");
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: { msg: "拿走", share_windows: [{ window_id: "w_file_4", mode: "move" }] },
+      args: forkArgs("拿走", { share_windows: [{ window_id: "w_file_4", mode: "move" }] }),
     });
 
     const mgr = WindowManager.fromThread(parent, builtinRegistry);
@@ -132,17 +152,17 @@ describe("WindowManager sharing 守门", () => {
         method: "edit",
         title: "尝试编辑",
       }),
-    ).rejects.toThrow(/已借出/);
+    ).rejects.toThrow(/已 move/);
   });
 });
 
-describe("do_window.move 归还路径", () => {
-  it("子在 creator do_window 上 mode=move → 触发归还，父恢复 owner", async () => {
-    const parent = makeThread({ id: "parent" });
+describe("talk_window.share 归还路径", () => {
+  it("子在 creator fork 窗上 mode=move → 触发归还，父恢复 owner", async () => {
+    const parent = makeParent("parent");
     makeFileWindowFixture(parent, "w_file_5", "/tmp/e.txt");
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: { msg: "处理", share_windows: [{ window_id: "w_file_5", mode: "move" }] },
+      args: forkArgs("处理", { share_windows: [{ window_id: "w_file_5", mode: "move" }] }),
     });
     const child = findChild(parent);
     // 子要修改 file path 模拟 latest 内容（实际场景是 file_window.edit 之类）
@@ -150,9 +170,9 @@ describe("do_window.move 归还路径", () => {
     if (childFile && childFile.class === "file") {
       (childFile as FileWindow).path = "/tmp/e-modified.txt";
     }
-    // 子在 creator do_window 上发起归还
+    // 子在 creator fork 窗上发起归还
     const creator = (child.contextWindows ?? []).find(
-      (w) => w.class === "do" && (w as DoWindow).isCreatorWindow,
+      (w) => w.class === "talk" && (w as TalkWindow).isCreatorWindow,
     );
     expect(creator).toBeDefined();
 
@@ -162,7 +182,7 @@ describe("do_window.move 归还路径", () => {
       arguments: {
         title: "归还 file",
         window_id: creator!.id,
-        method: "move",
+        method: "share",
         args: { window_id: "w_file_5", mode: "move" },
       },
     });
@@ -181,23 +201,23 @@ describe("do_window.move 归还路径", () => {
   });
 });
 
-describe("archiveDoWindowChild 自动归还", () => {
-  it("close 父 do_window 时自动归还所有 borrowed owners", async () => {
-    const parent = makeThread({ id: "parent" });
+describe("archiveForkChild 自动归还", () => {
+  it("close 父 fork 子窗时自动归还所有 borrowed owners", async () => {
+    const parent = makeParent("parent");
     makeFileWindowFixture(parent, "w_file_6", "/tmp/f.txt");
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: { msg: "处理", share_windows: [{ window_id: "w_file_6", mode: "move" }] },
+      args: forkArgs("处理", { share_windows: [{ window_id: "w_file_6", mode: "move" }] }),
     });
-    const doWindowId = findDoWindow(parent).id;
+    const forkWindowId = findForkWindow(parent).id;
     const child = findChild(parent);
 
     // 模拟 archive：直接调 archive helper（绕开 mgr 缓存层）
-    const { archiveDoWindowChild } = await import("../do/helpers");
-    const doWindow = (parent.contextWindows ?? []).find((w) => w.id === doWindowId);
-    expect(doWindow?.class).toBe("do");
-    if (doWindow?.class === "do") {
-      archiveDoWindowChild(parent, doWindow as DoWindow);
+    const { archiveForkChild } = await import("../talk/fork");
+    const forkWindow = (parent.contextWindows ?? []).find((w) => w.id === forkWindowId);
+    expect(forkWindow?.class).toBe("talk");
+    if (forkWindow?.class === "talk") {
+      archiveForkChild(parent, forkWindow as TalkWindow);
     }
 
     // 父侧 file 恢复 owner（直接看 parent.contextWindows，不经 mgr）

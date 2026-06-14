@@ -194,23 +194,27 @@ describe("plan_window — basic闭环", () => {
     expect(xml).toContain('name="expand_step"');
   });
 
-  it("step 8 (share): plan_window 通过 do_window.move 进入 lent_out 状态", async () => {
-    // 父 thread 创建 plan_window，再用 root.do 派生子并 share plan_window (mode=move)
-    const parent = makeThread({ id: "t_plan_share_parent" });
+  it("step 8 (share): plan_window 通过 talk_window.share(move) 进入 mutable-ref shadow 状态", async () => {
+    // 父 thread 创建 plan_window，再用 talk(target=自己) fork 子并 share plan_window (mode=move)
+    const parent = makeThread({
+      id: "t_plan_share_parent",
+      persistence: { baseDir: "/tmp/__test__", sessionId: "s_test", objectId: "alice", threadId: "t_plan_share_parent" },
+    });
     await execRootMethod("plan", { thread: parent, args: { plan: "shareable" } });
     const plan = findPlanWindow(parent);
 
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
       args: {
+        target: "alice",
         msg: "go work on plan",
         share_windows: [{ window_id: plan.id, mode: "move" }],
       },
     });
 
-    // 父侧 plan_window 现在应为 lent_out
+    // 父侧 plan_window 现在应为 mutable-ref shadow
     const parentPlan = parent.contextWindows.find((w) => w.id === plan.id);
-    expect(parentPlan?.sharing?.kind).toBe("lent_out");
+    expect(parentPlan?.sharing?.kind).toBe("mutable-ref");
 
     // 子侧应有完整 owner plan_window（无 sharing 字段）
     const childId = (parent.childThreadIds ?? [])[0]!;

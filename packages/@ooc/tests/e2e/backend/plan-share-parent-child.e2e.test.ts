@@ -25,21 +25,37 @@
 
 import { describe, expect, it } from "bun:test";
 
-// side-effect: 触发 windows 注册（含 plan / do）
+// side-effect: 触发 windows 注册（含 plan / talk）
 import "@ooc/core/executable/windows";
 
 import { execRootMethod, WindowManager, builtinRegistry } from "@ooc/core/executable/windows";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
-import { archiveDoWindowChild } from "@ooc/core/executable/windows/do/helpers";
-import { makeThread } from "@ooc/core/__tests__/make-thread";
+import { archiveForkChild } from "@ooc/core/executable/windows/talk/fork";
+import { makeThread, type MakeThreadOpts } from "@ooc/core/__tests__/make-thread";
 import type {
   ContextWindow,
-  DoWindow,
+  TalkWindow,
   PlanWindow,
 } from "@ooc/core/executable/windows/_shared/types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 // ───────────────────────────── helpers ────────────────────────────────────────
+
+const SELF = "alice";
+
+/** 父 thread fixture：带 persistence（objectId=SELF），让 talk(target=SELF) 走 fork 形态。 */
+function makeForkParent(id: string): ThreadContext {
+  const opts: MakeThreadOpts = {
+    id,
+    persistence: { baseDir: "/tmp/__test__", sessionId: "s_test", objectId: SELF, threadId: id },
+  };
+  return makeThread(opts);
+}
+
+/** fork 形态 talk 入参（target=自己）。 */
+function forkArgs(msg: string, extra: Record<string, unknown> = {}) {
+  return { target: SELF, msg, ...extra };
+}
 
 /** 找出某 thread 上的某 plan_window（按 id 严格匹配）。 */
 function findPlanWindowById(
@@ -50,22 +66,22 @@ function findPlanWindowById(
   return w && w.class === "plan" ? (w as PlanWindow) : undefined;
 }
 
-/** 找出 thread 上唯一的非 creator do_window（root.do 创建的对端通道）。 */
-function findParentSideDoWindow(thread: ThreadContext): DoWindow {
+/** 找出 thread 上唯一的非 creator fork 子窗（talk fork，对端通道）。 */
+function findParentSideForkWindow(thread: ThreadContext): TalkWindow {
   const win = (thread.contextWindows ?? []).find(
-    (w) => w.class === "do" && !(w as DoWindow).isCreatorWindow,
+    (w) => w.class === "talk" && (w as TalkWindow).isForkWindow && !(w as TalkWindow).isCreatorWindow,
   );
-  if (!win || win.class !== "do") throw new Error("expected parent-side do_window");
-  return win as DoWindow;
+  if (!win || win.class !== "talk") throw new Error("expected parent-side fork window");
+  return win as TalkWindow;
 }
 
-/** 通过子 thread 持有的 creator do_window 找到子→父归还通道。 */
-function findChildCreatorDoWindow(child: ThreadContext): DoWindow {
+/** 通过子 thread 持有的 creator fork 窗找到子→父归还通道。 */
+function findChildCreatorForkWindow(child: ThreadContext): TalkWindow {
   const win = (child.contextWindows ?? []).find(
-    (w) => w.class === "do" && (w as DoWindow).isCreatorWindow,
+    (w) => w.class === "talk" && (w as TalkWindow).isCreatorWindow,
   );
-  if (!win || win.class !== "do") throw new Error("expected creator do_window on child");
-  return win as DoWindow;
+  if (!win || win.class !== "talk") throw new Error("expected creator fork window on child");
+  return win as TalkWindow;
 }
 
 /** child 通过其 WindowManager 在某 plan_window 上执行命令（owner 路径）。 */
@@ -101,7 +117,7 @@ function getOnlyChild(parent: ThreadContext): ThreadContext {
 describe("plan_window share — Scenario A: move 模式完整闭环", () => {
   it("父建 plan → move 给子 → 子改 + expand → 归还 → 父见进度", async () => {
     // 1. setup: 父 thread
-    const parent = makeThread({ id: "_test_thinkable_b6_a_parent" });
+    const parent = makeForkParent("_test_thinkable_b6_a_parent");
 
     // 2. 父 exec(plan)
     await execRootMethod("plan", {
@@ -126,18 +142,15 @@ describe("plan_window share — Scenario A: move 模式完整闭环", () => {
     expect(s3).toBeDefined();
 
     // 6. 父 exec(do, share_windows=[{id:PW1, mode:move}])
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: {
-        msg: "执行重构计划",
-        share_windows: [{ window_id: PW1, mode: "move" }],
-      },
+      args: forkArgs("执行重构计划", { share_windows: [{ window_id: PW1, mode: "move" }] }),
     });
 
     // 7. 父侧验证：lent_out + 拒写
     const parentPlanAfterShare = findPlanWindowById(parent, PW1)!;
-    expect(parentPlanAfterShare.sharing?.kind).toBe("lent_out");
-    if (parentPlanAfterShare.sharing?.kind === "lent_out") {
+    expect(parentPlanAfterShare.sharing?.kind).toBe("mutable-ref");
+    if (parentPlanAfterShare.sharing?.kind === "mutable-ref") {
       expect(parentPlanAfterShare.sharing.snapshot.id).toBe(PW1);
     }
 
@@ -151,7 +164,7 @@ describe("plan_window share — Scenario A: move 模式完整闭环", () => {
         title: "[test] 父尝试改 lent_out",
         args: { text: "不应该成功" },
       }),
-    ).rejects.toThrow(/已借出/);
+    ).rejects.toThrow(/已 move/);
 
     // 8. 切到子线程执行
     const child = getOnlyChild(parent);
@@ -194,14 +207,14 @@ describe("plan_window share — Scenario A: move 模式完整闭环", () => {
     expect(childSubAfter.steps).toHaveLength(1);
 
     // 9. 子归还 — 通过 creator do_window 调 move(window_id=PW1, mode=move)
-    const childCreator = findChildCreatorDoWindow(child);
+    const childCreator = findChildCreatorForkWindow(child);
     const out = await dispatchToolCall(child, {
       id: "call_b6_a_return",
       name: "exec",
       arguments: {
         title: "[test] 归还 plan",
         window_id: childCreator.id,
-        method: "move",
+        method: "share",
         args: { window_id: PW1, mode: "move" },
       },
     });
@@ -233,7 +246,7 @@ describe("plan_window share — Scenario A: move 模式完整闭环", () => {
 
 describe("plan_window share — Scenario B: ref 模式（子只读）", () => {
   it("父建 plan → share ref 给子 → 子改被拒 → 子 close 不影响父", async () => {
-    const parent = makeThread({ id: "_test_thinkable_b6_b_parent" });
+    const parent = makeForkParent("_test_thinkable_b6_b_parent");
     await execRootMethod("plan", {
       thread: parent,
       args: { plan: "为 v2 做准备" },
@@ -247,12 +260,9 @@ describe("plan_window share — Scenario B: ref 模式（子只读）", () => {
     await execOnPlanWindow(parent, PW1, "add_step", { text: "step c" });
     const stepsBefore = findPlanWindowById(parent, PW1)!.steps.map((x) => x.id);
 
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: {
-        msg: "看父 plan",
-        share_windows: [{ window_id: PW1, mode: "ref" }],
-      },
+      args: forkArgs("看父 plan", { share_windows: [{ window_id: PW1, mode: "readonly-ref" }] }),
     });
 
     // 父侧仍 owner（无 sharing；ref 模式不影响父侧 sharing 字段）
@@ -261,7 +271,7 @@ describe("plan_window share — Scenario B: ref 模式（子只读）", () => {
 
     const child = getOnlyChild(parent);
     const childSide = findPlanWindowById(child, PW1)!;
-    expect(childSide.sharing?.kind).toBe("ref");
+    expect(childSide.sharing?.kind).toBe("readonly-ref");
 
     // 子在 ref 上尝试 update_step → 拒绝（守门：ref 上仅 close 允许）
     const childMgr = WindowManager.fromThread(child, builtinRegistry);
@@ -273,7 +283,7 @@ describe("plan_window share — Scenario B: ref 模式（子只读）", () => {
         title: "[test] 子尝试改 ref",
         args: { step_id: stepsBefore[0]!, status: "done" },
       }),
-    ).rejects.toThrow(/只读 ref/);
+    ).rejects.toThrow(/readonly-ref/);
 
     // 子 close ref（只释放本地）
     const closeMgr = WindowManager.fromThread(child, builtinRegistry);
@@ -298,7 +308,7 @@ describe("plan_window share — Scenario B: ref 模式（子只读）", () => {
 
 describe("plan_window share — Scenario C: 边界 / 错误路径", () => {
   it("root + sub plan_window 都能被 share（都是 plan 类型实例）", async () => {
-    const parent = makeThread({ id: "_test_thinkable_b6_c_parent" });
+    const parent = makeForkParent("_test_thinkable_b6_c_parent");
     await execRootMethod("plan", { thread: parent, args: { plan: "p" } });
     const rootPlan = (parent.contextWindows ?? []).find(
       (w) => w.class === "plan",
@@ -310,45 +320,39 @@ describe("plan_window share — Scenario C: 边界 / 错误路径", () => {
     const subId = findPlanWindowById(parent, PW1)!.steps[0]!.subPlanWindowId!;
 
     // 直接 share sub plan_window 给子线程（不带 root plan）
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: {
-        msg: "只看子 plan",
-        share_windows: [{ window_id: subId, mode: "ref" }],
-      },
+      args: forkArgs("只看子 plan", { share_windows: [{ window_id: subId, mode: "readonly-ref" }] }),
     });
     const child = getOnlyChild(parent);
     const childRef = findPlanWindowById(child, subId);
     expect(childRef).toBeDefined();
-    expect(childRef!.sharing?.kind).toBe("ref");
+    expect(childRef!.sharing?.kind).toBe("readonly-ref");
     // 父侧 sub plan 不变
     const parentSub = findPlanWindowById(parent, subId)!;
     expect(parentSub.sharing).toBeUndefined();
   });
 
   it("已 lent_out 的 plan_window 再 share 给同一子被拒（do_window.move 守门）", async () => {
-    const parent = makeThread({ id: "_test_thinkable_b6_c_dup" });
+    const parent = makeForkParent("_test_thinkable_b6_c_dup");
     await execRootMethod("plan", { thread: parent, args: { plan: "p" } });
     const PW1 = ((parent.contextWindows ?? []).find(
       (w) => w.class === "plan",
     ) as PlanWindow).id;
 
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: {
-        msg: "first share",
-        share_windows: [{ window_id: PW1, mode: "move" }],
-      },
+      args: forkArgs("first share", { share_windows: [{ window_id: PW1, mode: "move" }] }),
     });
     // 父侧已是 lent_out;通过父 do_window.move 再 share 应被拒（sharing 已设置)
-    const parentDo = findParentSideDoWindow(parent);
+    const parentDo = findParentSideForkWindow(parent);
     const out = await dispatchToolCall(parent, {
       id: "call_b6_c_dup",
       name: "exec",
       arguments: {
         title: "[test] 重复 share",
         window_id: parentDo.id,
-        method: "move",
+        method: "share",
         args: { window_id: PW1, mode: "move" },
       },
     });
@@ -367,19 +371,16 @@ describe("plan_window share — Scenario C: 边界 / 错误路径", () => {
   });
 
   it("mode=move 后强 archive 父 do_window → cascade 自动归还", async () => {
-    const parent = makeThread({ id: "_test_thinkable_b6_c_cascade" });
+    const parent = makeForkParent("_test_thinkable_b6_c_cascade");
     await execRootMethod("plan", { thread: parent, args: { plan: "p" } });
     const PW1 = ((parent.contextWindows ?? []).find(
       (w) => w.class === "plan",
     ) as PlanWindow).id;
     await execOnPlanWindow(parent, PW1, "add_step", { text: "first" });
 
-    await execRootMethod("do", {
+    await execRootMethod("talk", {
       thread: parent,
-      args: {
-        msg: "拿去做",
-        share_windows: [{ window_id: PW1, mode: "move" }],
-      },
+      args: forkArgs("拿去做", { share_windows: [{ window_id: PW1, mode: "move" }] }),
     });
     const child = getOnlyChild(parent);
     // 子在 plan 上加一步，证明 latest 在子侧
@@ -387,11 +388,11 @@ describe("plan_window share — Scenario C: 边界 / 错误路径", () => {
     expect(findPlanWindowById(child, PW1)!.steps).toHaveLength(2);
 
     // 父侧 lent_out
-    expect(findPlanWindowById(parent, PW1)!.sharing?.kind).toBe("lent_out");
+    expect(findPlanWindowById(parent, PW1)!.sharing?.kind).toBe("mutable-ref");
 
-    // 父调 archiveDoWindowChild 强行 archive 子 do_window → 触发自动归还
-    const parentDo = findParentSideDoWindow(parent);
-    archiveDoWindowChild(parent, parentDo);
+    // 父调 archiveForkChild 强行 archive 子 do_window → 触发自动归还
+    const parentDo = findParentSideForkWindow(parent);
+    archiveForkChild(parent, parentDo);
 
     // 父恢复 owner + 见到子的 latest（"child added"）
     const parentAfter = findPlanWindowById(parent, PW1)!;

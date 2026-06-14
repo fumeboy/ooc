@@ -3,7 +3,7 @@
  *
  * 验证 2026-06-14 的 attention 分层（见 docs/2026-06-14-context-axiom-implementation-record.md）：
  *   - 与 thread **creator（user）** 的对话 = 主要 attention = 全文进 LLM message 流；creator 窗在 context XML 仅句柄。
- *   - 与 **sub-thread（do）** 的对话 = 次要 attention = 全文在 do_window 的 XML transcript；message 流仅"新消息提示"（非全文）。
+ *   - 与 **sub-thread（talk fork）** 的对话 = 次要 attention = 全文在 fork 子窗的 XML transcript；message 流仅"新消息提示"（非全文）。
  *
  * 跑法（需运行中的 world + 真 LLM）：
  *   set -a && . ./.env && set +a && OOC_BACKEND=http://127.0.0.1:3000 \
@@ -24,7 +24,7 @@ export async function runAttentionTieringScenario(sid: string): Promise<{ checks
   // ── Round 1：派子线程 grep 'OOC'（创建 sub-thread = 次要 attention 窗），向 user 汇报 ──
   const seed = await seedTask(
     sid, "supervisor",
-    "这是一个多轮对话。请用 do 派一个子线程去用 filesystem 成员的 grep 搜索 'OOC'，等子线程把命中数报回来后，" +
+    "这是一个多轮对话。请用 talk（target 填你自己的 objectId）派一个子线程去用 filesystem 成员的 grep 搜索 'OOC'，等子线程把命中数报回来后，" +
     "你用一句话告诉我命中多少条。记住这个数，我接下来会追问。",
     "attention 分层：多轮多对象",
   );
@@ -37,7 +37,7 @@ export async function runAttentionTieringScenario(sid: string): Promise<{ checks
   if (infra1) return { checks: [{ id: "INFRA", ok: "skip", detail: `LLM 端点抖动：${infra1}` }], trace: [], transcriptQuality: "" };
 
   // ── Round 2：续派——再 grep 'Agent'，对比两次（考验跨轮记忆 = 主要 attention 是否被 attend 到）──
-  const cont = await continueTask(sid, "好。现在再用 do 派一个子线程搜 'Agent'，然后对比刚才 'OOC' 的命中数，一句话告诉我哪个命中更多。");
+  const cont = await continueTask(sid, "好。现在再用 talk（target 填你自己）派一个子线程搜 'Agent'，然后对比刚才 'OOC' 的命中数，一句话告诉我哪个命中更多。");
   if (cont.jobId) await waitJob(cont.jobId);
   const infra2 = await threadLlmInfraFailed(sid, "supervisor", tid);
   if (infra2) return { checks: [{ id: "INFRA", ok: "skip", detail: `LLM 端点抖动(R2)：${infra2}` }], trace: [], transcriptQuality: "" };
@@ -48,10 +48,11 @@ export async function runAttentionTieringScenario(sid: string): Promise<{ checks
   const execs = await threadExecs(sid, "supervisor", tid);
   const lastSay = [...execs].reverse().find((e) => e.msg)?.msg ?? "";
 
-  // 提取 creator talk 窗 / do 窗（粗解析）
+  // 提取 creator talk 窗 / fork 子窗（粗解析）。fork 子窗 class=talk、含 <target_thread>、id 非 w_creator。
   const creatorWinMatch = ctxXml.match(/<window id="(w_creator[^"]*)"[^>]*class="talk"[^>]*>([\s\S]*?)<\/window>/);
   const creatorInner = creatorWinMatch?.[2] ?? "";
-  const doWinMatches = [...ctxXml.matchAll(/<window id="([^"]*)" class="do"[^>]*>([\s\S]*?)<\/window>/g)];
+  const forkWinMatches = [...ctxXml.matchAll(/<window id="(w_talk[^"]*)" class="talk"[^>]*>([\s\S]*?)<\/window>/g)]
+    .filter(([, , inner]) => inner.includes("<target_thread>"));
 
   // TC1：creator（主要）—— 窗是句柄（含 transcript_in_messages、无内联 <transcript>）
   {
@@ -66,16 +67,16 @@ export async function runAttentionTieringScenario(sid: string): Promise<{ checks
     checks.push({ id: "TIER-CREATOR-IN-MESSAGES", ok: inStream && notInCreatorXml,
       detail: `R2 指令在 message 流=${inStream}；不在 creator 窗 XML=${notInCreatorXml}` });
   }
-  // TC3：sub-thread（次要）—— 若派了子线程：do 窗内联 transcript（全文在 XML），message 流出"次要 attention 提示"
+  // TC3：sub-thread（次要）—— 若派了子线程（talk fork）：fork 子窗内联 transcript（全文在 XML），message 流出"次要 attention 提示"
   {
-    const usedDo = execs.some((e) => e.cmd === "do");
-    if (!usedDo || doWinMatches.length === 0) {
-      checks.push({ id: "TIER-SUB-TRANSCRIPT", ok: "skip", detail: `agent 未派子线程(do)/无 do 窗(usedDo=${usedDo}, doWins=${doWinMatches.length})——次要层未触发，本次跳过` });
+    const usedFork = execs.some((e) => e.cmd === "talk");
+    if (!usedFork || forkWinMatches.length === 0) {
+      checks.push({ id: "TIER-SUB-TRANSCRIPT", ok: "skip", detail: `agent 未派子线程(talk fork)/无 fork 窗(usedFork=${usedFork}, forkWins=${forkWinMatches.length})——次要层未触发，本次跳过` });
     } else {
-      const anyDoInline = doWinMatches.some(([, , inner]) => inner.includes("<transcript>"));
+      const anyForkInline = forkWinMatches.some(([, , inner]) => inner.includes("<transcript>"));
       const hasSecondaryMarker = /次要 attention：新消息已到/.test(stream);
-      checks.push({ id: "TIER-SUB-TRANSCRIPT", ok: anyDoInline,
-        detail: `do 窗内联 transcript=${anyDoInline}（${doWinMatches.length} 个 do 窗）；message 流有次要提示=${hasSecondaryMarker}` });
+      checks.push({ id: "TIER-SUB-TRANSCRIPT", ok: anyForkInline,
+        detail: `fork 窗内联 transcript=${anyForkInline}（${forkWinMatches.length} 个 fork 窗）；message 流有次要提示=${hasSecondaryMarker}` });
     }
   }
   // TC4：对话质量（多轮连贯）—— 最终 say 应体现"对比两次"（跨轮记住 R1 命中数 = 主要 attention 起效）
@@ -88,7 +89,7 @@ export async function runAttentionTieringScenario(sid: string): Promise<{ checks
     checks, trace: renderTrace(execs),
     transcriptQuality:
       `creator 窗(句柄):\n${creatorInner.trim().slice(0, 300)}\n\n` +
-      `do 窗数=${doWinMatches.length}${doWinMatches[0] ? `；首个 do 窗片段:\n${doWinMatches[0][2].trim().slice(0, 300)}` : ""}\n\n` +
+      `fork 窗数=${forkWinMatches.length}${forkWinMatches[0] ? `；首个 fork 窗片段:\n${forkWinMatches[0][2].trim().slice(0, 300)}` : ""}\n\n` +
       `message 流条目数=${messageStream.length}`,
   };
 }

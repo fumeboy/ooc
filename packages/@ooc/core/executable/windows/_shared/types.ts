@@ -42,7 +42,6 @@ export {
 
 export type { RootWindow } from "@ooc/builtins/root/types.js";
 export type { MethodExecWindow } from "../method_exec/types.js";
-export type { DoWindow } from "../do/types.js";
 export type { TodoWindow } from "@ooc/builtins/todo/types.js";
 export type { TalkWindow } from "../talk/types.js";
 export type { PrWindow } from "@ooc/core/reflectable/pr/types.js";
@@ -63,7 +62,6 @@ export type { FeishuDocWindow, FeishuDocBlock } from "../../../extendable/lark/f
 // 用 import 形式拿到具体类型构造 ContextWindow union
 import type { RootWindow } from "@ooc/builtins/root/types.js";
 import type { MethodExecWindow } from "../method_exec/types.js";
-import type { DoWindow } from "../do/types.js";
 import type { TodoWindow } from "@ooc/builtins/todo/types.js";
 import type { TalkWindow } from "../talk/types.js";
 import type { PrWindow } from "@ooc/core/reflectable/pr/types.js";
@@ -92,7 +90,6 @@ import type { FeishuDocWindow } from "../../../extendable/lark/feishu-doc/types.
 export type ContextWindow =
   | RootWindow
   | MethodExecWindow
-  | DoWindow
   | TodoWindow
   | TalkWindow
   | PrWindow

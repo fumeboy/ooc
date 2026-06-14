@@ -5,8 +5,7 @@
  * 的 parent type 后 submit，manager 在 lookupMethodEntry 处拒绝（"not registered on
  * parent window type"），不会盲目调 entry.exec。
  *
- * fixture：talk_window 上的 `say`（say 只挂 talk）re-target 到 do_window（do 没有 say）。
- * （原 relation_window fixture 随 relation type 退役改用 talk/do。）
+ * fixture：talk_window 上的 `say`（say 只挂 talk）re-target 到 file_window（file 没有 say）。
  */
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -26,7 +25,7 @@ import {
 import { initContextWindows } from "../_shared/init";
 import {
   ROOT_WINDOW_ID,
-  type DoWindow,
+  type FileWindow,
   type TalkWindow,
 } from "../_shared/types";
 import type { ThreadContext } from "../../../thinkable/context";
@@ -50,14 +49,14 @@ async function setupThread(baseDir: string) {
     target: PEER,
     conversationId: "w_talk_alice_to_critic",
   };
-  const doWindow: DoWindow = {
-    id: "w_do_test",
-    class: "do",
+  const fileWindow: FileWindow = {
+    id: "w_file_test",
+    class: "file",
     parentWindowId: ROOT_WINDOW_ID,
-    title: "do test",
-    status: "running",
+    title: "file test",
+    status: "open",
     createdAt: Date.now(),
-    targetThreadId: "t_child",
+    path: "/tmp/file-test.txt",
   };
   const thread: ThreadContext = {
     id: "t_root",
@@ -67,16 +66,16 @@ async function setupThread(baseDir: string) {
     persistence: { ...flow, threadId: "t_root" },
   };
   initContextWindows(thread, { initialTaskTitle: "test self" });
-  thread.contextWindows = [...thread.contextWindows, talkWindow, doWindow];
+  thread.contextWindows = [...thread.contextWindows, talkWindow, fileWindow];
   await writeThread(thread);
-  return { thread, talkWindow, doWindow };
+  return { thread, talkWindow, fileWindow };
 }
 
 describe("WindowManager.submit — self-type guard", () => {
   it("rejects when form re-targeted to a parent type that doesn't declare the method", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-mgr-disp-"));
     try {
-      const { thread, talkWindow, doWindow } = await setupThread(tempRoot);
+      const { thread, talkWindow, fileWindow } = await setupThread(tempRoot);
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
 
       // 在 talk_window 上开一个 "say" form（say 只挂 talk），不带 args 避免 auto-submit。
@@ -90,11 +89,11 @@ describe("WindowManager.submit — self-type guard", () => {
       const formId = opened.formId!;
       expect(formId).toBeDefined();
 
-      // 把 form re-target 到 do_window：do 没有 "say" 方法。
+      // 把 form re-target 到 file_window：file 没有 "say" 方法。
       const form = mgr.get(formId)!;
-      Object.assign(form, { parentWindowId: doWindow.id });
+      Object.assign(form, { parentWindowId: fileWindow.id });
 
-      // submit 应被 manager 拦下：lookupMethodEntry 在 do_window 上找不到 "say" → throw。
+      // submit 应被 manager 拦下：lookupMethodEntry 在 file_window 上找不到 "say" → throw。
       let caught: Error | undefined;
       try {
         await mgr.submit(formId, thread);
@@ -103,7 +102,7 @@ describe("WindowManager.submit — self-type guard", () => {
       }
       expect(caught).toBeDefined();
       expect(caught!.message).toContain("not registered on parent window type");
-      expect(caught!.message).toContain("do");
+      expect(caught!.message).toContain("file");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

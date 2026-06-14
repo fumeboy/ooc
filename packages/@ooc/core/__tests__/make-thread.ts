@@ -2,7 +2,7 @@
  * 单元测试用 thread fixture — 构造一个最小可运行的 ThreadContext。
  *
  * Step 1 重构后 ThreadContext.contextWindows 必填；不少老测试用对象字面量直接 new 一个 thread，
- * 通过这个 helper 集中处理 contextWindows 的初始化（含 creator do_window 注入）。
+ * 通过这个 helper 集中处理 contextWindows 的初始化（含 creator talk_window 注入）。
  */
 import type { ThreadContext } from "../thinkable/context";
 import type { ThreadPersistenceRef } from "../persistable/common";
@@ -27,7 +27,7 @@ export interface MakeThreadOpts {
   extraWindows?: ThreadContext["contextWindows"];
   /** creator window 的 title；缺省 = "test-thread"。 */
   initialTaskTitle?: string;
-  /** 跳过自动 creator do_window 注入（当测试明确不想要时）。 */
+  /** 跳过自动 creator talk_window 注入（当测试明确不想要时）。 */
   skipCreatorWindow?: boolean;
 }
 
@@ -38,7 +38,7 @@ export interface MakeThreadOpts {
  * - id="t_root"
  * - status="running"
  * - events=[]
- * - contextWindows=[creator do_window]
+ * - contextWindows=[creator talk_window]
  *
  * 调用方可以通过 opts 覆盖任意字段。
  */
@@ -56,7 +56,7 @@ export function makeThread(opts: MakeThreadOpts = {}): ThreadContext {
     persistence: opts.persistence,
   };
   if (!opts.skipCreatorWindow) {
-    // 兼容老单元测试默认行为：注入一个指向 placeholder parent 的 creator do_window。
+    // 兼容老单元测试默认行为：注入一个指向 placeholder parent 的 creator talk_window。
     // 产品端 initContextWindows 现在要求"真有 creator info"才注入（避免 phantom），
     // 所以这里显式给个 placeholder thread id（即使是假的，对单元测试来说也是合理 stub）。
     initContextWindows(thread, {

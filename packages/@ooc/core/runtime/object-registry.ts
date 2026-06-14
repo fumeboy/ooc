@@ -36,12 +36,6 @@ export type {
 };
 export { filterMethodsByVisibility };
 
-const RENDERABLE_VISIBLE_TYPES = new Set([
-  "root", "method_exec", "do", "todo", "talk", "pr", "reflect_request", "program",
-  "file", "knowledge", "search", "skill_index",
-  "feishu_chat", "feishu_doc", "plan", "filesystem", "terminal", "world", "knowledge_base",
-]);
-
 /**
  * exec 名字全局唯一：同一 type 上同名 method 不能既是 object method 又是 window method。
  * dispatch 入口统一（exec by name），重名会导致优先级歧义。注册期 fail-loud。
@@ -69,40 +63,51 @@ function resolveEffectiveParentClass(
   return fallback?.parentClass;
 }
 
-/** Base types seeded into every new ObjectRegistry. Map key 即 type。 */
+/**
+ * Base types seeded into every new ObjectRegistry. Map key 即 type。
+ *
+ * 每条携带可见性/readable flag（取代旧 module-level `RENDERABLE_VISIBLE_TYPES` /
+ * xml.ts `BUILTIN_TYPES` 两个硬编码 Set）：
+ * - `renderableVisible: true` —— 参与 resolveEffectiveVisibleType（旧 RENDERABLE_VISIBLE_TYPES 成员）。
+ * - `builtinReadable: true` —— readable 走 builtin registry hook 短路（旧 BUILTIN_TYPES 成员，
+ *   renderableVisible 的真子集；pr / reflect_request 可见但**不**短路，保留差异）。
+ * example / _builtin/agent 两者皆不打——非渲染窗类型。
+ */
 const BASE_TYPE_DEFINITIONS: Array<[string, ObjectDefinition]> = [
-  ["root", { methods: {}, parentClass: null }],
-  ["method_exec", { methods: {}, parentClass: null }],
-  // 窗类型（do/talk/file/...）是 ContextWindow 的【种类】，不是继承 root 的 Object/Agent——
+  ["root", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["method_exec", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  // 窗类型（talk/file/...）是 ContextWindow 的【种类】，不是继承 root 的 Object/Agent——
   // 各自的方法直接注册在自身 class 上，不该继承 root 的 misc（example/feishu）。
   // 故全部 parentClass:null（与 root/method_exec/filesystem 一致）；否则 computeVisibleMethodSet
   // 沿链合并方法时会把 example/feishu 污染到每个窗。只有 _builtin/agent 与 agent 对象继承 root。
-  ["do", { methods: {}, parentClass: null }],
-  ["todo", { methods: {}, parentClass: null }],
-  ["talk", { methods: {}, parentClass: null }],
-  ["pr", { methods: {}, parentClass: null }],
-  ["reflect_request", { methods: {}, parentClass: null }],
-  ["program", { methods: {}, parentClass: null }],
-  ["file", { methods: {}, parentClass: null }],
-  ["knowledge", { methods: {}, parentClass: null }],
-  ["search", { methods: {}, parentClass: null }],
-  ["skill_index", { methods: {}, parentClass: null }],
-  ["feishu_chat", { methods: {}, parentClass: null }],
-  ["feishu_doc", { methods: {}, parentClass: null }],
-  ["plan", { methods: {}, parentClass: null }],
+  ["todo", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["talk", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  // pr / reflect_request —— 可见类型（renderableVisible），但 readable **不**走 builtin 短路
+  // （builtinReadable 缺省）：沿继承链 / stone 反射解析，保留旧 BUILTIN_TYPES 不含此二者的差异。
+  ["pr", { methods: {}, parentClass: null, renderableVisible: true }],
+  ["reflect_request", { methods: {}, parentClass: null, renderableVisible: true }],
+  ["program", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["file", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["knowledge", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["search", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["skill_index", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["feishu_chat", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["feishu_doc", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["plan", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
   // example —— 标准对象定义样板（executable/index.ts + readable.ts 两维度分注册示范）。
+  // 非渲染窗类型：renderableVisible / builtinReadable 皆缺省。
   ["example", { methods: {}, parentClass: null }],
   // filesystem / terminal —— agent 组合持有的 tool-object 成员。
   // parentClass:null（terminal，不继承 root）——tool-object **不是 Agent**：它没有 agency
-  // （talk/do/...），只有自己的工具方法。Object/Agent 边界在类型层落实。
-  ["filesystem", { methods: {}, parentClass: null }],
-  ["terminal", { methods: {}, parentClass: null }],
+  // （talk/plan/...），只有自己的工具方法。Object/Agent 边界在类型层落实。
+  ["filesystem", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["terminal", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
   // world（create_object/governance）/ knowledge_base（open_knowledge）—— 同为 tool-object 成员。
-  ["world", { methods: {}, parentClass: null }],
-  ["knowledge_base", { methods: {}, parentClass: null }],
-  // _builtin/agent —— OOC Agent 基类：承载 agency（talk/do/plan/todo/end），由 root/executable
+  ["world", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  ["knowledge_base", { methods: {}, parentClass: null, renderableVisible: true, builtinReadable: true }],
+  // _builtin/agent —— OOC Agent 基类：承载 agency（talk/plan/todo/end），由 root/executable
   // 在 load 期 registerExecutable 注入。具体 agent（supervisor）经 ooc.class 继承它。
-  // 隐式继承 root（拿 example/feishu 等残留 misc）。
+  // 隐式继承 root（拿 example/feishu 等残留 misc）。非渲染窗类型：两 flag 皆缺省。
   ["_builtin/agent", { methods: {} }],
 ];
 
@@ -152,6 +157,42 @@ export class ObjectRegistry {
   }
 
   /**
+   * 一次声明完成一个 window class 的全部接线——seed-if-absent + executable 维度
+   * （methods / parentClass / isBuiltinFeature）+ readable 维度（readable / windowMethods /
+   * compressView / onClose / consumedMessageIds）+ 可见性 flag（renderableVisible /
+   * builtinReadable）。把过去散落在 BASE_TYPE_DEFINITIONS seed、registerExecutable、
+   * registerReadable、两个硬编码 Set 上的接线收敛到一处声明。
+   *
+   * 与 {@link registerExecutable} / {@link registerReadable} 的差异：那两个要求 type 已 seed
+   * 且按维度分注册；本方法对**未 seed 的 type 先建空定义**再合入，故可一次性声明新 window class。
+   * 未传字段保留 existing（与 mergeExistingDefinition 同语义），可重复调用增量补全。
+   *
+   * 本步（S0）不强制现有类型改用它——供后续 S1 迁移各 window class 用。
+   */
+  registerWindowClass(
+    decl: { type: string } & Pick<
+      Partial<ObjectDefinition>,
+      | "methods"
+      | "parentClass"
+      | "isBuiltinFeature"
+      | "readable"
+      | "windowMethods"
+      | "compressView"
+      | "onClose"
+      | "consumedMessageIds"
+      | "renderableVisible"
+      | "builtinReadable"
+    >,
+  ): void {
+    const { type, ...patch } = decl;
+    if (!this.store.has(type)) {
+      // seed-if-absent：建最小空定义（methods 必填），随后 merge 合入声明的字段。
+      this.store.set(type, { methods: {} });
+    }
+    this.mergeExistingDefinition(type, patch, "registerWindowClass");
+  }
+
+  /**
    * 维度注册的共用 merge：把 partial 合入已存在的 ObjectDefinition（未传字段保留 existing），
    * 并校验 object method / window method 同名冲突。executable 与 readable 两个维度入口都走这里，
    * 故 method↔windowMethod 同名无论先注册哪个维度都能 fail-loud。
@@ -177,6 +218,8 @@ export class ObjectRegistry {
       readable: partial.readable ?? existing.readable,
       consumedMessageIds: partial.consumedMessageIds ?? existing.consumedMessageIds,
       isBuiltinFeature: partial.isBuiltinFeature ?? existing.isBuiltinFeature,
+      renderableVisible: partial.renderableVisible ?? existing.renderableVisible,
+      builtinReadable: partial.builtinReadable ?? existing.builtinReadable,
       parentClass: nextParentClass,
     });
   }
@@ -314,12 +357,26 @@ export class ObjectRegistry {
     }
   }
 
+  /** 查 entry 的 renderableVisible flag（取代旧 module-level RENDERABLE_VISIBLE_TYPES Set）。 */
+  private isRenderableVisible(type: string): boolean {
+    return this.store.get(type)?.renderableVisible === true;
+  }
+
   resolveEffectiveVisibleType(type: string): string | undefined {
-    if (RENDERABLE_VISIBLE_TYPES.has(type)) return type;
+    if (this.isRenderableVisible(type)) return type;
     for (const ancestor of this.resolveParentClassChain(type)) {
-      if (RENDERABLE_VISIBLE_TYPES.has(ancestor)) return ancestor;
+      if (this.isRenderableVisible(ancestor)) return ancestor;
     }
     return undefined;
+  }
+
+  /**
+   * 该 window class 的 readable 是否走 builtin registry hook 短路（取代 xml.ts 旧
+   * module-level BUILTIN_TYPES Set）。逐成员等价：renderableVisible 真子集，
+   * 不含 pr / reflect_request。
+   */
+  isBuiltinReadableType(type: string): boolean {
+    return this.store.get(type)?.builtinReadable === true;
   }
 
   /** Snapshot all entries (useful for tests or cloning). */
@@ -353,6 +410,8 @@ export class ObjectRegistry {
           readable: def.readable ?? existing.readable,
           consumedMessageIds: def.consumedMessageIds ?? existing.consumedMessageIds,
           isBuiltinFeature: def.isBuiltinFeature ?? existing.isBuiltinFeature,
+          renderableVisible: def.renderableVisible ?? existing.renderableVisible,
+          builtinReadable: def.builtinReadable ?? existing.builtinReadable,
           parentClass: def.parentClass !== undefined ? def.parentClass : existing.parentClass,
         });
       } else {
@@ -365,7 +424,7 @@ export class ObjectRegistry {
 
 /**
  * Module-level singleton holding builtin object type definitions (root, file,
- * plan, program, todo, search, knowledge, skill_index, do, talk, method_exec,
+ * plan, program, todo, search, knowledge, skill_index, talk, method_exec,
  * feishu_chat, feishu_doc).
  *
  * Builtin modules populate this via side-effect imports at module load time:

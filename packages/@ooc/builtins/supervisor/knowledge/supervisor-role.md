@@ -34,7 +34,7 @@ activates_on:
 先判断协作类型：
 - **同 stone peer**（同级或我的 children，已经在我的 contextWindows 中出现）→ 直接 `exec(window_id="<objectId>", method="...", args={...})`，1 跳返回结果。这是**首选**。
 - **跨 session / 异步 / 需要对方独立思考** → 开 `talk_window(target=<peer object>)` 把需求转述
-- **复杂任务、需要子 thread 独立调度** → 开 `do_window` 派生新 thread 处理（带 `share_windows` 共享必要上下文）
+- **复杂任务、需要子 thread 独立调度** → `talk(target=自己)` fork 新子 thread 处理（带 `share_windows` 共享必要上下文）
 
 > 不要对同 stone peer 先 talk 再 exec——链路从 3 跳变 1 跳，延迟和出错概率都降一个数量级。只有确实不满足"同 stone peer"时才走 talk。
 

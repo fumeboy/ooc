@@ -1,12 +1,10 @@
 /**
- * 会话窗（talk / do）共享渲染：transcript-or-handle。
+ * 会话窗共享渲染：transcript-or-handle。
  *
- * talk_window 与 do_window 本质同为"对端 thread 的会话窗"（见 docs/2026-06-14-…axiom 推论一）。
- * attention 分层（2026-06-14）后两者的 transcript 渲染**逐行相同**——creator 窗渲句柄、非 creator
- * 窗渲 viewport + transcript。本 helper 抽出这段共享逻辑（两边 readable hook 各自算 messages + head
- * 节点后调用它），消除重复。filter（do 按 targetThreadId / talk 按 windowId）寻址不同，仍各自保留。
- *
- * 注：do_window 类终将并入 talk_window（S4b）；届时本 helper 仍是 talk 的 transcript 渲染器，非废弃。
+ * talk_window 统一两形态（peer 会话 / fork 子线程窗），transcript 渲染**逐行相同**——
+ * creator 窗渲句柄、非 creator 窗渲 viewport + transcript。本 helper 抽出这段共享逻辑
+ * （readable hook 算 messages + head 节点后调用它）。filter（fork 按 targetThreadId /
+ * peer 按 windowId）寻址不同，由 filterMessagesForTalkWindow 各自处理。
  */
 import type { ThreadMessage } from "@ooc/core/_shared/types/thread.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";

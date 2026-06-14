@@ -70,7 +70,6 @@ interface CmdCase {
 
 const TARGETS = [
   "talk",
-  "do",
   "write_file",
   "open_file",
   "grep",

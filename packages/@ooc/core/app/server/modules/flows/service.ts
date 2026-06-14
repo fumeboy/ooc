@@ -135,8 +135,8 @@ function stripVolatileForHash(payload: { contextWindows?: ContextWindow[] }) {
  *
  * 输入是已 readThread 出来的 ThreadContext.contextWindows；遍历每个 window 的
  * sharing 字段：
- * - sharing.kind === "ref" → 进 holding（我持有别人借给我的 ref；ownerThreadId 来自 sharing）
- * - sharing.kind === "lent_out" → 进 lentOut（我借出去；borrowerThreadId 来自 sharing）
+ * - sharing.kind === "readonly-ref" → 进 holding（我持有别人借给我的只读引用；ownerThreadId 来自 sharing）
+ * - sharing.kind === "mutable-ref" → 进 lentOut（我 move 出去、自己降只读 shadow；borrowerThreadId 来自 sharing）
  *
  * 注意：当前 SharingState（src/executable/windows/_shared/types.ts）**不持久化**
  * ownerObjectId / borrowerObjectId 字段 —— 它们是 design 预留位，实现里永远 undefined。
@@ -151,16 +151,16 @@ function extractShareInfo(windows: ContextWindow[] | undefined): ThreadShareInfo
     const sharing = (window as { sharing?: unknown }).sharing;
     if (!sharing || typeof sharing !== "object") continue;
     const s = sharing as Record<string, unknown>;
-    if (s.kind === "ref") {
+    if (s.kind === "readonly-ref") {
       holding.push({
         windowId: window.id,
-        kind: "ref",
+        kind: "readonly-ref",
         ownerThreadId:
           typeof s.ownerThreadId === "string" ? s.ownerThreadId : undefined,
         // ownerObjectId 暂未持久化在 SharingState；design 预留位。
         ownerObjectId: undefined,
       });
-    } else if (s.kind === "lent_out") {
+    } else if (s.kind === "mutable-ref") {
       lentOut.push({
         windowId: window.id,
         borrowerThreadId:
@@ -431,7 +431,7 @@ export function createFlowsService(deps: {
           status: "running",
           events: [],
           // user.root 不注入 creator window：user 是一切交互的起点，没有"创建它的人"，
-          // creator do_window 在这里是无意义的。详见 init.ts 的 isUserRootThread。
+          // creator talk_window 在这里是无意义的。详见 init.ts 的 isUserRootThread。
           contextWindows: [],
           persistence: userPersistence,
         };
@@ -635,7 +635,7 @@ export function createFlowsService(deps: {
         contextWindows: [],
         persistence,
       } satisfies ThreadContext;
-      // 注入初始 creator do_window：root thread 的 creator 是外部 session
+      // 注入初始 creator talk_window：root thread 的 creator 是外部 session
       initContextWindows(thread, {
         initialTaskTitle: initialMessage ? initialMessage.slice(0, 60) : `flow ${objectId}`,
       });

@@ -19,9 +19,8 @@ import type { WindowDisplayState } from "./window-state.js";
  * Window 状态值汇总。
  *
  * - method_exec：open → executing → success | failed
- * - do：running → archived
  * - todo：open → done
- * - talk / program / file / knowledge：open → closed
+ * - talk / program / file / knowledge：open → closed（talk fork 子窗的子线程"运行中"状态挂 thread.status）
  * - root：仅 active；与 thread 同生命周期，不能被关闭
  */
 export type WindowStatus =
@@ -73,7 +72,7 @@ export interface ContextWindowRelevance {
  * - parentWindowId：method_exec 必有 parent；其它类型不显式挂 parent 时默认在 root 下
  * - title：所有 window 强制必填
  * - windowKnowledgePaths：本 window 自身关联的 knowledge path（用于 close 时释放引用计数）
- * - sharing：跨 thread 共享状态；缺省 = 该 thread 独占持有（owner，可正常操作）
+ * - sharing：跨 thread 引用模式；缺省 = mutable-ref（owner，可调全部 method）
  */
 export interface BaseContextWindow {
   id: string;
@@ -83,7 +82,7 @@ export interface BaseContextWindow {
   status: WindowStatus;
   createdAt: number;
   windowKnowledgePaths?: string[];
-  /** 跨 thread 共享状态；缺省 = owner-live。 */
+  /** 跨 thread 引用模式；缺省 = mutable-ref（owner）。 */
   sharing?: SharingState;
   /**
    * 上下文压缩档位。
@@ -131,21 +130,25 @@ export interface BaseContextWindow {
 }
 
 /**
- * 跨 thread 共享 ContextWindow 的状态。
+ * 跨 thread 引用模式
  *
- * - kind="ref"：我（当前 thread）持有的是只读 ref；snapshot 是分享时刻的 freeze。
- * - kind="lent_out"：我曾是 owner，已把 owner 移交给 borrowerThreadId。
+ * 缺省（无 sharing 字段）= **mutable-ref**：所有者，可调该窗全部 method。
+ * 显式 sharing 标记非缺省态：
+ * - kind="readonly-ref"：我（当前 thread）持有只读引用，只能调 window method；
+ *   owner 在 ownerThreadId；snapshot 是 share 时刻的 freeze。
+ * - kind="mutable-ref"：我曾是 owner，已把 mutable 所有权 move 给 borrowerThreadId，
+ *   自己降为只读 shadow（snapshot 冻结）。`move` 是动作（核心 11），非稳态。
  */
 export type SharingState =
   | {
-      kind: "ref";
+      kind: "readonly-ref";
       ownerThreadId: string;
       lentByWindowId: string;
       sharedAt: number;
       snapshot: ContextWindow;
     }
   | {
-      kind: "lent_out";
+      kind: "mutable-ref";
       borrowerThreadId: string;
       lentToWindowId: string;
       sharedAt: number;
@@ -190,7 +193,7 @@ export function generateWindowId(type: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** 派生稳定的 creator do_window id。 */
+/** 派生稳定的 creator 会话窗 id（talk window，指向 creator）。 */
 export function creatorWindowIdOf(threadId: string): string {
   return `w_creator_${threadId}`;
 }

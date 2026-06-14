@@ -12,7 +12,7 @@ import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
  *   - success：自动从 contextWindows 移除（submit 段）
  *   - failed：保留 result，且可通过 refine 回 open（"复活"路径）
  * - parentWindowId 是该 method 注册到的 window 的 id（root 命令时 = "root"；
- *   do_window 上的 continue 时 = 该 do_window 的 id）。
+ *   talk_window 上的 say 时 = 该 talk_window 的 id）。
  */
 export interface MethodExecWindow extends BaseContextWindow {
   class: "method_exec";

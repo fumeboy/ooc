@@ -43,7 +43,7 @@ export const EXEC_TOOL: LlmTool = {
       method: {
         type: "string",
         // self 窗（agency + root misc）上可调的方法；成员窗 / 其它 window 上的方法
-        // （filesystem.grep / terminal.program / do_window.continue / method_exec.refine|submit / custom）
+        // （filesystem.grep / terminal.program / talk_window.say / method_exec.refine|submit / custom）
         // 通过 enum 之外的 string 传入即可——schema 不强约束，运行时按 window_id 路由。
         // 惰性 getter：避免 module-eval 期就访问 ROOT_METHODS（循环 import 下会 TDZ；
         // EXEC_TOOL 是模块级 const，在 import 图某些加载顺序下 root/executable 尚未初始化完）。
@@ -53,11 +53,12 @@ export const EXEC_TOOL: LlmTool = {
         },
         description:
           "要在 target window 上调用的 method 名。" +
-          "你自己的 self 窗上有 agency：talk/do/plan/todo/end（+ example）。" +
+          "你自己的 self 窗上有 agency：talk/plan/todo/end（+ example）。" +
+          "talk 统一两形态：target=别的对象 ⇒ peer 会话；target=自己 ⇒ fork 一条子线程。" +
           "工具方法在成员对象窗上：filesystem 有 grep/glob/open_file/write_file；terminal 有 program；" +
           "world 有 create_object；knowledge_base 有 open_knowledge —— 调用时 window_id 指向对应成员窗。" +
           "（super flow 反思会话窗 reflect_request 另挂 new_feat_branch / create_pr_and_invite_reviewers 沉淀方法）" +
-          "其它 window 上注册的方法（如 do_window.continue / talk_window.say / form 自身的 refine/submit / custom 方法）" +
+          "其它 window 上注册的方法（如 talk_window.say / talk_window.share / method_exec.refine|submit / custom 方法）" +
           "也通过本字段传入，运行时按 window_id 路由。" +
           "调整信息展示的通用方法（任意窗可用）：compress（折叠，args={scope:\"windows\"|\"events\",...}）/ expand（展开压缩窗）。",
       },

@@ -223,12 +223,6 @@ function renderWindowClassesNode(
 
 // ─────────────────────────── readable resolution ─────────────────────────────
 
-const BUILTIN_TYPES = new Set([
-  "root", "method_exec", "do", "todo", "talk", "program",
-  "file", "knowledge", "search", "skill_index",
-  "feishu_chat", "feishu_doc", "plan", "filesystem", "terminal", "world", "knowledge_base",
-]);
-
 async function resolveReadableForType(
   classType: string,
   window: ContextWindow,
@@ -282,7 +276,9 @@ async function resolveObjectReadable(
   thread: ThreadContext,
   registry: ObjectRegistry,
 ): Promise<XmlNode[] | undefined> {
-  if (BUILTIN_TYPES.has(window.class)) {
+  // builtinReadable flag（取代旧 module-level BUILTIN_TYPES Set）：readable 走 builtin registry
+  // hook 短路、不经 stone 反射加载。逐成员等价（不含 pr / reflect_request）。
+  if (registry.isBuiltinReadableType(window.class)) {
     return resolveReadableForType(window.class, window, renderCtx, thread, undefined, registry);
   }
 
@@ -320,9 +316,9 @@ async function renderWindowNode(
   const renderedWindow: ContextWindow = sharingState ? (sharingState.snapshot as ContextWindow) : window;
 
   const titlePrefix = sharingState
-    ? sharingState.kind === "ref"
-      ? `[ref → owner@thread:${sharingState.ownerThreadId}] `
-      : `[已借给 thread:${sharingState.borrowerThreadId}] `
+    ? sharingState.kind === "readonly-ref"
+      ? `[readonly-ref → owner@thread:${sharingState.ownerThreadId}] `
+      : `[已 move 给 thread:${sharingState.borrowerThreadId}] `
     : "";
 
   const children: XmlNode[] = [
@@ -399,7 +395,7 @@ async function renderWindowNode(
   if (sharingState) {
     attrs.read_only = "true";
     attrs.sharing = sharingState.kind;
-    if (sharingState.kind === "ref") {
+    if (sharingState.kind === "readonly-ref") {
       attrs.owner_thread = sharingState.ownerThreadId;
     } else {
       attrs.borrower_thread = sharingState.borrowerThreadId;
@@ -426,8 +422,8 @@ async function renderContextWindowsNode(
  * 顶层 inbox/outbox fallback。
  *
  * 由 registry 派发——每个 window type 通过 ObjectDefinition.consumedMessageIds hook 自报
- * 已消费的消息（do/talk 复用各自的 filterMessagesFor*Window）。renderer 不直接 import
- * executable/windows/{do,talk}，消除 thinkable→executable 反向耦合。
+ * 已消费的消息（talk 经 filterMessagesForTalkWindow）。renderer 不直接 import
+ * executable/windows/talk，消除 thinkable→executable 反向耦合。
  */
 function collectWindowConsumedMessageIds(
   windows: ContextWindow[],

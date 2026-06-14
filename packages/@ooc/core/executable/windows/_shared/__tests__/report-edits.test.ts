@@ -127,13 +127,14 @@ describe("reportStateEdit / reportContextEdit + dispatch wiring", () => {
 
   it("Test 2: reportStateEdit(ref) on builtin feature (method_exec form) → no-op, no state.json", async () => {
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
-    // open a real form via openMethodExec (parent=root, method=do; not auto-submit because no args.msg)
+    // open a real form via openMethodExec (parent=agent, method=talk fork; not auto-submit because no args.msg)
     await mgr.openMethodExec({
       thread,
       parentWindowId: "agent",
-      method: "do",
+      method: "talk",
       title: "派生",
       description: "fork",
+      args: { target: "agent_x" },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.class === "method_exec",
@@ -192,11 +193,11 @@ describe("reportStateEdit / reportContextEdit + dispatch wiring", () => {
   });
 
   it("Test 4: refine via dispatch updates thread-context.json without explicit caller flush", async () => {
-    // Create a do form (no msg → not auto-submit, stays open)
+    // Create a talk fork form (target=self, no msg → not auto-submit, stays open)
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "talk", description: "fork", args: { target: "agent_x" } },
     });
     const form = thread.contextWindows.find(
       (w): w is MethodExecWindow => w.class === "method_exec",

@@ -18,7 +18,6 @@ export type {
   BaseContextWindow,
   RootWindow,
   MethodExecWindow,
-  DoWindow,
   TodoWindow,
   TalkWindow,
   PrWindow,
@@ -79,8 +78,7 @@ export {
 // root 必须最先 load。
 import "@ooc/builtins/root";
 
-// do / talk 是所有 Object 的固有能力。
-import "./do/index.js";
+// talk 是所有 Agent 的固有能力（统一 peer 会话 + fork 子线程两形态）。
 import "./talk/index.js";
 // reflectable 维度的 window 家族（pr 评审窗 + reflect_request 反思会话窗）——
 // 物理寄居 @ooc/core/reflectable/，经 barrel side-effect 注册到 builtinRegistry。

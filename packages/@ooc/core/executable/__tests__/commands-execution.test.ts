@@ -6,7 +6,7 @@ import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.j
 /**
  * 验证 root level method 在 ContextWindow 模型下的副作用。
  *
- * 注：do/todo 都改为产生 window 类型的产物；详见各自专门测试。
+ * 注：talk(fork)/todo 都改为产生 window 类型的产物；详见各自专门测试。
  */
 describe("method execution side effects", () => {
   it("all methods expose a description (LLM-facing)", async () => {
@@ -16,7 +16,6 @@ describe("method execution side effects", () => {
     }
 
     const modules = await Promise.all([
-      import("@ooc/builtins/root/executable/method.do"),
       import("@ooc/builtins/root/executable/method.end"),
       import("@ooc/builtins/root/executable/method.plan"),
       import("@ooc/builtins/root/executable/method.talk"),
@@ -68,7 +67,7 @@ describe("method execution side effects", () => {
     expect(thread.endSummary).toBe("真实测试可以继续往上叠");
   });
 
-  it("end with result writes to creator do_window transcript and archives the window", async () => {
+  it("end with result writes to creator fork talk_window transcript", async () => {
     const child = makeThread({ id: "thread-end-with-result", creatorThreadId: "t_parent" });
     const parent = makeThread({ id: "t_parent", skipCreatorWindow: true });
     parent.childThreads = { [child.id]: child };
@@ -79,10 +78,11 @@ describe("method execution side effects", () => {
       configurable: true,
     });
     const creatorBefore = child.contextWindows.find(
-      (w) => w.class === "do" && (w as { isCreatorWindow?: boolean }).isCreatorWindow,
+      (w) => w.class === "talk" && (w as { isCreatorWindow?: boolean }).isCreatorWindow,
     );
-    expect(creatorBefore?.class).toBe("do");
-    expect((creatorBefore as { status: string }).status).toBe("running");
+    expect(creatorBefore?.class).toBe("talk");
+    expect((creatorBefore as { isForkWindow?: boolean }).isForkWindow).toBe(true);
+    expect((creatorBefore as { status: string }).status).toBe("open");
 
     await execRootMethod("end", {
       thread: child,
@@ -93,10 +93,8 @@ describe("method execution side effects", () => {
     expect(child.endReason).toBe("done");
     const out = child.outbox ?? [];
     expect(out.some((m) => m.content === "已完成：见 memo/x.md")).toBe(true);
-    const creatorAfter = child.contextWindows.find(
-      (w) => w.class === "do" && (w as { isCreatorWindow?: boolean }).isCreatorWindow,
-    );
-    expect((creatorAfter as { status: string }).status).toBe("archived");
+    // 父收到回报
+    expect((parent.inbox ?? []).some((m) => m.content === "已完成：见 memo/x.md")).toBe(true);
   });
 
   it("end with result but no creator window warns and does not throw", async () => {
@@ -116,13 +114,22 @@ describe("method execution side effects", () => {
     expect(injected).toBeDefined();
   });
 
-  it("talk(target=user, title) creates a talk_window in contextWindows", async () => {
+  // peer 会话窗：class=talk, 非 creator、非 fork（区别于 makeThread 默认注入的 creator fork 窗）。
+  const findPeerTalk = (windows: ContextWindow[]) =>
+    windows.find(
+      (w) =>
+        w.class === "talk" &&
+        !(w as { isCreatorWindow?: boolean }).isCreatorWindow &&
+        !(w as { isForkWindow?: boolean }).isForkWindow,
+    );
+
+  it("talk(target=user, title) creates a peer talk_window in contextWindows", async () => {
     const thread = makeThread({ id: "thread-talk" });
     await execRootMethod("talk", {
       thread,
       args: { target: "user", title: "发布计划" },
     });
-    const talkWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "talk");
+    const talkWindow = findPeerTalk(thread.contextWindows as ContextWindow[]);
     expect(talkWindow?.class).toBe("talk");
     expect(talkWindow && talkWindow.class === "talk" && talkWindow.target).toBe("user");
     expect(talkWindow && talkWindow.class === "talk" && talkWindow.title).toBe("发布计划");
@@ -134,7 +141,7 @@ describe("method execution side effects", () => {
       thread,
       args: { target: "researcher", title: "ask" },
     });
-    const talkWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "talk");
+    const talkWindow = findPeerTalk(thread.contextWindows as ContextWindow[]);
     expect(talkWindow?.class).toBe("talk");
     expect(talkWindow && talkWindow.class === "talk" && talkWindow.target).toBe("researcher");
   });

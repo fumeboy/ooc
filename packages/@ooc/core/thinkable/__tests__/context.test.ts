@@ -130,7 +130,7 @@ describe("buildContext (ContextWindow model)", () => {
     expect(header).toContain("window_id=w_talk_42");
   });
 
-  it("inbox_message_arrived falls back to creator do_window matching fromThreadId (case B)", async () => {
+  it("inbox_message_arrived falls back to creator fork talk_window matching fromThreadId (case B)", async () => {
     const thread: ThreadContext = makeThread({
       id: "t_child",
       events: [
@@ -143,30 +143,36 @@ describe("buildContext (ContextWindow model)", () => {
           toThreadId: "t_child",
           content: "creator 派的消息",
           createdAt: 1,
-          source: "do",
+          source: "talk",
         },
       ],
       extraWindows: [
-        // 普通 do_window(非 creator)同样指向 t_creator
+        // 普通 fork 子窗(非 creator)同样指向 t_creator
         {
-          id: "w_do_other",
-          class: "do",
+          id: "w_fork_other",
+          class: "talk",
           parentWindowId: ROOT_WINDOW_ID,
           title: "non-creator",
-          status: "running",
+          status: "open",
           createdAt: 1,
+          target: "alice",
           targetThreadId: "t_creator",
+          isForkWindow: true,
+          conversationId: "w_fork_other",
         },
-        // creator do_window 应被优先选中
+        // creator fork 窗应被优先选中
         {
-          id: "w_do_creator",
-          class: "do",
+          id: "w_fork_creator",
+          class: "talk",
           parentWindowId: ROOT_WINDOW_ID,
           title: "creator",
-          status: "running",
+          status: "open",
           createdAt: 1,
+          target: "alice",
           targetThreadId: "t_creator",
+          isForkWindow: true,
           isCreatorWindow: true,
+          conversationId: "w_fork_creator",
         },
       ] as ContextWindow[],
     });
@@ -175,8 +181,8 @@ describe("buildContext (ContextWindow model)", () => {
       (i) => i.type === "message" && i.role === "system" && i.content.includes("[context_change:inbox_message_arrived]"),
     ) as { content: string } | undefined;
     const header = item!.content.split("\n", 2)[0]!;
-    expect(header).toContain("window_id=w_do_creator");
-    expect(header).not.toContain("window_id=w_do_other");
+    expect(header).toContain("window_id=w_fork_creator");
+    expect(header).not.toContain("window_id=w_fork_other");
   });
 
   it("inbox_message_arrived omits window_id when no source available (case C)", async () => {
@@ -256,7 +262,7 @@ describe("buildContext (ContextWindow model)", () => {
     );
   });
 
-  it("renders <context_windows> in system XML and includes creator do_window", async () => {
+  it("renders <context_windows> in system XML and includes creator fork talk_window", async () => {
     const thread: ThreadContext = makeThread({
       id: "t_parent",
       creatorThreadId: "t_root",
@@ -280,16 +286,16 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain("<creator_thread_id>t_root</creator_thread_id>");
     expect(xml).toContain("<description>先处理 inbox</description>");
     expect(xml).toContain("<context_windows>");
-    expect(xml).toContain('class="do"');
+    expect(xml).toContain('class="talk"');
     expect(xml).toContain('class="plan"');
     expect(xml).toContain("<is_creator_window>true</is_creator_window>");
     // 方法契约在 class 声明层（<window_classes>）声明一次，实例 window 不再带 <methods>。
     expect(xml).toContain("<window_classes");
-    // do class 的方法（continue/close…）在 <class name="do"> 内声明
+    // talk class 的方法（say/share/close…）在 <class name="talk"> 内声明
     const wcStart = xml.indexOf("<window_classes");
     const wcEnd = xml.indexOf("</window_classes>");
     const wcBlock = xml.slice(wcStart, wcEnd);
-    expect(wcBlock).toContain('<class name="do">');
+    expect(wcBlock).toContain('<class name="talk">');
     expect(wcBlock).toContain('<class name="plan">');
     // 负断言：实例 window 不含 <methods> 节点（菜单已搬走，不逐实例重复）
     const cwStart = xml.indexOf("<context_windows>");
@@ -397,7 +403,7 @@ describe("buildContext (ContextWindow model)", () => {
     expect(cw).not.toContain("<methods");
   });
 
-  it("filters do_window transcript by targetThreadId; top-level inbox excludes consumed messages", async () => {
+  it("filters fork talk_window transcript by targetThreadId; top-level inbox excludes consumed messages", async () => {
     const thread = makeThread({
       id: "t_p",
       inbox: [
@@ -407,7 +413,7 @@ describe("buildContext (ContextWindow model)", () => {
           toThreadId: "t_p",
           content: "from child",
           createdAt: 1,
-          source: "do",
+          source: "talk",
         },
         {
           id: "msg_in_other",
@@ -415,24 +421,27 @@ describe("buildContext (ContextWindow model)", () => {
           toThreadId: "t_p",
           content: "from other",
           createdAt: 2,
-          source: "do",
+          source: "talk",
         },
       ],
       extraWindows: [
         {
-          id: "w_do_child",
-          class: "do",
+          id: "w_fork_child",
+          class: "talk",
           parentWindowId: ROOT_WINDOW_ID,
           title: "对子线程",
-          status: "running",
+          status: "open",
           createdAt: 1,
+          target: "alice",
           targetThreadId: "t_child",
+          isForkWindow: true,
+          conversationId: "w_fork_child",
         },
       ] as ContextWindow[],
     });
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
-    // creator window 也是一种 do_window，targetThreadId="__session__"，会过滤；t_other 没归入任何 do_window
+    // creator window 也是一种 fork talk_window，targetThreadId="__session__"，会过滤；t_other 没归入任何 fork 窗
     expect(xml).toContain('<message id="msg_in_child"');
     // top level inbox 应该不再含 msg_in_child（已被 w_do_child 收纳）
     const inboxStart = xml.indexOf("<inbox>");

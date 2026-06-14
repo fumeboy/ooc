@@ -1,5 +1,5 @@
 /**
- * 集成测试：talk_window / do_window 上的 transcript viewport 协议。
+ * 集成测试：talk_window（peer 会话 / fork 子窗）上的 transcript viewport 协议。
  *
  * 覆盖：
  * - render 默认 tail=20：transcript ≤20 全展开；> 20 截到末 20 条，暴露 earlier_omitted
@@ -13,7 +13,6 @@ import "../index.js"; // 触发 registerExecutable 的 side-effect import
 import { builtinRegistry } from "../_shared/registry.js";
 import {
   ROOT_WINDOW_ID,
-  type DoWindow,
   type TalkWindow,
 } from "../_shared/types.js";
 import { serializeXml } from "@ooc/core/_shared/types/xml.js";
@@ -48,9 +47,9 @@ function makeThreadWithTalk(opts: {
   };
 }
 
-function makeThreadWithDo(opts: {
+function makeThreadWithFork(opts: {
   selfThreadId: string;
-  doWindow: DoWindow;
+  forkWindow: TalkWindow;
   outboxMsgs?: ThreadMessage[];
   inboxMsgs?: ThreadMessage[];
 }): ThreadContext {
@@ -58,7 +57,7 @@ function makeThreadWithDo(opts: {
     id: opts.selfThreadId,
     status: "running",
     events: [],
-    contextWindows: [opts.doWindow],
+    contextWindows: [opts.forkWindow],
     inbox: opts.inboxMsgs ?? [],
     outbox: opts.outboxMsgs ?? [],
   };
@@ -201,33 +200,36 @@ describe("talk_window: transcript viewport render", () => {
   });
 });
 
-describe("do_window: transcript viewport render", () => {
+describe("talk fork 子窗: transcript viewport render", () => {
   it("long transcript clips to last 20", async () => {
-    const doWindow: DoWindow = {
-      id: "w_do_1",
-      class: "do",
+    const forkWindow: TalkWindow = {
+      id: "w_fork_1",
+      class: "talk",
       parentWindowId: ROOT_WINDOW_ID,
       title: "test",
-      status: "running",
+      status: "open",
       createdAt: NOW,
+      target: "alice",
       targetThreadId: "child1",
+      isForkWindow: true,
+      conversationId: "w_fork_1",
       state: { transcriptViewport: { tail: 20 } },
     };
     const outbox: ThreadMessage[] = Array.from({ length: 25 }, (_, i) => ({
       id: `m${i}`,
       fromThreadId: "self",
       toThreadId: "child1",
-      content: `do-msg ${i}`,
+      content: `fork-msg ${i}`,
       createdAt: NOW + i,
-      source: "do",
+      source: "talk",
     }));
-    const thread = makeThreadWithDo({
+    const thread = makeThreadWithFork({
       selfThreadId: "self",
-      doWindow,
+      forkWindow,
       outboxMsgs: outbox,
     });
-    const def = builtinRegistry.getObjectDefinition("do");
-    const nodes = await def.readable!({ thread, window: doWindow });
+    const def = builtinRegistry.getObjectDefinition("talk");
+    const nodes = await def.readable!({ thread, window: forkWindow });
     const xml = nodes.map((n) => serializeXml(n)).join("\n");
     expect(xml).toContain('total="25"');
     expect(xml).toContain('tail="20"');
@@ -294,16 +296,3 @@ describe("set_transcript_window windowMethod (talk)", () => {
   });
 });
 
-describe("set_transcript_window windowMethod (do)", () => {
-  it("works on do_window via shared helper", () => {
-    const setMethod = builtinRegistry.getObjectDefinition("do").windowMethods!["set_transcript_window"]!;
-    expect(setMethod).toBeDefined();
-    expect(builtinRegistry.getObjectDefinition("do").methods["set_transcript_window"]).toBeUndefined();
-    const out = setMethod.exec({
-      args: { tail: 5 },
-      windowState: { transcriptViewport: { tail: 20 } },
-    } as any) as any;
-    expect(out.ok).toBe(true);
-    expect(out.state.transcriptViewport).toEqual({ tail: 5 });
-  });
-});

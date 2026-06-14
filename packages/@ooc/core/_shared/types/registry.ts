@@ -70,6 +70,20 @@ export interface ObjectDefinition {
   compressView?: CompressViewHook;
   readable?: ReadableFn;
   isBuiltinFeature?: boolean;
+  /**
+   * 该 window class 是否参与可见类型解析（resolveEffectiveVisibleType）。
+   * 取代 object-registry.ts 旧的 module-level `RENDERABLE_VISIBLE_TYPES` Set——
+   * 现由每个 class 在注册期声明自己是否「可渲染可见类型」，registry 查 flag 而非硬编码集合。
+   * （成员集与旧 Set 逐成员等价。）
+   */
+  renderableVisible?: boolean;
+  /**
+   * 该 window class 的 readable 是否走 **builtin registry**（registry.readable hook）而非
+   * stone 反射加载。取代 xml.ts 旧的 module-level `BUILTIN_TYPES` Set。
+   * 语义上是 {@link renderableVisible} 的真子集——builtin readable 类型同时是可见类型，
+   * 但 pr / reflect_request 虽可见、却**不**走 builtin readable 短路（保留沿继承链/stone 解析的差异）。
+   */
+  builtinReadable?: boolean;
   parentClass?: string | null;
   /**
    * 可选 hook：列出本 window 在 transcript 视图中已消费的 inbox/outbox 消息 id，

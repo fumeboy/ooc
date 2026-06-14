@@ -6,7 +6,7 @@
  * - 提供与 LLM 5 原语对齐的方法：
  *   - openMethodExec：在 parent window 下创建 method_exec sub-window；当 onFormChange 返回
  *     quick_exec_submit 时会立刻提交 form；若方法未声明 onFormChange 则直接 exec 不创建 form
- *   - openTypedWindow：创建非 form 的 window（do_window / todo_window 等）
+ *   - openTypedWindow：创建非 form 的 window（talk_window / todo_window 等）
  *   - refine：累积 method_exec 的 args，调用 onFormChange 重算 tip/intents，可自动 submit
  *   - submit：执行 method；成功自动移除 form；失败保留 result
  *   - close：触发 type 的 onClose，级联关闭子 window
@@ -190,14 +190,14 @@ export class WindowManager {
     const parentId = opts.parentWindowId ?? ROOT_WINDOW_ID;
     const parent = this.requireParent(parentId);
 
-    // sharing 守门（do_window.move）：
+    // sharing 守门（talk_window.share）：readonly-ref 只读引用 / mutable-ref shadow 都不能调 object method。
     if (parent.sharing) {
-      const isCloseOnRef = parent.sharing.kind === "ref" && opts.method === "close";
+      const isCloseOnRef = parent.sharing.kind === "readonly-ref" && opts.method === "close";
       if (!isCloseOnRef) {
         const reason =
-          parent.sharing.kind === "ref"
-            ? `window ${parent.id} 是只读 ref（owner 在 thread "${parent.sharing.ownerThreadId}"），不允许执行命令 "${opts.method}"。仅可 close 释放本地 ref 引用。`
-            : `window ${parent.id} 已借出给 thread "${parent.sharing.borrowerThreadId}"，等其归还后才能执行命令。`;
+          parent.sharing.kind === "readonly-ref"
+            ? `window ${parent.id} 是只读引用 readonly-ref（owner 在 thread "${parent.sharing.ownerThreadId}"），不允许执行命令 "${opts.method}"。仅可 close 释放本地引用。`
+            : `window ${parent.id} 已 move 给 thread "${parent.sharing.borrowerThreadId}"，等其归还后才能执行命令。`;
         throw new Error(`openMethodExec: ${reason}`);
       }
     }
@@ -343,7 +343,7 @@ export class WindowManager {
   }
 
   /**
-   * 创建非 form 的 typed window（do_window / todo_window 等）。
+   * 创建非 form 的 typed window（talk_window / todo_window 等）。
    */
   insertTypedWindow(window: ContextWindow, thread?: ThreadContext): string {
     if (this.windows.has(window.id)) {

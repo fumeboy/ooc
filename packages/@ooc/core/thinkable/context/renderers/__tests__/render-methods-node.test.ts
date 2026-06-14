@@ -29,8 +29,8 @@ test("talk class includes talk window method (set_transcript_window)", () => {
 test("S1: agent 类窗沿链 surface 继承的 agency（_builtin/agent → root）", () => {
   const agentWin = computeVisibleMethodSet({ id: "supervisor", class: "_builtin/agent" } as any, {} as any, builtinRegistry);
   expect(agentWin).not.toBeNull();
-  for (const m of ["do", "talk", "plan", "todo", "end"]) {
-    expect(agentWin!.methodNames).toContain(m); // agency 在 _builtin/agent
+  for (const m of ["talk", "plan", "todo", "end"]) {
+    expect(agentWin!.methodNames).toContain(m); // agency 在 _builtin/agent（talk 统一 peer + fork）
   }
   expect(agentWin!.methodNames).toContain("example"); // root misc 经 _builtin/agent → root 链
 

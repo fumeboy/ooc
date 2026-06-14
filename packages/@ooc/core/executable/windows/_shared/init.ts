@@ -3,16 +3,16 @@
  *
  * 初始 creator 对话 window：每个 thread 启动时必有一条与创建方的恒在通道。
  *
- * Creator window 类型由 thread 本身决定，不再由调用方指定：
- * - thread.creatorObjectId === thread.persistence?.objectId（含两者都缺省）→ "do"
+ * Creator window 一律是 talk_window，形态由 thread 与 creator 的关系决定：
+ * - thread.creatorObjectId === thread.persistence?.objectId（含两者都缺省）→ fork 子窗
  *   同 object 内 fork 出的子线程；creator 是父 thread。
- *   creator window = type=do, targetThreadId=父 thread id, isCreatorWindow=true。
- * - thread.creatorObjectId 与 self 不同 → "talk"
+ *   creator window = class=talk, isForkWindow=true, target=self object, targetThreadId=父 thread id。
+ * - thread.creatorObjectId 与 self 不同 → peer 会话窗
  *   跨对象 talk 派生 callee thread；creator 是 caller object 的某个 thread。
- *   creator window = type=talk, target=caller object, targetThreadId=caller thread,
- *   isCreatorWindow=true。callee 通过该 talk_window.say 回复给 caller。
+ *   creator window = class=talk, target=caller object, targetThreadId=caller thread。
+ *   callee 通过该 talk_window.say 回复给 caller。
  *
- * 两种 window 共用 creatorWindowIdOf(threadId) 派生的稳定 id；幂等插入。
+ * 两种形态共用 creatorWindowIdOf(threadId) 派生的稳定 id；幂等插入。
  */
 
 import {
@@ -20,7 +20,6 @@ import {
   SESSION_CREATOR_THREAD_ID,
   creatorWindowIdOf,
   type ContextWindow,
-  type DoWindow,
   type TalkWindow,
 } from "./types.js";
 import { DEFAULT_TRANSCRIPT_VIEWPORT } from "./transcript-viewport.js";
@@ -46,16 +45,16 @@ export interface InitContextWindowsOpts {
 }
 
 /**
- * thread 的 creator 是否=自己（同 object **且同 session**）。缺省字段视为同 object，回退 do_window。
+ * thread 的 creator 是否=自己（同 object **且同 session**）。缺省字段视为同 object，回退 fork 子窗。
  *
- * "同 object" 决定 do vs talk 的语义层；但 do_window 是**同 session 内进程内**的父子机制
- * （findThreadInScope 只走内存 childThreads/_parentThreadRef 树），**无法跨 session 寻址**。
+ * "同 object" 决定 fork-子窗 vs peer-会话窗的语义层；但 fork 子窗是**同 session 内进程内**的
+ * 父子机制（findThreadInScope 只走内存 childThreads/_parentThreadRef 树），**无法跨 session 寻址**。
  * super-alias 场景（super flow）callee 在 "super" session、caller 在 user session：objectId
- * 相同但 session 不同——若按 do 处理，callee 用 do_window.continue / end({result}) 回报
- * creator 时 findThreadInScope 永远找不到 caller（caller 在另一 session 的 thread.json 上，
- * 不在本 job 内存树里）→ 静默失败。故 cross-session 必须落 talk_window（disk-based 派送，
- * deliverTalkMessage 通过 readThread/writeThread 跨 session 寻址），与 reflectable knowledge
- * "通过 creator talk_window 回复" 的指引一致。
+ * 相同但 session 不同——若按 fork 处理，callee 用 say / end({result}) 回报 creator 时
+ * findThreadInScope 永远找不到 caller（caller 在另一 session 的 thread.json 上，不在本 job
+ * 内存树里）→ 静默失败。故 cross-session 必须落 peer 会话窗（disk-based 派送，deliverTalkMessage
+ * 通过 readThread/writeThread 跨 session 寻址），与 reflectable knowledge "通过 creator
+ * talk_window 回复" 的指引一致。
  *
  * creatorSessionId 由 talk-delivery 在跨 session 创建 callee 时写入；缺省回退 self session（同 session）。
  */
@@ -132,15 +131,19 @@ export function initContextWindows(
   const creatorWindow: ContextWindow = sameObject
     ? ({
         id: creatorWindowId,
-        class: "do",
+        // 同对象父子通道 = fork 子窗：creator 是父 thread，target=self object。
+        class: "talk",
         parentWindowId: ROOT_WINDOW_ID,
         title: opts.initialTaskTitle,
-        status: "running",
+        status: "open",
         createdAt: Date.now(),
+        target: thread.persistence?.objectId ?? thread.creatorObjectId ?? "",
         targetThreadId: creatorThreadId,
+        isForkWindow: true,
+        conversationId: creatorWindowId,
         isCreatorWindow: true,
-        transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
-      } satisfies DoWindow)
+        state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
+      } satisfies TalkWindow)
     : ({
         id: creatorWindowId,
         // super 反思 thread（sessionId="super"）的会话面用 reflect_request —— 同形会话窗，

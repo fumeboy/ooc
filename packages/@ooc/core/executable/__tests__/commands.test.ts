@@ -29,7 +29,7 @@ describe("executable methods", () => {
     expect(Object.keys(ROOT_METHODS)).toContain("example");
     // agency → _builtin/agent；file/program → filesystem/terminal；create_object → world；
     // open_knowledge → knowledge_base —— 全部不在 root type。
-    for (const moved of ["talk", "do", "plan", "todo", "end", "grep", "program", "open_file", "create_object", "open_knowledge"]) {
+    for (const moved of ["talk", "plan", "todo", "end", "grep", "program", "open_file", "create_object", "open_knowledge"]) {
       expect(Object.keys(ROOT_METHODS)).not.toContain(moved);
     }
     // 经各自归属解析得到：
@@ -59,7 +59,6 @@ describe("executable methods", () => {
     // 工具方法在成员窗（grep/program → filesystem/terminal；create_object → world；
     // open_knowledge → knowledge_base），不在此列。
     expect(getOpenableMethods()).toEqual([
-      "do",
       "end",
       "example",
       "open_feishu_chat",
@@ -77,13 +76,9 @@ describe("executable methods", () => {
     }
   });
 
-  it("root.talk static intents: includes talk", () => {
+  it("root.talk static intents: [talk, talk.wait]（统一 peer + fork）", () => {
     const paths = deriveRootIntentPaths("talk", {});
-    expect(paths).toContain("talk");
-  });
-
-  it("root.do static intents: [do, do.wait]", () => {
-    expect(deriveRootIntentPaths("do", {})).toEqual(expect.arrayContaining(["do", "do.wait"]));
+    expect(paths).toEqual(expect.arrayContaining(["talk", "talk.wait"]));
   });
 
   it("terminal.program static intents include program.shell/typescript/javascript（program 已移到 terminal 成员）", () => {

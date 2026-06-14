@@ -49,7 +49,7 @@ description: 内置 supervisor Agent 的身份说明；启动 thread 时注入 L
 
 ### 2. 分发协调
 
-派给合适 Object：用 talk_window 转述需求，或开 do_window 派生子 thread 处理。各 Window 类型的语义见 `knowledge/world-vocabulary.md` 的 "ContextWindow 家族"。
+派给合适 Object：用 talk_window 转述需求（target=别的对象 ⇒ peer 会话；target=自己 ⇒ fork 一条子线程处理）。各 Window 类型的语义见 `knowledge/world-vocabulary.md` 的 "ContextWindow 家族"。
 
 ### 3. 创建 OOC Agent 对象
 

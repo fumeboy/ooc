@@ -84,49 +84,32 @@ async function buildRootKnowledgeWindows(thread: ThreadContext): Promise<Knowled
 
 /**
  * 子→父 reply protocol knowledge builder.
- * Tells sub-thread LLM the only valid reply channel is creator_window.continue/say.
+ * Tells sub-thread LLM the only valid reply channel is creator talk_window.say.
  */
 function buildCreatorReplyKnowledge(window: ContextWindow): string {
-  if (window.class === "do") {
-    return [
-      "# 子→父 reply 协议（你的 creator do_window）",
-      "",
-      `你当前 thread 的 creator window 是 \`${window.id}\`（class=do，isCreatorWindow=true，不可被 close）。`,
-      "",
-      "**想把结果 / 状态 / 中间进展带回父线程，唯一通道**：",
-      "",
-      "```",
-      `exec(window_id="${window.id}", method="continue", args={ msg: "<结果或状态描述>" })`,
-      "```",
-      "",
-      "这条消息会被自动 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。",
-      "",
-      "**重要边界**：",
-      "- `end` method 只用于声明本轮**自己**结束，**不是回报通道**。",
-      "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 continue；",
-      "  多段对话 / 复杂状态汇报，请显式走 `creator_do_window.continue`，不要塞到 end 里。",
-      "- 不要 hallucinate \"reply\" / \"report\" / \"finish_with\" 等不存在的 method；只有 continue / say / wait / close。",
-    ].join("\n");
-  }
-  // talk creator window
+  const isFork = (window as { isForkWindow?: boolean }).isForkWindow === true;
+  const upstream = isFork ? "父线程" : "caller object 的对端 thread";
+  const delivery = isFork
+    ? "这条消息走内存树寻址 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。"
+    : "这条消息会通过 talk-delivery 派送到 caller object 的对端 thread；caller 下一轮就能看到。";
   return [
-    "# 子→父 reply 协议（你的 creator talk_window）",
+    `# 子→父 reply 协议（你的 creator talk_window，${isFork ? "fork 子线程窗" : "peer 会话窗"}）`,
     "",
     `你当前 thread 的 creator window 是 \`${window.id}\`（class=talk，isCreatorWindow=true，不可被 close）。`,
     "",
-    "**想给 caller 回信，唯一通道**：",
+    `**想把结果 / 回信带回${upstream}，唯一通道**：`,
     "",
     "```",
-    `exec(window_id="${window.id}", method="say", args={ msg: "<回复内容>", wait: false|true })`,
+    `exec(window_id="${window.id}", method="say", args={ msg: "<结果或回复内容>", wait: false|true })`,
     "```",
     "",
-    "这条消息会通过 talk-delivery 派送到 caller object 的对端 thread；caller 下一轮就能看到。",
+    delivery,
     "",
     "**重要边界**：",
     "- `end` method 只用于声明本轮**自己**结束，**不是回报通道**。",
     "- 即便 end 接受 `result` 参数（便捷糖），它内部仍是模拟在 creator window 上调一次 say；",
-    "  多轮往返 / 复杂确认，请显式走 `creator_talk_window.say`，不要塞到 end 里。",
-    "- 不要 open 新的 talk_window 给同一个 caller；用现有的 creator talk_window 复用。",
+    "  多段对话 / 复杂状态汇报，请显式走 `creator_talk_window.say`，不要塞到 end 里。",
+    "- 不要 hallucinate \"reply\" / \"report\" / \"continue\" / \"finish_with\" 等不存在的 method；只有 say / wait / close / share。",
   ].join("\n");
 }
 
@@ -134,7 +117,7 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
  * Produce all protocol-level knowledge windows for a thread.
  *
  * - root builtin knowledge（按 activates_on 命中当前 thread 的篇目）
- * - creator-reply 协议（动态按 creator do/talk window 生成）
+ * - creator-reply 协议（动态按 creator talk window 生成；fork / peer 两形态）
  */
 export async function buildProtocolKnowledgeWindows(
   thread: ThreadContext,
@@ -146,7 +129,7 @@ export async function buildProtocolKnowledgeWindows(
   const seen = new Set<string>();
   for (const w of (thread.contextWindows ?? []) as ContextWindow[]) {
     const isCreator =
-      (w.class === "do" || w.class === "talk" || w.class === "reflect_request") &&
+      (w.class === "talk" || w.class === "reflect_request") &&
       w.isCreatorWindow === true;
     if (!isCreator) continue;
     const path = `internal/windows/${w.class}/creator-reply/${w.id}`;

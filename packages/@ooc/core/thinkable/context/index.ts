@@ -41,14 +41,14 @@ function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage |
 }
 
 /**
- * 推导 inbox 消息在接收方(当前 thread)视角下所属的 talk/do window id。
+ * 推导 inbox 消息在接收方(当前 thread)视角下所属的 talk_window id（peer / fork 子窗）。
  *
  * 推导链:
  * 1. inboxMessage.replyToWindowId — talk-delivery / worker.syncCrossObjectCalleeEnds
  *    在跨 object 投递时已经写入,优先使用
- * 2. fallback: 在 thread.contextWindows 中找一个 type="do" 且
+ * 2. fallback: 在 thread.contextWindows 中找一个 fork 子线程窗（class=talk,isForkWindow）且
  *    targetThreadId === inboxMessage.fromThreadId 的 window;若多个,优先
- *    isCreatorWindow=true(child 视角下的 creator do_window 是规范配对窗口)
+ *    isCreatorWindow=true(child 视角下的 creator fork 窗是规范配对窗口)
  * 3. 都没有 → undefined,header 中静默不输出 window_id KV
  */
 function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage): string | undefined {
@@ -56,7 +56,10 @@ function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage
   const fromThreadId = inboxMessage.fromThreadId;
   if (!fromThreadId) return undefined;
   const candidates = thread.contextWindows.filter(
-    (w) => w.class === "do" && (w as { targetThreadId?: string }).targetThreadId === fromThreadId,
+    (w) =>
+      w.class === "talk" &&
+      (w as { isForkWindow?: boolean }).isForkWindow === true &&
+      (w as { targetThreadId?: string }).targetThreadId === fromThreadId,
   );
   if (candidates.length === 0) return undefined;
   const creator = candidates.find((w) => (w as { isCreatorWindow?: boolean }).isCreatorWindow === true);
@@ -116,7 +119,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
     }
     const header = headerParts.join(" ");
 
-    // body: inbox 消息正文(不截断, 与 talk_window/do_window level 0 渲染对齐);
+    // body: inbox 消息正文(不截断, 与 talk_window level 0 渲染对齐);
     // 找不到 inbox 消息时(罕见, 防御性兜底)给 LLM 一条可读提示, 不抛错不打日志。
     let body: string;
     if (inboxMessage) {
@@ -305,7 +308,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
  * these literals, so the check is safe even for top-level peers.
  */
 const BUILTIN_WINDOW_TYPES: ReadonlySet<string> = new Set([
-  "root", "method_exec", "do", "todo", "talk", "program", "file",
+  "root", "method_exec", "todo", "talk", "program", "file",
   "knowledge", "search", "skill_index",
   "feishu_chat", "feishu_doc", "plan",
 ]);

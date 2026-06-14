@@ -113,9 +113,10 @@ describe("session-aware read chokepoint (victim call sites)", () => {
       expect(otherRef._stonesBranch).toBeUndefined();
       expect(await readSelf(otherRef)).toBeUndefined();
 
-      // ── main-canonical supervisor 在所有上下文仍可 talk（不回归既有 main 读）──
+      // ── main-canonical supervisor 在所有上下文仍可被 peer talk（不回归既有 main 读）──
+      // 注：peer 形态 = caller 与 target 不同对象（talk(target=自己) 现在是 fork，不再走 peer 存在性检查）。
       expect(await talkResolves(mkThread(baseDir, sid, "user"), "supervisor")).toBe(true);
-      expect(await talkResolves(mainThread, "supervisor")).toBe(true);
+      expect(await talkResolves(mkThread(baseDir, "", "user"), "supervisor")).toBe(true);
     } finally {
       await rm(baseDir, { recursive: true, force: true });
     }

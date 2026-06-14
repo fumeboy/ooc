@@ -1,7 +1,7 @@
 /**
- * L4 — Collaborable（talk / do / Issue / relation）。
- * Object 间通过 talk_window / do_window / Issue 协作。
- * 真正的「agent 主动 talk/do/evolve 越界」需 worker → skip 归 Tier B；此处断结构通道。
+ * L4 — Collaborable（talk peer / talk fork / Issue / relation）。
+ * Object 间通过 talk_window（peer 会话 + fork 子线程两形态）/ Issue 协作。
+ * 真正的「agent 主动 talk/evolve 越界」需 worker → skip 归 Tier B；此处断结构通道。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -54,7 +54,7 @@ export const L4_STORIES: Story[] = [
     id: "L4-TALK-BUILTIN-FEATURE",
     layer: "collaborable",
     expectation: "talk window 是 isBuiltinFeature（inline 进 thread-context，不写独立 dir）",
-    design: "collaborable：talk/do 是 Object 内置特性，状态 inline。windows/talk registerExecutable isBuiltinFeature",
+    design: "collaborable：talk（peer + fork 两形态）是 Object 内置特性，状态 inline。windows/talk registerExecutable isBuiltinFeature",
     run: async () => {
       await import("@ooc/core/executable/windows/index.js");
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");

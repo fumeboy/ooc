@@ -123,11 +123,11 @@ export async function runControlPlane(): Promise<StoryResult> {
       const fsGrep = !!builtinRegistry.resolveMethod("filesystem", "grep");
       const tmProg = !!builtinRegistry.resolveMethod("terminal", "program");
       const fsNoTalk = !builtinRegistry.resolveMethod("filesystem", "talk");
-      const tmNoDo = !builtinRegistry.resolveMethod("terminal", "do");
+      const tmNoTalk = !builtinRegistry.resolveMethod("terminal", "talk");
       const agentHasTalk = !!builtinRegistry.resolveMethod("_builtin/agent", "talk"); // agency 在 agent 基类
-      rec.ok("TC-COMP-05", "Object/Agent 边界：filesystem/terminal 有自己工具方法但无 agency(talk/do)，agency 属 _builtin/agent",
-        fsGrep && tmProg && fsNoTalk && tmNoDo && agentHasTalk,
-        `fsGrep=${fsGrep} tmProg=${tmProg} fsNoTalk=${fsNoTalk} tmNoDo=${tmNoDo} agentTalk=${agentHasTalk}`);
+      rec.ok("TC-COMP-05", "Object/Agent 边界：filesystem/terminal 有自己工具方法但无 agency(talk)，agency 属 _builtin/agent",
+        fsGrep && tmProg && fsNoTalk && tmNoTalk && agentHasTalk,
+        `fsGrep=${fsGrep} tmProg=${tmProg} fsNoTalk=${fsNoTalk} tmNoTalk=${tmNoTalk} agentTalk=${agentHasTalk}`);
     }
 
     // TC-COMP-06: world / knowledge_base 成员 —— create_object / open_knowledge 迁出 root 落到工具对象上，
@@ -136,13 +136,13 @@ export async function runControlPlane(): Promise<StoryResult> {
       const wdCreate = !!builtinRegistry.resolveMethod("world", "create_object");
       const kbOpen = !!builtinRegistry.resolveMethod("knowledge_base", "open_knowledge");
       const wdNoTalk = !builtinRegistry.resolveMethod("world", "talk");
-      const kbNoDo = !builtinRegistry.resolveMethod("knowledge_base", "do");
+      const kbNoTalk = !builtinRegistry.resolveMethod("knowledge_base", "talk");
       // root 类自身不再直接持有这些方法（已迁出）。
       const rootNoCreate = !builtinRegistry.getObjectDefinition("root").methods?.create_object;
       const rootNoOpenKn = !builtinRegistry.getObjectDefinition("root").methods?.open_knowledge;
       rec.ok("TC-COMP-06", "world.create_object / knowledge_base.open_knowledge 迁出 root 落到工具对象，且无 agency",
-        wdCreate && kbOpen && wdNoTalk && kbNoDo && rootNoCreate && rootNoOpenKn,
-        `wdCreate=${wdCreate} kbOpen=${kbOpen} wdNoTalk=${wdNoTalk} kbNoDo=${kbNoDo} rootNoCreate=${rootNoCreate} rootNoOpenKn=${rootNoOpenKn}`);
+        wdCreate && kbOpen && wdNoTalk && kbNoTalk && rootNoCreate && rootNoOpenKn,
+        `wdCreate=${wdCreate} kbOpen=${kbOpen} wdNoTalk=${wdNoTalk} kbNoTalk=${kbNoTalk} rootNoCreate=${rootNoCreate} rootNoOpenKn=${rootNoOpenKn}`);
     }
   } finally {
     await srv.cleanup();

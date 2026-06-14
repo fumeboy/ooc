@@ -41,7 +41,7 @@ import { derivePeerObjectWindows } from "@ooc/core/thinkable/context/object-wind
 import { WindowManager } from "@ooc/core/executable/windows/_shared/manager";
 import type {
   ContextWindow,
-  DoWindow,
+  TalkWindow,
   TodoWindow,
   KnowledgeWindow,
 } from "@ooc/core/executable/windows/_shared/types";
@@ -105,9 +105,11 @@ describe("ooc-6 Object Unification harness cycle", () => {
     expect(selfWindow!.class).toBe("test_agent" as any);
     expect(selfWindow!.id).toBe("test_agent");
 
-    const doWindow = thread.contextWindows.find((w) => w.class === "do") as DoWindow | undefined;
-    expect(doWindow).toBeDefined();
-    expect(doWindow!.isCreatorWindow).toBe(true);
+    const creatorWindow = thread.contextWindows.find(
+      (w) => w.class === "talk" && (w as TalkWindow).isCreatorWindow,
+    ) as TalkWindow | undefined;
+    expect(creatorWindow).toBeDefined();
+    expect(creatorWindow!.isCreatorWindow).toBe(true);
 
     // Insert a todo window - should appear as object in context
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
@@ -142,7 +144,7 @@ describe("ooc-6 Object Unification harness cycle", () => {
     const expectedBuiltins: string[] = [
       "root", "method_exec", "todo", "file", "knowledge",
       "search", "skill_index", "plan", "program",
-      "do", "talk",
+      "talk",
     ];
     for (const t of expectedBuiltins) {
       expect(types).toContain(t);
@@ -188,14 +190,13 @@ describe("ooc-6 Object Unification harness cycle", () => {
 
   // ── Point 7: Method visibility - commands per type ───────────────────────
   it("7: each object type has its own methods (commands) registered", () => {
-    // root 已非 god-object：agency（talk/do/plan/todo/end）→ _builtin/agent，
+    // root 已非 god-object：agency（talk/plan/todo/end）→ _builtin/agent，
     // file/program 工具 → filesystem/terminal 成员。root type 只剩 misc。
     const rootDef = builtinRegistry.getObjectDefinition("root");
-    expect(rootDef.methods["open_knowledge"]).toBeDefined();
-    expect(rootDef.methods["create_object"]).toBeDefined();
-    // agency 在 _builtin/agent（具体 agent 经 ooc.class 继承）
+    expect(rootDef.methods["example"]).toBeDefined();
+    // agency 在 _builtin/agent（具体 agent 经 ooc.class 继承）；talk 统一 peer + fork 两形态。
     expect(builtinRegistry.resolveMethod("_builtin/agent", "talk")).toBeDefined();
-    expect(builtinRegistry.resolveMethod("_builtin/agent", "do")).toBeDefined();
+    expect(builtinRegistry.resolveMethod("_builtin/agent", "plan")).toBeDefined();
 
     // objectId type is no longer a separate builtin type (ooc-6); objects self-register
     // edit_relation method is now available on dynamically-registered object types

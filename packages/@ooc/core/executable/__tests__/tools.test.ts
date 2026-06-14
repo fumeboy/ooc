@@ -3,10 +3,20 @@ import { OOC_TOOLS, buildAvailableTools } from "../tools/index";
 import { dispatchToolCall } from "../tools";
 import { makeThread } from "../../__tests__/make-thread";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { ThreadPersistenceRef } from "../../persistable/common";
+
+const SELF = "alice";
+const persistenceOf = (threadId = "t_root"): ThreadPersistenceRef => ({
+  baseDir: "/tmp/__test__",
+  sessionId: "s_test",
+  objectId: SELF,
+  threadId,
+});
 
 /**
- * agency 方法（do/talk/plan/todo/end）已从 root 迁到 `_builtin/agent` 类。
+ * agency 方法（talk/plan/todo/end）已从 root 迁到 `_builtin/agent` 类。
  * 经 exec 调 agency 时须把 window_id 指向一个 class 解析得到 `_builtin/agent` 的窗。
+ * talk 统一两形态：target=别的对象 ⇒ peer 会话；target=自己 ⇒ fork 子线程。
  */
 const AGENT_WIN = {
   id: "agent",
@@ -90,12 +100,12 @@ describe("executable tools (ContextWindow model)", () => {
     );
   });
 
-  it("MethodExecWindow.refine 累积 args 并刷新 intentPaths（do 加 wait 触发 do.wait path）", async () => {
-    const thread = makeThread({ extraWindows: [AGENT_WIN] });
+  it("MethodExecWindow.refine 累积 args 并刷新 intentPaths（talk fork 加 wait 触发 talk.wait path）", async () => {
+    const thread = makeThread({ persistence: persistenceOf(), extraWindows: [AGENT_WIN] });
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生子线程", window_id: "agent", method: "do", description: "fork" },
+      arguments: { title: "派生子线程", window_id: "agent", method: "talk", description: "fork", args: { target: SELF } },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
@@ -110,31 +120,31 @@ describe("executable tools (ContextWindow model)", () => {
     });
 
     const form = (thread.contextWindows as ContextWindow[]).find((w) => w.id === formId);
-    expect(form && form.class === "method_exec" && form.accumulatedArgs).toEqual({ wait: true });
-    expect(form && form.class === "method_exec" && form.intentPaths).toContain("do.wait");
+    expect(form && form.class === "method_exec" && form.accumulatedArgs).toEqual({ target: SELF, wait: true });
+    expect(form && form.class === "method_exec" && form.intentPaths).toContain("talk.wait");
     expect(JSON.parse(output).ok).toBe(true);
   });
 
   it("MethodExecWindow.submit 成功后 form 自动移除", async () => {
-    const thread = makeThread();
+    const thread = makeThread({ persistence: persistenceOf() });
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", method: "do", description: "fork", args: { msg: "处理日志" } },
+      arguments: { title: "派生", method: "talk", description: "fork", args: { target: SELF, msg: "处理日志" } },
     });
-    // With quick_exec_submit, do auto-submits when msg is provided.
+    // With quick_exec_submit, talk fork auto-submits when target+msg are provided.
     // The form should be removed after successful execution.
     const formAfter = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "method_exec");
     expect(formAfter).toBeUndefined();
   });
 
   it("MethodExecWindow.submit 失败时 form 保留 status=failed, 可 refine 复活", async () => {
-    const thread = makeThread({ extraWindows: [AGENT_WIN] });
-    // do 缺 msg 直接 submit 会失败
+    const thread = makeThread({ persistence: persistenceOf(), extraWindows: [AGENT_WIN] });
+    // talk fork 缺 msg 直接 submit 会失败
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "talk", description: "fork", args: { target: SELF } },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "method_exec")?.id ?? "";
     await dispatchToolCall(thread, {
@@ -145,15 +155,16 @@ describe("executable tools (ContextWindow model)", () => {
     const form = (thread.contextWindows as ContextWindow[]).find((w) => w.id === formId);
     expect(form?.class).toBe("method_exec");
     expect(form && form.class === "method_exec" && form.status).toBe("failed");
-    expect(form && form.class === "method_exec" && form.result).toContain("[do] 缺少 msg");
+    expect(form && form.class === "method_exec" && form.result).toContain("缺少 msg");
   });
 
   it("close 释放任意 window", async () => {
-    const thread = makeThread({ extraWindows: [AGENT_WIN] });
+    const thread = makeThread({ persistence: persistenceOf(), extraWindows: [AGENT_WIN] });
+    // 只给 target 不给 msg → 留在 method_exec form（不 auto-submit），供下面 close 释放
     await dispatchToolCall(thread, {
       id: "call_1",
       name: "exec",
-      arguments: { title: "派生", window_id: "agent", method: "do", description: "fork" },
+      arguments: { title: "派生", window_id: "agent", method: "talk", description: "fork", args: { target: SELF } },
     });
     const formId = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "method_exec")?.id ?? "";
     const output = await dispatchToolCall(thread, {
@@ -179,9 +190,9 @@ describe("executable tools (ContextWindow model)", () => {
     });
   });
 
-  it("close creator do_window 时被拒绝并写 inject 事件", async () => {
+  it("close creator talk_window 时被拒绝并写 inject 事件", async () => {
     const thread = makeThread();
-    const creator = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "do" && w.isCreatorWindow);
+    const creator = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "talk" && w.isCreatorWindow);
     expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
@@ -195,21 +206,21 @@ describe("executable tools (ContextWindow model)", () => {
 
   it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait + waitingOn", async () => {
     const thread = makeThread({ inbox: [] });
-    const creatorDo = (thread.contextWindows as ContextWindow[]).find(
-      (w) => w.class === "do" && w.isCreatorWindow,
+    const creator = (thread.contextWindows as ContextWindow[]).find(
+      (w) => w.class === "talk" && w.isCreatorWindow,
     );
-    expect(creatorDo).toBeDefined();
+    expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "wait",
-      arguments: { on: creatorDo!.id, reason: "等待 creator 回信" },
+      arguments: { on: creator!.id, reason: "等待 creator 回信" },
     });
     expect(thread.status).toBe("waiting");
     expect(thread.inboxSnapshotAtWait).toBe(0);
-    expect(thread.waitingOn).toBe(creatorDo!.id);
+    expect(thread.waitingOn).toBe(creator!.id);
     const parsed = JSON.parse(output);
     expect(parsed.ok).toBe(true);
-    expect(parsed.on).toBe(creatorDo!.id);
+    expect(parsed.on).toBe(creator!.id);
   });
 
   // compress 经 exec(method="compress") 调用（不再是顶层 tool）；exec.ts 拦截后转 handleCompressTool，

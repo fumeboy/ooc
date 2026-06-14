@@ -5,7 +5,6 @@
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 import type { WindowManager } from "@ooc/core/executable/windows/_shared/manager.js";
 import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
-import { doMethod } from "./method.do.js";
 import { endMethod } from "./method.end.js";
 import {
   openFeishuChatMethod,
@@ -24,19 +23,19 @@ import "@ooc/builtins/knowledge";
 import "@ooc/builtins/search";
 import "@ooc/builtins/todo";
 
-// agency（talk/do/plan/todo/end）—— OOC Agent **基类能力**，只注册到 `_builtin/agent`（不在 root）。
+// agency（talk/plan/todo/end）—— OOC Agent **基类能力**，只注册到 `_builtin/agent`（不在 root）。
 // 具体 agent（supervisor）经 ooc.class 继承 _builtin/agent，从 agent 类拿 agency；
 // tool-object（filesystem/terminal，parentClass=null）拿不到 → 它们不是 Agent。
+// talk 统一两形态：target=别的对象 ⇒ peer 会话；target=自己 ⇒ fork 子线程（旧 do 并入）。
 const AGENCY_METHODS: Record<string, ObjectMethod> = {
   talk: talkMethod,
-  do: doMethod,
   plan: planMethod,
   todo: todoMethod,
   end: endMethod,
 };
 
 // root **类**的 method —— 仅剩边缘 misc。decomposition 后归属：
-// agency(talk/do/plan/todo/end) → _builtin/agent；grep/glob/open_file/write_file → filesystem；
+// agency(talk/plan/todo/end) → _builtin/agent；grep/glob/open_file/write_file → filesystem；
 // program → terminal；create_object → world；open_knowledge → knowledge_base。
 // 残留 example（教学样板）+ feishu（extendable 集成，grill 未列为成员/维度），暂留 root。
 export const ROOT_METHODS: Record<string, ObjectMethod> = {

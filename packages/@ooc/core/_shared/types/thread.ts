@@ -404,12 +404,13 @@ export type ThreadMessage = {
   content: string;
   /** 创建时间戳，用于排序和调试，不承担强一致时钟语义。 */
   createdAt: number;
-  /** 消息来源；talk 用于外部用户对话；user 区分"控制面代用户派送的 talk"。 */
+  /** 消息来源；talk = 经 talk_window.say（peer 会话 + fork 子窗统一）；user = 控制面代用户派送；
+   *  "do" 是旧 fork 消息的历史 source 值（do→talk 合并后不再产生，保留以读旧 thread.json）。 */
   source: "do" | "system" | "talk" | "user";
   /**
    * 消息归属的 window id；
    * - 由 talk_window.say 写 outbox 时设置为该 talk_window 的 id
-   * - 由 do_window.continue 可选设置（do_window 视图实际用 targetThreadId 过滤，本字段非必需）
+   *   （fork 子窗的 say 视图实际用 targetThreadId 过滤，本字段非必需）
    */
   windowId?: string;
   /**

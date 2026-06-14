@@ -1,7 +1,7 @@
 /**
  * 4 个高频 ContextWindow type 的 compressView 验收 e2e。
  *
- * 覆盖：file_window / search_window / do_window / talk_window 四种 type 的自定义折叠态。
+ * 覆盖：file_window / search_window / talk fork 子窗 / talk peer 窗 四种形态的自定义折叠态。
  * 每种 type 验证：
  *   1. Level 1 渲染包含该 type 的自定义节点(不是通用 fallback 的"未注册 compressView"提示)
  *   2. Level 2 渲染更精简(不含 Level 1 才有的预览/transcript 节点)
@@ -23,7 +23,6 @@ import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { renderContextXml } from "@ooc/core/__tests__/render-context-xml";
 import { generateWindowId } from "@ooc/core/executable/windows/_shared/types";
 import type {
-  DoWindow,
   FileWindow,
   SearchWindow,
   TalkWindow,
@@ -244,90 +243,89 @@ describe("[p0c] search_window.compressView", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// do_window
+// talk fork 子窗（旧 do 并入）
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("[p0c] do_window.compressView", () => {
-  it("level=1 含 target_thread + child_status + last_message + total_messages; level=2 不含 last_message", async () => {
+describe("[p0c] talk fork 子窗.compressView", () => {
+  it("level=1 含 target_thread + total_messages + recent_messages; level=2 不含 recent_messages", async () => {
     const thread = makeThread();
     const childThreadId = "t_child_001";
-    const doWindowId = generateWindowId("do");
-    const doWindow: DoWindow = {
-      id: doWindowId,
-      class: "do",
+    const forkWindowId = generateWindowId("talk");
+    const forkWindow: TalkWindow = {
+      id: forkWindowId,
+      class: "talk",
       title: "spawn helper",
-      status: "running",
+      status: "open",
       createdAt: Date.now(),
+      target: "alice",
       targetThreadId: childThreadId,
+      isForkWindow: true,
+      conversationId: forkWindowId,
     };
-    thread.contextWindows.push(doWindow);
+    thread.contextWindows.push(forkWindow);
 
     // 注入两条 transcript 消息(父 → 子,子 → 父),走 thread.outbox / thread.inbox
     const m1: ThreadMessage = {
-      id: "m_do_1",
+      id: "m_fork_1",
       fromThreadId: thread.id,
       toThreadId: childThreadId,
       content: "hello child",
-      source: "user",
+      source: "talk",
       createdAt: 1000,
     };
     const m2: ThreadMessage = {
-      id: "m_do_2",
+      id: "m_fork_2",
       fromThreadId: childThreadId,
       toThreadId: thread.id,
-      content: "ack from child — last-do-message-sentinel",
-      source: "user",
+      content: "ack from child — last-fork-message-sentinel",
+      source: "talk",
       createdAt: 2000,
     };
     thread.outbox = [m1];
     thread.inbox = [m2];
 
     // ── Level 1
-    await compressWindow(thread, doWindowId, 1, "call_do_l1");
+    await compressWindow(thread, forkWindowId, 1, "call_fork_l1");
     const xmlL1 = await renderContextXml({
       thread,
       contextWindows: thread.contextWindows,
     });
-    const sectL1 = extractWindowSection(xmlL1, doWindowId);
+    const sectL1 = extractWindowSection(xmlL1, forkWindowId);
     expect(sectL1).toBeTruthy();
     expect(sectL1).toContain(`<target_thread>${childThreadId}</target_thread>`);
-    expect(sectL1).toContain(`<child_status>running</child_status>`);
     expect(sectL1).toContain(`<total_messages>2</total_messages>`);
-    expect(sectL1).toContain(`<last_message `);
-    expect(sectL1).toContain(`last-do-message-sentinel`);
+    expect(sectL1).toContain(`<recent_messages`);
+    expect(sectL1).toContain(`last-fork-message-sentinel`);
     expect(sectL1).toContain(`<compressed level="1"`);
     expect(sectL1).not.toContain("未注册 compressView");
-    // 第一条不应出现(只保留最近一条)
-    expect(sectL1).not.toContain("hello child");
 
     // ── Level 2
-    await expandWindow(thread, doWindowId, "call_do_l1_back");
-    await compressWindow(thread, doWindowId, 2, "call_do_l2");
+    await expandWindow(thread, forkWindowId, "call_fork_l1_back");
+    await compressWindow(thread, forkWindowId, 2, "call_fork_l2");
     const xmlL2 = await renderContextXml({
       thread,
       contextWindows: thread.contextWindows,
     });
-    const sectL2 = extractWindowSection(xmlL2, doWindowId);
+    const sectL2 = extractWindowSection(xmlL2, forkWindowId);
     expect(sectL2).toBeTruthy();
     expect(sectL2).toContain(`<target_thread>${childThreadId}</target_thread>`);
-    expect(sectL2).toContain(`<child_status>running</child_status>`);
     expect(sectL2).toContain(`<total_messages>2</total_messages>`);
-    expect(sectL2).not.toContain(`<last_message`);
-    expect(sectL2).not.toContain("last-do-message-sentinel");
+    expect(sectL2).not.toContain(`<recent_messages`);
+    expect(sectL2).not.toContain("last-fork-message-sentinel");
     expect(sectL2).toContain(`<compressed level="2"`);
 
     // ── expand 还原
-    await expandWindow(thread, doWindowId, "call_do_l2_back");
+    await expandWindow(thread, forkWindowId, "call_fork_l2_back");
     const xmlLive = await renderContextXml({
       thread,
       contextWindows: thread.contextWindows,
     });
-    const sectLive = extractWindowSection(xmlLive, doWindowId);
+    const sectLive = extractWindowSection(xmlLive, forkWindowId);
     expect(sectLive).toBeTruthy();
     // 完整渲染才有的 <transcript> 节点
     expect(sectLive).toContain(`<transcript>`);
     expect(sectLive).toContain("hello child");
-    expect(sectLive).toContain("last-do-message-sentinel");
+    expect(sectLive).toContain("last-fork-message-sentinel");
     expect(sectLive).not.toContain("<compressed");
   });
 });

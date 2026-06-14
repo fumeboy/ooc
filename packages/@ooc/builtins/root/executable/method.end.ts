@@ -1,7 +1,6 @@
 import type { MethodExecutionContext, ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
-import type { ContextWindow, DoWindow, TalkWindow } from "@ooc/core/extendable/_shared/types.js";
+import type { ContextWindow, TalkWindow } from "@ooc/core/extendable/_shared/types.js";
 import type { ReflectRequestWindow } from "@ooc/core/reflectable/reflect-request/types.js";
-import { continueMethod } from "@ooc/core/executable/windows/do/method.continue.js";
 import { sayMethod } from "@ooc/core/executable/windows/talk/method.say.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 
@@ -17,13 +16,12 @@ export const endMethod: ObjectMethod = {
 
 function findCreatorWindow(
   ctx: MethodExecutionContext,
-): DoWindow | TalkWindow | ReflectRequestWindow | undefined {
+): TalkWindow | ReflectRequestWindow | undefined {
   const list = (ctx.thread?.contextWindows ?? []) as ContextWindow[];
   for (const w of list) {
-    // talk + reflect_request 同形会话窗（super 反思 thread 的会话面），均经 creator 通道回报 caller。
-    // 用字面量判（非 isTalkLikeClass）以保 TS discriminant 收窄出 isCreatorWindow。
+    // creator 窗一律是会话窗：talk（peer 或 fork）+ reflect_request（super 反思）均经 creator 通道回报。
     if (
-      (w.class === "do" || w.class === "talk" || w.class === "reflect_request") &&
+      (w.class === "talk" || w.class === "reflect_request") &&
       w.isCreatorWindow === true
     ) {
       return w;
@@ -32,37 +30,7 @@ function findCreatorWindow(
   return undefined;
 }
 
-async function autoReplyAndArchiveDo(
-  ctx: MethodExecutionContext,
-  creator: DoWindow,
-  result: string,
-): Promise<void> {
-  const thread = ctx.thread!;
-  const continueCtx: MethodExecutionContext = {
-    thread,
-    self: creator,
-    manager: ctx.manager,
-    args: { msg: result },
-  };
-  const outcome = await continueMethod.exec(continueCtx);
-  if (typeof outcome === "string" && outcome.length > 0) {
-    thread.events.push({
-      category: "context_change",
-      kind: "inject",
-      text: `[end.result] 自动 reply 到 creator do_window 失败：${outcome}`,
-    });
-    return;
-  }
-  const list = thread.contextWindows as ContextWindow[];
-  const idx = list.findIndex((w: ContextWindow) => w.id === creator.id);
-  if (idx >= 0) {
-    const target = list[idx]!;
-    if (target.class === "do") {
-      list[idx] = { ...target, status: "archived" };
-    }
-  }
-}
-
+/** end({result}) 自动经 creator 会话窗 say 回报（fork 走内存树、peer 走磁盘派送，由 say 自分流）。 */
 async function autoReplyTalk(
   ctx: MethodExecutionContext,
   creator: TalkWindow | ReflectRequestWindow,
@@ -105,8 +73,6 @@ export async function executeEndMethod(ctx: MethodExecutionContext): Promise<str
         kind: "inject",
         text: "[end.result] 当前 thread 无 creator window（self-driven root），result 参数被忽略；仅 endSummary 仍会记录。",
       });
-    } else if (creator.class === "do") {
-      await autoReplyAndArchiveDo(ctx, creator, result);
     } else {
       await autoReplyTalk(ctx, creator, result);
     }
@@ -120,10 +86,9 @@ export async function executeEndMethod(ctx: MethodExecutionContext): Promise<str
   if (persistence) {
     const creator = findCreatorWindow(ctx);
     if (creator) {
-      const callerObjectId =
-        creator.class === "do" ? persistence.objectId : creator.target;
-      const callerThreadId =
-        creator.class === "do" ? (creator as DoWindow).targetThreadId : (creator as TalkWindow).targetThreadId;
+      // fork 子窗（isForkWindow）：caller = 同对象的父 thread；peer 窗：caller = creator.target 对象。
+      const callerObjectId = creator.isForkWindow ? persistence.objectId : creator.target;
+      const callerThreadId = (creator as TalkWindow).targetThreadId;
       const callerSessionId = ctx.thread.creatorSessionId ?? persistence.sessionId;
       if (callerObjectId && callerThreadId && callerObjectId !== "user") {
         notifyThreadActivated({
