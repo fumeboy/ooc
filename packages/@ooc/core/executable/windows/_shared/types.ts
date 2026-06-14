@@ -59,6 +59,7 @@ export type { TerminalWindow } from "@ooc/builtins/terminal/types.js";
 export type { InterpreterWindow } from "@ooc/builtins/interpreter/types.js";
 export type { RuntimeWindow } from "@ooc/builtins/runtime/types.js";
 export type { KnowledgeBaseWindow } from "@ooc/builtins/knowledge_base/types.js";
+export type { ThreadWindow } from "@ooc/builtins/thread/types.js";
 export type { FeishuChatWindow, FeishuChatMessage } from "../../../extendable/lark/feishu-chat/types.js";
 export type { FeishuDocWindow, FeishuDocBlock } from "../../../extendable/lark/feishu-doc/types.js";
 
@@ -81,6 +82,7 @@ import type { TerminalWindow } from "@ooc/builtins/terminal/types.js";
 import type { InterpreterWindow } from "@ooc/builtins/interpreter/types.js";
 import type { RuntimeWindow } from "@ooc/builtins/runtime/types.js";
 import type { KnowledgeBaseWindow } from "@ooc/builtins/knowledge_base/types.js";
+import type { ThreadWindow } from "@ooc/builtins/thread/types.js";
 import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/types.js";
 import type { FeishuDocWindow } from "../../../extendable/lark/feishu-doc/types.js";
 
@@ -112,4 +114,5 @@ export type ContextWindow =
   | TerminalWindow
   | InterpreterWindow
   | RuntimeWindow
-  | KnowledgeBaseWindow;
+  | KnowledgeBaseWindow
+  | ThreadWindow;

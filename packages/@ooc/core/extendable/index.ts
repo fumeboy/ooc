@@ -31,5 +31,6 @@ import "@ooc/builtins/terminal";
 import "@ooc/builtins/interpreter";
 import "@ooc/builtins/runtime";
 import "@ooc/builtins/knowledge_base";
+import "@ooc/builtins/thread";
 import "@ooc/builtins/root";
 import "./lark/index.js";
