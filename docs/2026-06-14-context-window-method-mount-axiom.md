@@ -43,12 +43,18 @@
 | 异步开线程并通话 | `talk(target=…)` |
 | ├ 人 | `target=user` |
 | ├ 兄弟对象 | `target=<peer objectId>` |
-| ├ 工作分身（= 旧 do） | `target=self-new` |
+| ├ 工作分身（= 旧 do） | **`target=<自己的 objectId>`**（talk 自己 = fork 一条新子线程；talk description 说明）|
 | └ 反思分身（已存在） | `target=super` |
 
 **删除**：`do` 原语、`do_window` 作为独立概念。
 **降级为 talk arg**：`share_windows`。
 **保留**：fan-out = 开 N 条 talk 通道；`wait(on=talk_window)`；creator-reply 协议（已是 say）。
+
+**执行决策（用户 2026-06-14 拍板）**：
+- **不引入 `target=self-new` 魔法 token**——用 `target=<自己的 objectId>` 自然表达"talk 自己 ⇒ fork 子线程"，在 talk method description 里说清。每次 talk 自己 = 新建一条子线程（fan-out）。
+- **方案 B（统一表面、内部路由）**：一个 `talk` 窗类 + 一个 `say` 方法；`say` 内部按 `isForkWindow`（对端是我的子线程 vs peer 对象）路由到**内存树寻址**（fork，复用旧 continue 机制）或**磁盘派送**（peer，deliverTalkMessage）。同对象子线程不付磁盘 IO、不异步化。
+- **同 job**：fork 子线程仍在 `parent.childThreads`、随 parent 同 job 轮询（调度器对窗类零依赖，不动）。
+- 随之机械项：`status` 统一 open/closed（子线程"运行中"挂 `thread.status`）；`move` 作 talk 方法（fork 窗 gated）；持久化读取期迁移 `class:"do"→"talk"`（+`isForkWindow`）。
 
 ## 2. 推论二：compress tool → window method（4 原语回到 3）
 
