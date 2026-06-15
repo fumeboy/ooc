@@ -14,9 +14,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
 import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
 import { openFileExec as executeOpenFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
-import { executeFileWindowEdit } from "@ooc/builtins/file/executable/index";
+import { executeFileWindowEdit } from "@ooc/builtins/filesystem/file/executable/index";
 import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
-import type { FileWindow } from "@ooc/builtins/file/types";
+import type { FileWindow } from "@ooc/builtins/filesystem/file/types";
 
 let tempRoots: string[] = [];
 

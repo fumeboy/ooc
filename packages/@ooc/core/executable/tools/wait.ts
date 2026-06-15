@@ -11,7 +11,7 @@
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
-import type { TalkData } from "@ooc/builtins/thread/types.js";
+import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 

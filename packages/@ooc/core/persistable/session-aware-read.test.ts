@@ -11,7 +11,7 @@ import {
   resolveStoneIdentityRef,
   stoneDir,
 } from "@ooc/core/persistable";
-import { talkConstructor } from "@ooc/builtins/thread/executable/construct.js";
+import { talkConstructor } from "@ooc/builtins/agent/thread/executable/construct.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 /**

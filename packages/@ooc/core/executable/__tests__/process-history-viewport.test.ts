@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from "bun:test";
 
-import "@ooc/builtins/terminal_process"; // 触发 registerWindowClass side-effect import
+import "@ooc/builtins/terminal/terminal_process"; // 触发 registerWindowClass side-effect import
 
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import {
@@ -26,7 +26,7 @@ import {
   makeHistoryViewport,
 } from "@ooc/builtins/_shared/executable/process-history-viewport.js";
 import { runExec as executeTerminalRun } from "@ooc/builtins/terminal/executable/index.js";
-import { executeTerminalProcessExec } from "@ooc/builtins/terminal_process";
+import { executeTerminalProcessExec } from "@ooc/builtins/terminal/terminal_process";
 import { makeThread } from "../../../__tests__/make-thread.js";
 
 const NOW = 1_700_000_000_000;

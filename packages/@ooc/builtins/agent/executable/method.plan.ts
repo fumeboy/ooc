@@ -2,7 +2,7 @@
  * agent.plan —— agency 之一：把任务拆成可执行步骤，以 plan_window 挂在 context。
  *
  * 新契约下，plan 不再走 root delegator + registry lookupConstructor，而是经
- * `ctx.runtime.instantiate("_builtin/plan", args)` 委托 plan class 的 construct
+ * `ctx.runtime.instantiate("_builtin/agent/plan", args)` 委托 plan class 的 construct
  * 造一个 plan 子对象。返回一句提示文本。
  */
 
@@ -29,7 +29,7 @@ export const planMethod: ObjectMethod<Data> = {
   },
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     if (!ctx.runtime) return `[plan] ${PLAN_TIP}\n（runtime 不可用，无法实例化 plan 对象）`;
-    const id = await ctx.runtime.instantiate("_builtin/plan", args);
+    const id = await ctx.runtime.instantiate("_builtin/agent/plan", args);
     return `已创建 plan 对象（id=${id}）。`;
   },
 };

@@ -23,7 +23,7 @@ import {
   type SearchWindow,
 } from "@ooc/core/executable/manager.js";
 import {
-} from "@ooc/builtins/search/readable.js";
+} from "@ooc/builtins/filesystem/search/readable.js";
 import { renderContextXml } from "../../__tests__/render-context-xml";
 import { makeThread } from "../../__tests__/make-thread";
 import type { Intent } from "@ooc/core/_shared/types/intent.js";
@@ -638,7 +638,7 @@ describe("U4: root.glob + search_window.open_match", () => {
   });
 
   it("open_match exec edge: missing index error message", async () => {
-    const { executeSearchOpenMatch } = await import("@ooc/builtins/search");
+    const { executeSearchOpenMatch } = await import("@ooc/builtins/filesystem/search");
     const dir = await makeGlobFixtureDir("glob-no-idx-exec", ["a.ts"]);
     const thread = makeThread({ id: "t_open_match_exec_no_idx" });
     await dispatchGlob(thread, { pattern: "*.ts", cwd: dir });
@@ -670,7 +670,7 @@ describe("U4: root.glob + search_window.open_match", () => {
 
 // ---------- U5: root.grep ----------
 
-import { runJsFallback } from "@ooc/builtins/search/grep-impl";
+import { runJsFallback } from "@ooc/builtins/filesystem/search/grep-impl";
 
 async function dispatchGrep(thread: ReturnType<typeof makeThread>, args: Record<string, unknown>) {
   ensureFsWindow(thread);

@@ -1,0 +1,21 @@
+{
+  "name": "@ooc/builtins/filesystem/file",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*",
+    "./*.ts": "./*.ts",
+    "./*.tsx": "./*.tsx"
+  },
+  "dependencies": {
+    "@codemirror/merge": "^6.0.0",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/view": "^6.36.0",
+    "react": "^19.0.0"
+  },
+  "ooc": {
+    "objectId": "_builtin/filesystem/file",
+    "kind": "class"
+  }
+}

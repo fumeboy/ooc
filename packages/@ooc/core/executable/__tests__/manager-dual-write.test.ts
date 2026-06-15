@@ -18,7 +18,7 @@ import { WindowManager } from "../manager";
 import { builtinRegistry } from "../registry";
 import { makeThread } from "../../../../__tests__/make-thread";
 import { ROOT_WINDOW_ID } from "../types";
-import type { PlanWindow } from "@ooc/builtins/plan/types.js";
+import type { PlanWindow } from "@ooc/builtins/agent/plan/types.js";
 import {
   contextRegistryFile,
   readContextRegistry,

@@ -9,12 +9,12 @@ import type { ComponentType } from "react";
 import type { WindowDiffProps } from "./window-diff-props";
 
 // 有 builtin 目录（无 .tsx 扩展名，线 A 约定）:
-import FileDiff from "@ooc/builtins/file/visible/diff";
-import KnowledgeDiff from "@ooc/builtins/knowledge/visible/diff";
-import SearchDiff from "@ooc/builtins/search/visible/diff";
-import TerminalProcessDiff from "@ooc/builtins/terminal_process/visible/diff";
-import InterpreterProcessDiff from "@ooc/builtins/interpreter_process/visible/diff";
-import PlanDiff from "@ooc/builtins/plan/visible/diff";
+import FileDiff from "@ooc/builtins/filesystem/file/visible/diff";
+import KnowledgeDiff from "@ooc/builtins/knowledge_base/knowledge/visible/diff";
+import SearchDiff from "@ooc/builtins/filesystem/search/visible/diff";
+import TerminalProcessDiff from "@ooc/builtins/terminal/terminal_process/visible/diff";
+import InterpreterProcessDiff from "@ooc/builtins/interpreter/interpreter_process/visible/diff";
+import PlanDiff from "@ooc/builtins/agent/plan/visible/diff";
 // 无 builtin 目录，web 本地:
 import TalkDiff from "./TalkDiff";
 import DoDiff from "./DoDiff";

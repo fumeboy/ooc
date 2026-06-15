@@ -2,7 +2,7 @@
  * terminal —— executable 维度（object method）。
  *
  * terminal 是 agent 组合持有的 **tool-object 成员**：把「跑 bash 脚本」能力收成方法 `run`。
- * `run` 经 `ctx.runtime.instantiate` 委托到 `_builtin/terminal_process` 的 constructor——构造一个
+ * `run` 经 `ctx.runtime.instantiate` 委托到 `_builtin/terminal/terminal_process` 的 constructor——构造一个
  * terminal_process（bash 子进程 + history，首次 exec 已跑完、结果进 history）。terminal 自身无
  * 业务数据（Data 为空），run 不改 self，只产生「造子对象」副作用。
  *
@@ -15,7 +15,7 @@ import type {
 } from "@ooc/core/executable/contract.js";
 import type { Data } from "../types.js";
 
-const TERMINAL_PROCESS_CLASS = "_builtin/terminal_process";
+const TERMINAL_PROCESS_CLASS = "_builtin/terminal/terminal_process";
 
 const runMethod: ObjectMethod<Data> = {
   name: "run",

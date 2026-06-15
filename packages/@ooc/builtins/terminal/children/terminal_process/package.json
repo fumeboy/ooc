@@ -1,0 +1,19 @@
+{
+  "name": "@ooc/builtins/terminal/terminal_process",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*",
+    "./*.ts": "./*.ts",
+    "./*.tsx": "./*.tsx"
+  },
+  "dependencies": {
+    "@ooc/builtins/_shared": "workspace:*",
+    "react": "^19.0.0"
+  },
+  "ooc": {
+    "objectId": "_builtin/terminal/terminal_process",
+    "kind": "class"
+  }
+}

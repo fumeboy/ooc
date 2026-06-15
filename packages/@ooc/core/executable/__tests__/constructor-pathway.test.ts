@@ -21,7 +21,7 @@
 // Side-effect imports — register all builtin/core types into the object registry.
 import "@ooc/builtins/root/executable/index.js";
 import "@ooc/core/runtime/register-builtins.js";
-import "@ooc/builtins/plan";
+import "@ooc/builtins/agent/plan";
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
@@ -44,7 +44,7 @@ import {
 } from "../../../../persistable";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../../persistable/common";
 import type { ThreadContext } from "../../../../thinkable/context";
-import type { PlanWindow } from "@ooc/builtins/plan/types.js";
+import type { PlanWindow } from "@ooc/builtins/agent/plan/types.js";
 import { dispatchToolCall } from "../../../tools";
 import { builtinRegistry } from "../registry";
 

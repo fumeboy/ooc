@@ -18,8 +18,8 @@ import type {
 import type { Data } from "../types.js";
 
 // 子对象的 class id（委托目标；instantiate 经 ctx.runtime 在 exec 期解析其 constructor）。
-const SEARCH_CLASS = "_builtin/search";
-const FILE_CLASS = "_builtin/file";
+const SEARCH_CLASS = "_builtin/filesystem/search";
+const FILE_CLASS = "_builtin/filesystem/file";
 
 function requireRuntime(ctx: ExecutableContext, method: string) {
   if (!ctx.runtime) {

@@ -30,6 +30,22 @@ tmp
 packages/*
 !packages/@ooc/
 
+# Bun install artifacts: in-parent-dir subpath symlinks for nested children packages
+# (源真身在 <parent>/children/<child>/；这些 <parent>/<child> 软链由 bun install 生成且
+#  目标相对深度有 bug；bun 运行时按 lockfile workspace 映射解析、不依赖它们，故整体忽略)
+packages/@ooc/builtins/agent/plan
+packages/@ooc/builtins/agent/pr
+packages/@ooc/builtins/agent/thread
+packages/@ooc/builtins/agent/skill_index
+packages/@ooc/builtins/agent/todo
+packages/@ooc/builtins/interpreter/interpreter_process
+packages/@ooc/builtins/terminal/terminal_process
+packages/@ooc/builtins/filesystem/file
+packages/@ooc/builtins/filesystem/search
+packages/@ooc/builtins/knowledge_base/knowledge
+packages/@ooc/builtins/feishu_app/feishu_chat
+packages/@ooc/builtins/feishu_app/feishu_doc
+
 
 # 维度体验 harness 的自动 run 产物（ephemeral；notable 发现手工 curate 进 docs/）
 docs/harness-reports/

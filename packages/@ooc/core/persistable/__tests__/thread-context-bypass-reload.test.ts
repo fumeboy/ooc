@@ -28,7 +28,7 @@ import {
   __resetSerialQueueForTests,
 } from "../index";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../common";
-import { deliverTalkMessage } from "@ooc/builtins/thread/executable/talk-delivery.js";
+import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import { createObjectRegistry } from "../../runtime/object-registry";
 import type { ContextWindow, TalkWindow } from "@ooc/core/_shared/types/context-window.js";
 import { makeThread } from "../../__tests__/make-thread";

@@ -17,14 +17,14 @@
 import type { ComponentType } from "react";
 import type { ContextWindow } from "../../context-snapshot";
 
-import FileWindowDetail from "@ooc/builtins/file/visible/index";
-import KnowledgeWindowDetail from "@ooc/builtins/knowledge/visible/index";
-import TodoWindowDetail from "@ooc/builtins/todo/visible/index";
-import SearchWindowDetail from "@ooc/builtins/search/visible/index";
-import SkillIndexWindowDetail from "@ooc/builtins/skill_index/visible/index";
-import PlanWindowDetail from "@ooc/builtins/plan/visible/index";
-import TerminalProcessWindowDetail from "@ooc/builtins/terminal_process/visible/index";
-import InterpreterProcessWindowDetail from "@ooc/builtins/interpreter_process/visible/index";
+import FileWindowDetail from "@ooc/builtins/filesystem/file/visible/index";
+import KnowledgeWindowDetail from "@ooc/builtins/knowledge_base/knowledge/visible/index";
+import TodoWindowDetail from "@ooc/builtins/agent/todo/visible/index";
+import SearchWindowDetail from "@ooc/builtins/filesystem/search/visible/index";
+import SkillIndexWindowDetail from "@ooc/builtins/agent/skill_index/visible/index";
+import PlanWindowDetail from "@ooc/builtins/agent/plan/visible/index";
+import TerminalProcessWindowDetail from "@ooc/builtins/terminal/terminal_process/visible/index";
+import InterpreterProcessWindowDetail from "@ooc/builtins/interpreter/interpreter_process/visible/index";
 import RootWindowDetail from "@ooc/builtins/root/visible/index";
 import MethodExecWindowDetail from "../MethodExecWindowDetail";
 import FeishuChatWindowDetail from "./FeishuChatWindowDetail";

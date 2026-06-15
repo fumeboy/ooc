@@ -11,7 +11,7 @@ import {
   listExternalSkills,
   readWorldConfig,
 } from "../../persistable/index.js";
-import type { Data as SkillIndexData } from "@ooc/builtins/skill_index/types.js";
+import type { Data as SkillIndexData } from "@ooc/builtins/agent/skill_index/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { ThreadContext } from "./index.js";

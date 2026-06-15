@@ -1,7 +1,7 @@
 /**
  * agent.todo —— agency 之一：登记一条可见待办，产生 todo 对象。
  *
- * 新契约下经 `ctx.runtime.instantiate("_builtin/todo", args)` 委托 todo class 的
+ * 新契约下经 `ctx.runtime.instantiate("_builtin/agent/todo", args)` 委托 todo class 的
  * construct 造一个 todo 子对象。返回一句提示文本。
  */
 
@@ -27,7 +27,7 @@ export const todoMethod: ObjectMethod<Data> = {
     const content = typeof args.content === "string" ? args.content.trim() : "";
     if (!content) return `[todo] ${TODO_TIP}`;
     if (!ctx.runtime) return `[todo] ${TODO_TIP}\n（runtime 不可用，无法实例化 todo 对象）`;
-    const id = await ctx.runtime.instantiate("_builtin/todo", args);
+    const id = await ctx.runtime.instantiate("_builtin/agent/todo", args);
     return `已创建 todo 对象（id=${id}）。`;
   },
 };

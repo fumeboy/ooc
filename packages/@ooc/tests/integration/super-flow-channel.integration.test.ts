@@ -34,7 +34,7 @@ import {
   writeSelf,
   writeThread,
 } from "@ooc/core/persistable";
-import { deliverTalkMessage } from "@ooc/builtins/thread/executable/talk-delivery.js";
+import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 import {
   ROOT_WINDOW_ID,

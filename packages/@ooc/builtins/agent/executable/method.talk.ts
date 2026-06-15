@@ -5,7 +5,7 @@
  * - target = 别的 objectId（"user" 也是）⇒ peer 跨对象会话（需 title；同一 target 复用同一窗）。
  * - target = 自己的 objectId ⇒ fork 一条同对象子线程（需 msg；wait / share_windows 可选）。
  *
- * 新契约下经 `ctx.runtime.instantiate("_builtin/thread", args)` 委托 thread/talk class
+ * 新契约下经 `ctx.runtime.instantiate("_builtin/agent/thread", args)` 委托 thread/talk class
  * 的 construct 造一个会话对象（thread-as-object）。会话对象在其 construct 内创建 thread +
  * 跑 thinkloop（深层 core 耦合，见 deferred_hooks：talk thread 创建 / thinkloop 编排 /
  * peer 复用同窗 仍待 core 反推阶段补 RuntimeHandle 面）。
@@ -53,7 +53,7 @@ export const talkMethod: ObjectMethod<Data> = {
     if (!ctx.runtime) return `[talk] ${TALK_TIP}\n（runtime 不可用，无法实例化会话对象）`;
     // deferred: talk 会话对象的 construct 须创建 thread + 跑 thinkloop（深层 core 耦合）；
     // peer 同窗复用 / fork 子线程内存树派送 仍待 core 反推阶段补 RuntimeHandle 面。
-    const id = await ctx.runtime.instantiate("_builtin/thread", args);
+    const id = await ctx.runtime.instantiate("_builtin/agent/thread", args);
     return `已开启 talk 会话对象（id=${id}, target=${target}）。`;
   },
 };

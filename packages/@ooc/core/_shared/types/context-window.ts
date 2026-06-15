@@ -169,22 +169,22 @@ export type { OocObjectInstance } from "../../runtime/ooc-class.js";
 // 需要按 class narrow 的调用方：读 inst.class 后把 inst.data 断言成对应 Data。
 // 这些是 class 的纯业务数据（不含信封/不含旧平铺别名）。
 export type { Data as RootData } from "@ooc/builtins/root/types.js";
-export type { Data as TodoData } from "@ooc/builtins/todo/types.js";
-export type { TalkData, TalkWin, TalkWindowView } from "@ooc/builtins/thread/types.js";
-export type { Data as PrData } from "@ooc/builtins/pr/types.js";
-export type { Data as TerminalProcessData } from "@ooc/builtins/terminal_process/types.js";
-export type { Data as InterpreterProcessData } from "@ooc/builtins/interpreter_process/types.js";
+export type { Data as TodoData } from "@ooc/builtins/agent/todo/types.js";
+export type { TalkData, TalkWin, TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
+export type { Data as PrData } from "@ooc/builtins/agent/pr/types.js";
+export type { Data as TerminalProcessData } from "@ooc/builtins/terminal/terminal_process/types.js";
+export type { Data as InterpreterProcessData } from "@ooc/builtins/interpreter/interpreter_process/types.js";
 export type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";
-export type { Data as FileData } from "@ooc/builtins/file/types.js";
-export type { Data as KnowledgeData } from "@ooc/builtins/knowledge/types.js";
-export type { Data as SearchData, SearchMatch } from "@ooc/builtins/search/types.js";
-export type { Data as SkillIndexData, SkillEntry } from "@ooc/builtins/skill_index/types.js";
-export type { Data as PlanData, PlanWindowStep } from "@ooc/builtins/plan/types.js";
+export type { Data as FileData } from "@ooc/builtins/filesystem/file/types.js";
+export type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
+export type { Data as SearchData, SearchMatch } from "@ooc/builtins/filesystem/search/types.js";
+export type { Data as SkillIndexData, SkillEntry } from "@ooc/builtins/agent/skill_index/types.js";
+export type { Data as PlanData, PlanWindowStep } from "@ooc/builtins/agent/plan/types.js";
 export type { Data as TerminalData } from "@ooc/builtins/terminal/types.js";
 export type { Data as InterpreterData } from "@ooc/builtins/interpreter/types.js";
-export type { Data as ThreadData } from "@ooc/builtins/thread/types.js";
-export type { Data as FeishuChatData, FeishuChatMessage } from "@ooc/builtins/feishu_chat/types.js";
-export type { Data as FeishuDocData, FeishuDocBlock } from "@ooc/builtins/feishu_doc/types.js";
+export type { Data as ThreadData } from "@ooc/builtins/agent/thread/types.js";
+export type { Data as FeishuChatData, FeishuChatMessage } from "@ooc/builtins/feishu_app/feishu_chat/types.js";
+export type { Data as FeishuDocData, FeishuDocBlock } from "@ooc/builtins/feishu_app/feishu_doc/types.js";
 
 /** Root object 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";

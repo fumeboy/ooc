@@ -2,7 +2,7 @@
  * interpreter —— executable 维度（object method）。
  *
  * interpreter 是 agent 组合持有的 **tool-object 成员**：把「跑 ts/js 脚本」能力收成 `run` 方法。
- * `run` 经 `ctx.runtime.instantiate('_builtin/interpreter_process', args)` 委托——造一个
+ * `run` 经 `ctx.runtime.instantiate('_builtin/interpreter/interpreter_process', args)` 委托——造一个
  * interpreter_process（ts/js sandbox + history；首次 exec 已跑完，结果进 history）。
  *
  * 与 readable 维度（投影 + 方法菜单，在 ../readable/index.ts）物理分离。
@@ -37,7 +37,7 @@ const runMethod: ObjectMethod<Data, RunArgs> = {
     if (!ctx.runtime) {
       return "[run] runtime 句柄缺失，无法实例化 interpreter_process。";
     }
-    const id = await ctx.runtime.instantiate("_builtin/interpreter_process", {
+    const id = await ctx.runtime.instantiate("_builtin/interpreter/interpreter_process", {
       language: args.language ?? args.lang,
       code: args.code,
     });

@@ -1,0 +1,19 @@
+{
+  "name": "@ooc/builtins/agent/plan",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*",
+    "./*.ts": "./*.ts",
+    "./*.tsx": "./*.tsx"
+  },
+  "dependencies": {
+    "lucide-react": "^0.475.0",
+    "react": "^19.0.0"
+  },
+  "ooc": {
+    "objectId": "_builtin/agent/plan",
+    "kind": "class"
+  }
+}

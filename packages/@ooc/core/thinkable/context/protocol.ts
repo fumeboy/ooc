@@ -9,7 +9,7 @@
  */
 import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
-import type { Data as KnowledgeData } from "@ooc/builtins/knowledge/types.js";
+import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { computeActivations, loadKnowledgeIndexFromDir } from "../knowledge/index.js";

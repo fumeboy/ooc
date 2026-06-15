@@ -5,7 +5,7 @@
  * - open_chat：把一个飞书群聊 / 单聊作为 feishu_chat 子对象引入 context
  * - open_doc ：把一个飞书文档作为 feishu_doc 子对象引入 context
  *
- * 建子对象经 `ctx.runtime.instantiate("_builtin/feishu_chat"|"_builtin/feishu_doc", args)`；
+ * 建子对象经 `ctx.runtime.instantiate("_builtin/feishu_app/feishu_chat"|"_builtin/feishu_app/feishu_doc", args)`；
  * 子对象初始 Data 由其 class 的 construct 据 args 产出。method 把新建 id 记入 self（运行态）
  * 供 readable 投影列出。
  */
@@ -16,8 +16,8 @@ import type {
 } from "@ooc/core/executable/contract.js";
 import type { Data } from "../types.js";
 
-const FEISHU_CHAT_CLASS = "_builtin/feishu_chat";
-const FEISHU_DOC_CLASS = "_builtin/feishu_doc";
+const FEISHU_CHAT_CLASS = "_builtin/feishu_app/feishu_chat";
+const FEISHU_DOC_CLASS = "_builtin/feishu_app/feishu_doc";
 const VALID_DOC_KINDS = ["doc", "docx", "sheet", "base", "wiki", "drive_md"] as const;
 type DocKind = (typeof VALID_DOC_KINDS)[number];
 

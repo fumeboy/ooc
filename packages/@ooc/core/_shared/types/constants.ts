@@ -18,7 +18,7 @@ export function isSuperSessionId(sessionId: string): boolean {
 }
 
 /** 唯一会话载体注册 class。所有会话窗（creator/peer/sub/fork）inst.class 一律是它。 */
-export const THREAD_CLASS_ID = "_builtin/thread";
+export const THREAD_CLASS_ID = "_builtin/agent/thread";
 
 /**
  * "会话型" window 谓词 —— 判一条 context window 是不是会话载体（thread）实例。

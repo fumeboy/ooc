@@ -6,7 +6,7 @@
  */
 import { ROOT_WINDOW_ID } from "../../_shared/types/context-window.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
-import type { Data as KnowledgeData } from "@ooc/builtins/knowledge/types.js";
+import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ThreadContext } from "./index.js";
 import { computeActivations } from "../knowledge/activator.js";
 import { loadKnowledgeIndex } from "../knowledge/loader.js";

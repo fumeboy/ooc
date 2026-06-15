@@ -31,7 +31,7 @@ import "@ooc/core/runtime/register-builtins.js";
 import { execRootMethod, WindowManager } from "@ooc/core/executable/manager.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
-import { archiveForkChild } from "@ooc/builtins/thread/executable/talk-fork.js";
+import { archiveForkChild } from "@ooc/builtins/agent/thread/executable/talk-fork.js";
 import { makeThread, type MakeThreadOpts } from "@ooc/core/__tests__/make-thread";
 import type {
   ContextWindow,

@@ -213,7 +213,7 @@ describe("archiveForkChild 自动归还", () => {
     const child = findChild(parent);
 
     // 模拟 archive：直接调 archive helper（绕开 mgr 缓存层）
-    const { archiveForkChild } = await import("@ooc/builtins/thread/executable/talk-fork.js");
+    const { archiveForkChild } = await import("@ooc/builtins/agent/thread/executable/talk-fork.js");
     const forkWindow = (parent.contextWindows ?? []).find((w) => w.id === forkWindowId);
     expect(forkWindow?.class).toBe("talk");
     if (forkWindow?.class === "talk") {

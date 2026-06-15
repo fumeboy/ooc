@@ -16,5 +16,5 @@
 
 // side-effect-only import：两个包都各自 export `Class` / `Data`，re-export 会撞名；
 // 本 barrel 只为触发 registerWindowClass 的注册副作用，不转出任何符号。
-import "@ooc/builtins/pr/index.js"; // side-effect: registerWindowClass("pr")
+import "@ooc/builtins/agent/pr/index.js"; // side-effect: registerWindowClass("pr")
 import "@ooc/builtins/reflect_request/index.js"; // side-effect: registerWindowClass("reflect_request")

@@ -66,7 +66,7 @@ export const L3_STORIES: Story[] = [
     expectation: "builtin file 的 set_viewport 是 windowMethod，不在 object methods 表",
     design: "readable：展示控制方法归 windowMethods（readable 维度），与业务 method 分离。builtins/file/readable.ts",
     run: async () => {
-      await import("@ooc/builtins/file");
+      await import("@ooc/builtins/filesystem/file");
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
       const def = builtinRegistry.getObjectDefinition("file");
       check(!!def.windowMethods?.set_viewport, "file.set_viewport 不是 windowMethod");
@@ -80,7 +80,7 @@ export const L3_STORIES: Story[] = [
     expectation: "kind=constructor 的 method 经 lookupConstructor 命中",
     design: "executable：root 命令委托到 Object constructor。object-registry.ts:lookupConstructor",
     run: async () => {
-      await import("@ooc/builtins/file");
+      await import("@ooc/builtins/filesystem/file");
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
       check(!!builtinRegistry.lookupConstructor("file" as any), "file constructor 未命中");
     },
