@@ -6,10 +6,6 @@
  *
  * 与 readable 维度（投影 + window method set_viewport，在 ../readable/index.ts）物理分离。
  * constructor（open_knowledge）在 ../index.ts 装配。
- *
- * deferred hook（契约暂无、Wave3 反推 core 时 re-home）：
- *   - onClose：拒绝 close 非 explicit 来源的 knowledge（合成窗每轮再生，不可显式关闭）——
- *     见 ../index.ts 的 `rejectCloseNonExplicit` 注释保留逻辑。
  */
 
 import type {

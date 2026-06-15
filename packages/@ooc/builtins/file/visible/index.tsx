@@ -1,20 +1,21 @@
-import type { FileWindow } from "../types.js";
+import type { Data } from "../types.js";
+import type { FileWin } from "../readable/index.js";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 import React from "react";
 import { FileWindowContentView } from "@ooc/web/src/domains/files/components/FileWindowContentView";
 
 /** File window 详情面板。
  *
- * 展示参数（lines / columns）现归 `window.state`（WindowDisplayState）；旧 thread.json
- * 仍可能平铺在 window 顶层，故 `window.state?.X ?? window.X` 向后兼容读取。 */
-export default function FileWindowDetail({ window }: { window: FileWindow }) {
-  const lines = window.state?.lines ?? window.lines;
-  const columns = window.state?.columns ?? window.columns;
+ * 投影态（lines / columns viewport）归实例 `win`；业务字段（path）归 `data`。 */
+export default function FileWindowDetail({ window }: { window: OocObjectInstance<Data, FileWin> }) {
+  const lines = window.win?.lines;
+  const columns = window.win?.columns;
   return (
     <>
       <div className="llm-input-attrs">
         <div className="llm-input-attr-row">
           <span className="llm-input-attr-key">path</span>
-          <span className="llm-input-attr-value">{window.path}</span>
+          <span className="llm-input-attr-value">{window.data.path}</span>
         </div>
         {lines && (
           <div className="llm-input-attr-row">
@@ -29,7 +30,7 @@ export default function FileWindowDetail({ window }: { window: FileWindow }) {
           </div>
         )}
       </div>
-      <FileWindowContentView path={window.path} lines={lines} columns={columns} />
+      <FileWindowContentView path={window.data.path} lines={lines} columns={columns} />
     </>
   );
 }

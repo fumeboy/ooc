@@ -25,8 +25,7 @@ import type {
 } from "@ooc/core/executable/contract.js";
 import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
-import type { TalkData } from "../types.js";
-import type { TalkWindow } from "../../_shared/types.js";
+import type { TalkData, TalkWindowView } from "../types.js";
 import { deliverTalkMessage } from "../delivery.js";
 import { archiveForkChild, findThreadInScope, makeMessage, appendInbox } from "../fork.js";
 
@@ -42,7 +41,7 @@ const SAY_SCHEMA: MethodCallSchema = {
  * 把当前会话窗的业务数据 + 实例 id 还原成 delivery 期望的扁平 TalkWindow 视图。
  * delivery 只读 id / target / targetThreadId / isCreatorWindow（并回填 targetThreadId）。
  */
-function asTalkWindowView(objectId: string, self: TalkData): TalkWindow {
+function asTalkWindowView(objectId: string, self: TalkData): TalkWindowView {
   return {
     id: objectId,
     class: "talk",
@@ -51,7 +50,7 @@ function asTalkWindowView(objectId: string, self: TalkData): TalkWindow {
     isForkWindow: self.isForkWindow,
     isCreatorWindow: self.isCreatorWindow,
     conversationId: self.conversationId,
-  } as TalkWindow;
+  } as TalkWindowView;
 }
 
 async function executeSay(

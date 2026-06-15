@@ -36,14 +36,3 @@ export interface Data {
   /** 末次拉取时间（毫秒）。 */
   lastFetchedAtMs?: number;
 }
-
-/**
- * @deprecated 过渡兼容别名（visible 层仍按旧「窗对象」消费）。
- * 新后端契约用 Data + runtime 信封（OocObjectInstance）。
- */
-export type FeishuDocWindow = Data & {
-  id?: string;
-  class?: "feishu_doc";
-  title?: string;
-  status?: "open" | "closed";
-};

@@ -32,6 +32,26 @@ export interface RuntimeHandle {
   instantiate(classId: string, args?: Record<string, unknown>): Promise<string>;
   /** 关闭/卸载一个对象（窗）。 */
   close?(objectId: string): void | Promise<void>;
+  /**
+   * 委托调当前 thread 内某 object 的 **object method**（解析目标 object 的 class →
+   * resolveObjectMethod → 三参 exec）。用于一个 method 内编排别的对象的 method
+   * （如 interpreter_process 的 `self.callMethod` 跨窗调用）。
+   * 找不到 object / method 时抛清晰错误；返回该 method 的结果文本（或 undefined）。
+   */
+  callMethod?(
+    objectId: string,
+    methodName: string,
+    args?: Record<string, unknown>,
+  ): Promise<string | undefined>;
+  /**
+   * 经一个会话窗（talk-like：creator / peer / fork）把一段消息派给对端。
+   *
+   * 最小通道：复用 talk object method `say`——`windowId` 指向当前 thread 内某 talk-like
+   * 窗实例（典型为 creator 会话窗），`msg` 为消息正文。peer 走磁盘 talk-delivery、
+   * fork 走内存树派送由该窗自身 TalkData 分流。用于 agent.end 把 result 经 creator 窗回报。
+   * 找不到窗 / 该窗 class 无 say 时抛清晰错误。
+   */
+  say?(windowId: string, msg: string): Promise<string | undefined>;
 }
 
 /**

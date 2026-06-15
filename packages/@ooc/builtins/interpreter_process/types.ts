@@ -16,11 +16,3 @@ export type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process
 export interface Data {
   history: ProcessExecRecord[];
 }
-
-/**
- * @deprecated 过渡兼容别名 —— 供尚未迁移的 visible 前端（visible/index.tsx）编译用。
- * 新对象模型下窗信封由 runtime 管理、history 是 Data 字段；前端最终应改读运行时实例信封。
- */
-export interface InterpreterProcessWindow {
-  history: ProcessExecRecord[];
-}

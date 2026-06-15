@@ -27,20 +27,3 @@ export interface Data {
   /** author 发起沉淀时所在的业务 session（message 回投定位 super(foo) thread）。 */
   authorThreadId?: string;
 }
-
-/**
- * @deprecated 过渡别名 —— 旧 `PrWindow extends BaseContextWindow` 的兼容形状。
- *
- * core 的 `ContextWindow` discriminated union（`executable/windows/_shared/types.ts`）仍按 `class: "pr"`
- * 引本类型；前端 / core union 在 Wave 4 反推前继续编译需此交叉类型。新代码用 `Data`。
- * 信封字段（id/title/status/createdAt/parentWindowId）由 runtime 管理，此处标可选只为旧 union 兼容。
- */
-export type PrWindow = Data & {
-  class: "pr";
-  id?: string;
-  title?: string;
-  status?: "open" | "closed";
-  createdAt?: number;
-  parentWindowId?: string;
-  [key: string]: unknown;
-};

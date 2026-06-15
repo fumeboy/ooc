@@ -14,12 +14,3 @@ export type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process
 export interface Data {
   history: ProcessExecRecord[];
 }
-
-/**
- * @deprecated 过渡兼容别名 —— visible/ 前端组件仍按旧窗类型签名引用 `TerminalProcessWindow`。
- * 实际只用到 `history` 字段（见 _shared/visible/process-detail 的 ProcessWindowLike）。
- * 待前端切到 OocObjectInstance 投影后删除。
- */
-export type TerminalProcessWindow = Data & {
-  class?: "terminal_process";
-};

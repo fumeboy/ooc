@@ -14,18 +14,10 @@
 
 export type {
   ContextWindow,
+  OocObjectInstance,
   WindowStatus,
   BaseContextWindow,
-  RootWindow,
-  TodoWindow,
-  TalkWindow,
-  PrWindow,
-  TerminalProcessWindow,
-  InterpreterProcessWindow,
-  FileWindow,
-  KnowledgeWindow,
   SearchMatch,
-  PlanWindow,
   PlanWindowStep,
 } from "./_shared/types.js";
 

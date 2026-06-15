@@ -40,4 +40,4 @@ exec(method="talk", title="…", args={
 })
 ```
 
-不可分享的类型：fork 子窗 / talk / method_exec / root。
+不可分享的类型：fork 子窗 / talk / root。

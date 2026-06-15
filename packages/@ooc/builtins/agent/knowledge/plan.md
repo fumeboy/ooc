@@ -6,7 +6,7 @@ activates_on:
 ---
 
 plan_window 是 thread 的行动计划窗口，由 agent 的 `plan` 方法创建 / 更新；支持 sub plan 嵌套，
-也可经 `do` 的 `share_windows` 共享给子 thread。
+也可经 `talk(target=自己)` fork 子线程时的 `share_windows` 共享给子 thread。
 
 在 plan_window 上用 `exec(window_id="<plan_window_id>", method="X", args={…})` 调：
 

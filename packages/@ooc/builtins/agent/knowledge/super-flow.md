@@ -38,12 +38,13 @@ activates_on:
 
 | trigger | 含义 |
 |---|---|
-| `object::<type>` | 该 type 的 window open 时命中（`object::root` 每个 thread 都有 = 任何时候）|
-| `method::<window_type>::<method>` | 在该 window 上开同名 method form 时命中（如 `method::_builtin/agent::talk`）|
+| `object::<type>` | 该 type 的 window open 时命中（`object::root` 每个 thread 都有 = 任何时候；`object::talk` 有对话窗时；`object::plan` 有计划窗时…）|
+| `object_id::<id>` | 特定 objectId 的对象出现在 context 时命中（盯某个具体 peer / 成员）|
 | `super` | 仅在 super flow 命中 |
 
 `show_description` 命中露摘要，`show_content` 命中露全文；多 trigger 取 max。
-**自检**：写完想一下"下次哪个 window / method 出现时我希望想起这条？"填进 activates_on，否则白写。
+**自检**：写完想一下"下次哪类 window 出现时我希望想起这条？"挑一个会真正出现在 context 里的
+`object::<type>` 填进 activates_on，否则白写。
 
 ## 沉淀身份/身体进 canonical：feat 分支 PR
 

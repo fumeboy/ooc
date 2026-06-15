@@ -10,7 +10,7 @@
  */
 
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
-import type { TalkWindow } from "../_shared/types.js";
+import type { TalkWindowView } from "./types.js";
 
 export function generateMessageId(): string {
   return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -68,7 +68,7 @@ export function findThreadInScope(self: ThreadContext, targetId: string): Thread
 }
 
 /** archive fork 子线程窗对应的子线程（close / onClose 复用）。 */
-export function archiveForkChild(thread: ThreadContext | undefined, window: TalkWindow): void {
+export function archiveForkChild(thread: ThreadContext | undefined, window: TalkWindowView): void {
   if (!thread) return;
   const targetThreadId = window.targetThreadId;
   if (!targetThreadId) return;

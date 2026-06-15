@@ -36,15 +36,3 @@ export interface Data {
   /** 父 plan 中将本 plan 作为 sub 的那一 step id；与 parentPlanWindowId 配对。 */
   parentStepId?: string;
 }
-
-/**
- * 过渡兼容别名（deferred / Wave3）：visible 前端组件本轮**保留不动**，它消费的是
- * 「信封 + Data」的完整窗对象（持 id / title / parentPlanWindowId / steps）。在 core 反推
- * 把 visible 切到 `OocObjectInstance` 之前，此别名让前端继续编译；不属业务 Data，勿在后端使用。
- */
-export type PlanWindow = Data & {
-  id: string;
-  class: "plan";
-  parentWindowId?: string;
-  createdAt?: number;
-};

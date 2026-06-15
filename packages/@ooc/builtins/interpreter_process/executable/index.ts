@@ -40,7 +40,7 @@ const execMethod: ObjectMethod<Data> = {
     if (!(lang && code)) {
       return "[interpreter_process.exec] 缺少执行参数。请重新 exec(window_id=\"<interpreter_process_id>\", method=\"exec\", args={ language: \"ts\"|\"js\", code: \"...\" })。";
     }
-    const record = await runInterpreterExec(thread, lang, code);
+    const record = await runInterpreterExec(thread, lang, code, ctx.runtime);
     self.history.push(record);
     await ctx.reportDataEdit?.();
     return undefined;

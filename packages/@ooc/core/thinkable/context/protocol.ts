@@ -15,14 +15,28 @@ import { builtinRegistry } from "../../executable/windows/index.js";
 import { computeActivations, loadKnowledgeIndexFromDir } from "../knowledge/index.js";
 import type { KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import { dirname, join } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
 import type { ThreadContext } from "./index.js";
 
-/** root builtin 包的 knowledge 目录（随框架包发布，按包名解析，与 world 无关）。 */
-function resolveRootKnowledgeDir(): string | undefined {
+/**
+ * 全部 builtin 包的 knowledge 目录（随框架包发布，与 world 无关）。
+ * 每个 builtin class/object 都可携带自己的 knowledge/ (agency 知识在 agent、飞书知识在
+ * feishu_app、基类协议在 root)；遍历 packages/@ooc/builtins 各包全量收集，新增包的知识
+ * 自动加载、无需改本 loader。按各篇 activates_on 逐 thread 匹配。
+ */
+function resolveBuiltinKnowledgeDirs(): string[] {
   try {
-    return join(dirname(Bun.resolveSync("@ooc/builtins/root/package.json", process.cwd())), "knowledge");
+    const builtinsRoot = dirname(
+      dirname(Bun.resolveSync("@ooc/builtins/root/package.json", process.cwd())),
+    );
+    const dirs: string[] = [];
+    for (const name of readdirSync(builtinsRoot)) {
+      const kdir = join(builtinsRoot, name, "knowledge");
+      if (existsSync(kdir)) dirs.push(kdir);
+    }
+    return dirs;
   } catch {
-    return undefined;
+    return [];
   }
 }
 
@@ -55,10 +69,12 @@ function makeKnowledgeWindow(
 let rootKnowledgeIndex: KnowledgeIndex | undefined;
 async function loadRootKnowledgeIndex(): Promise<KnowledgeIndex> {
   if (rootKnowledgeIndex) return rootKnowledgeIndex;
-  const dir = resolveRootKnowledgeDir();
-  rootKnowledgeIndex = dir
-    ? await loadKnowledgeIndexFromDir(dir)
-    : { byPath: new Map() };
+  const byPath: KnowledgeIndex["byPath"] = new Map();
+  for (const dir of resolveBuiltinKnowledgeDirs()) {
+    const idx = await loadKnowledgeIndexFromDir(dir);
+    for (const [k, v] of idx.byPath) byPath.set(k, v);
+  }
+  rootKnowledgeIndex = { byPath };
   return rootKnowledgeIndex;
 }
 

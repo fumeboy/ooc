@@ -13,7 +13,7 @@
 
 import { readFile } from "node:fs/promises";
 
-import type { FileWindow } from "@ooc/core/executable/windows/_shared/types";
+import type { FileData } from "@ooc/core/executable/windows/_shared/types";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 
 /**
@@ -22,7 +22,7 @@ import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
  * 字段语义：
  * - previousContent: 上一 loop 该 file 的内容（added 时为 ""；二进制 / 过大时也为 ""）
  * - currentContent:  当前 loop 该 file 的内容（removed 时为 ""；二进制 / 过大时也为 ""）
- * - path:            file_window.path（绝对或相对工作目录）
+ * - path:            file_window.data.path（绝对或相对工作目录）
  * - isBinary:        true → 文件含 \0 byte，按二进制处理，两侧 content 都为 ""
  * - tooLarge:        true → 文件 > 200KB，按过大处理，两侧 content 都为 ""
  *
@@ -98,7 +98,7 @@ export type WindowSnapshotEntry = {
 
 /**
  * 对 file_window 计算 fileDiff：
- * - currentContent 从 fs.readFile(window.path) 读（FileWindow 本身不持有 content；与 renderFileWindow 同款）
+ * - currentContent 从 fs.readFile(window.data.path) 读（FileWindow 本身不持有 content；与 renderFileWindow 同款）
  * - previousContent 从 prev snapshot 同 id entry 的 fileDiff.currentContent 拿（首次出现 → ""）
  * - 二进制（含 \0）或过大（>200KB）时两侧 content 都设 ""，isBinary / tooLarge 字段标记
  * - 读失败（文件不存在 / 权限）→ console.warn + currentContent="" 退化，不抛错
@@ -107,10 +107,10 @@ export type WindowSnapshotEntry = {
  * 上一 loop 时刻的内容；时间机器的核心就是 prev = "上一 loop 那一刻"）。
  */
 async function computeFileDiff(
-  w: FileWindow,
+  w: OocObjectInstance<FileData>,
   previousSnapshot: WindowSnapshotEntry[] | undefined,
 ): Promise<FileDiffData> {
-  const path = w.path;
+  const path = w.data.path;
   const previousContent =
     previousSnapshot?.find((s) => s.id === w.id)?.fileDiff?.currentContent ?? "";
 
@@ -173,7 +173,7 @@ export async function buildWindowsSnapshot(
       entry.compressLevel = compressLevel;
     }
     if (w.class === "file") {
-      entry.fileDiff = await computeFileDiff(w as unknown as FileWindow, previousSnapshot);
+      entry.fileDiff = await computeFileDiff(w as unknown as OocObjectInstance<FileData>, previousSnapshot);
     }
     out.push(entry);
   }

@@ -47,14 +47,3 @@ export interface Data {
   /** 末次 refresh 时间（毫秒）；用于 render 显示陈旧度。 */
   lastRefreshAtMs?: number;
 }
-
-/**
- * @deprecated 过渡兼容别名（visible 层仍按旧「窗对象」消费）。
- * 新后端契约用 Data + runtime 信封（OocObjectInstance）。
- */
-export type FeishuChatWindow = Data & {
-  id?: string;
-  class?: "feishu_chat";
-  title?: string;
-  status?: "open" | "closed";
-};

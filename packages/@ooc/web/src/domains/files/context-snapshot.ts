@@ -28,224 +28,180 @@
  * - 字段名直接对齐后端类型；前端不需要"猜"标签语义
  */
 
-/** 后端 src/executable/windows/_shared/types.ts ContextWindow 在前端的最小镜像。 */
-type _ContextWindowUnion =
-  | { id: string; class: "root"; title: string; status?: string; createdAt?: number }
+/**
+ * 后端 OocObjectInstance（runtime/ooc-class.ts）在前端的最小镜像 —— **信封 + data + win 三分**。
+ *
+ * 信封字段（id / class / title / status / createdAt / parentObjectId）由 runtime 管理，
+ * 顶层平铺；业务数据归 `.data`（按 class 区分形态）；投影态归 `.win`。前端按 `.class` narrow，
+ * 业务字段读 `.data.xxx`。
+ */
+type _ContextWindowData =
+  | { class: "root"; data: Record<string, never> }
   | {
-      id: string;
       class: "method_exec";
-      parentWindowId: string;
-      title: string;
-      status: "open" | "executing" | "success" | "failed";
-      method: string;
-      description?: string;
-      accumulatedArgs?: Record<string, unknown>;
-      intentPaths?: string[];
-      loadedKnowledgePaths?: string[];
-      methodKnowledgePaths?: string[];
-      result?: string;
-      createdAt?: number;
-      schema?: { args: Record<string, {
-        type: "string" | "number" | "boolean" | "array" | "object" | "any";
-        required?: boolean;
-        default?: unknown;
+      data: {
+        method: string;
         description?: string;
-        enum?: Array<string | number | boolean>;
-      }> };
-      fill?: Record<string, {
-        status: "missing" | "provided" | "invalid";
-        value?: unknown;
-        error?: string;
-        source: "initial" | "refine" | "default";
-        refinedAt?: number;
-      }>;
+        accumulatedArgs?: Record<string, unknown>;
+        intentPaths?: string[];
+        loadedKnowledgePaths?: string[];
+        methodKnowledgePaths?: string[];
+        result?: string;
+        schema?: { args: Record<string, {
+          type: "string" | "number" | "boolean" | "array" | "object" | "any";
+          required?: boolean;
+          default?: unknown;
+          description?: string;
+          enum?: Array<string | number | boolean>;
+        }> };
+        fill?: Record<string, {
+          status: "missing" | "provided" | "invalid";
+          value?: unknown;
+          error?: string;
+          source: "initial" | "refine" | "default";
+          refinedAt?: number;
+        }>;
+      };
     }
-  | {
-      id: string;
-      class: "do";
-      parentWindowId?: string;
-      title: string;
-      status: "running" | "archived";
-      targetThreadId: string;
-      isCreatorWindow?: boolean;
-      createdAt?: number;
-    }
-  | {
-      id: string;
-      class: "todo";
-      parentWindowId?: string;
-      title: string;
-      status: "open" | "done";
-      content: string;
-      activatesOn?: string[];
-      createdAt?: number;
-    }
+  | { class: "do"; data: { targetThreadId: string; isCreatorWindow?: boolean } }
+  | { class: "todo"; data: { content: string; activatesOn?: string[]; status?: "open" | "done" } }
   | {
       // 会话窗三 class 同形（后端 talk/types.ts + thread/types.ts + reflect_request/types.ts）：
       // - talk：other-view（与对端 peer/sub thread 的对话）
       // - thread：self-view（普通 flow 里 thread 与其 creator 的对话；creator 窗）
       // - reflect_request：super flow 的 self-view（反思自视，额外挂沉淀 method）
       // 字段一致；前端按需用 isTalkLikeWindowClass 谓词同时认这三个 class。
-      id: string;
       class: "talk" | "thread" | "reflect_request";
-      parentWindowId?: string;
-      title: string;
-      status: "open" | "closed";
-      target: string;
-      conversationId: string;
-      isCreatorWindow?: boolean;
-      targetThreadId?: string;
-      isForkWindow?: boolean;
-      createdAt?: number;
-    }
-  | {
-      id: string;
-      class: "terminal_process" | "interpreter_process";
-      parentWindowId?: string;
-      title: string;
-      status: "open" | "closed";
-      history: Array<{
-        execId: string;
-        language: "shell" | "ts" | "js";
-        code?: string;
-        output: string;
-        ok: boolean;
-        startedAt: number;
-      }>;
-      createdAt?: number;
-    }
-  | {
-      id: string;
-      class: "file";
-      parentWindowId?: string;
-      title: string;
-      status: "open" | "closed";
-      path: string;
-      lines?: [number, number];
-      columns?: [number, number];
-      createdAt?: number;
-    }
-  | {
-      id: string;
-      class: "knowledge";
-      parentWindowId?: string;
-      title: string;
-      status: "open" | "closed";
-      path: string;
-      /** 来源：explicit=LLM 主动 pin；protocol=KNOWLEDGE/form 派生；activator=stone 知识命中 */
-      source?: "explicit" | "protocol" | "activator";
-      /** 合成 window 直接携带正文；explicit 来源时可能为空（render 端从 loader 取） */
-      body?: string;
-      /** activator 来源时区分 full / summary */
-      presentation?: "full" | "summary";
-      /** activator 来源时的描述（来自 frontmatter.description） */
-      description?: string;
-      createdAt?: number;
-    }
-  | {
-      id: string;
-      class: "search";
-      parentWindowId?: string;
-      title: string;
-      status: "open" | "closed";
-      kind: "glob" | "grep";
-      query: string;
-      matches: Array<{ index: number; path: string; line?: number; snippet?: string }>;
-      truncated: boolean;
-      searchRoot?: string;
-      createdAt?: number;
-    }
-  | {
-      id: string;
-      class: "skill_index";
-      parentWindowId?: string;
-      title: string;
-      status: "active";
-      skills: Array<{
-        name: string;
-        description: string;
-        skillFilePath: string;
-        scope: "branch" | "object" | "external";
-      }>;
-      createdAt?: number;
-    }
-  | {
-      id: string;
-      class: "feishu_chat";
-      parentWindowId?: string;
-      title: string;
-      status: "open" | "closed";
-      chatId: string;
-      chatName: string;
-      chatType?: "group" | "p2p" | "topic";
-      mode: "tail" | "search" | "thread";
-      tailCount?: number;
-      searchQuery?: string;
-      threadAnchorMessageId?: string;
-      lastRefreshAtMs?: number;
-      buffer: Array<{
-        messageId: string;
-        sender: string;
-        senderKind?: "user" | "bot" | "system";
-        createTimeMs: number;
-        text: string;
-        replyToMessageId?: string;
-      }>;
-      createdAt?: number;
-    }
-  | {
-      id: string;
-      class: "feishu_doc";
-      parentWindowId?: string;
-      title: string;
-      status: "open" | "closed";
-      docToken: string;
-      docKind: "doc" | "docx" | "sheet" | "base" | "wiki" | "drive_md";
-      docTitle: string;
-      content: {
-        format: "markdown" | "blocks";
-        body: string;
-        blocks?: Array<{ blockId: string; blockType?: string; text?: string; parentBlockId?: string }>;
+      data: {
+        target: string;
+        conversationId: string;
+        isCreatorWindow?: boolean;
+        targetThreadId?: string;
+        isForkWindow?: boolean;
       };
-      versionId?: string;
-      mode: "read" | "edit";
-      lastFetchedAtMs?: number;
-      createdAt?: number;
+    }
+  | {
+      class: "terminal_process" | "interpreter_process";
+      data: {
+        history: Array<{
+          execId: string;
+          language: "shell" | "ts" | "js";
+          code?: string;
+          output: string;
+          ok: boolean;
+          startedAt: number;
+        }>;
+      };
+    }
+  | { class: "file"; data: { path: string }; win?: { lines?: [number, number]; columns?: [number, number] } }
+  | {
+      class: "knowledge";
+      data: {
+        path: string;
+        /** 来源：explicit=LLM 主动 pin；protocol=KNOWLEDGE/form 派生；activator=stone 知识命中 */
+        source?: "explicit" | "protocol" | "activator" | "relation";
+        /** 合成 window 直接携带正文；explicit 来源时可能为空（render 端从 loader 取） */
+        body?: string;
+        /** activator 来源时区分 full / summary */
+        presentation?: "full" | "summary";
+        /** activator 来源时的描述（来自 frontmatter.description） */
+        description?: string;
+      };
+    }
+  | {
+      class: "search";
+      data: {
+        kind: "glob" | "grep";
+        query: string;
+        matches: Array<{ index: number; path: string; line?: number; snippet?: string }>;
+        truncated: boolean;
+        searchRoot?: string;
+      };
+    }
+  | {
+      class: "skill_index";
+      data: {
+        skills: Array<{
+          name: string;
+          description: string;
+          skillFilePath: string;
+          scope: "branch" | "object" | "external";
+        }>;
+      };
+    }
+  | {
+      class: "feishu_chat";
+      data: {
+        chatId: string;
+        chatName: string;
+        chatType?: "group" | "p2p" | "topic";
+        mode: "tail" | "search" | "thread";
+        tailCount?: number;
+        searchQuery?: string;
+        threadAnchorMessageId?: string;
+        lastRefreshAtMs?: number;
+        buffer: Array<{
+          messageId: string;
+          sender: string;
+          senderKind?: "user" | "bot" | "system";
+          createTimeMs: number;
+          text: string;
+          replyToMessageId?: string;
+        }>;
+      };
+    }
+  | {
+      class: "feishu_doc";
+      data: {
+        docToken: string;
+        docKind: "doc" | "docx" | "sheet" | "base" | "wiki" | "drive_md";
+        docTitle: string;
+        content: {
+          format: "markdown" | "blocks";
+          body: string;
+          blocks?: Array<{ blockId: string; blockType?: string; text?: string; parentBlockId?: string }>;
+        };
+        versionId?: string;
+        mode: "read" | "edit";
+        lastFetchedAtMs?: number;
+      };
     }
   | {
       /**
        * Plan window:
-       * - 由 src/executable/windows/plan/types.ts 的 PlanWindow 在前端做最小镜像
+       * - 业务数据（title / steps / description / status / parentPlanWindowId / parentStepId）归 `.data`
        * - 支持 sub plan 嵌套：parentPlanWindowId + parentStepId 反向链；step.subPlanWindowId 正向链
        */
-      id: string;
       class: "plan";
-      parentWindowId?: string;
-      title: string;
-      status: "active" | "done" | "archived";
-      description?: string;
-      steps: Array<{
-        id: string;
-        text: string;
-        status: "pending" | "in-progress" | "done" | "blocked";
-        subPlanWindowId?: string;
-      }>;
-      parentPlanWindowId?: string;
-      parentStepId?: string;
-      createdAt?: number;
+      data: {
+        title: string;
+        status: "active" | "done" | "archived";
+        description?: string;
+        steps: Array<{
+          id: string;
+          text: string;
+          status: "pending" | "in-progress" | "done" | "blocked";
+          subPlanWindowId?: string;
+        }>;
+        parentPlanWindowId?: string;
+        parentStepId?: string;
+      };
     };
 
-/**
- * ContextWindow 增加可选 enrichment 字段 effectiveVisibleType。
- *
- * 当 window.class 自身不在前端可渲染的 HANDLED_WINDOW_TYPES 集合中时，后端会沿
- * parentClass 继承链回退，把首个可渲染的 ancestor type 填到 effectiveVisibleType。
- * 前端渲染 switch 用 effectiveVisibleType ?? type 作为渲染 key。
- *
- * 增加 provenance / relevance / boundFormId
- * enrichment 字段，用于 budget 管理、intent 驱动的自动卸载和调试 trace。
- */
-export type ContextWindow = _ContextWindowUnion & {
+/** 所有 ContextWindow 共享的信封 + enrichment 字段。 */
+interface _ContextWindowEnvelope {
+  id: string;
+  title: string;
+  status?: string;
+  createdAt?: number;
+  /** 父对象 id（后端 OocObjectInstance.parentObjectId）；旧数据可能写 parentWindowId。 */
+  parentObjectId?: string;
+  parentWindowId?: string;
+  /** 投影态（与 data 分离）；多数 class 无投影态。 */
+  win?: unknown;
+  /**
+   * 沿 parentClass 继承链回退后首个可渲染的 ancestor type；渲染 key 用 effectiveVisibleType ?? class。
+   */
   effectiveVisibleType?: string;
   provenance?: {
     kind: "explicit" | "derived" | "system" | "related";
@@ -263,7 +219,18 @@ export type ContextWindow = _ContextWindowUnion & {
     signalCount: number;
   };
   boundFormId?: string;
-};
+}
+
+/**
+ * ContextWindow —— 信封 + data（+ win）。镜像后端 `OocObjectInstance`。
+ * 按 `.class` narrow（discriminant 在 `_ContextWindowData`），业务字段读 `.data.xxx`。
+ */
+export type ContextWindow = _ContextWindowEnvelope & _ContextWindowData;
+
+/** 取 window 的父对象 id（兼容旧 parentWindowId 字段）。 */
+export function windowParentId(window: ContextWindow): string | undefined {
+  return window.parentObjectId ?? window.parentWindowId;
+}
 
 /**
  * 会话窗谓词（镜像后端 isTalkLikeClass）—— talk / thread / reflect_request 三者同形。
@@ -383,48 +350,48 @@ function windowBadge(window: ContextWindow): string {
     case "feishu_doc":   return "FSDOC";
     case "plan": {
       // plan 分支：badge 携带 step count 摘要(如 "3/5 done")，方便在左树一眼看进度。
-      const total = window.steps.length;
-      const doneN = window.steps.filter((s) => s.status === "done").length;
+      const total = window.data.steps.length;
+      const doneN = window.data.steps.filter((s) => s.status === "done").length;
       return `PLAN ${doneN}/${total}`;
     }
     // ContextWindow union 加宽，穷尽性不再封闭：未知类型给兜底 badge。
     default:
-      return String((window as { type: string }).type).toUpperCase().slice(0, 6);
+      return String((window as { class: string }).class).toUpperCase().slice(0, 6);
   }
 }
 
 function windowSummary(window: ContextWindow): string {
   switch (window.class) {
     case "method_exec":
-      return `${window.method} (${window.status})`;
+      return `${window.data.method} (${window.status})`;
     case "do":
-      return `→ ${window.targetThreadId}${window.isCreatorWindow ? " · creator" : ""}`;
+      return `→ ${window.data.targetThreadId}${window.data.isCreatorWindow ? " · creator" : ""}`;
     case "todo":
-      return previewText(window.content);
+      return previewText(window.data.content);
     case "talk":
     case "thread":
     case "reflect_request":
-      return `→ ${window.target}`;
+      return `→ ${window.data.target}`;
     case "terminal_process":
     case "interpreter_process":
-      return `${window.history.length} exec${window.history.length === 1 ? "" : "s"}`;
+      return `${window.data.history.length} exec${window.data.history.length === 1 ? "" : "s"}`;
     case "file":
-      return window.path + (window.lines ? ` [${window.lines.join("-")}]` : "");
+      return window.data.path + (window.win?.lines ? ` [${window.win.lines.join("-")}]` : "");
     case "knowledge":
-      return `${window.source ?? "explicit"} · ${window.path}` + (window.presentation ? ` · ${window.presentation}` : "");
+      return `${window.data.source ?? "explicit"} · ${window.data.path}` + (window.data.presentation ? ` · ${window.data.presentation}` : "");
     case "search":
-      return `${window.kind} · ${window.query} · ${window.matches.length}${window.truncated ? "+" : ""} hit${window.matches.length === 1 ? "" : "s"}`;
+      return `${window.data.kind} · ${window.data.query} · ${window.data.matches.length}${window.data.truncated ? "+" : ""} hit${window.data.matches.length === 1 ? "" : "s"}`;
     case "root":
       return "thread root";
     case "skill_index":
-      return `${window.skills.length} skill${window.skills.length === 1 ? "" : "s"}`;
+      return `${window.data.skills.length} skill${window.data.skills.length === 1 ? "" : "s"}`;
     case "feishu_chat":
-      return `${window.chatName} · ${window.mode} · ${window.buffer.length} msg${window.buffer.length === 1 ? "" : "s"}`;
+      return `${window.data.chatName} · ${window.data.mode} · ${window.data.buffer.length} msg${window.data.buffer.length === 1 ? "" : "s"}`;
     case "feishu_doc":
-      return `${window.docKind} · ${window.docTitle}`;
+      return `${window.data.docKind} · ${window.data.docTitle}`;
     case "plan":
       // 一行摘要：plan title；description 留给详情面板渲染避免左树太宽。
-      return window.title;
+      return window.data.title || window.title;
     // ContextWindow union 加宽，穷尽性不再封闭：未知类型回退到 title。
     default:
       return (window as { title?: string }).title ?? "";
@@ -435,49 +402,51 @@ function windowCharCount(window: ContextWindow): number {
   let n = window.title.length;
   switch (window.class) {
     case "method_exec":
-      n += window.method.length;
-      n += jsonChars(window.accumulatedArgs ?? {});
-      n += (window.result ?? "").length;
+      n += window.data.method.length;
+      n += jsonChars(window.data.accumulatedArgs ?? {});
+      n += (window.data.result ?? "").length;
       break;
     case "do":
-      n += window.targetThreadId.length;
+      n += window.data.targetThreadId.length;
       break;
     case "todo":
-      n += window.content.length;
-      n += (window.activatesOn ?? []).join(",").length;
+      n += window.data.content.length;
+      n += (window.data.activatesOn ?? []).join(",").length;
       break;
     case "talk":
-      n += window.target.length;
+    case "thread":
+    case "reflect_request":
+      n += window.data.target.length;
       break;
     case "terminal_process":
     case "interpreter_process":
-      for (const ex of window.history) n += (ex.code ?? "").length + ex.output.length;
+      for (const ex of window.data.history) n += (ex.code ?? "").length + ex.output.length;
       break;
     case "file":
-      n += window.path.length;
+      n += window.data.path.length;
       break;
     case "knowledge":
-      n += window.path.length + (window.body?.length ?? 0) + (window.description?.length ?? 0);
+      n += window.data.path.length + (window.data.body?.length ?? 0) + (window.data.description?.length ?? 0);
       break;
     case "search":
-      n += window.query.length;
-      for (const m of window.matches) n += m.path.length + (m.snippet?.length ?? 0);
+      n += window.data.query.length;
+      for (const m of window.data.matches) n += m.path.length + (m.snippet?.length ?? 0);
       break;
     case "root":
       break;
     case "skill_index":
-      for (const s of window.skills) n += s.name.length + s.description.length;
+      for (const s of window.data.skills) n += s.name.length + s.description.length;
       break;
     case "feishu_chat":
-      for (const m of window.buffer) n += m.text.length + m.sender.length;
+      for (const m of window.data.buffer) n += m.text.length + m.sender.length;
       break;
     case "feishu_doc":
-      n += window.content.body.length;
+      n += window.data.content.body.length;
       break;
     case "plan":
       // title 已在外层兜底；这里加 description + 所有 step text。
-      n += (window.description ?? "").length;
-      for (const s of window.steps) n += s.text.length;
+      n += (window.data.description ?? "").length;
+      for (const s of window.data.steps) n += s.text.length;
       break;
   }
   return n;
@@ -499,7 +468,7 @@ function filterMessagesForDoWindow(
   inbox: ThreadMessage[],
   outbox: ThreadMessage[],
 ): Array<{ message: ThreadMessage; channel: "inbox" | "outbox" }> {
-  const target = window.targetThreadId;
+  const target = window.data.targetThreadId;
   const seen = new Set<string>();
   const acc: Array<{ message: ThreadMessage; channel: "inbox" | "outbox" }> = [];
   const collect = (channel: "inbox" | "outbox", list: ThreadMessage[]) => {
@@ -608,15 +577,15 @@ function buildWindowNode(
 
   // 进程 window 把 history 当作子节点展开
   if (window.class === "terminal_process" || window.class === "interpreter_process") {
-    window.history.forEach((exec, index) => {
+    window.data.history.forEach((exec, index) => {
       children.push(buildExecNode(window.id, depth + 1, exec, index));
     });
   }
 
-  // 找出 parentWindowId === self.id 的 sub-window
+  // 找出 parent === self.id 的 sub-window
   for (const sub of allWindows) {
     if (sub.class === "root") continue;
-    const parentId = sub.parentWindowId;
+    const parentId = windowParentId(sub);
     if (parentId === window.id) {
       children.push(buildWindowNode(sub, allWindows, inbox, outbox, depth + 1));
     }
@@ -667,7 +636,7 @@ function buildContextWindowsSection(
   // 顶层 = 非 root 且 parentWindowId 缺省 / 等于 "root"；root 自身视为顶层
   const topLevel = all.filter((w) => {
     if (w.class === "root") return true;
-    const pid = w.parentWindowId;
+    const pid = windowParentId(w);
     return !pid || pid === "root";
   });
 

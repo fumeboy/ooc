@@ -40,11 +40,11 @@ import { notifyThreadActivated } from "../../../observable/index.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "../_shared/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
-import { creatorWindowIdOf, type TalkWindow } from "../_shared/types.js";
-import type { TalkData } from "./types.js";
+import { creatorWindowIdOf } from "../_shared/types.js";
+import type { TalkData, TalkWindowView } from "./types.js";
 
 export interface TalkDeliveryInput {
-  caller: { thread: ThreadContext; talkWindow: TalkWindow };
+  caller: { thread: ThreadContext; talkWindow: TalkWindowView };
   content: string;
   /** 消息来源：talk = LLM 通过 talk_window.say 发；user = 控制面代用户发。 */
   source: "talk" | "user";

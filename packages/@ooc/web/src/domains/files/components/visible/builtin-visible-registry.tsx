@@ -32,17 +32,23 @@ import FeishuDocWindowDetail from "./FeishuDocWindowDetail";
 import DoWindowDetail from "./DoWindowDetail";
 import TalkWindowDetail from "./TalkWindowDetail";
 
-/** builtin window type → 视觉组件。组件约定 `({ window }) => JSX`。 */
+/**
+ * builtin window type → 视觉组件。组件约定 `({ window }) => JSX`。
+ *
+ * builtin `visible/index` 组件签名是 `{ window: OocObjectInstance<Data, Win> }`（信封 + data + win）；
+ * web `ContextWindow` 是同形镜像，但各 class 的 `data` 形态精确到具体 class，与组件期望的具体 `Data`
+ * 不互相 assignable，故经 `unknown` 统一收口为 `ComponentType<{ window: ContextWindow }>`。
+ */
 export const BUILTIN_VISIBLE: Record<string, ComponentType<{ window: ContextWindow }>> = {
-  file: FileWindowDetail as ComponentType<{ window: ContextWindow }>,
-  knowledge: KnowledgeWindowDetail as ComponentType<{ window: ContextWindow }>,
-  todo: TodoWindowDetail as ComponentType<{ window: ContextWindow }>,
-  search: SearchWindowDetail as ComponentType<{ window: ContextWindow }>,
-  skill_index: SkillIndexWindowDetail as ComponentType<{ window: ContextWindow }>,
-  plan: PlanWindowDetail as ComponentType<{ window: ContextWindow }>,
-  terminal_process: TerminalProcessWindowDetail as ComponentType<{ window: ContextWindow }>,
-  interpreter_process: InterpreterProcessWindowDetail as ComponentType<{ window: ContextWindow }>,
-  root: RootWindowDetail as ComponentType<{ window: ContextWindow }>,
+  file: FileWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
+  knowledge: KnowledgeWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
+  todo: TodoWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
+  search: SearchWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
+  skill_index: SkillIndexWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
+  plan: PlanWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
+  terminal_process: TerminalProcessWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
+  interpreter_process: InterpreterProcessWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
+  root: RootWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   method_exec: MethodExecWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   feishu_chat: FeishuChatWindowDetail,
   feishu_doc: FeishuDocWindowDetail,

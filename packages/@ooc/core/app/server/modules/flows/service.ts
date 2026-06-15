@@ -21,8 +21,8 @@ import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type ContextWindow,
-  type TalkWindow,
 } from "@ooc/core/executable/windows/_shared/types";
+import type { TalkWindowView } from "@ooc/core/executable/windows/talk/types";
 import {
   SUPER_SESSION_ID,
   isSuperSessionId,
@@ -48,13 +48,13 @@ const USER_OBJECT_ID = "user";
  *
  * 返回：
  * - instance：挂进 thread.contextWindows 的 OocObjectInstance（信封 + data=TalkData）。
- * - view    ：传给 deliverTalkMessage 的扁平 TalkWindow 视图（delivery 只读 id/target/targetThreadId/
+ * - view    ：传给 deliverTalkMessage 的扁平 TalkWindowView 视图（delivery 只读 id/target/targetThreadId/
  *             isCreatorWindow，并回填 targetThreadId——回填后同步回 instance.data）。
  */
 function buildUserTalkWindow(
   target: string,
   title: string,
-): { id: string; instance: OocObjectInstance; view: TalkWindow } {
+): { id: string; instance: OocObjectInstance; view: TalkWindowView } {
   const id = generateWindowId("talk");
   const data: TalkData = { target, conversationId: id };
   const instance: OocObjectInstance = {
@@ -66,12 +66,12 @@ function buildUserTalkWindow(
     createdAt: Date.now(),
     data,
   };
-  const view = { id, class: "talk", target, conversationId: id } as TalkWindow;
+  const view = { id, class: "talk", target, conversationId: id } as TalkWindowView;
   return { id, instance, view };
 }
 
-/** 把扁平 TalkWindow 视图（peer 派送可能回填 targetThreadId）的字段同步回实例 data。 */
-function syncTalkViewToInstance(instance: OocObjectInstance, view: TalkWindow): void {
+/** 把扁平 TalkWindowView 视图（peer 派送可能回填 targetThreadId）的字段同步回实例 data。 */
+function syncTalkViewToInstance(instance: OocObjectInstance, view: TalkWindowView): void {
   const data = instance.data as TalkData;
   if (view.targetThreadId) data.targetThreadId = view.targetThreadId;
 }
@@ -186,7 +186,7 @@ function extractShareInfo(_windows: OocObjectInstance[] | undefined): ThreadShar
 /**
  * 从 ThreadContext 抽取 talkPeers 摘要。
  *
- * 来源：contextWindows[type==="talk"]；每个 TalkWindow 对应一个 talkPeer。
+ * 来源：contextWindows[type==="talk"]；每个 TalkWindowView 对应一个 talkPeer。
  * - targetObjectId ← talk.target
  * - targetThreadId ← talk.targetThreadId（首条 say 之前可能 undefined）
  * - windowId      ← talk_window.id 自身
@@ -545,7 +545,7 @@ export function createFlowsService(deps: {
           target,
           targetThreadId: existingData.targetThreadId,
           conversationId: existingData.conversationId,
-        } as TalkWindow;
+        } as TalkWindowView;
         // 无 initialMessage：纯幂等创建窗口语义，无消息要送，早返回。
         if (!initialMessage || !initialMessage.trim()) {
           return {
@@ -865,7 +865,7 @@ export function createFlowsService(deps: {
         target: targetData.target,
         targetThreadId: targetData.targetThreadId,
         conversationId: targetData.conversationId,
-      } as TalkWindow;
+      } as TalkWindowView;
 
       const delivered = await deliverTalkMessage({
         caller: { thread: userThread, talkWindow: targetView },

@@ -12,26 +12,42 @@ import type {
   ExecutableContext,
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import type { Data } from "../types.js";
 
-/** thread.contextWindows 里的 self-view（creator）窗——会话窗形（含 target / say）。 */
-type CreatorWindow = ContextWindow & {
+/**
+ * creator（self-view）窗的归一化视图。
+ *
+ * Wave 4 对象模型：contextWindows 元素是 `OocObjectInstance`（信封 + data 分离）。
+ * 会话业务字段（isCreatorWindow / target / targetThreadId / isForkWindow）落 `inst.data`
+ * （=TalkData），`id` 落信封。本视图把两侧拍平给 end 的 auto-reply / 持久化通知用。
+ */
+type CreatorWindow = {
+  id: string;
   target?: string;
   targetThreadId?: string;
   isForkWindow?: boolean;
 };
 
 function findCreatorWindow(ctx: ExecutableContext): CreatorWindow | undefined {
-  const list = (ctx.thread?.contextWindows ?? []) as ContextWindow[];
-  for (const w of list) {
-    // creator 窗（self-view）一律恒有 isCreatorWindow=true，且每 thread 唯一。它的 class 随 POV 投影：
-    // 普通 flow = thread / super flow = reflect_request / 历史 fork-creator 也走同一 flag——故按 flag
-    // 识别（class-agnostic + forward-compatible），不再枚举 class 字面量。
-    if ((w as { isCreatorWindow?: boolean }).isCreatorWindow === true) {
-      // self-view 恒是会话窗形（含 target/say）。
-      return w as CreatorWindow;
+  const list = ctx.thread?.contextWindows ?? [];
+  for (const inst of list) {
+    // creator 窗（self-view）一律恒有 data.isCreatorWindow=true，且每 thread 唯一。它的 class 随
+    // POV 投影（普通 flow=thread / super flow=reflect_request / fork-creator 同 flag）——故按 flag
+    // 识别（class-agnostic + forward-compatible），不枚举 class 字面量。会话字段从 inst.data 读。
+    const data = (inst.data ?? {}) as {
+      isCreatorWindow?: boolean;
+      target?: string;
+      targetThreadId?: string;
+      isForkWindow?: boolean;
+    };
+    if (data.isCreatorWindow === true) {
+      return {
+        id: inst.id,
+        target: data.target,
+        targetThreadId: data.targetThreadId,
+        isForkWindow: data.isForkWindow,
+      };
     }
   }
   return undefined;
@@ -40,10 +56,9 @@ function findCreatorWindow(ctx: ExecutableContext): CreatorWindow | undefined {
 /**
  * end({result}) 自动经 creator 会话窗 say 回报（fork 走内存树、peer 走磁盘派送，由 say 自分流）。
  *
- * deferred（say 归位待 talk 迁移）：thread builtin 已把 say 方法体整体推迟（其 executable.methods
- * 留空，sayMethod 不再存在）——say 深依赖 core 的 talk 渲染/delivery（旧渲染上下文签名）。故本轮
- * auto-reply 暂以 thread 事件登记意图占位；talk 迁新契约后改调 thread.executable 的 say 把 result
- * 真正派到 creator 会话窗对端。
+ * 派送经 `ctx.runtime.say(creatorWindowId, result)`——委托 talk object method `say`，
+ * 由 creator 窗自身 TalkData 分流 peer 磁盘 / fork 内存派送。runtime 缺席（无 say 通道）或
+ * 派送失败时退化为 thread 事件登记意图，不阻断 end 主流程。
  */
 async function autoReplyTalk(
   ctx: ExecutableContext,
@@ -51,10 +66,23 @@ async function autoReplyTalk(
   result: string,
 ): Promise<void> {
   const thread = ctx.thread!;
+  if (ctx.runtime?.say) {
+    try {
+      await ctx.runtime.say(creator.id, result);
+      return;
+    } catch (error) {
+      thread.events.push({
+        category: "context_change",
+        kind: "inject",
+        text: `[end.result] 经 creator 会话窗 say 回报失败：${(error as Error).message}；result=${result}`,
+      });
+      return;
+    }
+  }
   thread.events.push({
     category: "context_change",
     kind: "inject",
-    text: `[end.result] 待经 creator 会话窗（target=${creator.target ?? "?"}）say 回报：${result}（say 派送 deferred 至 talk 迁移）。`,
+    text: `[end.result] 无 runtime.say 通道，待经 creator 会话窗（target=${creator.target ?? "?"}）say 回报：${result}。`,
   });
 }
 

@@ -10,24 +10,3 @@
 export interface Data {
   path: string;
 }
-
-/**
- * @deprecated 过渡兼容别名 —— 仅为让 `visible/` 旧组件继续编译（它读 window.path / window.state /
- * window.lines / window.columns 等平铺/信封字段）。新代码用 `Data` + runtime 信封 + `FileWin` 投影态；
- * core 反推完成后删除。
- */
-export type FileWindow = Data & {
-  id?: string;
-  class?: string;
-  title?: string;
-  status?: string;
-  createdAt?: number;
-  parentWindowId?: string;
-  lines?: [number, number];
-  columns?: [number, number];
-  state?: {
-    viewport?: unknown;
-    lines?: [number, number];
-    columns?: [number, number];
-  };
-};

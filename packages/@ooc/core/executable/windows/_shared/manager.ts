@@ -155,6 +155,38 @@ export class WindowManager implements RuntimeHandle {
     return id;
   }
 
+  /**
+   * 委托调当前 thread 内某 object 的 object method（RuntimeHandle.callMethod）。
+   *
+   * = execObjectMethod 的薄封装：thread 取自本 manager 的 threadRef（method 跑在该 thread
+   * 的 thinkloop 内）。无 threadRef 时抛错（callMethod 必须在已绑 thread 的 manager 上调）。
+   */
+  async callMethod(
+    objectId: string,
+    methodName: string,
+    args: Record<string, unknown> = {},
+  ): Promise<string | undefined> {
+    if (!this.threadRef) {
+      throw new Error(
+        `callMethod(${objectId}, ${methodName}): manager 未绑定 thread（须经 fromThread 构造）`,
+      );
+    }
+    return this.execObjectMethod(objectId, methodName, args, this.threadRef);
+  }
+
+  /**
+   * 经一个 talk-like 会话窗把 msg 派给对端（RuntimeHandle.say）。
+   *
+   * 复用 talk object method `say`：委托 execObjectMethod(windowId, "say", { msg })。
+   * 目标窗须为 talk-like（creator / peer / fork）；其 say 自分流 peer 磁盘 / fork 内存派送。
+   */
+  async say(windowId: string, msg: string): Promise<string | undefined> {
+    if (!this.threadRef) {
+      throw new Error(`say(${windowId}): manager 未绑定 thread（须经 fromThread 构造）`);
+    }
+    return this.execObjectMethod(windowId, "say", { msg }, this.threadRef);
+  }
+
   /** 关闭/卸载一个对象实例（从 thread 移除）。 */
   async close(objectId: string): Promise<void> {
     if (objectId === ROOT_WINDOW_ID) return;

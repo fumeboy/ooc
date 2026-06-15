@@ -82,7 +82,7 @@ function feishuDocKindSlug(kind: string): string {
 const FEISHU_DOC_PREVIEW_LIMIT = 400;
 
 export default function FeishuDocWindowDetail({ window }: { window: ContextWindow }) {
-  const w = window as FeishuDocWindow;
+  const w = (window as FeishuDocWindow).data;
   const config = useWorldConfig();
   const tenantHost = config?.larkTenantHost;
   const slug = feishuDocKindSlug(w.docKind);

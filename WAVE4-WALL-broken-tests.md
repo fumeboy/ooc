@@ -560,3 +560,128 @@ snapshot·pipeline 类型收口 / ContextWindow union 残留收口。**范围内
   须改指 canonical `@ooc/core/executable/windows/_shared/method-types`（这些测试本就因承重墙在坏测试清单中）。
 - `thinkable/knowledge/__tests__/activator.expr.test.ts`：`await import("@ooc/core/extendable/_shared/registry.js")`
   路径已删 → 改指 canonical registry（本就在坏测试清单中）。
+
+## P5 RuntimeHandle 补 callMethod / say 通道（AgentOfRuntime，2026-06-15）
+
+`RuntimeHandle`（contract.ts）增补 `callMethod(objectId,methodName,args)` + `say(windowId,msg)`；
+`WindowManager`（manager.ts）实现两者（callMethod=execObjectMethod 薄封装，绑 threadRef；
+say=委托 talk object method `say` via execObjectMethod(windowId,"say",{msg})）。接回消费方：
+interpreter_process `self.callMethod` 经 `runtime.callMethod`（runtime 穿 runInterpreterExec→
+runTsJs→createInterpreterSelf）；agent.end auto-reply 经 `ctx.runtime.say(creatorWindowId,result)`
+（findCreatorWindow 改读 inst.data 的 isCreatorWindow/target，原读信封是 Wave4 前残留 drift）。
+**四个改动文件 tsc 0 错误。**
+
+### 新增坏测试（只登记不修）
+- `executable/__tests__/process.test.ts`：`import { runInterpreterExec } from "@ooc/builtins/interpreter_process"`
+  —— 该符号在 P2 builtin 重组后不再从包根 re-export（只 import 不 export）→ TS2459 declares locally but not
+  exported。**非 P5 引入**（P5 仅给 runInterpreterExec 加可选 `runtime` 参，不动导出面）；与该文件既有的
+  runBashExec/executeTerminalProcessExec/runExec/TerminalProcessWindow 等死 import 同属 P1/P2 重组 ripple，
+  须由 P2 决定是否补回包根导出。P5 对该文件无新增破坏（新参可选，旧调用站点不传仍编译/行为不变）。
+
+## P2 删 deferred 悬空 helper（AgentOfExecutable，2026-06-15）
+
+删掉新契约下无对应槽位、且无 live 调用方的 deferred 悬空 helper（compress / onClose / onFormChange 三类）。
+**P2 范围内（builtins/{plan,file,interpreter,filesystem,runtime}）非测试源 tsc 0 错误。**
+
+### 已删（无 live 调用方，确认后删）
+- `builtins/file/readable/index.ts`：删 `compressFileWindow`（@deferred-hook compressView）——全仓无调用方。
+  压缩=展示档位本应是 window method，但本 helper 纯悬空无接线 → 按裁决直接删，不重建。
+- `builtins/knowledge/index.ts`：删 `rejectCloseNonExplicit`（onClose 拒关 helper）+ knowledge/{index,executable}
+  的 deferred 注释。全仓无调用方。
+- `builtins/filesystem/executable/index.ts`：删 4 个 `*_TIP`（GREP/GLOB/OPEN_FILE/WRITE_FILE）缺参引导文案
+  （旧 onFormChange 残留）；缺必填参引导改由 method `schema` 的 `required`+`description` 表达，缺参时 fail-fast
+  throw（对齐 interpreter.run 约定）。
+- `builtins/pr/readable/index.ts`：删 onClose 拒关「过渡说明」注释段（无 helper 代码，仅注释）。
+- `builtins/_shared/executable/utils.ts`：删头注释里已不存在的 `onFormChange`/`emptyIntent` 引用。
+
+### 登记 crossPackage 待 close 路径接（本轮不重建级联/拒关逻辑）
+- **knowledge 合成窗拒关**：合成来源（protocol/activator/relation）的 knowledge 由系统每轮再生，
+  本不应可被 LLM 显式 close。原 `rejectCloseNonExplicit` 已删——若确需此策略，应在 `RuntimeHandle.close`
+  路径据实例 `data.source` 拒绝，不在 builtin 包重建 hook。
+- **pr 投递窗拒关**：pr 是系统投递的 reviewer 评审窗，reviewer 不应显式 close。同样登记到 close 路径接。
+- **plan 级联归档子计划**：plan.close「cascades to sub plans」语义（method description 仍述）若需在 close
+  时真正级联归档子对象，应由 close 路径统一处理（本轮无悬空 helper 残留，仅记此意图）。
+
+### 范围外·未动（非 P2 范围 / 非悬空，仅说明）
+- `builtins/agent/executable/method.{talk,plan,todo}.ts` 与 `builtins/reflect_request/executable/method.*.ts`
+  的 `*_TIP`：**live 且承载跨字段条件必填语义**（如 talk 的 title|msg 依 target 二选一），非单字段 `required`
+  可表达 → 不属悬空 helper，且超出 P2 指定范围（plan/file/interpreter/filesystem/runtime），未动。
+
+### 坏测试（只登记不修）
+- `builtins/example/__tests__/example.test.ts`：断言 `def.compressView` 已定义——该字段随 Wave 4 契约收窄从
+  registerReadable 结果移除（OocClass 无 compressView 槽位）；且该测试还用旧 readable shape。承重墙坏测试，P2 不修。
+- `tests/e2e/backend/context-compression-p0c-typed.test.ts` / `plan-window-basic.e2e.test.ts`：验收旧
+  `compressView` hook 渲染——契约已无该 hook，承重墙坏测试，P2 不修。
+- 多处测试 import filesystem 旧具名导出 `writeFileExec` / `openFileExec`（`core/executable/__tests__/{create-object,
+  evolve-self,file-overlay-redirect,root.command.write-file.versioning}.test.ts`、`core/persistable/__tests__/
+  flows-worktree-migration.test.ts`、`tests/e2e/backend/stones-versioning.e2e.test.ts`）——filesystem/executable
+  现仅 `export default executable`（方法是内部 const grep/glob/open_file/write_file），这些具名导出在 builtin 重组中
+  早已不存在，**非 P2 引入**（P2 仅删 *_TIP 局部常量，未动导出面）；承重墙坏测试，P2 不修。
+- `builtins/file/__tests__/file-window-method.test.ts`：`import { … } from "@ooc/builtins/file/readable.js"`
+  路径（包根子路径）不存在——非 P2 引入（P2 仅删 compressFileWindow，readable 默认导出未动）；坏测试待修。
+- `core/executable/__tests__/process.test.ts`（P5 已登记）：`runInterpreterExec` 等不再从包根 re-export。
+  **P2 裁决：不为已多符号失效的坏测试补回包根导出面**（重新铺导出=为坏测试反向加 surface，违退潮）；
+  该测试整体属承重墙坏测试，待统一修测试阶段改指 canonical 子路径 import。
+
+### 非 P2 所致（P1 并发改 types.ts 的 ripple，登记备查）
+- `builtins/{file,plan}/visible/index.tsx`：`'../types.js' has no exported member 'FileWindow'/'PlanWindow'`
+  + plan/visible 隐式 any——P1 从 types.ts 删/改 Window 别名所致，非 P2 改动；待 P1/visible 跟进。
+
+## P1 ContextWindow union 收口 + 删 @deprecated 平铺别名 + web visible 迁移（AgentOfReadable/Web，2026-06-15）
+
+把 `ContextWindow` union 收口为 `OocObjectInstance`（信封 + data + win 三分），删各 builtin types.ts
+的 `@deprecated XxxWindow` 平铺别名，web 渲染层（context-snapshot 镜像 + visible 组件）改读
+`OocObjectInstance`。**P1 范围内（各 types.ts + builtin visible/ + web）非测试源 tsc 0 错误。**
+
+### 已落地（这些文件非测试源 tsc 通过）
+- **core union 收口** `executable/windows/_shared/types.ts`：`ContextWindow = OocObjectInstance`
+  （取代旧「每 class 一个平铺信封字段成员」的 discriminated union）。re-export 各 class 的纯
+  `Data`/`Win`（RootData/TodoData/TalkData+TalkWin/PrData/.../FeishuChatData+FeishuChatMessage/…）
+  供按 `.class` narrow 后断言 `.data`。
+- **windows barrel** `executable/windows/index.ts`：删已删别名的 re-export（RootWindow/TodoWindow/
+  TalkWindow/PrWindow/TerminalProcessWindow/InterpreterProcessWindow/FileWindow/KnowledgeWindow/PlanWindow），
+  改 export `ContextWindow`/`OocObjectInstance`/`WindowStatus`/`BaseContextWindow`/`SearchMatch`/`PlanWindowStep`
+  （后两者无外部别名消费方，保留兼容）。
+- **删各 builtin types.ts 的 `@deprecated XxxWindow` 平铺别名**（13 处）：file/plan/feishu_chat/feishu_doc/
+  interpreter/interpreter_process/root/knowledge/pr/reflect_request/terminal/terminal_process/skill_index/
+  thread/todo + talk（`core/.../talk/types.ts` 删 `TalkWindow`，保留 `TalkData`/`TalkWin`）。types.ts 现只剩
+  纯 `Data`（+ talk 的 `Win`）。
+- **builtin visible/index.tsx 迁 OocObjectInstance**（prop 从平铺别名改 `OocObjectInstance<Data[, Win]>`，
+  业务字段读 `.data.xxx`、投影态读 `.win`）：file（win=readable 的 `FileWin`，lines/columns 从 `.win`）/
+  knowledge/todo/root/skill_index/plan/search/terminal_process（`.data` 给 ProcessWindowDetail）/
+  interpreter_process（同）。visible/diff.tsx 组件吃 `WindowDiffProps`（loose `{previous,current}` + `readString`
+  helper），未引别名、无需改（其 prev/current 来自后端 windowsSnapshot，shape 归 observable）。
+- **web `context-snapshot.ts` 镜像收口**：`ContextWindow` = `_ContextWindowEnvelope & _ContextWindowData`
+  （信封顶层平铺 + 业务 `.data` 按 class 区分 + 可选 `.win`），镜像后端 `OocObjectInstance`。新增导出
+  `windowParentId(window)=parentObjectId ?? parentWindowId`（后端实例用 `parentObjectId`，兼容旧
+  `parentWindowId`）。pipeline 函数（windowSummary/windowBadge/windowCharCount/filterMessagesForDoWindow/
+  buildWindowNode 进程 history + sub-window parent / buildContextWindowsSection top-level 过滤）全改读 `.data` +
+  `windowParentId`。
+- **web visible 组件迁 `.data`**：`FeishuChatWindowDetail`/`FeishuDocWindowDetail`（`w = (window as X).data`）、
+  `TalkWindowDetail`/`DoWindowDetail`（读 `window.data` 的 target/conversationId/targetThreadId/isCreatorWindow）、
+  `ContextSnapshotViewer`（parent 行改 `windowParentId`；其余只用 `.class`/`.status`/`.id`/`.title` 信封字段）。
+- **registry cast 收口** `builtin-visible-registry.tsx`：组件签名是 `{window: OocObjectInstance<Data,Win>}`，
+  各具体 `Data` 与 web `ContextWindow` 不互相 assignable → 统一经 `as unknown as ComponentType<{window:
+  ContextWindow}>`。
+
+### 需收尾接缝（边界外文件引用已删别名，P1 未碰，留作 P2/P5/observable 收尾）
+均为「删 `TalkWindow`/`FileWindow` 平铺别名」级联，消费方读扁平视图、属 collaborable/app-server/observable 域：
+- `core/app/server/modules/flows/service.ts:24` —— import `TalkWindow`（user talk_window 扁平派送视图）。
+- `core/executable/windows/talk/{delivery.ts:43, executable/index.ts:29, fork.ts:13}` —— import `TalkWindow`。
+- `core/observable/window-hash.ts:16` —— import `FileWindow`（fileDiff 内容 hash）。
+- **method_exec seam**：`MethodExecWindow`（core `method_exec/types.ts`，flat `extends BaseContextWindow`）
+  P1 未动；web `MethodExecWindowDetail.tsx` 仍读它的平铺字段，web `ContextWindow` 的 `method_exec` 成员却把
+  method 字段放进 `.data`。method_exec 是 core form 机制（非 builtin class），其运行时落盘 shape（flat vs
+  envelope+data）归 P5 裁；裁定后 web ContextWindow 的 method_exec 成员 + MethodExecWindowDetail 需对齐。
+
+### 新增坏测试（P1 删别名 / 改 web ContextWindow 形态所致，只登记不修）
+- `web/src/domains/files/context-snapshot.plan.test.ts`：构造旧平铺 plan 窗字面量（title/steps/status 在顶层）
+  喂 buildContextTree → 须改用「信封 + `data:{title,steps,status,...}`」夹具。
+- builtin/core 测试 import 已删别名（`PrWindow`/`TalkWindow`/`FileWindow`/`KnowledgeWindow`/各 process/talk-family
+  窗别名）：`builtins/pr/__tests__/pr-window.test.ts`、`builtins/thread/__tests__/thread-say.test.ts`、
+  `core/observable/__tests__/window-hash.test.ts`、`core/executable/{windows/__tests__,__tests__}` 与
+  `core/thinkable/{context,knowledge}/__tests__` 多个、`tests/{e2e,integration}` 多个——多数已在上文承重墙/talk
+  迁移清单登记；P1 的别名删除使其 import 彻底失效。统一修测试阶段改用 OocObjectInstance 夹具 + 从
+  `_shared/types.ts` 取 `Data` 断言。
+- `builtins/example/__tests__/example.test.ts` import `ExampleWindow`：example/types.ts 已无此别名（P1 未删
+  example——其早已只有 `Data`）；属既有承重墙坏测试。

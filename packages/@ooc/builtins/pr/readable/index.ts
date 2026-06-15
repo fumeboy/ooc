@@ -11,10 +11,6 @@
  * 知识激活：root knowledge `pr-review.md`（activates_on: object::pr）在 thread 出现 pr 对象时注入评审协议。
  *
  * 与 executable 维度（object method，在 ../executable/index.ts）物理分离。
- *
- * 过渡说明（deferred_hooks）：旧 registerWindowClass 的 `onClose` 拒关 hook（pr 是系统投递窗，
- * reviewer 不可显式 close）契约里无对应槽位 —— 见 ../executable 注释 / 本批 deferred 登记，待 core
- * 反推阶段给 readable/lifecycle 契约补 close 策略后回填。
  */
 
 import type {

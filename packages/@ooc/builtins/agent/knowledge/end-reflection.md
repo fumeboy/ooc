@@ -2,10 +2,11 @@
 title: end 之前：考虑通过 super 沉淀经验
 description: 结束 thread 前想一下有没有值得带走的认知，有就走 super flow 沉淀
 activates_on:
+  "object::root": "show_description"
   "method::_builtin/agent::end": "show_content"
 ---
 
-你正准备结束当前 thread。submit end 之前，想一秒：**本次工作产生了什么值得带走的东西？**
+你正准备结束当前 thread。调 `end` 之前，想一秒：**本次工作产生了什么值得带走的东西？**
 
 - 新的认知 / 工作模式 / 抽象方法
 - 踩过的坑 / 反直觉的点 / 工具的边界
@@ -19,4 +20,4 @@ activates_on:
 什么时候不必：简单查询 / 读一个文件 / 一次性 utility（没有可沉淀的）；本次认知已有对应 memory；
 caller 明确说不必反思。
 
-这是 hint 不是 gate——判断不需要就直接 submit end。
+这是 hint 不是 gate——判断不需要就直接 `end`。

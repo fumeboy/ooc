@@ -32,23 +32,11 @@ export interface TalkWin {
 }
 
 /**
- * @deprecated 过渡别名 —— 旧 `TalkWindow`（窗即平铺 struct）的窗信封视图。
- *
- * 新契约里业务数据（target / targetThreadId / isForkWindow / isCreatorWindow / conversationId）
- * 落 `OocObjectInstance.data`（=`TalkData`），投影态落 `.win`（=`TalkWin`），信封字段（id / class /
- * title / status / createdAt / parentWindowId）由 runtime 管理。仍以「窗」整体看待 talk 投影的
- * 域外消费方（flows/model.ts、context/index.ts、web、_shared 的 ContextWindow union…）继续引本交叉
- * 类型让其编译。talk-family 全量迁移落定后归并删除。
+ * delivery 域内部的**扁平派送视图 DTO**（实例 id/class 信封 + TalkData 扁平）。
+ * 非持久化结构——say / fork 派送时把 `OocObjectInstance<TalkData>` 还原成 delivery 期望的扁平面；
+ * 取代 Wave 4 前的全局 `TalkWindow` 平铺别名（已随 union 收口删除）。
  */
-export type TalkWindow = TalkData & {
+export interface TalkWindowView extends TalkData {
   id: string;
-  class: "talk";
-  title?: string;
-  status?: "open" | "closed";
-  createdAt?: number;
-  parentWindowId?: string;
-  /** @deprecated 旧 transcript viewport 平铺字段（已移到投影态 win）。 */
-  transcriptViewport?: import("../_shared/transcript-viewport.js").TranscriptViewport;
-  state?: { transcriptViewport?: import("../_shared/transcript-viewport.js").TranscriptViewport };
-  [key: string]: unknown;
-};
+  class: string;
+}

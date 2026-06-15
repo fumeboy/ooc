@@ -10,7 +10,7 @@ import type { ContextWindow } from "../../context-snapshot";
 type FeishuChatWindow = Extract<ContextWindow, { class: "feishu_chat" }>;
 
 export default function FeishuChatWindowDetail({ window }: { window: ContextWindow }) {
-  const w = window as FeishuChatWindow;
+  const w = (window as FeishuChatWindow).data;
   const lastRefresh = w.lastRefreshAtMs
     ? new Date(w.lastRefreshAtMs).toLocaleString()
     : "(never)";

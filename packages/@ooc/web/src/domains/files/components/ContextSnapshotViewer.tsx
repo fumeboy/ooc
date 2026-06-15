@@ -48,6 +48,7 @@ import {
   estimateTokens,
   findNodePath,
   flattenContextTree,
+  windowParentId,
   type ContextNode,
   type ContextSnapshot,
   type ContextWindow,
@@ -365,8 +366,9 @@ function WindowDetail({
     ["title", window.title],
     ["status", String(window.status ?? "")],
   ];
-  if (window.class !== "root" && window.parentWindowId) {
-    rows.push(["parent", window.parentWindowId]);
+  const parentId = windowParentId(window);
+  if (window.class !== "root" && parentId) {
+    rows.push(["parent", parentId]);
   }
   return (
     <div className="llm-input-detail-body">

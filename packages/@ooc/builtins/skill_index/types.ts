@@ -21,16 +21,4 @@ export interface Data {
   skills: SkillEntry[];
 }
 
-/**
- * @deprecated 过渡兼容别名（Wave3 前端迁移时删除）：visible 层仍按旧「窗对象」消费。
- * 新后端契约用 Data + runtime 信封（OocObjectInstance）——**不要在后端引用本别名**。
- */
-export type SkillIndexWindow = Data & {
-  id?: string;
-  class?: "skill_index";
-  title?: string;
-  createdAt?: number;
-  parentWindowId?: string;
-};
-
 export type { SkillEntry };

@@ -3,9 +3,6 @@
  *
  * Extracted the byte-identical micro-helpers that were
  * copy-pasted across builtins/{root,plan,file,knowledge,...}/executable/.
- *
- * Removed `emptyIntent` (the intent(args) method was deleted from ObjectMethod;
- * intents now come from onFormChange's returned MethodExecuteForm).
  */
 
 /** typeof 字符串守卫——窄化 `unknown` 到 `string`。 */

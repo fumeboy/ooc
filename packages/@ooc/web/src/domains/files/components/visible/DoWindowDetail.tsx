@@ -8,14 +8,14 @@ import React from "react";
 import type { ContextWindow } from "../../context-snapshot";
 
 export default function DoWindowDetail({ window }: { window: ContextWindow }) {
-  const w = window as ContextWindow & { targetThreadId?: string; isCreatorWindow?: boolean };
+  const data = (window.data ?? {}) as { targetThreadId?: string; isCreatorWindow?: boolean };
   return (
     <div className="llm-input-attrs">
       <div className="llm-input-attr-row">
         <span className="llm-input-attr-key">target_thread</span>
-        <span className="llm-input-attr-value">{w.targetThreadId}</span>
+        <span className="llm-input-attr-value">{data.targetThreadId}</span>
       </div>
-      {w.isCreatorWindow && (
+      {data.isCreatorWindow && (
         <div className="llm-input-attr-row">
           <span className="llm-input-attr-key">role</span>
           <span className="llm-input-attr-value">creator window（不可关闭）</span>

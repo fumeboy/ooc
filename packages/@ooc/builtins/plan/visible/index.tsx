@@ -1,14 +1,16 @@
-import type { PlanWindow } from "../types.js";
+import type { Data, PlanWindowStep } from "../types.js";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 import React from "react";
 import { CheckCircle2, Circle, CircleDot, CircleSlash } from "lucide-react";
 import { MarkdownContent } from "@ooc/web/src/shared/ui/MarkdownContent";
 import { dispatchNavigateToWindow } from "@ooc/web/src/domains/files/navigation-events";
 
-/** Plan window 详情面板。 */
-export default function PlanWindowDetail({ window }: { window: PlanWindow }) {
-  const total = window.steps.length;
-  const doneN = window.steps.filter((s) => s.status === "done").length;
-  const isArchived = window.status === "archived";
+/** Plan window 详情面板（业务字段读自实例 `data`）。 */
+export default function PlanWindowDetail({ window }: { window: OocObjectInstance<Data> }) {
+  const data = window.data;
+  const total = data.steps.length;
+  const doneN = data.steps.filter((s) => s.status === "done").length;
+  const isArchived = data.status === "archived";
 
   const renderStepIcon = (status: "pending" | "in-progress" | "done" | "blocked") => {
     switch (status) {
@@ -33,7 +35,7 @@ export default function PlanWindowDetail({ window }: { window: PlanWindow }) {
       <div className="llm-input-attrs" style={{ marginBottom: 8 }}>
         <div className="llm-input-attr-row">
           <span className="llm-input-attr-key">plan</span>
-          <span className="llm-input-attr-value">{window.title}</span>
+          <span className="llm-input-attr-value">{data.title}</span>
         </div>
         <div className="llm-input-attr-row">
           <span className="llm-input-attr-key">progress</span>
@@ -43,9 +45,9 @@ export default function PlanWindowDetail({ window }: { window: PlanWindow }) {
         </div>
       </div>
 
-      {window.description && (
+      {data.description && (
         <div className="cw-plan-description" style={{ marginBottom: 12 }}>
-          <MarkdownContent content={window.description} />
+          <MarkdownContent content={data.description} />
         </div>
       )}
 
@@ -56,7 +58,7 @@ export default function PlanWindowDetail({ window }: { window: PlanWindow }) {
         <div className="llm-input-empty">该 plan 尚未添加 step。</div>
       ) : (
         <ul className="cw-plan-step-list" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {window.steps.map((step) => (
+          {data.steps.map((step: PlanWindowStep) => (
             <li
               key={step.id}
               className={`cw-plan-step cw-plan-step-status-${step.status}`}
@@ -96,13 +98,13 @@ export default function PlanWindowDetail({ window }: { window: PlanWindow }) {
         </ul>
       )}
 
-      {window.parentPlanWindowId && (
+      {data.parentPlanWindowId && (
         <div className="cw-plan-parent-link" style={{ marginTop: 12 }}>
           <span className="muted small">Parent: </span>
           <button
             type="button"
             className="cw-plan-parent-link-btn"
-            onClick={() => dispatchNavigateToWindow(window.parentPlanWindowId!)}
+            onClick={() => dispatchNavigateToWindow(data.parentPlanWindowId!)}
             style={{
               background: "none",
               border: "none",
@@ -113,10 +115,10 @@ export default function PlanWindowDetail({ window }: { window: PlanWindow }) {
               fontSize: "0.9em",
             }}
           >
-            {window.parentPlanWindowId}
+            {data.parentPlanWindowId}
           </button>
-          {window.parentStepId && (
-            <span className="muted small"> at step {window.parentStepId}</span>
+          {data.parentStepId && (
+            <span className="muted small"> at step {data.parentStepId}</span>
           )}
         </div>
       )}

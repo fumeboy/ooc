@@ -9,18 +9,3 @@
  * Data，故 reflect_request 的业务 Data 为空。
  */
 export interface Data {}
-
-/**
- * @deprecated 过渡别名 —— 旧 `ReflectRequestWindow`（talk 同形 super-flow self-view 窗）的窗信封视图。
- * 新契约里 Data 与窗信封（id/class/title/status/createdAt/parentWindowId）分离；旧引用仍以「窗」整体
- * 看待投影，故保留此交叉类型让其继续编译。Wave4 talk 迁移后归并删除。
- */
-export type ReflectRequestWindow = Data & {
-  id?: string;
-  class?: "reflect_request";
-  title?: string;
-  status?: string;
-  createdAt?: number;
-  parentWindowId?: string;
-  [key: string]: unknown;
-};

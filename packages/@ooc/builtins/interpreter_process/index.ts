@@ -36,7 +36,7 @@ export const Class: OocClass<Data> = {
       if (!(lang && code)) {
         throw new Error("[interpreter_process] 缺少执行参数；需要 language+code。");
       }
-      const record = await runInterpreterExec(thread, lang, code);
+      const record = await runInterpreterExec(thread, lang, code, ctx.runtime);
       return { history: [record] };
     },
   },

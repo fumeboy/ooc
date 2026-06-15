@@ -1,12 +1,14 @@
-import type { SkillIndexWindow } from "../types.js";
+import type { Data } from "../types.js";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 import React from "react";
 
-/** Skill index window 详情面板:按 scope 分组。 */
-export default function SkillIndexWindowDetail({ window }: { window: SkillIndexWindow }) {
-  const groups: Array<{ scope: "object" | "workspace" | "external"; label: string; skills: typeof window.skills }> = [
-    { scope: "object", label: "object", skills: window.skills.filter((s) => s.scope === "object") },
-    { scope: "workspace", label: "workspace", skills: window.skills.filter((s) => s.scope === "workspace") },
-    { scope: "external", label: "external", skills: window.skills.filter((s) => s.scope === "external") },
+/** Skill index window 详情面板:按 scope 分组（skills 读自实例 `data`）。 */
+export default function SkillIndexWindowDetail({ window }: { window: OocObjectInstance<Data> }) {
+  const skills = window.data.skills;
+  const groups: Array<{ scope: "object" | "workspace" | "external"; label: string; skills: typeof skills }> = [
+    { scope: "object", label: "object", skills: skills.filter((s) => s.scope === "object") },
+    { scope: "workspace", label: "workspace", skills: skills.filter((s) => (s.scope as string) === "workspace") },
+    { scope: "external", label: "external", skills: skills.filter((s) => s.scope === "external") },
   ];
   return (
     <>
@@ -14,7 +16,7 @@ export default function SkillIndexWindowDetail({ window }: { window: SkillIndexW
         <div className="llm-input-attr-row">
           <span className="llm-input-attr-key">total</span>
           <span className="llm-input-attr-value">
-            {window.skills.length} skill{window.skills.length === 1 ? "" : "s"}
+            {skills.length} skill{skills.length === 1 ? "" : "s"}
           </span>
         </div>
       </div>
@@ -41,7 +43,7 @@ export default function SkillIndexWindowDetail({ window }: { window: SkillIndexW
             </div>
           );
         })}
-        {window.skills.length === 0 && (
+        {skills.length === 0 && (
           <div className="llm-input-empty">该 thread 当前未挂载任何 skill。</div>
         )}
       </div>

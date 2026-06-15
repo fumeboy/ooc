@@ -7,8 +7,7 @@
  * 每个 method 是**委托类**：经 `ctx.runtime.instantiate(classId, args)` 造出对应子对象
  * （search / file），自身无业务态。返回提示文本告知 agent 子对象已造出。
  *
- * 注：旧契约的 `onFormChange`（refine-hint：`grepping for ...` 等动态引导文案 + quick_exec_submit）
- * 在新契约里无对应字段，逻辑暂以本文件局部常量保留（见各 *_TIP），等 core 反推阶段再决定归处。
+ * 缺必填参的引导由各 method `schema` 的 `required` + `description` 表达（不再有 onFormChange hook）。
  */
 
 import type {
@@ -21,16 +20,6 @@ import type { Data } from "../types.js";
 // 子对象的 class id（委托目标；instantiate 经 ctx.runtime 在 exec 期解析其 constructor）。
 const SEARCH_CLASS = "_builtin/search";
 const FILE_CLASS = "_builtin/file";
-
-// ── refine-hint 文案（旧 onFormChange 的缺参引导，保留语义；当前契约无 hook 槽位）──
-const GREP_TIP = `grep 按文件内容 regex 搜索，结果作为 search 对象。
-参数：pattern（必填，regex）、path（可选，目录或文件）、glob（可选，文件名过滤）、case_insensitive（可选）。`;
-const GLOB_TIP = `glob 按文件名通配符查找文件，结果作为 search 对象。
-参数：pattern（必填，glob 通配符，如 src/**/*.ts）、cwd（可选，搜索根目录）。`;
-const OPEN_FILE_TIP = `open_file 把文件内容作为 file 对象引入 context。
-参数：path（必填，文件路径）、lines（可选 [start,end]）、columns（可选 [start,end]）。`;
-const WRITE_FILE_TIP = `write_file 整文件覆盖。用于新建文件或完整重写；改已有文件局部请用 file.edit。
-参数：path（必填）、content（必填，完整文件内容，可为空串）。`;
 
 function requireRuntime(ctx: ExecutableContext, method: string) {
   if (!ctx.runtime) {
@@ -52,7 +41,7 @@ const grepMethod: ObjectMethod<Data> = {
   },
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     const pattern = typeof args.pattern === "string" ? args.pattern : "";
-    if (!pattern) return GREP_TIP;
+    if (!pattern) throw new Error("[filesystem.grep] 缺少必填参数 pattern");
     const runtime = requireRuntime(ctx, "grep");
     await runtime.instantiate(SEARCH_CLASS, {
       pattern,
@@ -76,7 +65,7 @@ const globMethod: ObjectMethod<Data> = {
   },
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     const pattern = typeof args.pattern === "string" ? args.pattern : "";
-    if (!pattern) return GLOB_TIP;
+    if (!pattern) throw new Error("[filesystem.glob] 缺少必填参数 pattern");
     const runtime = requireRuntime(ctx, "glob");
     await runtime.instantiate(SEARCH_CLASS, {
       glob: pattern,
@@ -99,7 +88,7 @@ const openFileMethod: ObjectMethod<Data> = {
   },
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     const path = typeof args.path === "string" ? args.path : "";
-    if (!path) return OPEN_FILE_TIP;
+    if (!path) throw new Error("[filesystem.open_file] 缺少必填参数 path");
     const runtime = requireRuntime(ctx, "open_file");
     await runtime.instantiate(FILE_CLASS, {
       path,
@@ -122,7 +111,7 @@ const writeFileMethod: ObjectMethod<Data> = {
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     const path = typeof args.path === "string" ? args.path : "";
     const hasContent = typeof args.content === "string";
-    if (!path || !hasContent) return WRITE_FILE_TIP;
+    if (!path || !hasContent) throw new Error("[filesystem.write_file] 缺少必填参数 path/content");
     const runtime = requireRuntime(ctx, "write_file");
     await runtime.instantiate(FILE_CLASS, {
       path,

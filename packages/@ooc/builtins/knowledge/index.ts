@@ -6,10 +6,6 @@
  *
  * knowledge 是**非单例 class**：constructor（open_knowledge）显式 pin 一篇 knowledge doc 进 context。
  * knowledge_base tool-object 经 ctx.runtime.instantiate 委托到此 constructor。
- *
- * deferred hook（契约暂无、Wave3 反推 core 时 re-home）：
- *   - onClose 拒绝逻辑（`rejectCloseNonExplicit`）：合成来源（protocol/activator/relation）的 knowledge
- *     由系统每轮再生，不可显式 close。当前以局部 helper 保留，待 core 提供窗生命周期 hook 后接回。
  */
 
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
@@ -20,15 +16,6 @@ import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import type { Data } from "./types.js";
-
-/**
- * deferred hook（Wave3 re-home）：拒绝 close 非 explicit 来源的 knowledge。
- * 合成窗（protocol/activator/relation）由系统每轮合成，LLM 不可显式关闭。
- * 缺 source 字段时按 explicit 处理（向后兼容）。
- */
-export function rejectCloseNonExplicit(data: Pick<Data, "source">): boolean {
-  return !!data.source && data.source !== "explicit";
-}
 
 export const Class: OocClass<Data> = {
   construct: {
