@@ -1,5 +1,5 @@
 /**
- * search/visible/diff.tsx — search_window 的 visible/diff 组件（线 C）。
+ * search/visible/diff.tsx — search 窗的 visible/diff 组件。
  *
  * 逻辑来自 packages/@ooc/web/src/domains/sessions/components/window-diff-renderers/SearchWindowDiff.tsx，
  * 签名收敛到 WindowDiffProps ({previous, current})，删去 windowId 引用。

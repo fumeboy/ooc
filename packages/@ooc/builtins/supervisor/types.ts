@@ -7,20 +7,3 @@
  * 由 runtime 管理、不在 Data 内。
  */
 export interface Data {}
-
-/**
- * @deprecated 旧窗类型别名 —— 仅供 visible 前端在对象模型迁移期继续编译。
- *
- * 对象模型下窗信封（id/class/title/status/createdAt/parentWindowId）由 runtime 管理、
- * 与 Data 分离；此交叉类型把二者拍平成旧 `SupervisorWindow` 形状的过渡门面。
- * 新代码请用 `Data` + runtime 信封，勿依赖此别名。
- */
-export type SupervisorWindow = Data & {
-  id?: string;
-  class?: string;
-  title?: string;
-  status?: "active";
-  createdAt?: number;
-  parentWindowId?: string;
-  [k: string]: unknown;
-};

@@ -5,18 +5,3 @@
  * 身份信封（id/class/title/status/createdAt）由 runtime 管理。
  */
 export interface Data {}
-
-/**
- * @deprecated 旧窗类型别名 —— 过渡期给前端 visible 继续编译用。
- * 新模型里 Data 与窗信封分离（信封由 runtime 管理）；此交叉类型把 Data 与可选信封
- * 字段拼回旧的「平铺窗」形状，仅供 visible 维度引用，勿在新代码使用。
- */
-export type UserWindow = Data & {
-  id?: string;
-  class?: string;
-  title?: string;
-  status?: string;
-  createdAt?: number;
-  parentWindowId?: string;
-  [key: string]: unknown;
-};

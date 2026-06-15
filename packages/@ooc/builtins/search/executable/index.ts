@@ -7,7 +7,7 @@
  * - close      : 关闭本 search 窗（不影响命中的文件）
  * - open_match : 对某个 match 的路径 spawn 一个 file 对象（经 ctx.runtime.instantiate('file', …)）
  *
- * 构造（glob/grep 执行 + 截断）在 ../index.ts 的 `Class.constructor`。
+ * 构造（glob/grep 执行 + 截断）在 ../index.ts 的 `Class.construct`。
  */
 
 import { isAbsolute, resolve } from "node:path";

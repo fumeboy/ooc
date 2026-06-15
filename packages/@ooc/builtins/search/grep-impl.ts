@@ -1,32 +1,12 @@
 /**
  * grep 实现细节：rg --json 驱动 + JS RegExp fallback。
- * 拆出此文件让 grep.ts 命令注册保持短小。
+ * 由 ../index.ts 的 Class.construct 在 grep 分支调用；输出 GrepHit[]。
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-export const GREP_BASIC_PATH = "internal/executable/grep/basic";
-export const GREP_INPUT_PATH = "internal/executable/grep/input";
-export const MAX_MATCHES = 200;
-export const SNIPPET_MAX = 200;
-
-export const KNOWLEDGE = `
-grep 用于按文件内容搜索（正则），结果作为 search_window kind=grep 留在 context。
-
-参数：
-- pattern: 必填，正则表达式
-- path: 可选，搜索根目录或单个文件（相对路径以 session baseDir 为根）；缺省 = session baseDir
-- glob: 可选，文件名过滤 glob（如 "*.ts"）
-- case_insensitive: 可选 bool
-
-行为：
-- 优先调用 rg --json；不可用时回退 JS 实现，输出结构一致
-- 每条 match 含 path / line(0-based) / snippet（单行 trim 到 200 字符）
-- 按 (path, line) 字典序；超过 200 条截断
-- 命中之后用 \`open(parent_window_id="<search_window_id>", method="open_match", args={ index: <N> })\`
-  spawn file_window；grep match 自动套上 [line ± 40] 切片
-`.trim();
+const SNIPPET_MAX = 200;
 
 export interface GrepOptions {
   pattern: string;

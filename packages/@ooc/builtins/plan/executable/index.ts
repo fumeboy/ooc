@@ -186,7 +186,7 @@ const collapseSubplanMethod: ObjectMethod<Data> = {
     nextSteps[idx] = { ...cur, subPlanWindowId: undefined };
     self.steps = nextSteps;
 
-    // 关掉子 plan 对象（runtime 协助；deferred: 旧实现把子切到 archived，详见 collapse/onClose hook 注释）。
+    // 关掉子 plan 对象（runtime 协助）。
     await ctx.runtime?.close?.(childId);
     return `collapsed sub plan ${childId} from step ${stepId}`;
   },
@@ -204,7 +204,6 @@ const markDoneMethod: ObjectMethod<Data> = {
 const closeMethod: ObjectMethod<Data> = {
   name: "close",
   description: "Close this plan window (cascades to sub plans).",
-  // 级联关闭子 plan 的逻辑见 ../readable/index.ts 的 cascadeArchiveSubPlans helper（deferred_hooks）。
   exec: () => undefined,
 };
 

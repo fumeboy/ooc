@@ -22,9 +22,7 @@
  * 把分支重新绑回本 thread（request-changes 时旧 worktree 与编辑都还在，可继续改；reject
  * 后旧 worktree 已归档清理，从 main 重新派生空白副本重做）。re-edit 后再 create_pr_and_invite_reviewers 重开 PR。
  *
- * deferred（旧 onFormChange / intents UI hook）：旧契约里本方法带 onFormChange + intents("new_feat_branch")
- * 给前端 fill-form 提示；新 ObjectMethod 契约不含这两个字段（见第六节 core 反推统一 UI hook）。
- * 提示文案保留为下方 NEW_FEAT_BRANCH_TIP 局部常量。
+ * 缺参时返回 NEW_FEAT_BRANCH_TIP（下方局部常量）作为引导文案。
  */
 
 import type {

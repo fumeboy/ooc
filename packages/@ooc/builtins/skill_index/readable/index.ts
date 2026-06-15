@@ -17,15 +17,6 @@ import type { Data } from "../types.js";
 /** skill_index 的**投影态**（与 Data 分离）：当前无展示态字段。 */
 export interface SkillIndexWin {}
 
-/**
- * Wave3 re-home：skill_index 是 protocol 派生 window，理论上不会被 close（不入 thread.json，
- * 每轮重建）；即使被显式 close 也应拒绝（与 root window 同级）。契约暂无 onClose hook，
- * 逻辑保留为本目录内局部 helper，待 core 反推时 re-home。
- */
-export function onCloseSkillIndex(): boolean {
-  return false;
-}
-
 const readable: ReadableModule<Data, SkillIndexWin> = {
   readable: (_ctx: ReadableContext, self: Data) => {
     const skills = self.skills ?? [];

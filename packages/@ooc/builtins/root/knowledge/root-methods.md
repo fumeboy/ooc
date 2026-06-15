@@ -16,7 +16,7 @@ activates_on:
 - 要**和别的对象（含 user、其它 flow object）持续对话** → `talk`；同一对象复用同一 talk_window，不要重复 open。
 - 要**派活给子线程**（自己继续别的事 / 之后再 wait 回写）→ `talk(target=自己的 objectId)` fork 一条子线程。
 - 要**把任务拆成可见步骤** → `plan`；只记一条待办 → `todo`；本轮**收尾** → `end`。
-- 要**对象定义样板** → `example`。接入**飞书** → `open_feishu_chat` / `open_feishu_doc`。
+- 要**对象定义样板** → `example`。接入**飞书** → `feishu_app` 成员的 `open_chat` / `open_doc`。
 
 **成员工具对象（你 context 里的 tool-object 成员窗）的方法：**
 

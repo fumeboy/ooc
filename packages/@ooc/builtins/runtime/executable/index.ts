@@ -17,10 +17,6 @@ import { createObjectInSession } from "@ooc/core/persistable/index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 import type { Data } from "../types.js";
 
-const CREATE_OBJECT_TIP = `create_object 建一个全新对象的骨架（仅业务 session 可调）。
-参数：objectId（必填，新对象 id）、selfMd（必填）、readableMd（必填）、knowledge（可选 {filename: content}）。
-骨架落 session worktree，本 session 内即可用；session 永不合入 main——进 canonical 走独立 feat-branch PR。`;
-
 function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
@@ -33,28 +29,6 @@ function asKnowledge(v: unknown): Record<string, string> | undefined {
     out[k] = val;
   }
   return out;
-}
-
-/**
- * Deferred hook（onFormChange）—— 旧契约的「填表就绪检查 + quick-exec」逻辑保留为本目录局部 helper。
- * 新契约（ObjectMethod）尚无 onFormChange 字段；Wave3 反推 core 时 re-home。
- * 参数缺失检查行为与旧 onFormChange 一致：objectId/selfMd/readableMd 三者就绪则可 quick-exec。
- */
-export function createObjectFormReadiness(args: Record<string, unknown>): {
-  ready: boolean;
-  tip: string;
-  missing: string[];
-} {
-  const missing: string[] = [];
-  if (!asString(args.objectId)) missing.push("objectId");
-  if (!asString(args.selfMd)) missing.push("selfMd");
-  if (!asString(args.readableMd)) missing.push("readableMd");
-  const ready = missing.length === 0;
-  return {
-    ready,
-    missing,
-    tip: ready ? "Creating object..." : CREATE_OBJECT_TIP + `\n\n还缺: ${missing.join(", ")}`,
-  };
 }
 
 /**

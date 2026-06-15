@@ -2,8 +2,7 @@
  * reflect_request.create_pr_and_invite_reviewers method —— reflectable 沉淀的 finalizer（feat-branch PR 路径）。
  *
  * 挂在 reflect_request class 上（super flow 反思会话面），标 for_reflectable（仅 super flow surface）。
- * 旧名 evolve_self 已退役——名副其实：它就是 commit feat worktree → 算 reviewer 集 → createPrIssue
- * → 投递 pr_window 给各 reviewer。
+ * 名副其实：commit feat worktree → 算 reviewer 集 → createPrIssue → 投递 pr_window 给各 reviewer。
  *
  * 地基不变量（用户拍板）：`session-<sid>` worktree 是纯运行时派生物，**永不合入 main**。
  * 沉淀知识/功能进 canonical 要走「另起 feat 分支 → 直接编辑 → commit → PR → review → merge」。
@@ -17,8 +16,7 @@
  * 合入闸：reviewer 集**强制聚合执行**——`aggregatePrApproval` 要求全员 approve 才 ready-to-merge
  * （reject 一票否决），再由 `.world.json prAutoMerge` 决定自动/人工合入（编排见 @ooc/builtins/pr/approval-flow.ts）。
  *
- * deferred（旧 intents UI hook）：旧契约里本方法带 intents("create_pr_and_invite_reviewers") 供前端；
- * 新 ObjectMethod 契约不含该字段（见第六节 core 反推统一 UI hook）。提示文案保留为 CREATE_PR_TIP 局部常量。
+ * 缺前置（无 feat 绑定 / 无 intent）时返回 CREATE_PR_TIP（下方局部常量）作为引导文案。
  */
 
 import type {

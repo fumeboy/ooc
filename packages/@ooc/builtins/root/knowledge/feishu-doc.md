@@ -5,7 +5,7 @@ activates_on:
   "object::feishu_doc": "show_content"
 ---
 
-feishu_doc window 把一个飞书文档引入 context（由 `root.open_feishu_doc` 创建）。
+feishu_doc window 把一个飞书文档引入 context（由 `feishu_app.open_doc` 创建）。
 
 在它上面用 `exec(window_id="<feishu_doc_window_id>", method="X", args={…})` 调：
 

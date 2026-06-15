@@ -20,15 +20,12 @@ import {
   type TranscriptViewport,
 } from "@ooc/core/_shared/types/viewport.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import type { Data, SearchMatch } from "../types.js";
+import type { Data } from "../types.js";
 
 /** search window 的默认 results viewport：末 50 条 match。 */
 export const DEFAULT_RESULTS_VIEWPORT: TranscriptViewport = Object.freeze({
   tail: 50,
 });
-
-const SEARCH_PREVIEW_COUNT = 3;
-const SEARCH_SNIPPET_TRUNCATE = 200;
 
 /** search 的**投影态**（与 Data 分离）：matches 渲染视口（末 N 条 / 固定区间）。 */
 export interface SearchWin {
@@ -171,42 +168,3 @@ const readable: ReadableModule<Data, SearchWin> = {
 };
 
 export default readable;
-
-// ─────────────────────────── deferred hook（Wave3 re-home）──────────────────
-// 旧 registerWindowClass 的 `compressView` hook 在新契约里暂无对应槽位；逻辑保留为本目录
-// 局部纯函数，待 core 反推阶段（Wave3）把 compress 维度重新接进契约后再 re-home。
-//   - Level 1 (folded):   kind + query + matches.count + 前 3 条 match 预览（仅 path + line）
-//   - Level 2 (snapshot): kind + query + matches.count
-export function compressSearchWindow(self: Data, level: 1 | 2): XmlNode[] {
-  const children: XmlNode[] = [
-    xmlElement("kind", {}, [xmlText(self.kind)]),
-    xmlElement("query", {}, [xmlText(self.query)]),
-    xmlElement("matches", {
-      count: String(self.matches.length),
-      truncated: self.truncated ? "true" : "false",
-    }),
-  ];
-  if (level === 1 && self.matches.length > 0) {
-    const previewNodes: XmlNode[] = self.matches
-      .slice(0, SEARCH_PREVIEW_COUNT)
-      .map((m: SearchMatch) => {
-        const attrs: Record<string, string> = {
-          index: String(m.index),
-          path: m.path,
-        };
-        if (typeof m.line === "number") attrs.line = String(m.line);
-        const snippet = m.snippet
-          ? m.snippet.slice(0, SEARCH_SNIPPET_TRUNCATE)
-          : undefined;
-        return xmlElement("preview", attrs, snippet ? [xmlText(snippet)] : []);
-      });
-    children.push(xmlElement("preview_list", {}, previewNodes));
-  }
-  children.push(
-    xmlElement("compressed", {
-      level: String(level),
-      hint: "exec(window_id, 'expand') to restore",
-    }),
-  );
-  return children;
-}

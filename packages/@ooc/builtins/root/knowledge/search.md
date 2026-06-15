@@ -5,7 +5,7 @@ activates_on:
   "object::search": "show_content"
 ---
 
-search_window 持有一次 glob/grep 搜索结果（由 `root.glob` / `root.grep` 创建）。
+search_window 持有一次 glob/grep 搜索结果（由 `filesystem` 成员的 `glob` / `grep` 创建）。
 
 在它上面用 `exec(window_id="<search_window_id>", method="X", args={…})` 调：
 

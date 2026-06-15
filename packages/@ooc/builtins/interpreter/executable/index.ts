@@ -17,27 +17,6 @@ import type { Data } from "../types.js";
 
 const LANG_ENUM = ["ts", "typescript", "js", "javascript"];
 
-const RUN_TIP = `run 执行一段 ts/js 脚本，返回 interpreter_process（首次 exec 已跑完，结果进 history）。
-参数：language（ts/js，必填）、code（字符串，必填）。`;
-
-/**
- * 契约外的旧 form 驱动 hook（onFormChange）逻辑——保留为本目录局部 helper 备查（登 deferred_hooks）。
- * 旧形态：随表单填写实时回报 tip / intents(run.ts|run.js) / quick_exec_submit，供前端 UI。
- * 新契约的 ObjectMethod 不含该 hook 字段；运行时若需 form 反馈应在 readable/visible 重新表达。
- */
-export function runFormFeedback(args: Record<string, unknown>): {
-  tip: string;
-  intents: { name: string }[];
-  quick_exec_submit: boolean;
-} {
-  const lang = (args.language ?? args.lang) as string | undefined;
-  const code = typeof args.code === "string" ? (args.code as string).trim() : "";
-  const intents =
-    lang === "js" || lang === "javascript" ? [{ name: "run.js" }] : [{ name: "run.ts" }];
-  const ready = Boolean(lang && code);
-  return { tip: ready ? `Running ${lang}...` : RUN_TIP, intents, quick_exec_submit: ready };
-}
-
 interface RunArgs {
   language?: string;
   lang?: string;

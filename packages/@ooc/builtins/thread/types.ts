@@ -12,8 +12,10 @@ export interface Data {}
 
 /**
  * @deprecated 过渡别名 —— 旧 `ThreadWindow`（talk 同形 self-view 窗）的窗信封视图。
- * 新契约里 Data 与窗信封（id/class/title/status/createdAt/parentWindowId）分离；前端/旧引用
- * 仍以「窗」整体看待 thread 投影，故保留此交叉类型让其继续编译。Wave4 talk 迁移后归并删除。
+ * 新契约里 Data 与窗信封（id/class/title/status/createdAt/parentWindowId）分离；但 core 的
+ * `executable/windows/_shared/types.ts` ContextWindow union 仍按「每 class 一个带信封的成员」组织、
+ * 把本别名收为 union 成员，故保留此交叉类型让其继续编译。待 union 改为「信封由 runtime 管、不再
+ * per-class 平铺」后删除（跨包，归 core/Supervisor）。
  */
 export type ThreadWindow = Data & {
   id?: string;

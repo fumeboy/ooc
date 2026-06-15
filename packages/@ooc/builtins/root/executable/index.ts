@@ -17,12 +17,12 @@ import type {
 import { exampleMethod } from "./method.example.js";
 import type { Data } from "../types.js";
 
-export const ROOT_METHODS: ObjectMethod<Data>[] = [
+const methods: ObjectMethod<Data>[] = [
   exampleMethod,
 ];
 
 const executable: ExecutableModule<Data> = {
-  methods: ROOT_METHODS,
+  methods,
 };
 
 export default executable;

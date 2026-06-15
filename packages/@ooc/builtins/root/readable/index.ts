@@ -4,8 +4,7 @@
  * root 通常不显式渲染（外层包装 + 调度器的 commands 块已足够说明 root 上可调命令），
  * 故 content 返回空 children——让调度器的 commands 子节点自然承担表达。
  *
- * root window 上展示 root 类的 misc method（example / open_feishu_chat / open_feishu_doc）；
- * 无投影态、无 window method。
+ * root window 上展示 root 类的 misc method（example）；无投影态、无 window method。
  */
 
 import type {
@@ -25,7 +24,7 @@ const readable: ReadableModule<Data, RootWin> = {
   window: [
     {
       class: "root",
-      object_methods: ["example", "open_feishu_chat", "open_feishu_doc"],
+      object_methods: ["example"],
       window_methods: [],
     },
   ],

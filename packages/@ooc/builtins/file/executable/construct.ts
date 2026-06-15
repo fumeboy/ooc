@@ -7,8 +7,8 @@
  *
  * 分支判别（取代旧 ctx.form.method）：args 带 `content:string` → write_file，否则 open_file。
  *
- * 投影态（viewport / lines / columns）不再进 Data，由 readable 维度的 win 默认值 + window method 控制
- * （open_file 旧版预填的 lines/columns 已不在构造侧落地——见 NEXT/notes）。
+ * 投影态（viewport / lines / columns）不再进 Data，也不在 construct schema——构造只收 path / content，
+ * 视口由 readable 维度的 win 默认值 + window method（set_viewport / set_range）控制。
  */
 
 import { mkdir, stat, writeFile } from "node:fs/promises";
@@ -215,8 +215,6 @@ export const construct: ObjectConstructor<Data> = {
     args: {
       path: { type: "string", required: true, description: "文件路径（相对 session baseDir）" },
       content: { type: "string", description: "要写入的文件内容；提供时走 write_file 分支" },
-      lines: { type: "array", description: "可选 [start, end]，open_file 时指定可见行范围" },
-      columns: { type: "array", description: "可选 [start, end]，open_file 时指定可见列范围" },
     },
   },
   exec: async (ctx: ConstructorContext, args: Record<string, unknown>): Promise<Data> => {

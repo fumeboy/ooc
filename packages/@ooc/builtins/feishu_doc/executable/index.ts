@@ -28,7 +28,7 @@ import type { Data } from "../types.js";
 
 const readMethod: ObjectMethod<Data> = {
   name: "read",
-  description: "Read the Feishu doc content into window.content.",
+  description: "Read the Feishu doc content into my content.",
   schema: {
     args: {
       format: { type: "string", enum: ["markdown", "blocks"], description: "输出格式，默认 markdown" },
@@ -183,7 +183,7 @@ function executeSearchInDoc(self: Data, args: Record<string, unknown>): string |
   if (!query) return "[feishu_doc.search_in_doc] 缺少 query。";
   const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 100);
   if (!self.content.body) {
-    return "[feishu_doc.search_in_doc] window.content 为空，先 read。";
+    return "[feishu_doc.search_in_doc] content 为空，先 read。";
   }
   const lines = self.content.body.split("\n");
   const lower = query.toLowerCase();
@@ -248,7 +248,7 @@ async function executePatchBlock(self: Data, args: Record<string, unknown>): Pro
       return "[feishu_doc.patch_block] confirm 提交时必须提供 expected_version（来自 dry-run 时记录的 versionId / revision_id）。";
     }
     if (self.versionId && self.versionId !== expectedVersion) {
-      return `[feishu_doc.patch_block] 版本飘移：window.versionId=${self.versionId}，expected_version=${expectedVersion}；请重新 read 并核对再 patch。`;
+      return `[feishu_doc.patch_block] 版本飘移：versionId=${self.versionId}，expected_version=${expectedVersion}；请重新 read 并核对再 patch。`;
     }
   }
 

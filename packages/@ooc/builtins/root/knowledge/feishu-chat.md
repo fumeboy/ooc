@@ -5,7 +5,7 @@ activates_on:
   "object::feishu_chat": "show_content"
 ---
 
-feishu_chat window 把一个飞书群聊 / 单聊引入 context（由 `root.open_feishu_chat` 创建）。
+feishu_chat window 把一个飞书群聊 / 单聊引入 context（由 `feishu_app.open_chat` 创建）。
 
 在它上面用 `exec(window_id="<feishu_chat_window_id>", method="X", args={…})` 调：
 

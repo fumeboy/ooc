@@ -2,7 +2,7 @@
  * reflect_request —— executable 维度（reflectable 沉淀 object method）。
  *
  * reflect_request 是 super flow 反思 thread 的 self-view（`ooc.class: "_builtin/thread"`，class 链
- * reflect_request → thread → talk）。会话 method（say / wait / close / share / talk）全部经 class 链
+ * reflect_request → thread → talk）。会话 method（say / close / share）全部经 class 链
  * 从 talk 继承；本类只提供自己的两个 **reflectable 沉淀 method**：
  *   - new_feat_branch                  —— 开 feat 分支并绑定本 thread（沉淀第一步）
  *   - create_pr_and_invite_reviewers   —— commit feat worktree、开 PR、邀 reviewer（finalizer）

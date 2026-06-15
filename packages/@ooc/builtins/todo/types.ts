@@ -15,17 +15,15 @@ export interface Data {
 }
 
 /**
- * @deprecated 过渡兼容别名 —— 旧 `TodoWindow`（窗信封 + 业务字段平铺）的形状，
- * 仅为让尚未迁移的 visible 组件 / 外部引用在 core 反推完成前继续编译。
- * core 反推到新契约后删除。新代码一律用 `Data`。
+ * 过渡兼容别名（deferred）：visible 前端组件本轮**保留不动**，它消费的是
+ * 「信封 + Data」的完整窗对象（持 id / title / status / content）。在 core 反推
+ * 把 visible 切到 `OocObjectInstance` 之前，此别名让前端 / live union 继续编译；
+ * 由 `Data` 派生而非另铺业务字段，避免与 `Data` 漂移。不属业务 Data，勿在后端使用。
  */
-export interface TodoWindow {
+export type TodoWindow = Data & {
   id: string;
   class: "todo";
   parentWindowId?: string;
   title: string;
-  status: "open" | "done";
   createdAt: number;
-  content: string;
-  activatesOn?: string[];
-}
+};

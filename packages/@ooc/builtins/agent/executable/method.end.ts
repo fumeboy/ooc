@@ -62,6 +62,17 @@ export const endMethod: ObjectMethod<Data> = {
   name: "end",
   description:
     "End the current thread (mark done); optional reason/summary/result to report back to parent.",
+  schema: {
+    args: {
+      reason: { type: "string", required: false, description: "结束原因（记入 thread.endReason）" },
+      summary: { type: "string", required: false, description: "本 thread 的小结（记入 thread.endSummary）" },
+      result: {
+        type: "string",
+        required: false,
+        description: "回报给父级/creator 会话窗的结果（经 creator 窗 say 派回）",
+      },
+    },
+  },
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     if (!ctx.thread) return undefined;
 
