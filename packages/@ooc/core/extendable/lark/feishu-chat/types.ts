@@ -1,5 +1,3 @@
-import type { BaseContextWindow } from "../../../executable/windows/_shared/types.js";
-
 /**
  * Feishu chat window — 在 context 中以飞书群聊 / 单聊为对象单元的窗口。
  *
@@ -36,9 +34,11 @@ export interface FeishuChatMessage {
   replyToMessageId?: string;
 }
 
-export interface FeishuChatWindow extends BaseContextWindow {
-  class: "feishu_chat";
-  status: "open" | "closed";
+/**
+ * feishu_chat 的 **object data**（Wave 4 OocClass 契约的 `types.ts` = 纯业务数据）。
+ * 不含窗信封字段（id/class/title/status/createdAt 由 runtime 管理）；投影态本类无独立 win。
+ */
+export interface Data {
   chatId: string;
   chatName: string;
   chatType?: "group" | "p2p" | "topic";
@@ -52,3 +52,14 @@ export interface FeishuChatWindow extends BaseContextWindow {
   /** 末次 refresh 时间（毫秒）；用于 render 显示陈旧度。 */
   lastRefreshAtMs?: number;
 }
+
+/**
+ * @deprecated 过渡兼容别名（visible 层仍按旧「窗对象」消费）。
+ * 新后端契约用 Data + runtime 信封（OocObjectInstance）。
+ */
+export type FeishuChatWindow = Data & {
+  id?: string;
+  class?: "feishu_chat";
+  title?: string;
+  status?: "open" | "closed";
+};

@@ -133,9 +133,9 @@ function lookupDeclaredPermission(
 
   const tryWindow = (windowType: string): PermissionLevel | undefined => {
     try {
-      const def = registry.getObjectDefinition(windowType as never);
-      const entry = def.methods[methodName];
-      const fn = entry?.permission;
+      // 沿继承链解析该 class 上的 method（子类覆盖父类），取其 permission 谓词。
+      const method = registry.resolveObjectMethod(windowType, methodName);
+      const fn = method?.permission;
       if (!fn) return undefined;
       try {
         const args = call.args && typeof call.args === "object" && !Array.isArray(call.args)

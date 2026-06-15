@@ -10,7 +10,9 @@ import {
   writeReadable,
   writeSelf,
 } from "@ooc/core/persistable";
-import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
+import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
+import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
+import type { ExecutableContext } from "@ooc/core/executable/contract";
 import { normalizeMethodOutcome } from "@ooc/core/_shared/types/method.js";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { parseKnowledgeFile, parseActivatesOn } from "@ooc/core/thinkable/knowledge";
@@ -363,31 +365,36 @@ export function createStonesService({
     },
     async callMethod({ objectId, method, args = {} }: { objectId: string; method: string; args?: Record<string, unknown> }) {
       await ensureStoneExists(objectId);
-      let window;
+      // 加载 stone 的 `export const Class` 并注册进 per-call registry（seedFrom builtins 以解析
+      // 继承链上的 object method）；该 stone 无 index.ts（纯 self.md 对象）= 没有可调方法。
+      const registry = createObjectRegistry();
+      let registered: boolean;
       try {
-        window = await loadObjectWindow(ref(objectId));
+        registered = await defaultServerLoader.loadAndRegisterStoneClass(ref(objectId), objectId, registry);
       } catch (error) {
         throw new AppServerError(
           "METHOD_LOAD_FAILED",
-          `failed to load object window for stone ${objectId}: ${(error as Error).message}`,
+          `failed to load object class for stone ${objectId}: ${(error as Error).message}`,
           { objectId, method }
         );
       }
-      // HTTP call_method 只暴露 window.methods 里标了 for_ui_access 的方法（人类/client 侧专路）。
-      const methods = window?.methods ?? {};
-      const entry = methods[method];
+      // HTTP call_method 只暴露标了 for_ui_access 的 object method（人类/client 侧专路）。
+      const methods = registered ? registry.resolveObjectMethods(objectId) : [];
+      const entry = methods.find((m) => m.name === method);
       if (!entry || entry.for_ui_access !== true) {
         throw new AppServerError(
           "METHOD_NOT_FOUND",
           `method '${method}' not found or not for_ui_access on stone '${objectId}'`,
-          { objectId, method, available: Object.keys(methods).filter((m) => methods[m].for_ui_access === true) }
+          { objectId, method, available: methods.filter((m) => m.for_ui_access === true).map((m) => m.name) }
         );
       }
       try {
-        // HTTP 入口无 thread/manager；注入 self.dir（stone 身份目录）让 for_ui_access 方法
+        // HTTP 入口无 thread/runtime；注入 self.dir（stone 身份目录）让 for_ui_access 方法
         // 能读写自己 stone 文件（reflectable）。响应即规范化 MethodOutcome——前端从 data
         // 取结构化数据、result 取消息文本。
-        return normalizeMethodOutcome(await entry.exec({ args, self: { dir: dir(objectId) } } as never));
+        const ctx: ExecutableContext = { object: { id: objectId, class: objectId }, args };
+        const self = { dir: dir(objectId) } as never;
+        return normalizeMethodOutcome(await entry.exec(ctx, self, args));
       } catch (error) {
         throw new AppServerError(
           "INTERNAL_ERROR",

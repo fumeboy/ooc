@@ -7,8 +7,9 @@
  *   的 activates_on 对当前 thread 逐篇匹配，命中才注入——Object 只在相关交互面看到对应切片。
  * - **creator-reply 协议**：动态按 creator do/talk window 的 id 生成，不属于静态 root 知识。
  */
-import type { ContextWindow, KnowledgeWindow } from "../../executable/windows/_shared/types.js";
 import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { Data as KnowledgeData } from "@ooc/builtins/knowledge/types.js";
 import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
 import { computeActivations, loadKnowledgeIndexFromDir } from "../knowledge/index.js";
@@ -34,18 +35,16 @@ function nextSyntheticId(): string {
 function makeKnowledgeWindow(
   path: string,
   body: string,
-  source: NonNullable<KnowledgeWindow["source"]>,
-): KnowledgeWindow {
+  source: NonNullable<KnowledgeData["source"]>,
+): OocObjectInstance<KnowledgeData> {
   return {
     id: nextSyntheticId(),
     class: "knowledge",
-    parentWindowId: ROOT_WINDOW_ID,
+    parentObjectId: ROOT_WINDOW_ID,
     title: path,
     status: "open",
     createdAt: Date.now(),
-    path,
-    source,
-    body,
+    data: { path, source, body },
   };
 }
 
@@ -67,17 +66,21 @@ async function loadRootKnowledgeIndex(): Promise<KnowledgeIndex> {
  * 按 activates_on 把 root builtin knowledge 中命中当前 thread 的篇目转成 KnowledgeWindow。
  * full → 完整 body；summary → 仅 description（body 空），与 activator 渲染对齐。
  */
-async function buildRootKnowledgeWindows(thread: ThreadContext): Promise<KnowledgeWindow[]> {
+async function buildRootKnowledgeWindows(
+  thread: ThreadContext,
+): Promise<OocObjectInstance<KnowledgeData>[]> {
   const index = await loadRootKnowledgeIndex();
   if (index.byPath.size === 0) return [];
-  const out: KnowledgeWindow[] = [];
+  const out: OocObjectInstance<KnowledgeData>[] = [];
   for (const act of computeActivations(thread, index)) {
     const body = act.presentation === "full" ? act.doc.body : "";
-    out.push({
-      ...makeKnowledgeWindow(act.path, body, "protocol"),
+    const inst = makeKnowledgeWindow(act.path, body, "protocol");
+    inst.data = {
+      ...inst.data,
       presentation: act.presentation,
       description: act.doc.frontmatter.description,
-    } as KnowledgeWindow);
+    };
+    out.push(inst);
   }
   return out;
 }
@@ -86,7 +89,7 @@ async function buildRootKnowledgeWindows(thread: ThreadContext): Promise<Knowled
  * 子→父 reply protocol knowledge builder.
  * Tells sub-thread LLM the only valid reply channel is creator talk_window.say.
  */
-function buildCreatorReplyKnowledge(window: ContextWindow): string {
+function buildCreatorReplyKnowledge(window: OocObjectInstance): string {
   const isFork = (window as { isForkWindow?: boolean }).isForkWindow === true;
   const upstream = isFork ? "父线程" : "caller object 的对端 thread";
   const delivery = isFork
@@ -122,14 +125,14 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
 export async function buildProtocolKnowledgeWindows(
   thread: ThreadContext,
   _registry: ObjectRegistry = builtinRegistry,
-): Promise<KnowledgeWindow[]> {
-  const windows: KnowledgeWindow[] = await buildRootKnowledgeWindows(thread);
+): Promise<OocObjectInstance<KnowledgeData>[]> {
+  const windows: OocObjectInstance<KnowledgeData>[] = await buildRootKnowledgeWindows(thread);
 
   // creator-reply 协议：每个 self-view（creator）会话窗一条，按 window id 去重。
   // self-view 恒有 isCreatorWindow=true（普通 flow class=thread / super flow class=reflect_request /
   // 历史 fork-creator 也走同一 flag），按 flag 识别（class-agnostic + forward-compatible）。
   const seen = new Set<string>();
-  for (const w of (thread.contextWindows ?? []) as ContextWindow[]) {
+  for (const w of thread.contextWindows ?? []) {
     const isCreator = (w as { isCreatorWindow?: boolean }).isCreatorWindow === true;
     if (!isCreator) continue;
     const path = `internal/windows/${w.class}/creator-reply/${w.id}`;

@@ -1,22 +1,18 @@
 /**
  * Window enrichment utilities.
  *
- * 仅沿 parentClass 链解析各窗口的 effectiveVisibleType（form 指引现为 plain-string tip
- * 直渲于 form，不派生 guidance/knowledge 窗口）。
+ * Wave 4：effectiveVisibleType（沿 parentClass 链解析「有效可见渲染类型」）随可见性短路
+ * 一并丢弃——registry 不再提供 resolveEffectiveVisibleType。本函数降为类型对齐的 pass-through，
+ * 保留 pipeline 相位占位以便后续 re-home 可见性时填回。
  */
-import type { ContextWindow } from "../../executable/windows/_shared/types.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
 
-/** Enrich context windows: resolve effectiveVisibleType along the parentClass chain. */
+/** Pass-through over context windows（effectiveVisibleType 解析本轮丢弃）。 */
 export function enrichContextWindows(
-  windows: ContextWindow[] | undefined,
-  registry: ObjectRegistry = builtinRegistry,
-): ContextWindow[] {
-  return (windows ?? []).map((window) => {
-    const effVis = registry.resolveEffectiveVisibleType(window.class as any);
-    return effVis && effVis !== window.class
-      ? { ...window, effectiveVisibleType: effVis }
-      : window;
-  });
+  windows: OocObjectInstance[] | undefined,
+  _registry: ObjectRegistry = builtinRegistry,
+): OocObjectInstance[] {
+  return windows ?? [];
 }

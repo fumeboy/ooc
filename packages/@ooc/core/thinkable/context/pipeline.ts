@@ -6,7 +6,7 @@
  * buildInputItems 是本 pipeline 的薄封装。
  */
 import type { ThreadContext } from "./index.js";
-import type { ContextWindow } from "../../executable/windows/_shared/types.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { ContextSnapshot } from "./snapshot.js";
 import { BudgetManager, loadBudgetThresholds } from "./budget.js";
 import { SystemProcessor } from "./processors/system.js";
@@ -16,11 +16,11 @@ import { PeerProcessor } from "./processors/peer.js";
 
 export interface PipelinePhase {
   name: string;
-  run(thread: ThreadContext, ctx: PipelineContext): ContextWindow[] | Promise<ContextWindow[]>;
+  run(thread: ThreadContext, ctx: PipelineContext): OocObjectInstance[] | Promise<OocObjectInstance[]>;
 }
 
 export interface PipelineContext {
-  windows: ContextWindow[];  // accumulated so far
+  windows: OocObjectInstance[];  // accumulated so far
 }
 
 export class ContextPipeline {
@@ -33,8 +33,8 @@ export class ContextPipeline {
   async run(thread: ThreadContext): Promise<ContextSnapshot> {
     // intentCache 的 lazy-init —— evaluateTrigger 的 intent case 会读 thread.intentCache。
     if (!thread.intentCache) thread.intentCache = new Map();
-    // contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 PipelineContext.windows。
-    const ctx: PipelineContext = { windows: [...(thread.contextWindows ?? [])] as ContextWindow[] };
+    // thread.contextWindows 已是 OocObjectInstance[]——pipeline 直接以实例信封为流通单元。
+    const ctx: PipelineContext = { windows: [...(thread.contextWindows ?? [])] };
 
     for (const phase of this.phases) {
       const result = await phase.run(thread, ctx);

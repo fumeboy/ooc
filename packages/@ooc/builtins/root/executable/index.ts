@@ -11,7 +11,6 @@
  */
 
 import type {
-  ExecutableContext,
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
@@ -24,19 +23,6 @@ import {
 import { exampleMethod } from "./method.example.js";
 import type { Data } from "../types.js";
 
-// deferred: 飞书 opener 的执行体（executeOpenFeishuChat/Doc）仍是旧契约
-// （单参 MethodExecutionContext{thread,args,manager}，体内 WindowManager.insertTypedWindow +
-// FeishuChatWindow/FeishuDocWindow 强类型）。core 反推阶段把它们迁到新契约后，此处直接调
-// 新签名；本轮经 unknown 桥接 (ctx,self,args) → 旧 ctx，保留业务逻辑体。
-function bridgeLegacyExec(
-  legacy: (ctx: any) => Promise<string | undefined>,
-): ObjectMethod<Data>["exec"] {
-  return async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
-    const legacyCtx = { thread: ctx.thread, args } as unknown;
-    return await legacy(legacyCtx);
-  };
-}
-
 const openFeishuChatMethod: ObjectMethod<Data> = {
   name: "open_feishu_chat",
   description: "Open a Feishu (Lark) chat as a window in context.",
@@ -48,7 +34,7 @@ const openFeishuChatMethod: ObjectMethod<Data> = {
       tail_count: { type: "number", description: "首屏 buffer 条数（默认 30）" },
     },
   },
-  exec: bridgeLegacyExec(executeOpenFeishuChat),
+  exec: executeOpenFeishuChat,
 };
 
 const openFeishuDocMethod: ObjectMethod<Data> = {
@@ -65,7 +51,7 @@ const openFeishuDocMethod: ObjectMethod<Data> = {
       doc_title: { type: "string", description: "文档标题" },
     },
   },
-  exec: bridgeLegacyExec(executeOpenFeishuDoc),
+  exec: executeOpenFeishuDoc,
 };
 
 export const ROOT_METHODS: ObjectMethod<Data>[] = [

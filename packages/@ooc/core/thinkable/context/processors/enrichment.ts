@@ -7,13 +7,13 @@
  */
 import type { PipelinePhase, PipelineContext } from "../pipeline.js";
 import type { ThreadContext } from "../index.js";
-import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
+import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
 import { builtinRegistry } from "../../../executable/windows/index.js";
 import { enrichContextWindows } from "../window-enrichment.js";
 
 export const WindowEnrichmentProcessor: PipelinePhase = {
   name: "WindowEnrichmentProcessor",
-  async run(_thread: ThreadContext, ctx: PipelineContext): Promise<ContextWindow[]> {
+  async run(_thread: ThreadContext, ctx: PipelineContext): Promise<OocObjectInstance[]> {
     const enriched = enrichContextWindows(ctx.windows, builtinRegistry);
     ctx.windows.length = 0;
     ctx.windows.push(...enriched);

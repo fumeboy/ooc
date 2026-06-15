@@ -41,6 +41,7 @@ import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "../_shared/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { creatorWindowIdOf, type TalkWindow } from "../_shared/types.js";
+import type { TalkData } from "./types.js";
 
 export interface TalkDeliveryInput {
   caller: { thread: ThreadContext; talkWindow: TalkWindow };
@@ -250,13 +251,15 @@ function resolveCalleeReplyToWindowId(
   callerThreadId: string,
   callerObjectId: string,
 ): string {
-  const windows = (calleeThread.contextWindows ?? []).filter(
-    // talk + reflect_request 同形会话窗：callee 的 reflect_request creator 窗（super 反思）也参与回信归位。
-    (w): w is TalkWindow => isTalkLikeClass(w.class),
-  );
-  const byThreadId = windows.find((w) => w.targetThreadId === callerThreadId);
+  // Wave 4：contextWindows 元素是 OocObjectInstance（信封 + data 分离）；会话业务字段
+  // （target / targetThreadId）落 inst.data（=TalkData）。会话窗（talk + reflect_request
+  // self-view）按 inst.class 识别，回信归位字段从 inst.data 读。
+  const windows = (calleeThread.contextWindows ?? [])
+    .filter((inst) => isTalkLikeClass(inst.class))
+    .map((inst) => ({ id: inst.id, data: (inst.data ?? {}) as TalkData }));
+  const byThreadId = windows.find((w) => w.data.targetThreadId === callerThreadId);
   if (byThreadId) return byThreadId.id;
-  const byObjectId = windows.find((w) => w.target === callerObjectId);
+  const byObjectId = windows.find((w) => w.data.target === callerObjectId);
   if (byObjectId) return byObjectId.id;
   return creatorWindowIdOf(calleeThread.id);
 }

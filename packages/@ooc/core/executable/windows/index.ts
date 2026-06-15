@@ -1,15 +1,15 @@
 /**
- * windows/ 模块 barrel — 对外暴露 ContextWindow 抽象的所有公共入口。
+ * windows/ 模块 barrel —— ContextWindow 抽象 + builtin class 装载入口。
  *
- * 已删除所有 deprecated alias re-export
- * （string / ContextObject / ObjectTypeDefinition / ObjectMethod /
- *  MethodExecutionContext / MethodOutcome）。
+ * 两职：
+ * 1. 对外暴露 ContextWindow 类型 / WindowManager / init / projection 等公共入口。
+ * 2. **装载核心 builtin class**：root / pr / reflect_request 经 `export const Class` 显式
+ *    `builtinRegistry.register(...)`；talk / method_exec 等核心载体经 side-effect import 注册；
+ *    其余 builtin 经 `../../extendable/index.js` 装载。
  *
- * 已删除 registry thin wrapper 函数的 re-export
- * （registerObjectType / getObjectDefinition / listRegisteredObjectTypes /
- *  assertAllObjectDefinitionsRegistered / lookupMethod / lookupMethodEntry /
- *  lookupConstructor / resolveParentClassChain / resolveEffectiveVisibleType）。
- * 调用方应直接使用 builtinRegistry.registerWindowClass(...)（一处声明一个窗类型）。
+ * Wave 4 对象模型重构已删除旧 deferred-hook 类型 re-export（ObjectDefinition / OnCloseHook /
+ * RenderContext / ReadableFn）与旧 root method re-export（ROOT_METHODS / getOpenableMethods /
+ * deriveRootIntentPaths / execRootMethod）——它们随旧 ObjectDefinition 契约一并废弃。
  */
 
 export type {
@@ -17,7 +17,6 @@ export type {
   WindowStatus,
   BaseContextWindow,
   RootWindow,
-  MethodExecWindow,
   TodoWindow,
   TalkWindow,
   PrWindow,
@@ -25,7 +24,6 @@ export type {
   InterpreterProcessWindow,
   FileWindow,
   KnowledgeWindow,
-  SearchWindow,
   SearchMatch,
   PlanWindow,
   PlanWindowStep,
@@ -45,12 +43,7 @@ export {
 } from "./_shared/registry.js";
 
 export type {
-  ObjectDefinition,
-  ObjectRegistry,
-  OnCloseHook,
-  OnCloseContext,
-  RenderContext,
-  ReadableFn,
+  RegisteredClass,
   MethodVisibilityContext,
 } from "./_shared/registry.js";
 
@@ -69,40 +62,26 @@ export type { InitContextWindowsOpts } from "./_shared/init.js";
 export { computeProjectionClass } from "./_shared/projection-class.js";
 export type { ProjectionClass } from "./_shared/projection-class.js";
 
-// root methods 的工具函数（仅服务 root level；非 root window 的 method 通过 object registry 查）
-export {
-  ROOT_METHODS,
-  getOpenableMethods,
-  deriveRootIntentPaths,
-  execRootMethod,
-} from "@ooc/builtins/root";
+// ─────────────────────────── builtin class 装载 ───────────────────────────
+// 每个 builtin 包导出 `export const Class: OocClass`；一处 builtinRegistry.register 装载。
+// 装载键名传原始 objectId（含 `_builtin/`），registry 内部归一。
 
-// Side-effect imports: each window type module 通过 builtinRegistry.registerWindowClass 一处声明
-// （seed-if-absent + methods + readable + 可见性 flag）。这些 import 必须在 WindowManager 之后 load，确保使用时表已就绪。
-//
-// root 必须最先 load。
-import "@ooc/builtins/root";
+import { builtinRegistry as _reg } from "./_shared/registry.js";
+import { Class as RootClass } from "@ooc/builtins/root";
+import { Class as PrClass } from "@ooc/builtins/pr";
+import { Class as ReflectRequestClass } from "@ooc/builtins/reflect_request";
 
-// talk 是所有 Agent 的固有能力（统一 peer 会话 + fork 子线程两形态）。
+// root 是继承链终点基类（BASE_CLASS_ANCHOR 已 parentClass:null）；合入 root 的 executable/readable。
+_reg.register("_builtin/root", RootClass, { parentClass: null });
+// pr：reviewer 评审窗（隐式继承 root）。
+_reg.register("_builtin/pr", PrClass);
+// reflect_request：super flow 反思会话窗（继承 _builtin/thread → talk）。
+_reg.register("_builtin/reflect_request", ReflectRequestClass, { parentClass: "_builtin/thread" });
+
+// talk 是所有 Agent 的固有能力（统一 peer 会话 + fork 子线程两形态）——核心载体，side-effect 注册。
 import "./talk/index.js";
-// reflectable 维度的 builtin 窗类（pr 评审窗 + reflect_request 反思会话窗）——
-// 已迁出 core 成正式 ooc class 包（@ooc/builtins/{pr,reflect_request}）；经
-// reflectable/index 源码索引 re-export 触发 side-effect 注册到 builtinRegistry。
-import "@ooc/core/reflectable/index.js";
+// method_exec 模块已删除（Wave 4 裁决：form 收集机制废弃，method 参数经 exec 直传 args）。
+// method_exec 仍作 BASE_CLASS_ANCHOR 保留在 object-registry，但无 methods/readable。
 
-// method_exec form 是 method 调用过程的临时载体（Object 内置特性）。
-import "./method_exec/index.js";
-
-
-// 其余 builtin types 通过 extendable/index.js 加载。
+// 其余 builtin class 通过 extendable/index.js 装载（含 thread / file / plan / … + 外部集成）。
 import "../../extendable/index.js";
-
-// Boot-time 校验：所有 object type 必须配齐 readable hook。
-// 延迟到 microtask 执行：本 barrel 与 root/executable / extendable 等存在循环 import，
-// 同步在 module-eval 末尾跑 assert 会在某些加载顺序下"过早"触发（彼时 root 等类型尚未
-// registerExecutable 完成），assert 抛错反而中断 root/executable 的 eval → ROOT_METHODS
-// 永不初始化（TDZ 级联）。queueMicrotask 让整个同步 import 图先 settle 再校验。
-import { builtinRegistry as _builtinReg } from "./_shared/registry.js";
-queueMicrotask(() => {
-  _builtinReg.assertAllObjectDefinitionsRegistered();
-});

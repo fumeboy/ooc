@@ -8,7 +8,7 @@
  * persistable。
  */
 
-import type { ContextWindow } from "./context-window.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { IntentCache } from "./intent.js";
 
 // ─────────────────────────── flow / stone 引用类型 ───────────────────────────
@@ -488,12 +488,11 @@ export type ThreadContext = {
   /** 当前线程发出的协作消息记录。 */
   outbox?: ThreadMessage[];
   /**
-   * 当前线程的所有 ContextWindow（flat 数组，层级通过 parentWindowId 表达）。
-   *
-   * 取代旧的 activeForms / windows / pinnedKnowledge 三套并列字段。
-   * 见 executable/windows/_shared/types.ts。
+   * 当前线程持有的 object 实例（Wave 4：元素类型从旧平铺 `ContextWindow` 改为
+   * `OocObjectInstance` —— 身份信封 + 业务 data + 投影态 win 分离）。**复用字段名**
+   * `contextWindows` 以最小破坏。访问方式：业务数据 `.data`、投影态 `.win`、信封 `.id/.class/...`。
    */
-  contextWindows: ContextWindow[];
+  contextWindows: OocObjectInstance[];
   /**
    * thread-local 共享数据；program_window 的 ts/js exec 之间通过这里传值
    * （program_window 的"跨 exec 数据传递"）。当前仅占位、不读不写。
@@ -556,7 +555,7 @@ export type ThreadContext = {
    * protocol knowledge look "未激活" in the debug snapshot). Runtime-only; never
    * persisted. Undefined falls back to thread.contextWindows.
    */
-  _renderedWindows?: ContextWindow[];
+  _renderedWindows?: OocObjectInstance[];
   /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
   persistence?: ThreadPersistenceRef;
 };

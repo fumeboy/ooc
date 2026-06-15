@@ -1,65 +1,46 @@
 /**
- * ServerLoader — 动态加载 stone 的 executable / readable 模块。
+ * ServerLoader —— 动态加载 stone（world 对象）的 `export const Class`（OocClass）+ 继承元信息。
  *
- * 从 executable/server/loader.ts 抽出为可实例化类。
- * 原有 module-level 导出保留作为对 `defaultServerLoader` 的 thin wrapper。
+ * Wave 4 对象模型：world 对象与 builtin 包同形——stone 目录有一个 `index.ts` 一处
+ * `export const Class: OocClass<Data>`（装配 construct / executable / readable / persistable），
+ * 及 `package.json` 的 `ooc.{objectId, class}`（继承父类）。loader 不再读旧
+ * `executable/index.ts` 的 `export const window`（barrel）。
+ *
+ * loader 只负责「从磁盘 import Class + 读 ooc.class」并按 mtime 缓存；把它注册进某个
+ * {@link ObjectRegistry} 由 {@link loadAndRegisterStoneClass} 收口（继承链 ensure 等渲染期策略
+ * 留给调用方）。
  */
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { resolveStoneDir } from "../persistable/index.js";
+import { resolveStoneDir, readStoneClass } from "../persistable/index.js";
 import type { StoneObjectRef } from "../persistable/index.js";
-import type { ReadableFn, ObjectDefinition } from "../executable/windows/_shared/registry.js";
+import type { OocClass } from "./ooc-class.js";
+import type { ObjectRegistry } from "./object-registry.js";
 
-/**
- * loader 缓存条目（loader 私有；按 mtime 失效）。
- *
- * `window` 即 stone 的 `export const window`（Partial<ObjectDefinition>），其 `readable`
- * 已合并独立 `readable.ts` 的导出——两者同属 ObjectDefinition.readable，不再拆成两个字段。
- * HTTP call_method 走 `window.methods` 里 `for_ui_access` 的方法（废 ui_methods 维度）。
- */
+/** loader 加载出的 stone class —— Class 模块 + 继承父类（来自 package.json `ooc.class`）。 */
+export interface LoadedStoneClass {
+  cls: OocClass;
+  parentClass: string | null | undefined;
+}
+
+/** loader 缓存条目（loader 私有；按 index.ts mtime 失效）。 */
 interface LoaderCacheEntry {
   mtime: number;
-  window: Partial<ObjectDefinition> | undefined;
+  loaded: LoadedStoneClass | undefined;
 }
 
 export class ServerLoader {
   private readonly cache = new Map<string, LoaderCacheEntry>();
 
-  /** 加载 stone 的独立 `readable.ts`（default 或具名 `readable` 导出）；缺失返回 undefined。 */
-  private async loadReadableTs(
-    readableFile: string,
-  ): Promise<{ fn: ReadableFn; mtime: number } | undefined> {
-    try {
-      const stats = await stat(readableFile);
-      const mod = await import(`${readableFile}?t=${stats.mtimeMs}`);
-      const fn =
-        typeof mod.default === "function"
-          ? mod.default
-          : typeof mod.readable === "function"
-            ? mod.readable
-            : undefined;
-      return fn ? { fn: fn as ReadableFn, mtime: stats.mtimeMs } : undefined;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-      throw e;
-    }
-  }
-
-  private async resolveExecutableFile(
+  /** 解析 stone 目录的 `index.ts`（`export const Class` 装配入口）；缺失返回 undefined。 */
+  private async resolveClassFile(
     ref: StoneObjectRef,
   ): Promise<{ path: string; mtime: number } | undefined> {
     const resolvedStoneDir = await resolveStoneDir(ref);
-    const newPath = join(resolvedStoneDir, "executable", "index.ts");
+    const indexPath = join(resolvedStoneDir, "index.ts");
     try {
-      const stats = await stat(newPath);
-      return { path: newPath, mtime: stats.mtimeMs };
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    const oldPath = join(resolvedStoneDir, "server", "index.ts");
-    try {
-      const stats = await stat(oldPath);
-      return { path: oldPath, mtime: stats.mtimeMs };
+      const stats = await stat(indexPath);
+      return { path: indexPath, mtime: stats.mtimeMs };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
       throw error;
@@ -67,47 +48,46 @@ export class ServerLoader {
   }
 
   private async loadEntry(stoneRef: StoneObjectRef): Promise<LoaderCacheEntry | undefined> {
-    const resolvedStoneDir = await resolveStoneDir(stoneRef);
-    const readableFile = join(resolvedStoneDir, "readable.ts");
-    const executableInfo = await this.resolveExecutableFile(stoneRef);
+    const classInfo = await this.resolveClassFile(stoneRef);
+    // 无 index.ts：合法的纯 self.md / readable.md 对象（无后端程序路由）。
+    if (!classInfo) return undefined;
 
-    // 无 executable/index.ts：仅有独立 readable.ts → window 只携带 readable。
-    if (!executableInfo) {
-      const r = await this.loadReadableTs(readableFile);
-      if (!r) return undefined;
-      const entry: LoaderCacheEntry = { mtime: r.mtime, window: { readable: r.fn } };
-      this.cache.set(readableFile, entry);
-      return entry;
-    }
+    const { path: classFile, mtime } = classInfo;
+    const cached = this.cache.get(classFile);
+    if (cached && cached.mtime === mtime) return cached;
 
-    const { path: serverFile, mtime: serverMtime } = executableInfo;
-    const cached = this.cache.get(serverFile);
-    if (cached && cached.mtime === serverMtime) return cached;
-
-    const mod = await import(`${serverFile}?t=${serverMtime}`);
-
-    if ("llm_methods" in mod) {
+    const mod = await import(`${classFile}?t=${mtime}`);
+    const cls = (mod.Class ?? undefined) as OocClass | undefined;
+    if (!cls) {
       throw new Error(
-        `${serverFile}: 'llm_methods' 已被移除；请改写为 \`export const window: Partial<ObjectDefinition> = { methods: { ... } }\``,
+        `${classFile}: 缺少 \`export const Class\`（OocClass 装配入口）。世界对象的 index.ts 必须一处导出 Class。`,
       );
     }
+    const parentClass = await readStoneClass(stoneRef);
 
-    const win = (mod.window ?? undefined) as Partial<ObjectDefinition> | undefined;
-    const readableTs = await this.loadReadableTs(readableFile);
-    // 合并 readable.ts 进 window.readable（window 自带 readable 优先），二者同属 ObjectDefinition.readable。
-    const window: Partial<ObjectDefinition> | undefined =
-      win || readableTs
-        ? { ...(win ?? {}), readable: win?.readable ?? readableTs?.fn }
-        : undefined;
-
-    const entry: LoaderCacheEntry = { mtime: serverMtime, window };
-    this.cache.set(serverFile, entry);
+    const entry: LoaderCacheEntry = { mtime, loaded: { cls, parentClass } };
+    this.cache.set(classFile, entry);
     return entry;
   }
 
-  /** 动态加载 stone 的 `export const window`（readable 已合并 readable.ts），按 mtime 缓存。 */
-  async loadObjectWindow(stoneRef: StoneObjectRef): Promise<Partial<ObjectDefinition> | undefined> {
-    return (await this.loadEntry(stoneRef))?.window;
+  /** 动态加载 stone 的 `export const Class` + 继承父类（按 mtime 缓存）；无后端路由返回 undefined。 */
+  async loadStoneClass(stoneRef: StoneObjectRef): Promise<LoadedStoneClass | undefined> {
+    return (await this.loadEntry(stoneRef))?.loaded;
+  }
+
+  /**
+   * 加载 stone 的 Class 并注册进给定 registry（键名=原始 objectId，registry 内部归一）。
+   * 成功返回 true；该 stone 无 index.ts（纯 self.md 对象）返回 false。load 抛错向上抛（fail-loud）。
+   */
+  async loadAndRegisterStoneClass(
+    stoneRef: StoneObjectRef,
+    objectId: string,
+    registry: ObjectRegistry,
+  ): Promise<boolean> {
+    const loaded = await this.loadStoneClass(stoneRef);
+    if (!loaded) return false;
+    registry.register(objectId, loaded.cls, { parentClass: loaded.parentClass });
+    return true;
   }
 
   /** 使单个 stone 的缓存条目失效（热更新用）。 */
@@ -133,11 +113,11 @@ export function createServerLoader(): ServerLoader {
   return new ServerLoader();
 }
 
-/** 动态加载 stone 的 `export const window`，按 mtime 缓存（委托默认实例）。 */
-export async function loadObjectWindow(
+/** 动态加载 stone 的 `export const Class` + 继承父类，按 mtime 缓存（委托默认实例）。 */
+export async function loadStoneClass(
   stoneRef: StoneObjectRef,
-): Promise<Partial<ObjectDefinition> | undefined> {
-  return defaultServerLoader.loadObjectWindow(stoneRef);
+): Promise<LoadedStoneClass | undefined> {
+  return defaultServerLoader.loadStoneClass(stoneRef);
 }
 
 /** 测试钩子：清空默认实例的 loader 缓存。 */

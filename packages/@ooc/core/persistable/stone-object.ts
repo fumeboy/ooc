@@ -165,7 +165,6 @@ export async function createStoneObject(
     ooc: {
       objectId: ref.objectId,
       kind: "object",
-      type: "agent",
       ...(opts?.class ? { class: opts.class } : {}),
     },
   };

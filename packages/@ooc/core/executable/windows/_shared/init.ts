@@ -19,12 +19,10 @@ import {
   ROOT_WINDOW_ID,
   SESSION_CREATOR_THREAD_ID,
   creatorWindowIdOf,
-  type ContextWindow,
-  type TalkWindow,
 } from "./types.js";
 import { DEFAULT_TRANSCRIPT_VIEWPORT } from "./transcript-viewport.js";
 import { computeProjectionClass } from "./projection-class.js";
-import type { ReflectRequestWindow } from "@ooc/builtins/reflect_request/types.js";
+import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {
   deriveStoneFromThread,
@@ -130,39 +128,39 @@ export function initContextWindows(
 
   // class 是 POV 投影：由 computeProjectionClass 从窗形态（isForkWindow/isCreatorWindow）+
   // thread session 单点算（同对象父子=fork 子窗→talk；跨对象 creator→super 取 reflect_request 否则 talk）。
-  const creatorWindow: ContextWindow = sameObject
-    ? ({
-        id: creatorWindowId,
-        // 同对象父子通道 = fork 子窗：creator 是父 thread，target=self object。
-        class: computeProjectionClass({ id: creatorWindowId, isForkWindow: true, isCreatorWindow: true }, thread),
-        parentWindowId: ROOT_WINDOW_ID,
-        title: opts.initialTaskTitle,
-        status: "open",
-        createdAt: Date.now(),
+  // Wave 4：creator 窗作为 OocObjectInstance——身份信封在顶层，talk-family 的投影态/会话字段
+  // （target/targetThreadId/conversationId/isForkWindow/transcriptViewport…）落 win。
+  const creatorClass = sameObject
+    ? computeProjectionClass({ id: creatorWindowId, isForkWindow: true, isCreatorWindow: true }, thread)
+    : computeProjectionClass({ id: creatorWindowId, isCreatorWindow: true }, thread);
+  const creatorWin: Record<string, unknown> = sameObject
+    ? {
+        transient: true,
         target: thread.persistence?.objectId ?? thread.creatorObjectId ?? "",
         targetThreadId: creatorThreadId,
         isForkWindow: true,
         conversationId: creatorWindowId,
         isCreatorWindow: true,
         state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
-        // class 经 computeProjectionClass 投影（fork → "talk"），其返回 union 比
-        // TalkWindow.class 宽，故整窗 as TalkWindow（运行期值恒为 "talk"）。
-      } as TalkWindow)
-    : ({
-        id: creatorWindowId,
-        // 跨对象 creator 窗：super 反思 thread（sessionId="super"）取 reflect_request —— 同形会话窗，
-        // 额外挂 new_feat_branch / create_pr_and_invite_reviewers 沉淀方法；普通跨对象 callee 取 talk。
-        class: computeProjectionClass({ id: creatorWindowId, isCreatorWindow: true }, thread),
-        parentWindowId: ROOT_WINDOW_ID,
-        title: opts.initialTaskTitle,
-        status: "open",
-        createdAt: Date.now(),
+      }
+    : {
+        transient: true,
         target: thread.creatorObjectId!,
         targetThreadId: creatorThreadId,
         conversationId: creatorWindowId,
         isCreatorWindow: true,
         transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
-      } as TalkWindow | ReflectRequestWindow);
+      };
+  const creatorWindow: OocObjectInstance = {
+    id: creatorWindowId,
+    class: creatorClass,
+    parentObjectId: ROOT_WINDOW_ID,
+    title: opts.initialTaskTitle,
+    status: "open",
+    createdAt: Date.now(),
+    data: {},
+    win: creatorWin,
+  };
 
   thread.contextWindows = [creatorWindow, ...list];
 }
@@ -186,21 +184,22 @@ function injectSelfWindowIfObjectThread(thread: ThreadContext): void {
   const objectId = thread.persistence?.objectId;
   if (!objectId || objectId === "user") return;
 
-  const id = objectId; // window id = object id (new design)
+  const id = objectId; // instance id = object id (new design)
   const list = thread.contextWindows ?? (thread.contextWindows = []);
   if (list.some((w) => w.id === id)) return;
 
-  const selfWindow: ContextWindow = {
+  const selfWindow: OocObjectInstance = {
     id,
-    class: objectId as any,
-    parentWindowId: ROOT_WINDOW_ID,
+    class: objectId,
+    parentObjectId: ROOT_WINDOW_ID,
     title: objectId,
     status: "open",
     createdAt: Date.now(),
-    // self 门面窗每次 init 幂等重注入、无独立 state.json → 标记为不持久化，
+    data: {},
+    // self 门面窗每次 init 幂等重注入、无独立 state.json → win.transient 标记为不持久化，
     // 否则 thread-context.json 落死 _ref，reload 刷屏 `references missing object <id>`。
-    isSelfWindow: true,
-  } as ContextWindow;
+    win: { transient: true, isSelfWindow: true },
+  };
 
   // 紧跟 root 之后；creator window 仍由后续路径插到这之前/之后均可
   thread.contextWindows = [selfWindow, ...list];
@@ -249,23 +248,25 @@ export async function injectPeerWindowsIfObjectThread(thread: ThreadContext): Pr
 
   const now = Date.now();
   const existingIds = new Set(list.map((w) => w.id));
-  const newWindows: ContextWindow[] = [];
+  const newInstances: OocObjectInstance[] = [];
   for (const peerId of peers) {
     if (existingIds.has(peerId)) continue;
-    newWindows.push({
+    newInstances.push({
       id: peerId,
-      class: peerId as any,
-      parentWindowId: ROOT_WINDOW_ID,
+      class: peerId,
+      parentObjectId: ROOT_WINDOW_ID,
       title: `peer: ${peerId}`,
       status: "open",
       createdAt: now,
-    } as ContextWindow);
+      data: {},
+      // peer 窗每轮幂等重注入（discover 派生）→ 非持久化。
+      win: { transient: true },
+    });
   }
-  if (newWindows.length > 0) {
+  if (newInstances.length > 0) {
     // 位置：放在 self window 之后、creator window 之前；与 self window 同属
-    // "Object 身份/环境层"。这里简单 push 到尾部即可——creator window 通常是
-    // prepend，self window 也是 prepend；实际显示顺序由 XmlRenderer 按语义排序。
-    thread.contextWindows = [...list, ...newWindows];
+    // "Object 身份/环境层"。这里简单 push 到尾部即可——实际显示顺序由 renderer 按语义排序。
+    thread.contextWindows = [...list, ...newInstances];
   }
 }
 
@@ -318,13 +319,13 @@ async function readDeclaredMembers(ref: StoneObjectRef): Promise<string[]> {
 
 /**
  * 组合注入 —— 把 agent 类声明持有的 tool-object 成员（如 filesystem）作为 first-class
- * 可 exec 的 ContextWindow 注入 thread.contextWindows。
+ * 可 exec 的 object 实例（`OocObjectInstance`）注入 thread.contextWindows。
  *
- * 设计：成员是单例 builtin 类型（registry 已 seed + 全局注册，无需每轮 type 注册——
- * 这点比 peer 注入更简单）。member 窗：
+ * 设计：成员是单例 builtin 类型（registry 已 seed + 全局注册，无需每轮 type 注册）。member 实例：
  * - id = class = 成员 type 串（singleton：id 稳定 = type）
- * - isMemberWindow=true → 非持久化（每轮 init 幂等重注入，不落 thread-context.json 死 _ref）
- * - exec 路由不变：window_id="filesystem" → requireParent 命中 → registry.lookupMethod 解析其方法
+ * - data = {}（成员单例无业务数据；行为来自 class 方法）
+ * - win = { transient:true, isMemberWindow:true } → **非持久化**：每轮 init 幂等重注入，
+ *   写盘端经 `isTransientInstance` 剔除（不落 thread-context.json 死 _ref）。
  *
  * 幂等：已存在则跳过。IO 失败静默吞（debug log），不阻塞 thread 启动。
  */
@@ -347,20 +348,21 @@ export async function injectMemberWindowsIfObjectThread(thread: ThreadContext): 
   const list = thread.contextWindows ?? (thread.contextWindows = []);
   const existingIds = new Set(list.map((w) => w.id));
   const now = Date.now();
-  const newWindows: ContextWindow[] = [];
+  const newInstances: OocObjectInstance[] = [];
   for (const memberType of members) {
     if (existingIds.has(memberType)) continue;
-    newWindows.push({
+    newInstances.push({
       id: memberType,
-      class: memberType as any,
-      parentWindowId: ROOT_WINDOW_ID,
+      class: memberType,
+      parentObjectId: ROOT_WINDOW_ID,
       title: `member: ${memberType}`,
       status: "open",
       createdAt: now,
-      isMemberWindow: true,
-    } as ContextWindow);
+      data: {},
+      win: { transient: true, isMemberWindow: true },
+    });
   }
-  if (newWindows.length > 0) {
-    thread.contextWindows = [...list, ...newWindows];
+  if (newInstances.length > 0) {
+    thread.contextWindows = [...list, ...newInstances];
   }
 }

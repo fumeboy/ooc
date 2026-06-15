@@ -1,95 +1,31 @@
 /**
- * ObjectRegistry 相关类型 + filterMethodsByVisibility 纯函数 —— canonical 源
- * （从 `executable/windows/_shared/registry.ts` 迁入类型部分）。
+ * ObjectRegistry 相关类型 + filterMethodsByVisibility 纯函数 —— canonical 源。
  *
- * **留在 runtime / executable**（含可变状态，不可下沉 `_shared`）：
- * - `ObjectRegistry` class、`builtinRegistry` singleton、`createObjectRegistry()` 工厂
- *   （在 `runtime/object-registry.ts`）
+ * Wave 4 对象模型重构：registry 从存旧 `ObjectDefinition`（methods Record + 旧 readable +
+ * onClose/compressView/consumedMessageIds 等 deferred hook）改为存新契约 `OocClass`
+ * （construct / executable / readable / persistable 四维度模块）。
  *
- * **迁入本文件**：所有 hook/定义类型 + `filterMethodsByVisibility`（纯函数，无可变状态）。
+ * **本文件只留两样东西**：
+ * - `RegisteredClass`：registry store 的元素类型 = `OocClass` + 继承元信息（parentClass / isBuiltinFeature）。
+ * - `filterMethodsByVisibility`：按可见性档位过滤 object method（纯函数，无可变状态）。
+ *
+ * 旧 hook 类型（OnCloseHook / CompressViewHook / ReadableFn / RenderContext / ConsumedMessageIdsHook）
+ * 在 Wave 4 直接丢弃——它们是 Wave 4 之后 re-home 的，不为兼容保留。
  */
 
-import type { ContextWindow } from "./context-window.js";
-import type { ThreadContext } from "./thread.js";
-import type { XmlNode } from "./xml.js";
-import type { ObjectMethod } from "./method.js";
-import type { WindowMethod } from "./window-method.js";
-
-export interface OnCloseContext {
-  thread: ThreadContext;
-  window: ContextWindow;
-}
-export type OnCloseHook = (ctx: OnCloseContext) => boolean | void;
-
-export interface RenderContext {
-  thread: ThreadContext;
-  window: ContextWindow;
-}
-
-export type ReadableFn = (ctx: RenderContext) => XmlNode[] | Promise<XmlNode[]>;
-
-export type CompressViewHook = (
-  ctx: RenderContext,
-  level: 1 | 2,
-) => XmlNode[] | Promise<XmlNode[]>;
+import type { OocClass } from "../../runtime/ooc-class.js";
+import type { ObjectMethod } from "../../executable/contract.js";
 
 /**
- * 列出某个 window 在本轮已"消费"的 inbox/outbox 消息 id。
+ * registry store 的元素 —— 一个已注册 class 的全部信息。
  *
- * 用途：renderer 在渲染顶层 inbox/outbox fallback 时，需要排除那些已被某个
- * window（如 do/talk）的 transcript 视图展示过的消息，避免重复渲染。每个 window
- * type 自己最清楚"哪些消息属于我的 transcript"，故把该判定下放到 ObjectDefinition。
- *
- * 解耦动机（ooc-6 G4）：消除 renderer（thinkable）对 do/talk 过滤函数（executable）
- * 的直接 import；改由 registry 派发。返回 `{ id }` 序列即可，renderer 只取 id。
+ * = `OocClass`（construct/executable/readable/persistable）+ 继承/可见性元信息：
+ * - parentClass     : 单链继承父类 id（`undefined` → 隐式继承 root；`null` → 无父=继承链终点）。
+ * - isBuiltinFeature : 标记 Object 内置特性类（method_exec 等临时载体），影响 ownerRef 解析。
  */
-export type ConsumedMessageIdsHook = (
-  ctx: RenderContext,
-) => Iterable<{ id: string }>;
-
-/**
- * Object 类型定义（canonical，原 ObjectTypeDefinition 重命名）。
- *
- * 已删除字段：
- * - 旧 `commands` → `methods`；`prototype` → `parentClass`
- * - `type` —— registry Map key 即 type，字段冗余（string 类型本身也在逐步退役）
- * - `renderXml` → `readable`（签名一致的标准替代）
- * - `basicKnowledge` —— type 级协议知识通道退役
- *
- * stone 的 `executable/index.ts` `export const window` 即本形状的 Partial
- * （旧 StoneObjectDeclaration 已删，与本定义冗余）。
- */
-export interface ObjectDefinition {
-  methods: Record<string, ObjectMethod>;
-  /**
-   * Window method 表（归 readable 维度，控制 window 展示）。与 methods（object method,
-   * 归 executable）物理分离。dispatch 时优先查此表。
-   */
-  windowMethods?: Record<string, WindowMethod>;
-  onClose?: OnCloseHook;
-  compressView?: CompressViewHook;
-  readable?: ReadableFn;
-  isBuiltinFeature?: boolean;
-  /**
-   * 该 window class 是否参与可见类型解析（resolveEffectiveVisibleType）。
-   * 取代 object-registry.ts 旧的 module-level `RENDERABLE_VISIBLE_TYPES` Set——
-   * 现由每个 class 在注册期声明自己是否「可渲染可见类型」，registry 查 flag 而非硬编码集合。
-   * （成员集与旧 Set 逐成员等价。）
-   */
-  renderableVisible?: boolean;
-  /**
-   * 该 window class 的 readable 是否走 **builtin registry**（registry.readable hook）而非
-   * stone 反射加载。取代 xml.ts 旧的 module-level `BUILTIN_TYPES` Set。
-   * 语义上是 {@link renderableVisible} 的真子集——builtin readable 类型同时是可见类型，
-   * 但 pr / reflect_request 虽可见、却**不**走 builtin readable 短路（保留沿继承链/stone 解析的差异）。
-   */
-  builtinReadable?: boolean;
+export interface RegisteredClass<Data = any> extends OocClass<Data> {
   parentClass?: string | null;
-  /**
-   * 可选 hook：列出本 window 在 transcript 视图中已消费的 inbox/outbox 消息 id，
-   * 供 renderer 去重顶层 inbox/outbox（见 ConsumedMessageIdsHook）。
-   */
-  consumedMessageIds?: ConsumedMessageIdsHook;
+  isBuiltinFeature?: boolean;
 }
 
 // ——— Method Visibility Filtering（纯函数，不依赖状态）———
@@ -100,29 +36,24 @@ export type MethodVisibilityContext =
   | { kind: "ui" };
 
 /**
- * 按可见性档位过滤 method 表。纯函数，canonical 源（从 runtime/object-registry.ts 迁入）。
+ * 按可见性档位过滤 object method 列表。纯函数，canonical 源。
  *
  * - self → 全部可见
  * - peer → 仅 public=true
  * - ui   → 仅 for_ui_access=true
  */
 export function filterMethodsByVisibility(
-  methods: Record<string, ObjectMethod>,
+  methods: ObjectMethod[],
   ctx: MethodVisibilityContext,
-): Record<string, ObjectMethod> {
-  const filtered: Record<string, ObjectMethod> = {};
-  for (const [name, method] of Object.entries(methods)) {
+): ObjectMethod[] {
+  return methods.filter((method) => {
     switch (ctx.kind) {
       case "self":
-        filtered[name] = method;
-        break;
+        return true;
       case "peer":
-        if (method.public === true) filtered[name] = method;
-        break;
+        return method.public === true;
       case "ui":
-        if (method.for_ui_access === true) filtered[name] = method;
-        break;
+        return method.for_ui_access === true;
     }
-  }
-  return filtered;
+  });
 }

@@ -3,14 +3,14 @@
  *
  * fork 子线程窗（isForkWindow=true）是同对象内的父子双向通道：
  * - `say` 走内存树寻址（findThreadInScope，同 session 同 job、不付磁盘 IO）
- * - close / archive：把子线程标记为 paused、自动归还借出的 owner windows
- * - share：跨 thread 传 window 引用（method.share.ts）
+ * - close / archive：把子线程标记为 paused
  *
- * 这些 helper 从旧 windows/do/helpers.ts 原样迁入，仅 source 标记 "do" → "fork"。
+ * Wave 4：share 的 owner 借/还机制（依赖每窗 sharing 字段 = SharingState）随对象模型重构删除，
+ * 故 archive 不再做 returnBorrowedOwners；window 引用借/还语义在 OocObjectInstance 模型下待重设计。
  */
 
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
-import type { ContextWindow, SharingState, TalkWindow } from "../_shared/types.js";
+import type { TalkWindow } from "../_shared/types.js";
 
 export function generateMessageId(): string {
   return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -67,41 +67,6 @@ export function findThreadInScope(self: ThreadContext, targetId: string): Thread
   return null;
 }
 
-/**
- * archive 子 thread 时的归还路径（share move 自动归还）：
- *
- * 在切 paused 之前，遍历 child.contextWindows
- * - 对每个 owner window（无 sharing 字段）：按 id 在父 thread.contextWindows 里查 mutable-ref shadow；
- *   若 borrowerThreadId === childId → 归还（owner 副本回写父，清父 shadow；移除子的 owner）
- * - 子原生创建的 windows / 子持有的 readonly-ref placeholder：忽略（随 child archive 自然消失）
- */
-function returnBorrowedOwnersFromChild(parent: ThreadContext, child: ThreadContext): void {
-  const childWindows = (child.contextWindows ?? []) as ContextWindow[];
-  const parentWindows = (parent.contextWindows ?? []) as ContextWindow[];
-  const remainingChildWindows: ContextWindow[] = [];
-  for (const w of childWindows) {
-    if (w.sharing) {
-      remainingChildWindows.push(w);
-      continue;
-    }
-    const parentIdx = parentWindows.findIndex(
-      (pw) =>
-        pw.id === w.id &&
-        pw.sharing?.kind === "mutable-ref" &&
-        pw.sharing.borrowerThreadId === child.id,
-    );
-    if (parentIdx >= 0) {
-      const returned: ContextWindow = { ...w };
-      delete (returned as { sharing?: SharingState }).sharing;
-      parentWindows[parentIdx] = returned;
-      continue;
-    }
-    remainingChildWindows.push(w);
-  }
-  child.contextWindows = remainingChildWindows;
-  parent.contextWindows = parentWindows;
-}
-
 /** archive fork 子线程窗对应的子线程（close / onClose 复用）。 */
 export function archiveForkChild(thread: ThreadContext | undefined, window: TalkWindow): void {
   if (!thread) return;
@@ -110,7 +75,6 @@ export function archiveForkChild(thread: ThreadContext | undefined, window: Talk
   const child = findChild(thread, targetThreadId);
   if (!child) return;
   if (child.status === "running" || child.status === "waiting") {
-    returnBorrowedOwnersFromChild(thread, child);
     child.status = "paused";
   }
 }

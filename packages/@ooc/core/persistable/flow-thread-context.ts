@@ -83,7 +83,7 @@ export function buildThreadContextEntries(
       if (isTalkLikeClass(window.class)) {
         // talk-family（talk/reflect_request）：class 是 POV 投影，不落盘——读回时由
         // computeProjectionClass 据窗形态 + thread session 重算。仅剥 class，其余字段照常 inline。
-        const { class: _dropClass, ...rest } = window as ContextWindow;
+        const { class: _dropClass, ...rest } = window;
         entries.push(rest as Omit<ContextWindow, "class">);
       } else {
         entries.push(window as ContextWindow);

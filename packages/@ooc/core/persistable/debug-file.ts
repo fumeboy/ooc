@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "./common";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage } from "../thinkable/llm/types";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../thinkable/context";
-import type { ContextWindow } from "../executable/windows/_shared/types";
+import type { OocObjectInstance } from "../runtime/ooc-class.js";
 import type { ObjectRegistry } from "../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../executable/windows/index.js";
 import type { WindowSnapshotEntry } from "@ooc/core/observable/window-hash";
@@ -17,7 +17,7 @@ import type { WindowSnapshotEntry } from "@ooc/core/observable/window-hash";
 export interface ContextSnapshot {
   id: string;
   status?: string;
-  contextWindows: ContextWindow[];
+  contextWindows: OocObjectInstance[];
   inbox?: ThreadMessage[];
   outbox?: ThreadMessage[];
   events?: ProcessEvent[];
@@ -42,17 +42,12 @@ export interface LlmInputDebugRecord {
 /** 从 thread 中抽取调用 LLM 时刻的快照子集。 */
 export function captureContextSnapshot(
   thread: ThreadContext,
-  registry: ObjectRegistry = builtinRegistry,
+  // registry 形参保留以兼容调用方签名；effectiveVisibleType enrichment 已随 Wave 4 投影态收口下线
+  // （投影类解析改由 readable computeProjectionClass 一处收口，不再在快照层旁路 enrich）。
+  _registry: ObjectRegistry = builtinRegistry,
 ): ContextSnapshot {
-  // contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 ContextSnapshot.contextWindows。
-  const contextWindows = ((thread.contextWindows ?? []) as ContextWindow[]).map((w) => {
-    // enrichment effectiveVisibleType（沿 parentClass 继承链回退到可渲染 type）。
-    const effVis = registry.resolveEffectiveVisibleType(w.class as any);
-    if (effVis && effVis !== w.class) {
-      return { ...w, effectiveVisibleType: effVis };
-    }
-    return w;
-  });
+  // contextWindows 已是 OocObjectInstance[]，直接进快照（投影态/信封字段都在实例内）。
+  const contextWindows = thread.contextWindows ?? [];
   return {
     id: thread.id,
     status: thread.status,

@@ -6,8 +6,19 @@ import { stat } from "node:fs/promises";
 import type { ServerConfig } from "../bootstrap/config";
 import type { RuntimeJob } from "./types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
-import type { TalkWindow } from "@ooc/core/executable/windows/_shared/types";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
+
+/**
+ * talk 对象的会话视图字段（target / targetThreadId）。
+ *
+ * Wave 4：contextWindows 元素是 `OocObjectInstance`（信封 + data + win 分离）；talk 的会话业务
+ * 字段落 `inst.data`（=TalkData）。本 helper 从 data 读出 target / targetThreadId。
+ */
+function talkView(inst: OocObjectInstance): { target?: string; targetThreadId?: string } {
+  const data = (inst.data ?? {}) as { target?: string; targetThreadId?: string };
+  return { target: data.target, targetThreadId: data.targetThreadId };
+}
 import { resumePausedThread } from "./resume";
 import { scanRunningThreads } from "./thread-query";
 import { readdir } from "node:fs/promises";
@@ -264,28 +275,30 @@ async function syncCrossObjectCalleeEnds(
 ): Promise<void> {
   if (!caller.persistence) return;
   const talkWindows = (caller.contextWindows ?? []).filter(
-    // narrowing: contextWindows 元素契约层是 base；type==="talk" 后 narrow 回 TalkWindow 读 targetThreadId。
-    (w): w is TalkWindow => w.class === "talk" && Boolean((w as TalkWindow).targetThreadId),
+    // talk 会话窗：class==="talk" 且有 targetThreadId（指向对端 thread）。字段经 talkView 兼读
+    // 实例信封顶层 / inst.data（talk 迁移在途）。
+    (w) => w.class === "talk" && Boolean(talkView(w).targetThreadId),
   );
   if (talkWindows.length === 0) return;
 
   let mutated = false;
   for (const w of talkWindows) {
+    const view = talkView(w);
     // super alias 是自指目标:派送到 caller 自身在 super session 下的 thread。
     // 这里的 callee 解析必须与 talk-delivery.ts 严格一致 — 否则 readThread 会
     // 读错路径(在 sessions/super/objects/super/ 找不到任何东西)。
-    const isSuperAlias = w.target === SUPER_ALIAS_TARGET;
+    const isSuperAlias = view.target === SUPER_ALIAS_TARGET;
     // super-alias 的 callee = super-flow actor。canonical caller → 自身（透明）；
     // 新对象（仅 session 内、未 canonical）→ 冒泡到最近 canonical 祖先（顶层兜底 supervisor），
     // 由其代为发起沉淀 super flow。必须与 talk-delivery.ts 严格一致（同 resolveSuperActor）。
     const calleeObjectId = isSuperAlias
       ? await resolveSuperActor(baseDir, caller.persistence.objectId)
-      : w.target;
+      : view.target!;
     const calleeSessionId = isSuperAlias ? SUPER_SESSION_ID : callerSessionId;
     const calleeRef = { baseDir, sessionId: calleeSessionId, objectId: calleeObjectId };
     let callee: ThreadContext | undefined;
     try {
-      callee = await readThread(calleeRef, w.targetThreadId!);
+      callee = await readThread(calleeRef, view.targetThreadId!);
     } catch {
       continue;
     }

@@ -23,7 +23,6 @@ import {
   writeLoopDebugOutput,
 } from "../persistable/index.js";
 import { buildWindowsSnapshot } from "../observable/window-hash.js";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 
 /** 一轮 LLM 观测的运行时句柄。 */
 export interface LlmLoopHandle {
@@ -292,9 +291,8 @@ export class ObservableStore {
       // Prefer the pipeline's rendered window set (base + derived: activator/protocol
       // knowledge, peer Objects) so the snapshot mirrors what the LLM saw. Falls back
       // to persisted contextWindows when no render happened this loop.
-      const snapshotWindows = (thread._renderedWindows ?? thread.contextWindows ?? []) as ContextWindow[];
+      const snapshotWindows = thread._renderedWindows ?? thread.contextWindows ?? [];
       const windowsSnapshot = await buildWindowsSnapshot(
-        // contextWindows 契约层是 base[]；narrow 回 union[] 传入 buildWindowsSnapshot。
         snapshotWindows,
         previousSnapshot,
       );

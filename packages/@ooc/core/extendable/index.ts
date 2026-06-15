@@ -1,36 +1,51 @@
 /**
- * extendable — 第三方 / 外部世界 集成的扩展层。
+ * extendable —— 第三方 / 外部世界 集成的扩展层。
  *
- * 与 OOC 核心 8 维度（thinkable / executable / collaborable / observable / reflectable
- * / programmable / visible / persistable）平行：核心维度回答"OOC Agent 自身能干什么"，
- * extendable 回答"OOC 如何吃下外部世界（外部 SaaS / CLI / SDK）"。
+ * 与 OOC 核心维度平行：核心维度回答"OOC Agent 自身能干什么"，extendable 回答"OOC 如何吃下
+ * 外部世界（外部 SaaS / CLI / SDK）"。
  *
- * 当前子目录：
- * - builtins/ 内置 OOC Objects（原 builtin windows）
- * - lark/    飞书 (Lark Suite) 集成；通过 lark-cli 子进程 + ContextWindow 类型注册
+ * 本 barrel 兼两职：
+ * 1. **装载一批 builtin class**（原 builtin windows）—— 显式 import 各包的 `export const Class`
+ *    + 把它注册进 `builtinRegistry`（键名=原始 objectId，含 `_builtin/` 前缀；registry 内部归一）。
+ *    继承父类来自各包 package.json 的 `ooc.class`（缺省 → 隐式 root）。
+ * 2. 拉起外部集成子目录（lark 等）的 side-effect 注册。
  *
- * 添加新外部集成时：
- * 1. 在本目录下建子目录（如 \`extendable/notion/\`）
- * 2. 子目录的 index.ts 做 side-effect 注册（registerExecutable / 注册 root opener / 等）
- * 3. 在本文件追加 \`import "./<sub>/index.js";\`
- *
- * 这条 barrel 由 src/executable/windows/index.ts 在所有 builtin window type 加载完成后拉起，
- * 保证扩展类型在通用层 boot 校验（assertAllObjectDefinitionsRegistered）之前注册到位。
+ * 由 src/executable/windows/index.ts 在 root / talk / method_exec 装载后拉起。
  */
 
-import "@ooc/builtins/knowledge";
-import "@ooc/builtins/file";
-import "@ooc/builtins/todo";
-import "@ooc/builtins/search";
-import "@ooc/builtins/skill_index";
-import "@ooc/builtins/plan";
-import "@ooc/builtins/terminal_process";
-import "@ooc/builtins/interpreter_process";
-import "@ooc/builtins/filesystem";
-import "@ooc/builtins/terminal";
-import "@ooc/builtins/interpreter";
-import "@ooc/builtins/runtime";
-import "@ooc/builtins/knowledge_base";
-import "@ooc/builtins/thread";
-import "@ooc/builtins/root";
+import { builtinRegistry } from "../runtime/object-registry.js";
+
+import { Class as KnowledgeClass } from "@ooc/builtins/knowledge";
+import { Class as FileClass } from "@ooc/builtins/file";
+import { Class as TodoClass } from "@ooc/builtins/todo";
+import { Class as SearchClass } from "@ooc/builtins/search";
+import { Class as SkillIndexClass } from "@ooc/builtins/skill_index";
+import { Class as PlanClass } from "@ooc/builtins/plan";
+import { Class as TerminalProcessClass } from "@ooc/builtins/terminal_process";
+import { Class as InterpreterProcessClass } from "@ooc/builtins/interpreter_process";
+import { Class as FilesystemClass } from "@ooc/builtins/filesystem";
+import { Class as TerminalClass } from "@ooc/builtins/terminal";
+import { Class as InterpreterClass } from "@ooc/builtins/interpreter";
+import { Class as RuntimeClass } from "@ooc/builtins/runtime";
+import { Class as KnowledgeBaseClass } from "@ooc/builtins/knowledge_base";
+import { Class as ThreadClass } from "@ooc/builtins/thread";
+
+// 装载清单：[原始 objectId, Class, 继承父类]（父类取自各包 package.json `ooc.class`；缺省 → 隐式 root）。
+builtinRegistry.register("_builtin/knowledge", KnowledgeClass);
+builtinRegistry.register("_builtin/file", FileClass);
+builtinRegistry.register("_builtin/todo", TodoClass);
+builtinRegistry.register("_builtin/search", SearchClass);
+builtinRegistry.register("_builtin/skill_index", SkillIndexClass);
+builtinRegistry.register("_builtin/plan", PlanClass);
+builtinRegistry.register("_builtin/terminal_process", TerminalProcessClass);
+builtinRegistry.register("_builtin/interpreter_process", InterpreterProcessClass);
+builtinRegistry.register("_builtin/filesystem", FilesystemClass);
+builtinRegistry.register("_builtin/terminal", TerminalClass);
+builtinRegistry.register("_builtin/interpreter", InterpreterClass);
+builtinRegistry.register("_builtin/runtime", RuntimeClass);
+builtinRegistry.register("_builtin/knowledge_base", KnowledgeBaseClass);
+// thread 继承 talk（package.json ooc.class: "talk"）。
+builtinRegistry.register("_builtin/thread", ThreadClass, { parentClass: "talk" });
+
+// 外部集成子目录（飞书等）：side-effect 注册。
 import "./lark/index.js";

@@ -23,7 +23,7 @@ import {
   readExecutableSource,
   type PrIssueRecord,
 } from "@ooc/core/persistable";
-import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
+import { loadStoneClass } from "@ooc/core/runtime/server-loader";
 import { createStoneRegistry } from "@ooc/core/runtime/stone-registry";
 
 const RECOVERY_PREFIX = "[recovery-needed]";
@@ -65,7 +65,8 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
     }
     if (!source) continue;
     try {
-      await loadObjectWindow(stoneRef);
+      // load-detection：import 该 stone 的 `export const Class`（坏 import / 语法错误会 throw）。
+      await loadStoneClass(stoneRef);
     } catch (err) {
       broken.push({
         objectId: def.objectId,

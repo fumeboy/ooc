@@ -25,7 +25,7 @@
  */
 
 import type { ThreadContext } from "../context";
-import type { MethodExecWindow, ContextWindow } from "../../executable/windows/_shared/types";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
 
@@ -185,7 +185,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       // 若按下方扫 contextWindows 匹配 type==="root" 则**永不命中** → 沉淀的 memory 永不激活、召回闭环
       // 静默断。特判 root 为 always-on，坐实契约。
       if (trigger.objectType === "root") return true;
-      const list = (thread.contextWindows ?? []) as ContextWindow[]; // narrow base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
+      const list = thread.contextWindows ?? [];
       for (const w of list) {
         if (w.class !== trigger.objectType) continue;
         if (isOpen(w)) return true;
@@ -194,7 +194,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
     }
 
     case "objectId": {
-      const list = (thread.contextWindows ?? []) as ContextWindow[]; // narrow base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
+      const list = thread.contextWindows ?? [];
       for (const w of list) {
         // ooc-6 Object Unification: window.id = objectId for custom objects
         if (w.id !== trigger.objectId) continue;
@@ -204,18 +204,19 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
     }
 
     case "method": {
-      const list = (thread.contextWindows ?? []) as ContextWindow[]; // narrow base[] → union[] 以传入 isOpen/byId map（runtime 即 union 实例）。
+      const list = thread.contextWindows ?? [];
       // 先做一次按 id 的 parent 索引，避免 O(n²)；通常 windows 量级小，O(n) 也无妨。
-      const byId = new Map<string, ContextWindow>();
+      const byId = new Map<string, OocObjectInstance>();
       for (const w of list) byId.set(w.id, w);
 
       for (const w of list) {
         if (w.class !== "method_exec") continue;
-        const form = w as MethodExecWindow;
-        if (form.method !== trigger.method) continue;
+        // method_exec 业务字段（method）落 inst.data。
+        const method = (w.data as { method?: string } | undefined)?.method;
+        if (method !== trigger.method) continue;
         // form 必须 open 才视为"该 method 当前活跃"——success/failed 不算
-        if (!isOpen(form)) continue;
-        const parentType = parentTypeOf(form, byId);
+        if (!isOpen(w)) continue;
+        const parentType = parentTypeOf(w, byId);
         // 沿 parentClass 类链匹配（与方法解析同语义）：trigger.objectType 命中 parent 自身
         // 或其任一祖先。例：agency(talk/end) 跑在 agent 的 self 窗（class=objectId），其链
         // 含 _builtin/agent / root → `method::_builtin/agent::talk` 命中；create_object 跑在
@@ -248,16 +249,16 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
  * - `status === "active"` (root / skill_index / custom 等常驻型 object)
  * - status 缺省 (向后兼容)
  */
-function isOpen(w: ContextWindow): boolean {
+function isOpen(w: OocObjectInstance): boolean {
   return w.status === "open" || w.status === "active" || w.status === undefined;
 }
 
-/** form 的 parent window type；parentWindowId === "root" 或 missing 时视为 "root"。 */
+/** form 的 parent window type；parentObjectId === "root" 或 missing 时视为 "root"。 */
 function parentTypeOf(
-  form: MethodExecWindow,
-  byId: Map<string, ContextWindow>,
+  form: OocObjectInstance,
+  byId: Map<string, OocObjectInstance>,
 ): string {
-  const pid = form.parentWindowId;
+  const pid = form.parentObjectId;
   if (!pid || pid === "root") return "root";
   const parent = byId.get(pid);
   return parent?.class ?? "root";

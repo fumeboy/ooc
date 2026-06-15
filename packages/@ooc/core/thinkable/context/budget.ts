@@ -16,7 +16,9 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-import type { ContextWindow } from "../../executable/windows/_shared/types";
+// budget 只读 base 字段（id/title/provenance/relevance/compressLevel）；用 base 版 ContextWindow
+// 而非 builtins union，以接收 pipeline 流通的 OocObjectInstance（其结构满足 BaseContextWindow）。
+import type { ContextWindow } from "../../_shared/types/context-window.js";
 import { deriveStoneFromThread, stoneDir } from "../../persistable/common";
 import type { ThreadContext } from "./index";
 

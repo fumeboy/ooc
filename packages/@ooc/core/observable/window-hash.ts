@@ -13,7 +13,8 @@
 
 import { readFile } from "node:fs/promises";
 
-import type { ContextWindow, FileWindow } from "@ooc/core/executable/windows/_shared/types";
+import type { FileWindow } from "@ooc/core/executable/windows/_shared/types";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 
 /**
  * file_window 的 diff 数据；用于前端 CodeMirror Merge 双侧渲染。
@@ -47,12 +48,14 @@ const FILE_DIFF_MAX_BYTES = 200 * 1024;
  * - 删 compressLevel === 0 或 undefined（默认值不参与 hash，避免与历史 window 漂移）
  * - 其余字段（含 sharing / windowKnowledgePaths / status / type-specific 字段）原样保留
  */
-export function stripVolatileWindow(window: ContextWindow): Record<string, unknown> {
+export function stripVolatileWindow(window: OocObjectInstance): Record<string, unknown> {
   // shallow clone 后剥字段；保证调用方传入对象不被改动（immutability）
   const rest: Record<string, unknown> = { ...(window as unknown as Record<string, unknown>) };
-  if (!rest.compressLevel) {
-    // undefined / 0 都视为默认值
-    delete rest.compressLevel;
+  // Wave 4：compressLevel 投影态落 inst.win.compressLevel；默认值（undefined/0）不参与 hash。
+  const win = rest.win as { compressLevel?: number } | undefined;
+  if (win && !win.compressLevel) {
+    rest.win = { ...win };
+    delete (rest.win as Record<string, unknown>).compressLevel;
   }
   return rest;
 }
@@ -67,7 +70,7 @@ export function stripVolatileWindow(window: ContextWindow): Record<string, unkno
  * 同 content（剥 volatile 后）→ 同 hash；
  * 不同 content → 不同 hash（高概率；hash 冲突非安全需求）。
  */
-export function computeWindowContentHash(window: ContextWindow): string {
+export function computeWindowContentHash(window: OocObjectInstance): string {
   const stripped = stripVolatileWindow(window);
   const sortedKeys = Object.keys(stripped).sort();
   const json = JSON.stringify(stripped, sortedKeys);
@@ -153,7 +156,7 @@ async function computeFileDiff(
  *                          previousContent。
  */
 export async function buildWindowsSnapshot(
-  windows: ContextWindow[],
+  windows: OocObjectInstance[],
   previousSnapshot?: WindowSnapshotEntry[],
 ): Promise<WindowSnapshotEntry[]> {
   const out: WindowSnapshotEntry[] = [];
@@ -163,13 +166,14 @@ export async function buildWindowsSnapshot(
       class: w.class,
       contentHash: computeWindowContentHash(w),
     };
-    if (w.parentWindowId) entry.parentWindowId = w.parentWindowId;
+    if (w.parentObjectId) entry.parentWindowId = w.parentObjectId;
     if (w.status) entry.status = w.status;
-    if (w.compressLevel !== undefined && w.compressLevel !== 0) {
-      entry.compressLevel = w.compressLevel;
+    const compressLevel = (w.win as { compressLevel?: 0 | 1 | 2 } | undefined)?.compressLevel;
+    if (compressLevel !== undefined && compressLevel !== 0) {
+      entry.compressLevel = compressLevel;
     }
     if (w.class === "file") {
-      entry.fileDiff = await computeFileDiff(w as FileWindow, previousSnapshot);
+      entry.fileDiff = await computeFileDiff(w as unknown as FileWindow, previousSnapshot);
     }
     out.push(entry);
   }

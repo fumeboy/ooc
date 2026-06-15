@@ -1,9 +1,9 @@
-import type { ContextWindow } from "../../executable/windows/_shared/types.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 
 export interface ContextSnapshot {
   thread: { id: string; status: string };
   self: { objectId: string };
-  windows: ContextWindow[];
+  windows: OocObjectInstance[];
   overflow: Array<{
     id: string;
     title: string;

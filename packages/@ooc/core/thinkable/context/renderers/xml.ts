@@ -1,42 +1,45 @@
 /**
  * XmlRenderer — renders a ContextSnapshot to the XML format used by the LLM.
  *
- * Replaces the old renderContextXml function.
+ * Wave 4 对象模型：thread 持 `OocObjectInstance`（身份信封 + 业务 data + 投影态 win），
+ * 渲染走 **readable 投影**：
+ *   `resolveReadable(inst.class)?.readable(ctx, inst.data, inst.win)` → `ReadableProjection{class, content}`
+ * —— class 是动态投影窗 class（同 object 不同视角可不同），content 是 `XmlNode[]`（直接用）或 string
+ * （包成 xml 文本节点）。无 Class.readable 时回退读盘 readable.md 静态内容。
+ *
+ * 方法契约声明层（<window_classes>）按 **投影 class** 声明一次：该投影窗展示哪些 object method
+ * （decl.object_methods 引用 executable）+ window method（decl.window_methods）。
+ *
  * Structure:
  *   <context>
  *     <self object_id="..."/>
  *     <thread id="..." status="...">
  *       <creator_thread_id>...</creator_thread_id>
  *       <parent_thread_id>...</parent_thread_id>
+ *       <window_classes>...</window_classes>?
  *       <context_windows>
- *         <window id class status [sharing read_only]>
+ *         <window id class status>
  *           <title>...</title>
- *           ... type-specific content (readable / compressView)
- *           <commands hint="...">...</commands>
+ *           ... readable 投影 content
  *           <sub_windows>...</sub_windows>?
  *         </window>
  *       </context_windows>
- *       <inbox><message>...</message>...</inbox>?
- *       <outbox><message>...</message>...</outbox>?
+ *       <inbox>...</inbox>? <outbox>...</outbox>?
  *     </thread>
- *     <context_overflow item_count="N">
- *       <item id title relevance reason/>...
- *     </context_overflow>?
+ *     <context_overflow item_count="N">...</context_overflow>?
  *   </context>
  */
 import type { ContextSnapshot } from "../snapshot.js";
-import type { ContextWindow } from "../../../executable/windows/_shared/types.js";
-import { ROOT_WINDOW_ID } from "../../../executable/windows/_shared/types.js";
+import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
+import { ROOT_WINDOW_ID } from "../../../_shared/types/context-window.js";
 import {
-  type RenderContext,
+  builtinRegistry,
   type ObjectRegistry,
-  type ObjectDefinition,
-} from "../../../executable/windows/_shared/registry.js";
-import { builtinRegistry } from "../../../executable/windows/index.js";
+} from "../../../runtime/object-registry.js";
+import type { ReadableContext, ReadableProjection } from "../../../readable/contract.js";
 import { extractBasicDescription, conciseDescription } from "../../../executable/windows/_shared/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
-import { loadObjectWindow } from "../../../runtime/server-loader.js";
 import { readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "../../../persistable/index.js";
 import {
   appendNode,
@@ -79,7 +82,7 @@ const COMMAND_DESC_MAX = 200;
 
 /**
  * 把 method schema 的**必填**参数渲染为 `<arg name type required[ enum]>description</arg>` 子节点。
- * 只渲染 required===true 的参数（可选参数不进 eager）；无 schema / 无必填参数 → 空数组（行为同旧版仅 brief）。
+ * 只渲染 required===true 的参数（可选参数不进 eager）；无 schema / 无必填参数 → 空数组。
  * enum 作属性带上（治「猜值」）；fail-soft 不抛。
  */
 function renderRequiredArgNodes(schema: { args?: Record<string, import("@ooc/core/_shared/types/intent.js").MethodArgSpec> } | undefined): XmlNode[] {
@@ -99,67 +102,64 @@ function renderRequiredArgNodes(schema: { args?: Record<string, import("@ooc/cor
 }
 
 /**
- * 算某 window 的**可见方法集**并渲染成 `<method>` 节点。class 级事实（方法契约）——
- * 与具体实例无关，因此抽成纯函数，供 class 声明层（renderWindowClassesNode）按 class 调用一次。
+ * 算某**投影窗 class** 的可见方法集并渲染成 `<method>` 节点。
  *
- * 含 for_reflectable / inSuperFlow 门控、def.methods + def.windowMethods 合并、brief、必填 arg。
- * compress 的 `expand` 提示**不**在此（那是实例态，贴 <compressed> 节点就地说）。
+ * 新对象模型：readable 把 object 投影成 window 后，`resolveWindowClass(ownerClass, projectionClass)`
+ * 给出该投影窗展示哪些 object method（decl.object_methods 引用 executable）+ window method
+ * （decl.window_methods）。object method 沿继承链合并（resolveObjectMethods）后按引用名挑选；
+ * window method 直接取自 decl。两类统一呈现，exec 入口相同、LLM 不需区分。
  *
- * fail-soft：未注册 class（peer stone 后台注册中 / 新建对象未注册 / builtin 缺失）返回 null。
+ * for_reflectable 门控：标记的 object method 仅在 super flow（反思 session）下 surface，
+ * 非 super 从菜单剔除。
+ *
+ * fail-soft：未注册 ownerClass / 无该投影窗声明 → 返回 null（无方法契约可声明）。
  *
  * @returns `{ methodNodes, methodNames }`——methodNodes 为排好序的 `<method>` 节点，
  *          methodNames 为同序方法名（供一致性断言/分组）。
  */
 export function computeVisibleMethodSet(
-  window: ContextWindow,
+  ownerClass: string,
+  projectionClass: string,
   thread: ThreadContext,
   registry: ObjectRegistry,
 ): { methodNodes: XmlNode[]; methodNames: string[] } | null {
-  if (!registry.has(window.class)) return null;
-  // for_reflectable 门控：标记的 reflectable 沉淀方法仅在 super flow（反思 session）下 surface。
-  // 非 super 时从菜单剔除（取代旧的 exec 内 isSuperSessionId 命令式拒绝 —— 存在即有效）。
+  const decl = registry.resolveWindowClass(ownerClass, projectionClass);
+  if (!decl) return null;
+
+  // for_reflectable 门控：reflectable 沉淀 method 仅在 super flow（反思 session）下 surface。
   const inSuperFlow = isSuperSessionId(thread.persistence?.sessionId ?? "");
 
-  // 沿 parentClass 链合并可见方法（与 resolveMethod 同语义）：子类自声明覆盖父类同名。
-  // 这是公理「窗须投影它的 Object 实际拥有的面」的兑现——self 窗 class=objectId，自身无 methods、
-  // agency 继承自 _builtin/agent；不走链就漏掉它该有的 agency 面（A 问题根因）。
-  // object method（控制 object，归 executable）+ window method（控制展示，归 readable）统一呈现，
-  // exec 入口相同、LLM 不需区分两类。
-  const chain = [window.class as string, ...registry.resolveParentClassChain(window.class as never)];
   type AnyMethod =
-    | import("@ooc/core/extendable/_shared/method-types.js").ObjectMethod
-    | import("@ooc/core/_shared/types/window-method.js").WindowMethod;
+    | import("../../../executable/contract.js").ObjectMethod
+    | import("../../../readable/contract.js").WindowMethod;
   const merged = new Map<string, AnyMethod>();
-  for (const type of chain) {
-    let def: ReturnType<ObjectRegistry["getObjectDefinition"]>;
-    try {
-      def = registry.getObjectDefinition(type as never);
-    } catch {
-      continue;
-    }
-    for (const [name, entry] of Object.entries(def.methods ?? {})) {
-      if (merged.has(name)) continue; // 子类先到、覆盖父类同名
-      if (!inSuperFlow && entry?.for_reflectable) continue;
-      merged.set(name, entry);
-    }
-    for (const [name, entry] of Object.entries(def.windowMethods ?? {})) {
-      if (merged.has(name)) continue;
-      merged.set(name, entry);
-    }
+
+  // object method：沿继承链合并后，按 decl.object_methods 引用名挑选。
+  const objectMethods = new Map(
+    registry.resolveObjectMethods(ownerClass).map((m) => [m.name, m]),
+  );
+  for (const name of decl.object_methods) {
+    const m = objectMethods.get(name);
+    if (!m) continue; // 引用了不存在的 method：fail-soft 跳过
+    if (!inSuperFlow && (m as any).for_reflectable) continue;
+    merged.set(name, m);
+  }
+  // window method：直接取自该投影窗声明。
+  for (const wm of decl.window_methods) {
+    if (merged.has(wm.name)) continue;
+    merged.set(wm.name, wm);
   }
 
   const names = [...merged.keys()].sort();
 
   const methodNodes: XmlNode[] = names.map((name) => {
     const entry = merged.get(name);
-    // 优先展示语义描述（method 的 *_BASIC 知识），让 LLM 看懂每个 method 的含义；
-    // 无描述时退回 paths 简述（仅别名，价值低）。
+    // 优先展示语义描述（method 的 description），让 LLM 看懂每个 method 的含义。
     const desc = entry ? extractBasicDescription(entry) : undefined;
     const brief = desc
       ? conciseDescription(desc, COMMAND_DESC_MAX)
-      : (entry?.description ?? (entry?.intents ?? [name]).join(", ")).slice(0, COMMAND_BRIEF_MAX);
-    // 必填参数 eager 摆出完整契约（name+type+required+description[+enum]）治 false confidence：
-    // LLM 在决策点填 args 前就看到真相，不靠先验猜 key/值。可选参数不进 eager（走 form tip / brief 正文）。
+      : (entry?.description ?? name).slice(0, COMMAND_BRIEF_MAX);
+    // 必填参数 eager 摆出完整契约治 false confidence：LLM 填 args 前就看到真相。
     const argNodes = renderRequiredArgNodes(entry?.schema);
     return xmlElement("method", { name }, [xmlText(brief), ...argNodes]);
   });
@@ -168,45 +168,41 @@ export function computeVisibleMethodSet(
 }
 
 /**
- * class 声明层：本轮 context 中出现过的每个 window class，方法契约在此**声明一次**——
- * 取代旧的「每实例抄一遍 <methods>」（28% 纯重复）。实例 window 只带 `class=` 引用此声明。
+ * class 声明层：本轮 context 中出现过的每个**投影窗 class**，方法契约在此**声明一次**——
+ * 实例 window 只带 `class=` 引用此声明。
  *
- * 收集 snapshot.windows（**展平含 sub_windows**，method_exec form 等子窗口的 class 也要进）。
- * 分组 key = class 名；同 class 的多个实例**断言可见方法集一致**，不一致则 fail-soft 裂组
+ * 输入是已算出的 `{ ownerClass, projectionClass }` 对（projection 已先于此层算出）。
+ * 分组 key = projectionClass；同 class 的多个实例**断言可见方法集一致**，不一致则 fail-soft 裂组
  * （`<class name="X#2">`），既不抹掉差异也不崩。
  *
- * fail-soft：未注册 class 的实例不进声明层（其方法本就 null）。无任何可声明 class → 返回 null。
+ * fail-soft：无声明的投影窗不进声明层。无任何可声明 class → 返回 null。
  */
 function renderWindowClassesNode(
-  windows: ContextWindow[],
+  projected: Array<{ ownerClass: string; projectionClass: string }>,
   thread: ThreadContext,
   registry: ObjectRegistry,
 ): XmlNode | null {
-  // 按 class 名分组：每个 class 记录首次出现的方法集签名 + 节点。
-  // 同 class 的后续实例若签名不一致（未来 per-instance 门控可能引入）→ fail-soft 裂组为
-  // `<class name="X#2">`，既不抹掉差异也不崩。现状无 per-instance 门控，恒一致 → 不裂组。
   interface ClassVariant {
     name: string;
     signature: string;
     nodes: XmlNode[];
   }
-  // class 名 → 已见变体列表（绝大多数情形长度 1）。
   const byClass = new Map<string, ClassVariant[]>();
   const ordered: ClassVariant[] = [];
 
-  for (const w of windows) {
-    const set = computeVisibleMethodSet(w, thread, registry);
-    if (!set) continue; // 未注册 class：无方法契约可声明
+  for (const { ownerClass, projectionClass } of projected) {
+    const set = computeVisibleMethodSet(ownerClass, projectionClass, thread, registry);
+    if (!set) continue; // 无方法契约可声明
     if (set.methodNames.length === 0) continue; // 无可见方法：不进声明层
 
     const signature = set.methodNames.join(",");
-    const variants = byClass.get(w.class) ?? [];
-    if (variants.some((v) => v.signature === signature)) continue; // 同 class 同方法集：已声明，去重
+    const variants = byClass.get(projectionClass) ?? [];
+    if (variants.some((v) => v.signature === signature)) continue; // 同 class 同方法集：去重
 
-    const name = variants.length === 0 ? w.class : `${w.class}#${variants.length + 1}`;
+    const name = variants.length === 0 ? projectionClass : `${projectionClass}#${variants.length + 1}`;
     const variant: ClassVariant = { name, signature, nodes: set.methodNodes };
     variants.push(variant);
-    byClass.set(w.class, variants);
+    byClass.set(projectionClass, variants);
     ordered.push(variant);
   }
 
@@ -221,229 +217,124 @@ function renderWindowClassesNode(
   );
 }
 
-// ─────────────────────────── readable resolution ─────────────────────────────
+// ─────────────────────────── readable projection ─────────────────────────────
 
-async function resolveReadableForType(
-  classType: string,
-  window: ContextWindow,
-  renderCtx: RenderContext,
-  _thread: ThreadContext,
-  persistence: { baseDir: string; sessionId?: string } | undefined,
-  registry: ObjectRegistry,
-): Promise<XmlNode[] | undefined> {
-  // Step 1: registry.readable (builtin types)
-  try {
-    const def = registry.getObjectDefinition(classType as any);
-    if (def.readable) {
-      return await def.readable(renderCtx);
-    }
-  } catch {
-    // continue
+/** 把 ReadableProjection.content（XmlNode[] | string）规整成 XmlNode[] 子节点。 */
+function projectionContentNodes(content: XmlNode[] | string): XmlNode[] {
+  if (typeof content === "string") {
+    return [xmlElement("readable", {}, [xmlText(content)])];
   }
-
-  if (!persistence) return undefined;
-
-  // session-aware：classType 可能是本 session 新建对象（落 worktree 未合 main）——经
-  // resolveStoneIdentityRef(read) 路由到 worktree 读其 readable / executable window，
-  // 否则裸 main ref 取不到 → 渲染落 placeholder。super / 无 session / 未建 worktree → main。
-  const stoneRef: StoneObjectRef = await resolveStoneIdentityRef(
-    { baseDir: persistence.baseDir, sessionId: persistence.sessionId, objectId: classType },
-    "read",
-  );
-
-  // Step 2: stone `export const window`.readable（loader 已把独立 readable.ts 合并进此字段）
-  try {
-    const objWin = await loadObjectWindow(stoneRef);
-    if (objWin?.readable) {
-      return await objWin.readable(renderCtx);
-    }
-  } catch { /* continue */ }
-
-  // Step 3: readable.md static content
-  try {
-    const readableText = await readReadable(stoneRef);
-    if (readableText && readableText.trim().length > 0) {
-      return [xmlElement("readable", {}, [xmlText(readableText)])];
-    }
-  } catch { /* continue */ }
-
-  return undefined;
+  return content;
 }
 
-async function resolveObjectReadable(
-  window: ContextWindow,
-  renderCtx: RenderContext,
+/**
+ * 算一个 object 实例的 readable 投影。
+ *
+ * 1) `resolveReadable(inst.class)` 命中 → 调 `readable(ctx, inst.data, inst.win)` 取投影。
+ * 2) 无 Class.readable → 回退读盘 readable.md 静态内容（投影 class 即 inst.class）。
+ * 3) 都无 → placeholder 投影（投影 class 即 inst.class）。
+ *
+ * fail-soft：任何一步抛错都不崩 think loop，落 placeholder。
+ */
+async function resolveProjection(
+  inst: OocObjectInstance,
   thread: ThreadContext,
   registry: ObjectRegistry,
-): Promise<XmlNode[] | undefined> {
-  // builtinReadable flag（取代旧 module-level BUILTIN_TYPES Set）：readable 走 builtin registry
-  // hook 短路、不经 stone 反射加载。逐成员等价（不含 pr / reflect_request）。
-  if (registry.isBuiltinReadableType(window.class)) {
-    return resolveReadableForType(window.class, window, renderCtx, thread, undefined, registry);
+  persistence: { baseDir: string; sessionId?: string } | undefined,
+): Promise<ReadableProjection> {
+  const readableCtx: ReadableContext = {
+    thread,
+    object: { id: inst.id, class: inst.class },
+    persistence,
+  };
+
+  // Step 1: Class.readable（沿继承链解析）
+  const mod = registry.resolveReadable(inst.class);
+  if (mod) {
+    try {
+      return await mod.readable(readableCtx, inst.data, inst.win);
+    } catch (err) {
+      return {
+        class: inst.class,
+        content: [
+          xmlElement("readable", { source: "error" }, [
+            xmlText(`readable 投影失败：${(err as Error).message}`),
+          ]),
+        ],
+      };
+    }
   }
 
-  const persistence = thread.persistence;
-  if (!persistence) return undefined;
-
-  const selfResult = await resolveReadableForType(window.class, window, renderCtx, thread, persistence, registry);
-  if (selfResult) return selfResult;
-
-  for (const ancestorType of registry.resolveParentClassChain(window.class as any)) {
-    const ancestorResult = await resolveReadableForType(
-      ancestorType, window, renderCtx, thread, persistence, registry,
-    );
-    if (ancestorResult) return ancestorResult;
+  // Step 2: readable.md 静态内容（无 Class.readable 时的回退）
+  if (persistence) {
+    try {
+      const stoneRef: StoneObjectRef = await resolveStoneIdentityRef(
+        { baseDir: persistence.baseDir, sessionId: persistence.sessionId, objectId: inst.class },
+        "read",
+      );
+      const readableText = await readReadable(stoneRef);
+      if (readableText && readableText.trim().length > 0) {
+        return { class: inst.class, content: readableText };
+      }
+    } catch {
+      // continue to placeholder
+    }
   }
 
-  return [
-    xmlElement(
-      "readable",
-      { source: "placeholder" },
-      [xmlText(`Object "${window.id}" 没有可渲染的 readable 内容（包括 parentClass 继承链）。`)],
-    ),
-  ];
+  // Step 3: placeholder
+  return {
+    class: inst.class,
+    content: [
+      xmlElement("readable", { source: "placeholder" }, [
+        xmlText(`Object "${inst.id}"(class "${inst.class}") 没有可渲染的 readable 投影（stone 可能后台注册中或新建未就绪）。`),
+      ]),
+    ],
+  };
 }
 
 // ─────────────────────────── window node rendering ───────────────────────────
 
 async function renderWindowNode(
-  window: ContextWindow,
+  inst: OocObjectInstance,
+  projection: ReadableProjection,
   thread: ThreadContext,
-  allWindows: ContextWindow[],
-  registry: ObjectRegistry,
+  allWindows: Array<{ inst: OocObjectInstance; projection: ReadableProjection }>,
 ): Promise<XmlNode> {
-  const sharingState = window.sharing;
-  const renderedWindow: ContextWindow = sharingState ? (sharingState.snapshot as ContextWindow) : window;
+  const children: XmlNode[] = [xmlElement("title", {}, [xmlText(inst.title)])];
 
-  const titlePrefix = sharingState
-    ? sharingState.kind === "readonly-ref"
-      ? `[readonly-ref → owner@thread:${sharingState.ownerThreadId}] `
-      : `[已 move 给 thread:${sharingState.borrowerThreadId}] `
-    : "";
+  children.push(...projectionContentNodes(projection.content));
 
-  const children: XmlNode[] = [
-    xmlElement("title", {}, [xmlText(titlePrefix + renderedWindow.title)]),
-  ];
-
-  // fail-soft：未注册 type（peer stone 后台注册中 / 新建对象 / builtin 缺失）→ def undefined，
-  // 走下方 resolveObjectReadable 从 stone 磁盘加载 readable 渲染，不在此 getObjectDefinition 抛崩 think loop。
-  // （collaborable world 级 think 崩根因：peer window 的 type=peer objectId，撞未注册 peer 即整轮 think_error。）
-  let def: ObjectDefinition | undefined;
-  try {
-    def = registry.getObjectDefinition(renderedWindow.class as never);
-  } catch {
-    def = undefined;
-  }
-  const compressLevel = (renderedWindow.compressLevel ?? 0) as 0 | 1 | 2;
-  const renderCtx: RenderContext = { thread, window: renderedWindow };
-
-  if (compressLevel === 1 || compressLevel === 2) {
-    if (def?.compressView) {
-      const typeChildren = await def.compressView(renderCtx, compressLevel);
-      children.push(...typeChildren);
-      // expand 提示就地贴在压缩实例上（方法菜单已搬去 class 声明层，不再随实例渲染 expand method）。
-      children.push(
-        xmlElement(
-          "compressed",
-          { level: String(compressLevel) },
-          [xmlText(`本 window 处于压缩态(level=${compressLevel})。exec(window_id="${renderedWindow.id}", method="expand") 恢复完整内容。`)],
-        ),
-      );
-    } else {
-      children.push(
-        xmlElement(
-          "compressed",
-          { level: String(compressLevel) },
-          [
-            xmlText(
-              `本 window 处于压缩态(level=${compressLevel}); class "${renderedWindow.class}" 未注册 compressView hook。exec(window_id="${renderedWindow.id}", method="expand") 恢复完整内容。`,
-            ),
-          ],
-        ),
-      );
-    }
-  } else {
-    const readableChildren = await resolveObjectReadable(renderedWindow, renderCtx, thread, registry);
-    if (readableChildren) {
-      children.push(...readableChildren);
-    } else {
-      // fail-soft：readable hook 无产出（未注册 type / 无 persistence / 磁盘 readable 取不到）——占位不崩。
-      children.push(
-        xmlElement("readable", { source: def ? "empty" : "unregistered" }, [
-          xmlText(`Object type "${renderedWindow.class}" 无 readable 产出（stone 可能后台注册中或新建未就绪）。`),
-        ]),
-      );
-    }
-  }
-
-  // 方法契约不再逐实例渲染：class 级声明一次在 <window_classes>（renderWindowClassesNode），
-  // 实例只带 class= 引用。compress 态的 expand 提示就地贴在上方 <compressed> 节点，不在此。
-
-  const subWindows = allWindows.filter((w) => w.parentWindowId === window.id);
+  const subWindows = allWindows.filter((w) => w.inst.parentObjectId === inst.id);
   if (subWindows.length > 0) {
     const subNodes = await Promise.all(
-      subWindows.map((sub) => renderWindowNode(sub, thread, allWindows, registry)),
+      subWindows.map((sub) => renderWindowNode(sub.inst, sub.projection, thread, allWindows)),
     );
     children.push(xmlElement("sub_windows", {}, subNodes));
   }
 
+  // 实例 window 带**投影 class**（方法契约在 <window_classes> 按投影 class 声明一次）。
   const attrs: Record<string, string> = {
-    id: window.id,
-    class: window.class,
-    status: window.status,
+    id: inst.id,
+    class: projection.class,
+    status: inst.status,
   };
-  if (sharingState) {
-    attrs.read_only = "true";
-    attrs.sharing = sharingState.kind;
-    if (sharingState.kind === "readonly-ref") {
-      attrs.owner_thread = sharingState.ownerThreadId;
-    } else {
-      attrs.borrower_thread = sharingState.borrowerThreadId;
-    }
-  }
 
   return xmlElement("window", attrs, children);
 }
 
 async function renderContextWindowsNode(
-  windows: ContextWindow[],
+  projected: Array<{ inst: OocObjectInstance; projection: ReadableProjection }>,
   thread: ThreadContext,
-  registry: ObjectRegistry,
 ): Promise<XmlNode | null> {
-  if (windows.length === 0) return null;
+  if (projected.length === 0) return null;
 
-  const topLevel = windows.filter((w) => !w.parentWindowId || w.parentWindowId === ROOT_WINDOW_ID);
-  const children = await Promise.all(topLevel.map((w) => renderWindowNode(w, thread, windows, registry)));
+  const topLevel = projected.filter(
+    (w) => !w.inst.parentObjectId || w.inst.parentObjectId === ROOT_WINDOW_ID,
+  );
+  const children = await Promise.all(
+    topLevel.map((w) => renderWindowNode(w.inst, w.projection, thread, projected)),
+  );
   return xmlElement("context_windows", {}, children);
-}
-
-/**
- * 收集所有 window 在其 transcript 视图中已消费的 inbox/outbox 消息 id，用于去重
- * 顶层 inbox/outbox fallback。
- *
- * 由 registry 派发——每个 window type 通过 ObjectDefinition.consumedMessageIds hook 自报
- * 已消费的消息（talk 经 filterMessagesForTalkWindow）。renderer 不直接 import
- * executable/windows/talk，消除 thinkable→executable 反向耦合。
- */
-function collectWindowConsumedMessageIds(
-  windows: ContextWindow[],
-  thread: ThreadContext,
-  registry: ObjectRegistry,
-): Set<string> {
-  const consumed = new Set<string>();
-  for (const w of windows ?? []) {
-    let def: ObjectDefinition | undefined;
-    try {
-      def = registry.getObjectDefinition(w.class as never);
-    } catch {
-      def = undefined;
-    }
-    if (!def?.consumedMessageIds) continue;
-    for (const m of def.consumedMessageIds({ thread, window: w })) {
-      consumed.add(m.id);
-    }
-  }
-  return consumed;
 }
 
 // ─────────────────────────── self nodes ──────────────────────────────────────
@@ -463,33 +354,48 @@ export class XmlRenderer {
   }
 
   async render(snapshot: ContextSnapshot, thread: ThreadContext): Promise<string> {
-    // Use snapshot.windows (already budget-allocated) for rendering
+    // snapshot.windows（已 budget 分配）的元素是 object 实例信封。
     const windows = snapshot.windows;
     const threadForRender: ThreadContext = {
       ...thread,
       contextWindows: windows,
     };
 
+    const persistence = threadForRender.persistence
+      ? { baseDir: threadForRender.persistence.baseDir, sessionId: threadForRender.persistence.sessionId }
+      : undefined;
+
+    // 先算每个实例的 readable 投影（class 声明层 + 实例渲染都基于它）。
+    const projected = await Promise.all(
+      windows.map(async (inst) => ({
+        inst,
+        projection: await resolveProjection(inst, threadForRender, this.registry, persistence),
+      })),
+    );
+
     const threadChildren: XmlNode[] = [];
     appendNode(threadChildren, optionalElement("creator_thread_id", threadForRender.creatorThreadId));
     appendNode(threadChildren, optionalElement("parent_thread_id", threadForRender.parentThreadId));
 
-    // class 声明层：本轮出现的每个 window class 的方法契约声明一次，插在 <context_windows> 之前。
-    // 实例 window 只带 class= 引用此声明，不再逐实例重复方法菜单。
-    appendNode(threadChildren, renderWindowClassesNode(windows, threadForRender, this.registry));
+    // class 声明层：本轮出现的每个投影窗 class 的方法契约声明一次，插在 <context_windows> 之前。
+    appendNode(
+      threadChildren,
+      renderWindowClassesNode(
+        projected.map((p) => ({ ownerClass: p.inst.class, projectionClass: p.projection.class })),
+        threadForRender,
+        this.registry,
+      ),
+    );
 
-    const contextWindowsNode = await renderContextWindowsNode(windows, threadForRender, this.registry);
+    const contextWindowsNode = await renderContextWindowsNode(projected, threadForRender);
     if (contextWindowsNode) {
       threadChildren.push(xmlComment("context windows: persistent or in-flight windows the LLM is currently interacting with (knowledge synthesized as knowledge_window with source=protocol|activator|explicit)"));
       threadChildren.push(contextWindowsNode);
     }
 
-    // Top-level inbox/outbox fallback
-    const consumedMsgIds = collectWindowConsumedMessageIds(windows, threadForRender, this.registry);
-    const fallbackInbox = (threadForRender.inbox ?? []).filter((m) => !consumedMsgIds.has(m.id));
-    const fallbackOutbox = (threadForRender.outbox ?? []).filter((m) => !consumedMsgIds.has(m.id));
-    appendNode(threadChildren, renderMessagesNode("inbox", fallbackInbox));
-    appendNode(threadChildren, renderMessagesNode("outbox", fallbackOutbox));
+    // Top-level inbox/outbox fallback（消息已消费去重由 transcript 投影自身负责，本层只兜未消费）。
+    appendNode(threadChildren, renderMessagesNode("inbox", threadForRender.inbox));
+    appendNode(threadChildren, renderMessagesNode("outbox", threadForRender.outbox));
 
     const rootChildren: XmlNode[] = [
       ...renderSelfNodes(threadForRender.persistence?.objectId),

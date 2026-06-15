@@ -1,81 +1,41 @@
 /**
- * root.open_feishu_chat — 创建 feishu_chat_window。
+ * root.open_feishu_chat — 创建 feishu_chat 对象（window）。
+ *
+ * 新契约（Wave 4）：`exec(ctx, self, args)`；建窗经 `ctx.runtime.instantiate("feishu_chat", args)`
+ * （不再 `ctx.manager.insertTypedWindow` + 强类型整窗）。feishu_chat 的初始 Data 由其 class 的
+ * construct 据 args 产出。
  */
 
-import type {
-  MethodExecutionContext,
-  ObjectMethod,
-} from "../../../executable/windows/_shared/method-types.js";
-import {
-  ROOT_WINDOW_ID,
-  generateWindowId,
-  type FeishuChatWindow,
-} from "../../../executable/windows/_shared/types.js";
-import type { WindowManager } from "../../../executable/windows/_shared/manager.js";
+import type { ExecutableContext } from "../../../executable/contract.js";
 
-const OPEN_TIP = `open_feishu_chat 创建飞书群聊/单聊 window。
-参数：chat_id（必填 oc_xxx）、chat_name（可选）、chat_type（可选 group/p2p/topic）、tail_count（可选）。
-创建后建议立即 refresh 验证拉取链路。`;
-
-export const openFeishuChatMethod: ObjectMethod = {
-  description: "Open a Feishu (Lark) chat as a window in context.",
-  intents: ["open_feishu_chat"],
-  schema: {
-    args: {
-      chat_id: { type: "string", required: true, description: "飞书 chat_id (oc_xxx)" },
-      chat_name: { type: "string", description: "群名/对方姓名" },
-      chat_type: { type: "string", enum: ["group", "p2p", "topic"] },
-      tail_count: { type: "number", description: "首屏 buffer 条数（默认 30）" },
-    },
-  },
-  onFormChange(change, { args }) {
-    const hasChatId = typeof args.chat_id === "string" && args.chat_id.length > 0;
-    return {
-      tip: hasChatId ? `Opening chat ${args.chat_id}...` : OPEN_TIP,
-      intents: [{ name: "open_feishu_chat" }],
-      quick_exec_submit: hasChatId,
-    };
-  },
-  exec: (ctx) => executeOpenFeishuChat(ctx),
-};
+const FEISHU_CHAT_CLASS = "feishu_chat";
 
 export async function executeOpenFeishuChat(
-  ctx: MethodExecutionContext,
+  ctx: ExecutableContext,
+  _self: unknown,
+  args: Record<string, unknown>,
 ): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return "[open_feishu_chat] 缺少 thread context。";
-  const chatId = typeof ctx.args.chat_id === "string" ? ctx.args.chat_id : "";
+  if (!ctx.runtime) return "[open_feishu_chat] 缺少 runtime 句柄，无法实例化 feishu_chat。";
+  const chatId = typeof args.chat_id === "string" ? args.chat_id : "";
   if (!chatId) return "[open_feishu_chat] 缺少 chat_id。";
   const chatName =
-    typeof ctx.args.chat_name === "string" && ctx.args.chat_name
-      ? ctx.args.chat_name
-      : chatId.slice(-8);
+    typeof args.chat_name === "string" && args.chat_name ? args.chat_name : chatId.slice(-8);
   const chatType =
-    ctx.args.chat_type === "group" || ctx.args.chat_type === "p2p" || ctx.args.chat_type === "topic"
-      ? (ctx.args.chat_type as "group" | "p2p" | "topic")
+    args.chat_type === "group" || args.chat_type === "p2p" || args.chat_type === "topic"
+      ? (args.chat_type as "group" | "p2p" | "topic")
       : undefined;
-  const rawCount = Number(ctx.args.tail_count);
-  const tailCount = Number.isFinite(rawCount) && rawCount > 0 ? Math.min(Math.max(Math.floor(rawCount), 1), 100) : 30;
+  const rawCount = Number(args.tail_count);
+  const tailCount =
+    Number.isFinite(rawCount) && rawCount > 0
+      ? Math.min(Math.max(Math.floor(rawCount), 1), 100)
+      : 30;
 
-  const window: FeishuChatWindow = {
-    id: generateWindowId("feishu_chat"),
-    class: "feishu_chat",
-    parentWindowId: ROOT_WINDOW_ID,
+  const id = await ctx.runtime.instantiate(FEISHU_CHAT_CLASS, {
     title: chatName,
-    status: "open",
-    createdAt: Date.now(),
-    chatId,
-    chatName,
-    chatType,
-    mode: "tail",
-    tailCount,
-    buffer: [],
-  };
-
-  if (ctx.manager) {
-    (ctx.manager as WindowManager).insertTypedWindow(window, ctx.thread);
-  } else {
-    thread.contextWindows = [...(thread.contextWindows ?? []), window];
-  }
-  return `已创建 feishu_chat_window（id=${window.id}, chat=${chatId}）；建议立即 open method=refresh 验证拉取链路。`;
+    chat_id: chatId,
+    chat_name: chatName,
+    chat_type: chatType,
+    tail_count: tailCount,
+  });
+  return `已创建 feishu_chat（id=${id}, chat=${chatId}）；建议立即 exec(method="refresh") 验证拉取链路。`;
 }

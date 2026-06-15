@@ -28,7 +28,8 @@ import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
-import type { PrWindow } from "./types.js";
+import type { Data as PrData } from "./types.js";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 
 /** pr_window 的稳定 id：同一 reviewer 看同一 PR 复用同一 window（幂等更新，不堆叠）。 */
 export function prWindowId(issueId: number): string {
@@ -108,24 +109,25 @@ export async function deliverPrWindowToReviewers(
     }
 
     const windowId = prWindowId(issueId);
-    const prWindow: PrWindow = {
+    // Wave 4 对象模型：信封字段（id/class/title/status/createdAt/parentObjectId）落实例信封，
+    // pr 业务字段（issueId/reviewerObjectId/authorObjectId/authorThreadId）落 inst.data（=PrData）。
+    const prInstance: OocObjectInstance<PrData> = {
       id: windowId,
       class: "pr",
-      parentWindowId: ROOT_WINDOW_ID,
+      parentObjectId: ROOT_WINDOW_ID,
       title,
       status: "open",
       createdAt: Date.now(),
-      issueId,
-      reviewerObjectId,
-      authorObjectId,
-      ...(authorThreadId ? { authorThreadId } : {}),
+      data: {
+        issueId,
+        reviewerObjectId,
+        authorObjectId,
+        ...(authorThreadId ? { authorThreadId } : {}),
+      },
     };
 
     const windows = (thread.contextWindows ?? []).filter((w) => w.id !== windowId);
-    // Wave3 过渡：delivery 仍手搓 inline 信封（Data + 信封字段），Wave4 由 runtime 投递创建实例统一。
-    // prWindow 字面量已填齐 BaseContextWindow 必填字段，经 @deprecated PrWindow 别名（信封字段可选）
-    // 投进 ContextWindow[]，故在赋值边界收窄一次（deferred_hooks 登记）。
-    thread.contextWindows = [...windows, prWindow as (typeof windows)[number]];
+    thread.contextWindows = [...windows, prInstance];
 
     // push inbox_message_arrived 让 reviewer LLM 看到「有新 PR 待审」（与 talk-delivery 一致）。
     const messageId = generateMessageId();

@@ -4,8 +4,9 @@
  * Matches active thread intents against knowledge index frontmatter triggers and produces
  * KnowledgeWindow entries with source="activator".
  */
-import type { ContextWindow, KnowledgeWindow } from "../../executable/windows/_shared/types.js";
-import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types.js";
+import { ROOT_WINDOW_ID } from "../../_shared/types/context-window.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { Data as KnowledgeData } from "@ooc/builtins/knowledge/types.js";
 import type { ThreadContext } from "./index.js";
 import { computeActivations } from "../knowledge/activator.js";
 import { loadKnowledgeIndex } from "../knowledge/loader.js";
@@ -34,13 +35,13 @@ function nextSyntheticId(): string {
  */
 export async function buildActivatorKnowledgeWindows(
   thread: ThreadContext,
-): Promise<ContextWindow[]> {
+): Promise<OocObjectInstance<KnowledgeData>[]> {
   if (!thread.persistence) return [];
 
   const explicitPaths = new Set(
     (thread.contextWindows ?? [])
-      .filter((w): w is KnowledgeWindow => w.class === "knowledge" && (w as KnowledgeWindow).source === "explicit")
-      .map((w) => w.path),
+      .filter((w) => w.class === "knowledge" && (w.data as KnowledgeData | undefined)?.source === "explicit")
+      .map((w) => (w.data as KnowledgeData).path),
   );
 
   try {
@@ -49,23 +50,25 @@ export async function buildActivatorKnowledgeWindows(
     const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
     const activations = computeActivations(thread, index);
 
-    const out: ContextWindow[] = [];
+    const out: OocObjectInstance<KnowledgeData>[] = [];
     for (const act of activations) {
       if (explicitPaths.has(act.path)) continue;
       const body = act.presentation === "full" ? truncateKnowledgeBody(act.doc.body) : "";
       out.push({
         id: nextSyntheticId(),
         class: "knowledge",
-        parentWindowId: ROOT_WINDOW_ID,
+        parentObjectId: ROOT_WINDOW_ID,
         title: act.path,
         status: "open",
         createdAt: Date.now(),
-        path: act.path,
-        source: "activator",
-        body,
-        presentation: act.presentation,
-        description: act.doc.frontmatter.description,
-      } as KnowledgeWindow);
+        data: {
+          path: act.path,
+          source: "activator",
+          body,
+          presentation: act.presentation,
+          description: act.doc.frontmatter.description,
+        },
+      });
     }
     return out;
   } catch {

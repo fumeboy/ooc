@@ -19,7 +19,7 @@ import { join } from "node:path";
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext, ProcessEvent } from "../../thinkable/context.js";
-import type { ContextWindow } from "../windows/_shared/types.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { deriveStoneFromThread, stoneDir } from "../../persistable/common.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
@@ -130,10 +130,11 @@ function compressWindowsClean(
   }
 
   const oldLevels = new Map<string, 0 | 1 | 2>();
-  // 窄化：contextWindows 契约层是 base[]；narrow 回 union[] 以匹配 next 的 union 元素类型。
-  const next: ContextWindow[] = ((thread.contextWindows ?? []) as ContextWindow[]).map((window) => {
+  // Wave 4：compressLevel 投影态落 inst.win.compressLevel；id/class 是信封字段。
+  const next: OocObjectInstance[] = (thread.contextWindows ?? []).map((window) => {
     if (!idSet.has(window.id)) return window;
-    const current = (window.compressLevel ?? 0) as 0 | 1 | 2;
+    const win = (window.win ?? {}) as { compressLevel?: 0 | 1 | 2 };
+    const current = (win.compressLevel ?? 0) as 0 | 1 | 2;
     if (current === level) {
       alreadyAtLevel.push(window.id);
       return window;
@@ -144,7 +145,7 @@ function compressWindowsClean(
     }
     oldLevels.set(window.id, current);
     changed.push(window.id);
-    return { ...window, compressLevel: level } as ContextWindow;
+    return { ...window, win: { ...win, compressLevel: level } };
   });
   thread.contextWindows = next;
 

@@ -11,17 +11,20 @@ import {
   listExternalSkills,
   readWorldConfig,
 } from "../../persistable/index.js";
-import type { SkillIndexWindow } from "../../executable/windows/_shared/types.js";
+import type { Data as SkillIndexData } from "@ooc/builtins/skill_index/types.js";
 import { ROOT_WINDOW_ID, SKILL_INDEX_WINDOW_ID } from "../../executable/windows/_shared/types.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { ThreadContext } from "./index.js";
 
 /**
- * Synthesize a SkillIndexWindow for the thread's object.
+ * Synthesize a skill_index object instance for the thread's object.
  *
- * Returns an array with either 0 or 1 SkillIndexWindow.
+ * Returns an array with either 0 or 1 OocObjectInstance（信封 + data.skills）。
  * When thread has no persistence, returns [].
  */
-export async function synthesizeSkillIndex(thread: ThreadContext): Promise<SkillIndexWindow[]> {
+export async function synthesizeSkillIndex(
+  thread: ThreadContext,
+): Promise<OocObjectInstance<SkillIndexData>[]> {
   if (!thread.persistence) return [];
 
   try {
@@ -43,14 +46,14 @@ export async function synthesizeSkillIndex(thread: ThreadContext): Promise<Skill
     const merged = Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
     if (merged.length === 0) return [];
 
-    const skillIndex: SkillIndexWindow = {
+    const skillIndex: OocObjectInstance<SkillIndexData> = {
       id: SKILL_INDEX_WINDOW_ID,
       class: "skill_index",
-      parentWindowId: ROOT_WINDOW_ID,
+      parentObjectId: ROOT_WINDOW_ID,
       title: `Skills (${merged.length})`,
       status: "active",
       createdAt: Date.now(),
-      skills: merged,
+      data: { status: "active", skills: merged },
     };
     return [skillIndex];
   } catch (err) {

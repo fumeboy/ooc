@@ -3,7 +3,7 @@ import { isBuiltinObjectId, objectDir, readSelf, resolveStoneIdentityRef, stoneD
 import { createDefaultPipeline } from "./pipeline.js";
 import { estimateWindowsTokens, loadBudgetThresholds, type BudgetThresholds } from "./budget.js";
 import { XmlRenderer } from "./renderers/xml.js";
-import type { ContextWindow } from "../../executable/windows/_shared/types.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { isTalkLikeClass } from "../../_shared/types/constants.js";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../../_shared/types/thread.js";
 
@@ -320,7 +320,7 @@ const BUILTIN_WINDOW_TYPES: ReadonlySet<string> = new Set([
  * id === type (by ooc-6 Object window convention) and the type
  * is neither a builtin window type nor a builtin Object id.
  */
-function isPeerWindow(w: ContextWindow): boolean {
+function isPeerWindow(w: OocObjectInstance): boolean {
   if (w.id !== w.class) return false;
   if (BUILTIN_WINDOW_TYPES.has(w.class)) return false;
   if (isBuiltinObjectId(w.class)) return false;
@@ -336,7 +336,7 @@ function isPeerWindow(w: ContextWindow): boolean {
  */
 function reconcilePeerWindowsIntoContext(
   thread: ThreadContext,
-  snapshotWindows: readonly ContextWindow[],
+  snapshotWindows: readonly OocObjectInstance[],
 ): void {
   if (!snapshotWindows.length) return;
   const list = thread.contextWindows ?? (thread.contextWindows = []);
@@ -345,7 +345,7 @@ function reconcilePeerWindowsIntoContext(
   for (const w of snapshotWindows) {
     if (!isPeerWindow(w)) continue;
     if (existing.has(w.id)) continue;
-    list.push({ ...w } as ContextWindow);
+    list.push({ ...w });
     existing.add(w.id);
     appended++;
   }
