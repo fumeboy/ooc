@@ -137,7 +137,7 @@ export interface BaseContextWindow {
  * - kind="readonly-ref"：我（当前 thread）持有只读引用，只能调 window method；
  *   owner 在 ownerThreadId；snapshot 是 share 时刻的 freeze。
  * - kind="mutable-ref"：我曾是 owner，已把 mutable 所有权 move 给 borrowerThreadId，
- *   自己降为只读 shadow（snapshot 冻结）。`move` 是动作（核心 11），非稳态。
+ *   自己降为只读 shadow（snapshot 冻结）。
  */
 export type SharingState =
   | {

@@ -14,7 +14,6 @@
   },
   "ooc": {
     "objectId": "_builtin/terminal_process",
-    "kind": "class",
-    "type": "object"
+    "kind": "class"
   }
 }

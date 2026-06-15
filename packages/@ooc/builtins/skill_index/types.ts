@@ -1,27 +1,36 @@
-import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
-import type { SkillEntry } from "@ooc/core/persistable/stone-skills.js";
-
 /**
- * Skill 索引窗口。
+ * skill_index —— stones 上 skills 目录的索引视图的 **object data**（types.ts = 纯 Data）。
  *
- * 每个 thread 启动时由 initContextWindows 自动注入一份，固定 id="skill_index"。
+ * 只含业务字段；**不含**窗信封字段（id/class/title/status/createdAt）——那些由 runtime 管理。
  *
- * **不持久化**：thread.json 序列化时被 strip；reload 后由 initContextWindows 重新插入。
- * 内容（skills 字段）通过 renderXml 阶段动态扫描得出（10s TTL 缓存，详见
- * persistable/stone-skills.ts）。
- *
- * 不注册任何命令；onClose 拒绝（与 root window 同级，与 thread 生命周期同寿）。
+ * 完全由 synthesizer 派生：每个 thread 每轮渲染时按 thread.persistence 推导 stoneRef，
+ * 并行扫描 branch / object 两层 skills 目录（10s TTL 缓存，详见 stone-skills.ts），
+ * 合并去重（同名 object 级优先），把派生的 skills 注入这份 Data。**不持久化**。
  *
  * skills 来源（双层）：
- * - branch 级 `stones/<branch>/skills/<name>/SKILL.md`（跨 Object 共享）
- * - object 级 `stones/<branch>/objects/<self>/skills/<name>/SKILL.md`（仅 self）
+ * - workspace 级 `stones/@ooc/skills/<name>/SKILL.md`（跨 Object 共享）
+ * - object 级 `stones/<objectId>/skills/<name>/SKILL.md`（仅 self）
  * 同名 skill object 级优先。
  */
-export interface SkillIndexWindow extends BaseContextWindow {
-  class: "skill_index";
+import type { SkillEntry } from "@ooc/core/persistable/stone-skills.js";
+
+export interface Data {
+  /** 业务态：始终 active（与 thread 生命周期同寿的派生窗）。 */
   status: "active";
   /** 派生时已扫描出的 skill 列表（每轮重算）。 */
   skills: SkillEntry[];
 }
+
+/**
+ * @deprecated 过渡兼容别名（Wave3 前端迁移时删除）：visible 层仍按旧「窗对象」消费。
+ * 新后端契约用 Data + runtime 信封（OocObjectInstance）——**不要在后端引用本别名**。
+ */
+export type SkillIndexWindow = Data & {
+  id?: string;
+  class?: "skill_index";
+  title?: string;
+  createdAt?: number;
+  parentWindowId?: string;
+};
 
 export type { SkillEntry };

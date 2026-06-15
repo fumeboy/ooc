@@ -27,7 +27,7 @@ import type { ThreadContext } from "./index.js";
 import type { ObjectRegistry, ObjectDefinition } from "../../executable/windows/_shared/registry.js";
 import { builtinRegistry } from "../../executable/windows/index.js";
 import type { ContextWindow, TalkWindow } from "../../executable/windows/_shared/types.js";
-import { SUPER_ALIAS_TARGET } from "@ooc/core/_shared/types/constants.js";
+import { SUPER_ALIAS_TARGET, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
 import { loadObjectWindow } from "../../runtime/server-loader.js";
 
@@ -170,9 +170,11 @@ export async function derivePeerObjectWindows(
   if (!thread.persistence) return [];
   const { baseDir, objectId: selfId, sessionId } = thread.persistence;
 
-  // 1) From talk_window
+  // 1) From 会话窗（talk other-view + thread/reflect_request self-view）。
+  // 自视图（creator 窗）的 target = 本 thread 的 creator object（cross-object callee 借此把它的 caller
+  // 也带成 peer object window）；故按 isTalkLikeClass 认会话窗，而非只认 other-view "talk"。
   const talkWindows = (thread.contextWindows ?? []).filter(
-    (w): w is TalkWindow => w.class === "talk",
+    (w): w is TalkWindow => isTalkLikeClass(w.class),
   );
   const peerEarliest = new Map<string, number>();
   for (const w of talkWindows) {

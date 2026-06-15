@@ -13,7 +13,6 @@
   },
   "ooc": {
     "objectId": "_builtin/todo",
-    "kind": "builtin",
-    "type": "object"
+    "kind": "class"
   }
 }

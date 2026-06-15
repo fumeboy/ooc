@@ -95,7 +95,7 @@ function buildCreatorReplyKnowledge(window: ContextWindow): string {
   return [
     `# 子→父 reply 协议（你的 creator talk_window，${isFork ? "fork 子线程窗" : "peer 会话窗"}）`,
     "",
-    `你当前 thread 的 creator window 是 \`${window.id}\`（class=talk，isCreatorWindow=true，不可被 close）。`,
+    `你当前 thread 的 creator window 是 \`${window.id}\`（class=${window.class}，isCreatorWindow=true，不可被 close）。`,
     "",
     `**想把结果 / 回信带回${upstream}，唯一通道**：`,
     "",
@@ -125,12 +125,12 @@ export async function buildProtocolKnowledgeWindows(
 ): Promise<KnowledgeWindow[]> {
   const windows: KnowledgeWindow[] = await buildRootKnowledgeWindows(thread);
 
-  // creator-reply 协议：每个 creator do/talk window 一条，按 window id 去重。
+  // creator-reply 协议：每个 self-view（creator）会话窗一条，按 window id 去重。
+  // self-view 恒有 isCreatorWindow=true（普通 flow class=thread / super flow class=reflect_request /
+  // 历史 fork-creator 也走同一 flag），按 flag 识别（class-agnostic + forward-compatible）。
   const seen = new Set<string>();
   for (const w of (thread.contextWindows ?? []) as ContextWindow[]) {
-    const isCreator =
-      (w.class === "talk" || w.class === "reflect_request") &&
-      w.isCreatorWindow === true;
+    const isCreator = (w as { isCreatorWindow?: boolean }).isCreatorWindow === true;
     if (!isCreator) continue;
     const path = `internal/windows/${w.class}/creator-reply/${w.id}`;
     if (seen.has(path)) continue;

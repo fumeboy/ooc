@@ -65,8 +65,10 @@ export type ContextWindow =
       createdAt?: number;
     }
   | {
+      // 会话窗三 class 同形：talk（other-view）/ thread（普通 flow self-view）/
+      // reflect_request（super flow self-view）。字段一致。
       id: string;
-      class: "talk";
+      class: "talk" | "thread" | "reflect_request";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";

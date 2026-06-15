@@ -10,7 +10,7 @@
   },
   "ooc": {
     "objectId": "_builtin/reflect_request",
-    "kind": "builtin",
-    "type": "object"
+    "kind": "class",
+    "class": "_builtin/thread"
   }
 }

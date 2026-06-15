@@ -4,6 +4,7 @@ import { createDefaultPipeline } from "./pipeline.js";
 import { estimateWindowsTokens, loadBudgetThresholds, type BudgetThresholds } from "./budget.js";
 import { XmlRenderer } from "./renderers/xml.js";
 import type { ContextWindow } from "../../executable/windows/_shared/types.js";
+import { isTalkLikeClass } from "../../_shared/types/constants.js";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../../_shared/types/thread.js";
 
 export type {
@@ -46,9 +47,10 @@ function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage |
  * 推导链:
  * 1. inboxMessage.replyToWindowId — talk-delivery / worker.syncCrossObjectCalleeEnds
  *    在跨 object 投递时已经写入,优先使用
- * 2. fallback: 在 thread.contextWindows 中找一个 fork 子线程窗（class=talk,isForkWindow）且
+ * 2. fallback: 在 thread.contextWindows 中找一个 fork 子线程窗（会话窗 + isForkWindow）且
  *    targetThreadId === inboxMessage.fromThreadId 的 window;若多个,优先
- *    isCreatorWindow=true(child 视角下的 creator fork 窗是规范配对窗口)
+ *    isCreatorWindow=true(child 视角下的 creator fork 窗是规范配对窗口——它的 self-view class
+ *    是 thread/reflect_request，故按 isTalkLikeClass 认会话窗而非死写 "talk")
  * 3. 都没有 → undefined,header 中静默不输出 window_id KV
  */
 function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage): string | undefined {
@@ -57,7 +59,7 @@ function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage
   if (!fromThreadId) return undefined;
   const candidates = thread.contextWindows.filter(
     (w) =>
-      w.class === "talk" &&
+      isTalkLikeClass(w.class) &&
       (w as { isForkWindow?: boolean }).isForkWindow === true &&
       (w as { targetThreadId?: string }).targetThreadId === fromThreadId,
   );

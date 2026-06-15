@@ -15,7 +15,7 @@ import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 interface WaitCandidate {
   id: string;
-  class: "talk" | "reflect_request";
+  class: "talk" | "thread" | "reflect_request";
   hint: string;
 }
 
@@ -25,9 +25,11 @@ function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
   // 窄化：contextWindows 契约层是 base[]；narrow 回 union[]，
   // switch(w.class) 才能 discriminant-narrow 到 TalkWindow 读 isCreatorWindow/isForkWindow/target/targetThreadId。
   for (const w of (thread.contextWindows ?? []) as ContextWindow[]) {
-    // 会话窗（talk peer / talk fork 子窗 / reflect_request）= 唯一可产生未来 IO 的 window；alive=open。
+    // 会话窗（talk peer / fork 子窗 / thread self-view / reflect_request）= 唯一可产生未来 IO 的
+    // window；alive=open。thread/reflect_request 是 self-view（等 creator 回复）。
     switch (w.class) {
       case "talk":
+      case "thread":
       case "reflect_request": {
         if (w.status !== "open") break;
         if (w.isForkWindow) {
@@ -149,8 +151,8 @@ export async function handleWaitTool(
     );
   }
 
-  // R3: on 类型不合法（非 talk / reflect_request）—— 这同时盖掉了 root/method_exec/file 等
-  if (target.class !== "talk" && target.class !== "reflect_request") {
+  // R3: on 类型不合法（非会话窗 talk / thread / reflect_request）—— 同时盖掉 root/method_exec/file 等
+  if (target.class !== "talk" && target.class !== "thread" && target.class !== "reflect_request") {
     // 进程 window 给针对性提示:它是同步执行,结果已落在 history 里,不需要 wait
     const typeSpecificHint =
       target.class === "terminal_process" || target.class === "interpreter_process"
@@ -166,7 +168,7 @@ export async function handleWaitTool(
     );
   }
 
-  // 类型已收窄到 talk | reflect_request；会话窗一律 alive=open。
+  // 类型已收窄到 talk | thread | reflect_request；会话窗一律 alive=open。
   if (target.status !== "open") {
     const desc = target.isForkWindow ? "fork 子线程窗（子线程已结束）" : `${target.class}_window`;
     return errorOutput(

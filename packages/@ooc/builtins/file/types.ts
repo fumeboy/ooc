@@ -1,25 +1,33 @@
-import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
-import type { Viewport } from "@ooc/core/extendable/_shared/viewport.js";
-
 /**
- * File window — 显示某个文件的内容（按 viewport 切片）。
+ * file —— 文件窗 class 的 **object data**（types.ts = 纯 Data）。
+ *
+ * 只含业务字段；**不含**窗信封字段（id/class/title/status/createdAt/parentWindowId）——那些由 runtime
+ * 管理。展示态（viewport / lines / columns）也不在此，归 readable 的投影态 `win`（见 readable/index.ts
+ * 的 `FileWin`）。
  *
  * - path：文件绝对路径或工作目录相对路径
- * - 展示状态（viewport / lines / columns）现归 `state`（WindowDisplayState）：
- *   open_file 创建时填默认 viewport 0-200 / 0-200，由 readable 维度的 window method
- *   `set_viewport`（写 state.viewport）/ `set_range`（写 state.lines / state.columns）调整。
- * - 下方平铺 viewport / lines / columns 字段 **@deprecated**，仅为兼容旧 thread.json 读取。
- *
- * 详见 meta/object.doc.ts:executable.context_window.patches.viewport_protocol。
  */
-export interface FileWindow extends BaseContextWindow {
-  class: "file";
-  status: "open" | "closed";
+export interface Data {
   path: string;
-  /** @deprecated 移到 state.viewport；保留以兼容旧 thread.json。 */
-  viewport?: Viewport;
-  /** @deprecated 移到 state.lines；保留以兼容旧 thread.json。 */
-  lines?: [number, number];
-  /** @deprecated 移到 state.columns；保留以兼容旧 thread.json。 */
-  columns?: [number, number];
 }
+
+/**
+ * @deprecated 过渡兼容别名 —— 仅为让 `visible/` 旧组件继续编译（它读 window.path / window.state /
+ * window.lines / window.columns 等平铺/信封字段）。新代码用 `Data` + runtime 信封 + `FileWin` 投影态；
+ * core 反推完成后删除。
+ */
+export type FileWindow = Data & {
+  id?: string;
+  class?: string;
+  title?: string;
+  status?: string;
+  createdAt?: number;
+  parentWindowId?: string;
+  lines?: [number, number];
+  columns?: [number, number];
+  state?: {
+    viewport?: unknown;
+    lines?: [number, number];
+    columns?: [number, number];
+  };
+};

@@ -26,7 +26,7 @@ import {
 } from "@ooc/core/persistable/index.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
-import { ROOT_WINDOW_ID } from "@ooc/core/extendable/_shared/types.js";
+import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
 import type { PrWindow } from "./types.js";
 
@@ -122,7 +122,10 @@ export async function deliverPrWindowToReviewers(
     };
 
     const windows = (thread.contextWindows ?? []).filter((w) => w.id !== windowId);
-    thread.contextWindows = [...windows, prWindow];
+    // Wave3 过渡：delivery 仍手搓 inline 信封（Data + 信封字段），Wave4 由 runtime 投递创建实例统一。
+    // prWindow 字面量已填齐 BaseContextWindow 必填字段，经 @deprecated PrWindow 别名（信封字段可选）
+    // 投进 ContextWindow[]，故在赋值边界收窄一次（deferred_hooks 登记）。
+    thread.contextWindows = [...windows, prWindow as (typeof windows)[number]];
 
     // push inbox_message_arrived 让 reviewer LLM 看到「有新 PR 待审」（与 talk-delivery 一致）。
     const messageId = generateMessageId();

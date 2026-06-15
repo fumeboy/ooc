@@ -102,13 +102,14 @@
 
 ### 绿增量序（替代原 S3.4→S3.6 列序；勿一把梭）
 
+> **依赖修正（2026-06-15 实现期发现）**：原列序「先 end→thread 再 thread 窗」**倒置**。`end` 只能在 `thread`-class 自视角窗**存在之后**才能干净归位——否则自侧 creator 窗 class=`talk` 与 peer 窗同 class，把 end 注册到 `talk` 会误挂到 peer。且自视角窗一旦变 `thread`，`wait` 目标校验 + 持久化 omit 须**同步**接纳 `thread`。故正确序 = **先立 thread 窗，再迁 end**。
+
 | 增量 | 内容 | 绿判据 |
 |---|---|---|
-| **H1** | thread/talk 投影 class **构建时算 + 停持久化**，值与今**完全一致**（behavior-identical）；窄域只碰 thread/talk/creator/fork 窗，其余窗 class 不动 | verify + storybook 绿、无行为变（de-risk 持久化机制，与语义翻转解耦） |
-| **H2a** | **end→thread**（S3.4）：agency 去 end、thread 注册 end、共享给会话窗、auto-reply 改 thread.persistence 路由、导出 isCreatorSelf | fork/peer/跨 session end 回复通；改/删旧 agency-end 测试 |
-| **H2b** | **thread 窗自视角**（S3.6 + 引入 `thread` class + 核心 10 渲染）：creator 窗→thread 窗、events 折入、reflect_request extends thread | self-view 渲染 + 投影测试；改旧 creator/self 窗形态断言 |
-| **H2c** | **wait 接 thread 窗**（surgical） | wait-for-creator-reply 落 thread 窗通 |
-| **S3.5** | thread readable + compressView（自视角渲染 + events 折叠） | |
+| **H1 ✅** | thread/talk 投影 class **构建时算 + 停持久化**，值与今**完全一致**（behavior-identical）；窄域只碰 thread/talk/creator/fork 窗 | 已落（commit d1d43e5b）verify 911/0 + storybook 63/0 |
+| **H2** | **自视角窗 → class `thread`**：computeProjectionClass 自侧 creator 窗产 `thread`（super 产 `reflect_request`、extends thread）、peer/sub 仍 `talk`；注册 `thread` 会话类（say/wait-handling/close-reject、readable、暂沿用今渲染）；`findCreatorWindow` 放宽为只认 `isCreatorWindow`（弃 class 过滤、前向兼容）；`wait.ts` listValidWaitTargets/WaitCandidate + 持久化 omit + isTalkLikeClass 等价处纳入 `thread` | behavior-near-identical（class 标签翻转、方法菜单等价）；改旧 creator-窗 class 断言 |
+| **H3** | **thread 窗核心 10 渲染**（S3.6 自投影 + S3.5 compress）：events 折入 thread 窗、XML 只渲方法、内容进 message 流并纳预算、compressView | 自视角渲染 + attention 分层测试 |
+| **H4** | **end → thread class**（S3.4）：endMethod 迁 builtins/thread、注册 thread 类（仅自视角、不挂 peer）、AGENCY 去 end；end 显式 exec(thread窗)，auto-reply 直接 say on ctx.self（thread 窗即 creator 通道、无需 findCreatorWindow 搜索） | fork/peer/跨 session end 回复通；改/删旧 window-less/agency-end 测试 |
 | **S3.7** | 持久化一致性收尾（接 S5） | |
 | **S5** | persistable 自定义（thread 持久化去特例化为 class override，next_todo #1） | |
 

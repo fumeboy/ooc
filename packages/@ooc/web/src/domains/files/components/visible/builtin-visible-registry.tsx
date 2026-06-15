@@ -47,5 +47,8 @@ export const BUILTIN_VISIBLE: Record<string, ComponentType<{ window: ContextWind
   feishu_chat: FeishuChatWindowDetail,
   feishu_doc: FeishuDocWindowDetail,
   do: DoWindowDetail,
+  // 会话窗三 class 同形（H2）：talk other-view + thread/reflect_request self-view 共用 TalkWindowDetail。
   talk: TalkWindowDetail,
+  thread: TalkWindowDetail,
+  reflect_request: TalkWindowDetail,
 };

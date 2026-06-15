@@ -1,8 +1,8 @@
-import type { SearchWindow } from "../types.js";
+import type { Data as SearchData } from "../types.js";
 import React from "react";
 
 /** Search window 详情面板。 */
-export default function SearchWindowDetail({ window }: { window: SearchWindow }) {
+export default function SearchWindowDetail({ window }: { window: SearchData }) {
   return (
     <>
       <div className="llm-input-attrs">

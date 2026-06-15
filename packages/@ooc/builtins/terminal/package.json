@@ -10,7 +10,6 @@
   },
   "ooc": {
     "objectId": "_builtin/terminal",
-    "kind": "builtin",
-    "type": "object"
+    "kind": "class"
   }
 }

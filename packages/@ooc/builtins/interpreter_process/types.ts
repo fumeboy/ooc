@@ -1,21 +1,26 @@
-import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
-import type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";
-import type { TranscriptViewport } from "@ooc/core/extendable/_shared/transcript-viewport.js";
-
-export type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";
-
 /**
- * interpreter_process — ts/js 解释进程窗。
+ * interpreter_process — ts/js 解释进程 class 的 **object data**（types.ts = 纯 Data）。
  *
  * 由 interpreter 对象构造（args: code, language: ts/js）。每次 exec 跑一段 ts/js 脚本
  * （独立 sandbox），结果作为一条 ProcessExecRecord 追加进 history。ts/js sandbox 通过
  * self.getThreadLocal/setThreadLocal 跨 exec 共享数据。非单例。
- * 注册的 method：exec / close / set_history_window。
+ *
+ * 只含业务字段：history。**不含**窗信封（id/class/title/status/createdAt）——由 runtime 管理；
+ * 也**不含**展示态（history viewport）——归 readable 的投影态 win（见 _shared 的 ProcessWin）。
  */
-export interface InterpreterProcessWindow extends BaseContextWindow {
-  class: "interpreter_process";
-  status: "open" | "closed";
+import type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";
+
+export type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";
+
+/** interpreter_process 的业务数据：历次 ts/js exec 记录。 */
+export interface Data {
   history: ProcessExecRecord[];
-  /** history 渲染视口；由 window method set_history_window 调整（默认 { tail: 10 }）。 */
-  historyViewport?: TranscriptViewport;
+}
+
+/**
+ * @deprecated 过渡兼容别名 —— 供尚未迁移的 visible 前端（visible/index.tsx）编译用。
+ * 新对象模型下窗信封由 runtime 管理、history 是 Data 字段；前端最终应改读运行时实例信封。
+ */
+export interface InterpreterProcessWindow {
+  history: ProcessExecRecord[];
 }

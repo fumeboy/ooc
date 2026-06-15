@@ -10,9 +10,7 @@
   },
   "ooc": {
     "objectId": "supervisor",
-    "kind": "class",
-    "type": "agent",
-    "class": "_builtin/agent",
-    "instantiate_with_new_world": true
+    "kind": "object",
+    "class": "_builtin/agent"
   }
 }

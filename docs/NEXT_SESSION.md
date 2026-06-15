@@ -28,7 +28,6 @@
 评审定稿后逐子步实现：S3.4(end 迁 thread) → S3.6(thread window 自我投影注入) → S2(class-dynamic 落地) → S3.5(thread readable/compress) → S3.7(持久化收尾) → S5(persistable 可自定义)。最后 storybook 覆盖 + 全树文档回顾。
 
 ## 工程纪律（踩过的坑）
-- bun runtime；**绝不 bun install**（lockfile pin 内网 bnpm 会 hang）。新 builtins workspace 包：建包后手动 `ln -s ../../../packages/@ooc/builtins/<id> node_modules/@ooc/builtins/<id>`；@ooc/builtins/* 经 root tsconfig paths 双轨解析(tsc+bun)。
 - 窗类型一律经 ObjectRegistry.registerWindowClass 自声明（一处声明含 methods/parentClass/readable/windowMethods/renderableVisible/builtinReadable），不再硬编码 BASE_TYPE_DEFINITIONS。
 - **不要信二手结论**（前序 recon/summary 多处把"已做/未做"说反）——动手前直接 grep/read 核验真实代码状态。
 - 大手术别一把梭（曾让 mega-agent 卡住）：派**界定清晰的聚焦 sub-agent**逐子步实现（终态绿、不自行 commit），由你（Supervisor）验证整合后提交。

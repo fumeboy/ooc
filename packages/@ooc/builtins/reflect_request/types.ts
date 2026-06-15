@@ -1,16 +1,26 @@
-import type { TalkWindow } from "@ooc/core/executable/windows/talk/types.js";
+/**
+ * reflect_request —— object data 结构（types.ts = 纯 Data）。
+ *
+ * reflect_request 是 super flow 反思 thread 的 self-view（context.md core 9：取代普通 flow 的 thread
+ * creator 窗）+ reflectable 沉淀方法挂载窗。它经 class 链继承 thread → talk
+ * （`ooc.class: "_builtin/thread"`）的全部会话行为；自身只额外提供两个沉淀 object method。
+ *
+ * 与 thread 同理：会话/渲染过程数据由 runtime 管理（thread.json / thread-context.json），不冗余进业务
+ * Data，故 reflect_request 的业务 Data 为空。
+ */
+export interface Data {}
 
 /**
- * ReflectRequestWindow —— super flow 反思 thread 的会话面 + reflectable 沉淀方法挂载窗。
- *
- * 它在 super flow 里取代 creator talk_window：形态与 TalkWindow 一致（target/targetThreadId/
- * conversationId/isCreatorWindow/state.transcriptViewport，复用 talk 的渲染与会话 method），
- * 仅 class 判别符为 "reflect_request"，从而额外挂载 new_feat_branch / create_pr_and_invite_reviewers
- * 两个沉淀方法（标 for_reflectable，只在 super flow surface）。
- *
- * 因与 talk 同形，talk 的报回-caller 双通道（end 自动代发 / worker 兜底扫描）经
- * `isTalkLikeClass` 谓词同时认 reflect_request——见 `@ooc/core/_shared/types/constants.ts`。
+ * @deprecated 过渡别名 —— 旧 `ReflectRequestWindow`（talk 同形 super-flow self-view 窗）的窗信封视图。
+ * 新契约里 Data 与窗信封（id/class/title/status/createdAt/parentWindowId）分离；旧引用仍以「窗」整体
+ * 看待投影，故保留此交叉类型让其继续编译。Wave4 talk 迁移后归并删除。
  */
-export interface ReflectRequestWindow extends Omit<TalkWindow, "class"> {
-  class: "reflect_request";
-}
+export type ReflectRequestWindow = Data & {
+  id?: string;
+  class?: "reflect_request";
+  title?: string;
+  status?: string;
+  createdAt?: number;
+  parentWindowId?: string;
+  [key: string]: unknown;
+};

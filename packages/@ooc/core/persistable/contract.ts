@@ -1,0 +1,29 @@
+/**
+ * persistable 维度契约 —— ooc object 的**自定义序列化**（object-model 核心 7）。
+ *
+ * 设计权威：`.ooc-world-meta/.../children/class/knowledge/object-model.md`（对象模型单一权威）
+ * 接口模板：同目录 `example.md`。本文件是该模板在 core 的**可编译落字**。
+ *
+ * object 经自定义 persistable 控制自己的**序列化目录与序列化方式**；
+ * 未自定义（class 不导出 persistable）则走**系统默认**持久化。
+ */
+
+/** persistable save/load 的上下文 —— 定位「这个 object 实例的盘上位置」。 */
+export interface PersistableContext {
+  /** world 根目录。 */
+  baseDir: string;
+  /** 对象逻辑 id（含 `_builtin/` 前缀或 world bare id）。 */
+  objectId: string;
+  /** 运行时 session（flow）id；缺省 = stone（类/身份）层。 */
+  sessionId?: string;
+  /** 系统已解析好的默认序列化目录（自定义实现可改用别处，但通常基于它）。 */
+  dir: string;
+}
+
+/** persistable 维度模块 —— `persistable/index.ts` 的 default export。 */
+export interface PersistableModule<Data = any> {
+  /** 把实例 Data 写盘。 */
+  save: (ctx: PersistableContext, data: Data) => void | Promise<void>;
+  /** 从盘读回实例 Data（无则返回 undefined，走缺省）。 */
+  load: (ctx: PersistableContext) => Data | undefined | Promise<Data | undefined>;
+}

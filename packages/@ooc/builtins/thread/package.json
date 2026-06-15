@@ -11,6 +11,6 @@
   "ooc": {
     "objectId": "_builtin/thread",
     "kind": "class",
-    "type": "object"
+    "class": "talk"
   }
 }

@@ -21,6 +21,7 @@ import type { ContextWindow, SharingState, TalkWindow } from "../_shared/types.j
 import type { WindowManager } from "../_shared/manager.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import { findChild } from "./fork.js";
+import { isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 
 const SHARE_TIP = `talk_window.share 跨 thread 传 window 引用（仅 fork 子线程窗可用）。
 参数：window_id（必填，要传的 window id）、mode（"readonly-ref" 只读借用 或 "move" 移交所有权）。`;
@@ -101,7 +102,9 @@ async function executeShare(ctx: MethodExecutionContext): Promise<string | undef
         : `已 move 给 thread "${source.sharing.borrowerThreadId}"`;
     return `[talk_window.share] window "${window_id}" 当前是 ${stateDesc}，不能再传。`;
   }
-  if (source.id === forkWindow.id || source.class === "talk" || source.class === "method_exec" || source.class === "root") {
+  // 会话窗（talk other-view + thread/reflect_request self-view）与系统窗不可传；仅数据/内容型可 share。
+  // H2 后 self-view 窗 class 由 "talk" 改为 thread/reflect_request，用 isTalkLikeClass 统一识别。
+  if (source.id === forkWindow.id || isTalkLikeClass(source.class) || source.class === "method_exec" || source.class === "root") {
     return `[talk_window.share] window "${window_id}" 是 ${source.class} 类型，不允许传（仅可传数据 / 内容型 window）。`;
   }
 

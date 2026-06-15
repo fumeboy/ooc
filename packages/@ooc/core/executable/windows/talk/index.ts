@@ -209,8 +209,9 @@ function buildChildCreatorWindow(
   initialTitle: string,
 ): TalkWindow {
   const id = creatorWindowIdOf(child.id);
-  // class 经 computeProjectionClass 投影（fork → "talk"）；其返回 union 比 TalkWindow.class 宽，
-  // 故整窗 as TalkWindow（运行期值恒为 "talk"）。
+  // 子 thread 的 creator 窗 = 它对自身与父 thread 对话的 self-view。class 经 computeProjectionClass
+  // 投影（H2：isCreatorWindow → 普通 flow "thread" / super flow "reflect_request"）；其返回 union
+  // 比 TalkWindow.class 宽，故整窗 as TalkWindow（self-view 与 TalkWindow 同形）。
   return {
     id,
     class: computeProjectionClass({ id, isForkWindow: true, isCreatorWindow: true }, child),
@@ -260,7 +261,10 @@ function applyInitialShare(
   if (source.sharing) {
     return `window "${entry.window_id}" 已是 sharing 状态，不能再传`;
   }
-  if (source.class === "talk" || source.class === "method_exec" || source.class === "root") {
+  // 会话窗（talk other-view + thread/reflect_request self-view）与系统窗（method_exec/root）
+  // 不可传——仅数据/内容型 window 可 share。H2 后 self-view 窗 class 由 "talk" 改为 thread/
+  // reflect_request，用 isTalkLikeClass 统一识别会话窗，保持「会话窗不可传」行为不变。
+  if (isTalkLikeClass(source.class) || source.class === "method_exec" || source.class === "root") {
     return `window "${entry.window_id}" 是 ${source.class} 类型，不允许传`;
   }
 

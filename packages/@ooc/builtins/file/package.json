@@ -16,7 +16,6 @@
   },
   "ooc": {
     "objectId": "_builtin/file",
-    "kind": "builtin",
-    "type": "object"
+    "kind": "class"
   }
 }

@@ -81,13 +81,21 @@ type _ContextWindowUnion =
       createdAt?: number;
     }
   | {
+      // 会话窗三 class 同形（后端 talk/types.ts + thread/types.ts + reflect_request/types.ts）：
+      // - talk：other-view（与对端 peer/sub thread 的对话）
+      // - thread：self-view（普通 flow 里 thread 与其 creator 的对话；creator 窗）
+      // - reflect_request：super flow 的 self-view（反思自视，额外挂沉淀 method）
+      // 字段一致；前端按需用 isTalkLikeWindowClass 谓词同时认这三个 class。
       id: string;
-      class: "talk";
+      class: "talk" | "thread" | "reflect_request";
       parentWindowId?: string;
       title: string;
       status: "open" | "closed";
       target: string;
       conversationId: string;
+      isCreatorWindow?: boolean;
+      targetThreadId?: string;
+      isForkWindow?: boolean;
       createdAt?: number;
     }
   | {
@@ -257,6 +265,15 @@ export type ContextWindow = _ContextWindowUnion & {
   boundFormId?: string;
 };
 
+/**
+ * 会话窗谓词（镜像后端 isTalkLikeClass）—— talk / thread / reflect_request 三者同形。
+ * 凡是按"会话 / self-view 窗"语义处理的 UI（transcript 折叠、composer、chat-line 提升），
+ * 用本谓词同时认这三个 class，避免 self-view 窗从 talk 改投影到 thread/reflect_request 后漏渲。
+ */
+export function isTalkLikeWindowClass(cls: string | undefined): boolean {
+  return cls === "talk" || cls === "thread" || cls === "reflect_request";
+}
+
 /** 与后端 ThreadMessage 同 shape；前端只读取关心的字段。 */
 export type ThreadMessage = {
   id?: string;
@@ -353,6 +370,8 @@ function windowBadge(window: ContextWindow): string {
     case "do":           return "DO";
     case "todo":         return "TODO";
     case "talk":         return "TALK";
+    case "thread":       return "SELF";
+    case "reflect_request": return "RFLCT";
     case "terminal_process":   return "TERM";
     case "interpreter_process": return "INTERP";
     case "file":         return "FILE";
@@ -383,6 +402,8 @@ function windowSummary(window: ContextWindow): string {
     case "todo":
       return previewText(window.content);
     case "talk":
+    case "thread":
+    case "reflect_request":
       return `→ ${window.target}`;
     case "terminal_process":
     case "interpreter_process":
@@ -465,7 +486,8 @@ function windowCharCount(window: ContextWindow): number {
 // ---- Window 视图归纳（与后端 src/thinkable/context/render.ts 同语义） ----
 
 type DoWindowShape = Extract<ContextWindow, { class: "do" }>;
-type TalkWindowShape = Extract<ContextWindow, { class: "talk" }>;
+// 会话窗三 class 同形（talk/thread/reflect_request）共用一个 union 成员，Extract 按其判别符整体取出。
+type TalkWindowShape = Extract<ContextWindow, { class: "talk" | "thread" | "reflect_request" }>;
 
 /**
  * do_window 的视图过滤：选出与该 window targetThreadId 相关的消息。
@@ -523,8 +545,8 @@ function collectWindowConsumedMessageIds(snapshot: ContextSnapshot): Set<string>
       for (const e of filterMessagesForDoWindow(w, inbox, outbox)) {
         if (e.message.id) consumed.add(e.message.id);
       }
-    } else if (w.class === "talk") {
-      for (const e of filterMessagesForTalkWindow(w, inbox, outbox)) {
+    } else if (isTalkLikeWindowClass(w.class)) {
+      for (const e of filterMessagesForTalkWindow(w as TalkWindowShape, inbox, outbox)) {
         if (e.message.id) consumed.add(e.message.id);
       }
     }
@@ -570,10 +592,10 @@ function buildWindowNode(
   let messageCounts: { inbox: number; outbox: number } | undefined;
   let transcript: TranscriptEntry[] | undefined;
 
-  if (window.class === "do" || window.class === "talk") {
+  if (window.class === "do" || isTalkLikeWindowClass(window.class)) {
     transcript = window.class === "do"
       ? filterMessagesForDoWindow(window, inbox, outbox)
-      : filterMessagesForTalkWindow(window, inbox, outbox);
+      : filterMessagesForTalkWindow(window as TalkWindowShape, inbox, outbox);
     let inboxN = 0;
     let outboxN = 0;
     for (const entry of transcript) {

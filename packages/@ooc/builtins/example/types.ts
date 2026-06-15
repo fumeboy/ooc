@@ -1,18 +1,13 @@
-import type { BaseContextWindow } from "@ooc/core/extendable/_shared/types.js";
-
 /**
- * example_window —— 标准对象定义的最小样板窗口。
+ * example —— 对象模型最小样板 class 的 **object data** 结构（types.ts = 纯 Data）。
  *
- * 业务数据（executable 维度的 object method 读写）：
- * - message：要展示的文本（可多行）
- * - bumpCount：被 `bump` method 累加的次数
+ * 只含业务字段；**不含**窗信封字段（id/class/title/status/createdAt）——那些由 runtime 管理。
+ * 展示态（viewport）也不在此，归 readable 的投影态 `win`（见 readable.ts 的 `ExampleWin`）。
  *
- * 展示状态（readable 维度的 window method 读写）归 `state.viewport`（行/列视口），
- * 与业务数据物理分离——与 file_window 同构。
+ * - message  : 要展示的文本（可多行）
+ * - bumpCount: 被 `bump` object method 累加的次数
  */
-export interface ExampleWindow extends BaseContextWindow {
-  class: "example";
-  status: "open" | "closed";
+export interface Data {
   message: string;
   bumpCount: number;
 }

@@ -13,7 +13,6 @@
   },
   "ooc": {
     "objectId": "_builtin/search",
-    "kind": "builtin",
-    "type": "object"
+    "kind": "class"
   }
 }

@@ -10,7 +10,6 @@
   },
   "ooc": {
     "objectId": "user",
-    "kind": "builtin",
-    "type": "user-proxy"
+    "kind": "object"
   }
 }

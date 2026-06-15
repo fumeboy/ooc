@@ -1,107 +1,30 @@
 /**
- * pr_window —— reviewer 看到的「一条待审 feat-branch PR」（collaborable window 家族）。
+ * pr —— executable 维度（reviewer 评审 object method）。
  *
- * reflectable 沉淀：
- * - 注册的 method（executable 维度）：approve / reject / request_changes —— reviewer 在
- *   thinkloop 里亲手批，底层走 applyPrApproval（聚合 + prAutoMerge 闸 + 回修）。
- * - readable：渲染 getPrIssue(issueId) 的 DetailView（intent / diff / paths / reviewers /
- *   approvals / verdict），与 list/get 端点同一份视图来源（不冗余存业务数据）。
- * - 知识激活：root knowledge `pr-review.md`（activates_on: object::pr）在 thread 出现
- *   pr_window 时注入评审协议（既有 activates_on 机制）。
+ * reflectable 沉淀：注册的 object method approve / reject / request_changes —— reviewer 在
+ * thinkloop 里亲手批，底层走 applyPrApproval（聚合 + prAutoMerge 闸 + 回修）。
  *
- * supervisor 恒在 reviewer 集，故其评审入口（pr_window method + HTTP approve 端点）天然可用。
+ * object method 签名 `(ctx, self, args)`：self = pr 的 Data（issueId/reviewerObjectId/…），
+ * ctx 携 thread（取 persistence baseDir）。与 readable 维度（投影，在 ../readable/index.ts）物理分离。
+ *
+ * supervisor 恒在 reviewer 集，故其评审入口（pr object method + HTTP approve 端点）天然可用。
  */
 
-import {
-  builtinRegistry,
-  type OnCloseContext,
-  type RenderContext,
-} from "@ooc/core/extendable/_shared/registry.js";
-import type { ObjectMethod } from "@ooc/core/extendable/_shared/method-types.js";
-import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { readPrIssue, aggregatePrApproval } from "@ooc/core/persistable/index.js";
-import { applyPrApproval } from "../approval-flow.js";
-import type { PrWindow } from "../types.js";
+import type {
+  ExecutableContext,
+  ObjectMethod,
+  ExecutableModule,
+} from "@ooc/core/executable/contract.js";
 import type { PrApproveAction } from "@ooc/core/persistable/index.js";
-
-const MAX_DIFF_RENDER_BYTES = 8192;
-
-/**
- * pr_window 的 readable hook：读 PR record → 渲染 intent / paths / reviewers / approvals /
- * verdict / diff（截断）。record 缺失（已 archive 删除等）→ error 占位，不崩。
- */
-async function renderPrWindow(ctx: RenderContext): Promise<XmlNode[]> {
-  const window = ctx.window as PrWindow;
-  const children: XmlNode[] = [
-    xmlElement("issue_id", {}, [xmlText(String(window.issueId))]),
-    xmlElement("you_are_reviewer", {}, [xmlText(window.reviewerObjectId)]),
-  ];
-  if (!ctx.thread.persistence) {
-    children.push(xmlElement("error", {}, [xmlText("thread 无 persistence ref，无法读 PR record")]));
-    return children;
-  }
-  const issue = await readPrIssue(ctx.thread.persistence.baseDir, window.issueId);
-  if (!issue) {
-    children.push(
-      xmlElement("error", {}, [xmlText(`PR-Issue #${window.issueId} 不存在（可能已合入/归档）`)]),
-    );
-    return children;
-  }
-  const reviewers = issue.reviewers ?? [];
-  const approvals = issue.approvals ?? {};
-  const verdict = aggregatePrApproval(reviewers, approvals);
-
-  children.push(
-    xmlElement("status", {}, [xmlText(issue.status)]),
-    xmlElement("verdict", {}, [xmlText(verdict)]),
-    xmlElement("author", {}, [xmlText(issue.createdByObjectId)]),
-  );
-  if (issue.prPayload?.intent) {
-    children.push(xmlElement("intent", {}, [xmlText(issue.prPayload.intent)]));
-  }
-  if (issue.prPayload?.branch) {
-    children.push(xmlElement("branch", {}, [xmlText(issue.prPayload.branch)]));
-  }
-  const paths = issue.prPayload?.paths ?? [];
-  children.push(
-    xmlElement(
-      "paths",
-      { count: String(paths.length) },
-      paths.map((p) => xmlElement("path", {}, [xmlText(p)])),
-    ),
-  );
-  children.push(
-    xmlElement(
-      "reviewers",
-      {},
-      reviewers.map((r) =>
-        xmlElement("reviewer", { decision: approvals[r] ?? "pending" }, [xmlText(r)]),
-      ),
-    ),
-  );
-  if (issue.prPayload?.diff) {
-    children.push(
-      xmlElement("diff", {}, [xmlText(truncateBytes(issue.prPayload.diff, MAX_DIFF_RENDER_BYTES))]),
-    );
-  }
-  return children;
-}
-
-/** pr_window 是合成投递的协作窗口，reviewer 不可显式 close（合入/归档后系统回收）。 */
-function onClosePrWindow(ctx: OnCloseContext): boolean | void {
-  if (ctx.window.class !== "pr") return;
-  ctx.thread.events.push({
-    category: "context_change",
-    kind: "inject",
-    text: `[close 拒绝] pr_window "${ctx.window.id}" 是系统投递的待审 PR，请用 approve / reject / request_changes 行使评审，而非 close。`,
-    source: "builtins/pr#onClosePrWindow",
-    errorCode: "pr_window_close_rejected",
-  });
-  return false;
-}
+import { applyPrApproval } from "../approval-flow.js";
+import type { Data } from "../types.js";
 
 /** 把 applyPrApproval 结果规整为 LLM-facing 文本（method 返回）。 */
-function describeOutcome(action: PrApproveAction, issueId: number, r: Awaited<ReturnType<typeof applyPrApproval>>): string {
+function describeOutcome(
+  action: PrApproveAction,
+  issueId: number,
+  r: Awaited<ReturnType<typeof applyPrApproval>>,
+): string {
   if (!r.ok) {
     return JSON.stringify({ ok: false, action, issueId, code: r.code, error: r.message });
   }
@@ -127,60 +50,48 @@ function describeOutcome(action: PrApproveAction, issueId: number, r: Awaited<Re
   });
 }
 
-/** 公共 exec：读 pr_window → applyPrApproval(action)。 */
+/** 公共 exec：读 pr Data → applyPrApproval(action)。 */
 async function execReview(
-  ctx: { thread?: { persistence?: { baseDir: string } }; self?: unknown },
+  ctx: ExecutableContext,
+  self: Data,
   action: PrApproveAction,
 ): Promise<string> {
-  const window = ctx.self as PrWindow | undefined;
-  if (!window || window.class !== "pr") {
-    return `[pr_window.${action}] 缺少 pr_window self context。`;
-  }
   const baseDir = ctx.thread?.persistence?.baseDir;
   if (!baseDir) {
-    return `[pr_window.${action}] thread 无 persistence ref。`;
+    return `[pr.${action}] thread 无 persistence ref。`;
   }
   const r = await applyPrApproval({
     baseDir,
-    issueId: window.issueId,
-    reviewerObjectId: window.reviewerObjectId,
+    issueId: self.issueId,
+    reviewerObjectId: self.reviewerObjectId,
     action,
   });
-  return describeOutcome(action, window.issueId, r);
+  return describeOutcome(action, self.issueId, r);
 }
 
-const approveMethod: ObjectMethod = {
-  description: "As this PR's reviewer, approve the diff (counts toward merge when all reviewers approve).",
-  intents: ["approve"],
-  exec: (ctx) => execReview(ctx, "approve"),
+const approveMethod: ObjectMethod<Data> = {
+  name: "approve",
+  description:
+    "As this PR's reviewer, approve the diff (counts toward merge when all reviewers approve).",
+  exec: (ctx, self) => execReview(ctx, self, "approve"),
 };
 
-const rejectMethod: ObjectMethod = {
-  description: "As this PR's reviewer, reject the diff (one reject vetoes the PR; author gets a repair message).",
-  intents: ["reject"],
-  exec: (ctx) => execReview(ctx, "reject"),
+const rejectMethod: ObjectMethod<Data> = {
+  name: "reject",
+  description:
+    "As this PR's reviewer, reject the diff (one reject vetoes the PR; author gets a repair message).",
+  exec: (ctx, self) => execReview(ctx, self, "reject"),
 };
 
-const requestChangesMethod: ObjectMethod = {
-  description: "As this PR's reviewer, request changes (PR stays open; author gets a repair message to revise).",
-  intents: ["request_changes"],
-  exec: (ctx) => execReview(ctx, "request-changes"),
+const requestChangesMethod: ObjectMethod<Data> = {
+  name: "request_changes",
+  description:
+    "As this PR's reviewer, request changes (PR stays open; author gets a repair message to revise).",
+  exec: (ctx, self) => execReview(ctx, self, "request-changes"),
 };
 
-// pr 类的单处声明：executable（review methods）+ readable（readable + onClose）+ 可见性 flag。
-// renderableVisible:true 但 **不** builtinReadable —— pr 可见、却沿继承链/stone 反射解析 readable
-// （保留与其他 builtin 窗类型的差异，缺省 builtinReadable）。parentClass:null。
-builtinRegistry.registerWindowClass({
-  type: "pr",
-  parentClass: null,
-  methods: {
-    approve: approveMethod,
-    reject: rejectMethod,
-    request_changes: requestChangesMethod,
-  },
-  // pr_window 是系统投递的协作窗口 —— inline 进所属 thread 的 thread-context.json，不写独立 dir。
-  isBuiltinFeature: true,
-  onClose: onClosePrWindow,
-  readable: renderPrWindow,
-  renderableVisible: true,
-});
+const executable: ExecutableModule<Data> = {
+  methods: [approveMethod, rejectMethod, requestChangesMethod],
+};
+
+export default executable;

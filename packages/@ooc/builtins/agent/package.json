@@ -10,8 +10,6 @@
   },
   "ooc": {
     "objectId": "_builtin/agent",
-    "kind": "class",
-    "type": "agent",
-    "members": ["filesystem", "terminal", "interpreter", "runtime", "knowledge_base"]
+    "kind": "class"
   }
 }

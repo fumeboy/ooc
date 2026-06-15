@@ -1,6 +1,20 @@
-// executable/index.ts 单处声明整个 reflect_request 类（registerWindowClass：会话+沉淀 methods + readable 维度 + flag）。
-export * from "./executable/index.js"; // side-effect: registerWindowClass
-export type * from "./types.js";
-// reflectable 沉淀方法（for_reflectable）：被 reflect_request class 注册，也被 e2e/集成测试直接 exec。
-export * from "./method.new-feat-branch.js";
-export * from "./method.create-pr-and-invite-reviewers.js";
+/**
+ * reflect_request —— ooc class（`ooc.class: "_builtin/thread"`）：super flow 反思 thread 的 self-view
+ * + reflectable 沉淀方法挂载窗。
+ *
+ * 一处 `export const Class` 装配两维度（reflect_request 经 class 链继承 thread → talk 的会话行为）。
+ * - **无 construct**：reflect_request 不经构造路径——随 super flow 反思 thread 投影。
+ * - executable：两个 reflectable 沉淀 method（say/wait/close/share/talk 经 class 链继承 talk）。
+ * - readable：最小占位（Wave4 talk 迁移后复用 talk 的会话渲染）。
+ */
+import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
+import executable from "./executable/index.js";
+import readable from "./readable/index.js";
+import type { Data } from "./types.js";
+
+export const Class: OocClass<Data> = {
+  executable,
+  readable,
+};
+
+export type { Data } from "./types.js";

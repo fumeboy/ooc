@@ -451,7 +451,10 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
   // 而不是只看到 JSON 化的 open 工具卡。
   const talkWindowTargets = new Map<string, string>();
   for (const w of thread.contextWindows ?? []) {
-    if (w.class === "talk") talkWindowTargets.set(w.id, w.target);
+    // 会话窗三 class 同形（talk / thread self-view / reflect_request）都带 target。
+    if (w.class === "talk" || w.class === "thread" || w.class === "reflect_request") {
+      talkWindowTargets.set(w.id, w.target);
+    }
   }
 
   // 收集"发给 user 的 outbox 消息"作为 outbound message lines。

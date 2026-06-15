@@ -14,7 +14,6 @@
   },
   "ooc": {
     "objectId": "_builtin/plan",
-    "kind": "builtin",
-    "type": "object"
+    "kind": "class"
   }
 }

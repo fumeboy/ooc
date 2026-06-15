@@ -2,29 +2,21 @@
  * thread —— executable 维度。
  *
  * thread 是 agent 一次智能运行的载体（设计权威：thinkable `knowledge/thread.md`）。agency `talk`
- * 把它造出来（无 constructor——thread 不经 open() 构造，裁决已定），thread 在它之上跑 thinkloop。
+ * 把它造出来（无 construct——thread 不经构造路径，裁决已定），thread 在它之上跑 thinkloop。
  *
- * - **say（S3.2 归位）**：say 是 thread 的行为（thread 持 inbox/outbox）。真正逻辑落在本类
- *   （executable/say.ts + method.say.ts）；会话窗 talk / reflect_request 的 say 共享同一 method
- *   （薄 delegation），LLM 仍在会话窗上 say，落到这同一份逻辑。
- * - **parentClass: null**：thread 不是 Agent（不继承 agency）、也不是 root 杂项窗，自成一类。
- * - **readable + flag**：配齐 readable hook 以过 boot 校验，并标记 renderableVisible /
- *   builtinReadable，与其它窗类型一视同仁。
+ * thread 经 class 链继承 talk（`ooc.class: "talk"`）的全部会话 method：say / wait / close / share /
+ * talk(构造) 都从 talk 继承（resolveMethod 走 class 链），故本类 `methods` **留空**。
+ *
+ * deferred（Wave4 talk 迁移归位）：say 的方法体仍是 thread 的行为（设计权威 thread.md 核心 3：
+ * thread 持 inbox/outbox，say 据会话窗形态分流——fork 子窗走内存树派送、peer 窗走磁盘 talk-delivery）。
+ * 该逻辑现深依赖 core 的 talk 渲染/delivery（旧渲染上下文签名，本轮未迁），故暂不落在本 class 的
+ * executable methods 上；talk 迁到新契约后把 say 归位到 thread.executable。
  */
-import { builtinRegistry } from "@ooc/core/extendable/_shared/registry.js";
-import { readable } from "../readable.js";
-import { sayMethod } from "./method.say.js";
+import type { ExecutableModule } from "@ooc/core/executable/contract.js";
+import type { Data } from "../types.js";
 
-// thread 类的单处声明：executable（say）+ readable + 可见性 flag。无 constructor（由 agency talk 创建）。
-builtinRegistry.registerWindowClass({
-  type: "thread",
-  parentClass: null,
-  methods: {
-    say: sayMethod,
-  },
-  readable,
-  renderableVisible: true,
-  builtinReadable: true,
-});
+const executable: ExecutableModule<Data> = {
+  methods: [],
+};
 
-export { sayMethod } from "./method.say.js";
+export default executable;

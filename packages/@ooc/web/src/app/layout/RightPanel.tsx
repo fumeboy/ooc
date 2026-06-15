@@ -177,8 +177,15 @@ function RightFooter({
 function isUserOwnedOrCreated(objectId: string | undefined, thread: ThreadContext | undefined): boolean {
   if (objectId === "user") return true;
   if (thread?.creatorObjectId === "user") return true;
-  // 兼容旧 thread.json：缺 creatorObjectId 时看 creator window 是不是指向 user 的 talk_window
+  // 兼容旧 thread.json：缺 creatorObjectId 时看 creator window（self-view）是不是指向 user。
+  // self-view 会话窗三 class 同形（talk / thread / reflect_request），都带 target。
   const creator = thread?.contextWindows?.find((w) => "isCreatorWindow" in w && w.isCreatorWindow);
-  if (creator && creator.class === "talk" && creator.target === "user") return true;
+  if (
+    creator &&
+    (creator.class === "talk" || creator.class === "thread" || creator.class === "reflect_request") &&
+    creator.target === "user"
+  ) {
+    return true;
+  }
   return false;
 }
