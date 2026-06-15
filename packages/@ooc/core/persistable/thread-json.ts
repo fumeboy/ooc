@@ -175,23 +175,21 @@ async function hydrateContextWindows(
       continue;
     }
     let data: unknown = (env as { data?: unknown }).data;
-    if (data === undefined && !registry.isBuiltinFeatureType(env.class)) {
+    if (data === undefined && !registry.isInlinePersisted(env.class)) {
       // 独立 object：entry 剥了 data，另读 state.json。
       const stateRef: FlowObjectRef = {
         baseDir: persistence.baseDir,
         sessionId: persistence.sessionId,
         objectId: env.id,
       };
-      const custom = registry.resolvePersistable(env.class);
-      if (custom) {
-        data = await custom
-          .load({
-            baseDir: stateRef.baseDir,
-            objectId: stateRef.objectId,
-            sessionId: stateRef.sessionId,
-            dir: objectDir(stateRef),
-          })
-          .catch(() => undefined);
+      const loadFn = registry.resolvePersistable(env.class)?.load;
+      if (loadFn) {
+        data = await loadFn({
+          baseDir: stateRef.baseDir,
+          objectId: stateRef.objectId,
+          sessionId: stateRef.sessionId,
+          dir: objectDir(stateRef),
+        }).catch(() => undefined);
       } else {
         const rawState = await readRuntimeObjectState(stateRef).catch(() => undefined);
         data = rawState ? (rawState as { data?: unknown }).data ?? rawState : undefined;

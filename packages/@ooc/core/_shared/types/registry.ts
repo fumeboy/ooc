@@ -6,7 +6,7 @@
  * （construct / executable / readable / persistable 四维度模块）。
  *
  * **本文件只留两样东西**：
- * - `RegisteredClass`：registry store 的元素类型 = `OocClass` + 继承元信息（parentClass / isBuiltinFeature）。
+ * - `RegisteredClass`：registry store 的元素类型 = `OocClass` + 继承元信息（parentClass）。
  * - `filterMethodsByVisibility`：按可见性档位过滤 object method（纯函数，无可变状态）。
  *
  * 旧 hook 类型（OnCloseHook / CompressViewHook / ReadableFn / RenderContext / ConsumedMessageIdsHook）
@@ -19,13 +19,15 @@ import type { ObjectMethod } from "../../executable/contract.js";
 /**
  * registry store 的元素 —— 一个已注册 class 的全部信息。
  *
- * = `OocClass`（construct/executable/readable/persistable）+ 继承/可见性元信息：
- * - parentClass     : 单链继承父类 id（`undefined` → 隐式继承 root；`null` → 无父=继承链终点）。
- * - isBuiltinFeature : 标记 Object 内置特性类（method_exec 等临时载体），影响 ownerRef 解析。
+ * = `OocClass`（construct/executable/readable/persistable）+ 继承元信息：
+ * - parentClass : 单链继承父类 id（`undefined` → 隐式继承 root；`null` → 无父=继承链终点）。
+ *
+ * 注：旧 `isBuiltinFeature` 标志（标记 inline 持久化的运行态自有窗）已退役——inline 持久化策略
+ * 现由 class 自己的 `persistable.mode === "inline"` 声明（见 persistable/contract.ts），
+ * registry 经 `isInlinePersisted(class)` 沿继承链解析，不再硬编码标志位。
  */
 export interface RegisteredClass<Data = any> extends OocClass<Data> {
   parentClass?: string | null;
-  isBuiltinFeature?: boolean;
 }
 
 // ——— Method Visibility Filtering（纯函数，不依赖状态）———

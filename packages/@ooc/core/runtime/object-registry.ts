@@ -68,12 +68,12 @@ function assertNoMethodNameCollision(classId: string, cls: OocClass): void {
  * 只留真正的基类锚点（继承链终点 / 临时载体）；窗类型由各 builtins 包经 `register`
  * side-effect import 自声明，不在此硬编码。
  * - `root`         : 默认 parentClass 终点。
- * - `method_exec`  : method 调用过程的临时载体（Object 内置特性）。
+ * - `method_exec`  : method 调用过程的临时载体（inline 持久化的运行态载体，经 persistable.mode 声明）。
  * - `agent`        : OOC Agent 基类（承载 agency；归一去掉 `_builtin/` 前缀）。
  */
 const BASE_CLASS_ANCHORS: Array<[string, RegisteredClass]> = [
   ["root", { parentClass: null }],
-  ["method_exec", { parentClass: null, isBuiltinFeature: true }],
+  ["method_exec", { parentClass: null, persistable: { mode: "inline" } }],
   ["agent", {}],
 ];
 
@@ -95,7 +95,7 @@ export class ObjectRegistry {
   register(
     classId: string,
     cls: OocClass,
-    meta?: { parentClass?: string | null; isBuiltinFeature?: boolean },
+    meta?: { parentClass?: string | null },
   ): void {
     const key = normalizeClassId(classId);
     assertNoMethodNameCollision(key, cls);
@@ -110,7 +110,6 @@ export class ObjectRegistry {
       readable: cls.readable ?? existing?.readable,
       persistable: cls.persistable ?? existing?.persistable,
       parentClass: nextParentClass,
-      isBuiltinFeature: meta?.isBuiltinFeature ?? existing?.isBuiltinFeature,
     });
   }
 
@@ -122,8 +121,14 @@ export class ObjectRegistry {
     return this.store.has(normalizeClassId(classId));
   }
 
-  isBuiltinFeatureType(classId: string): boolean {
-    return this.store.get(normalizeClassId(classId))?.isBuiltinFeature === true;
+  /**
+   * 该 class 的实例是否 **inline 持久化**（运行态自有窗：整窗随所属 thread 的
+   * thread-context.json inline 落盘、不写独立 state.json）。
+   * 沿继承链查 `persistable.mode === "inline"`——取代旧的 `isBuiltinFeature` 标志，
+   * 持久化策略归 class 自己的 persistable 维度声明，registry 不再硬编码标志位。
+   */
+  isInlinePersisted(classId: string): boolean {
+    return this.resolvePersistable(classId)?.mode === "inline";
   }
 
   /** 单链继承：从 startClass 自底向上的祖先 id 序列（不含自身），防环（MAX_DEPTH/seen）。 */
@@ -264,7 +269,6 @@ export class ObjectRegistry {
           persistable: def.persistable ?? existing.persistable,
           parentClass:
             def.parentClass !== undefined ? def.parentClass : existing.parentClass,
-          isBuiltinFeature: def.isBuiltinFeature ?? existing.isBuiltinFeature,
         });
       } else {
         this.store.set(classId, def);
@@ -278,7 +282,7 @@ export class ObjectRegistry {
  * + 各窗类型 file / plan / talk / search / knowledge / … 经 side-effect import 注册）。
  *
  * Builtin 包 populate this via side-effect import：每个 class 一处
- * `builtinRegistry.register(objectId, Class, { parentClass, isBuiltinFeature })`。
+ * `builtinRegistry.register(objectId, Class, { parentClass })`（inline 持久化经 Class.persistable.mode 声明）。
  * think / exec / render 默认用这个单例；per-world / 测试经 createObjectRegistry() seedFrom 拿到等价集合。
  */
 export const builtinRegistry = new ObjectRegistry();

@@ -111,9 +111,10 @@ _reg.register("_builtin/interpreter", InterpreterClass);
 _reg.register("_builtin/runtime", RuntimeClass);
 _reg.register("_builtin/knowledge_base", KnowledgeBaseClass);
 // thread：**唯一**会话载体注册 class（talk/reflect_request 是它 readable 投影出的 window class，
-// 非注册 class）。继承 root 缺省；isBuiltinFeature=固有特性，会话窗状态 inline 进所属 thread 的
-// thread-context.json，不写独立 stone dir。
-_reg.register("_builtin/thread", ThreadClass, { isBuiltinFeature: true });
+// 非注册 class）。继承 root 缺省；inline 持久化（会话窗状态 inline 进所属 thread 的
+// thread-context.json、不写独立 stone dir）由 ThreadClass.persistable.mode="inline" 自声明，
+// 不再经 register 的 isBuiltinFeature 标志。
+_reg.register("_builtin/thread", ThreadClass);
 
 // 飞书集成：feishu_chat / feishu_doc 是窗类型（parentClass:null，由 feishu_app 开出）；
 // feishu_app 是带 own method 的单例 object，注册为继承 agent 的 class（实例 class="feishu_app"

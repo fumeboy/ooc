@@ -54,7 +54,7 @@ export interface ThreadContextFile {
  * buildThreadContextEntries —— 把一组内存里的 contextWindows 序列化成 thread-context.json
  * 的 entry 数组（**唯一**生成规则来源）。
  *
- * registry 以参数注入（最小结构 `{ isBuiltinFeatureType }`），避免 persistable ↔ runtime
+ * registry 以参数注入（最小结构 `{ isInlinePersisted }`），避免 persistable ↔ runtime
  * 循环 import。两处调用方共用本函数，保证 writeThread 单点刷与 WindowManager.snapshot
  * 不产生不一致写：
  *   - WindowManager.writeThreadContextSnapshot（manager.ts）
@@ -64,18 +64,18 @@ export interface ThreadContextFile {
  *   - root window 跳过
  *   - isNonPersistedWindow（volatile derived + self 门面窗）跳过——无 state.json，
  *     落成 _ref 后 reload 必报 missing object。
- *   - registry.isBuiltinFeatureType(type) === true → 完整 inline ContextWindow
+ *   - registry.isInlinePersisted(type) === true → 完整 inline ContextWindow
  *   - 否则（独立 flow object）→ 轻量 ref `{ id, type, _ref: true, refObjectId: id }`
  */
 export function buildThreadContextEntries(
   windows: Iterable<BaseContextWindow>,
-  registry: { isBuiltinFeatureType(type: string): boolean },
+  registry: { isInlinePersisted(type: string): boolean },
 ): ThreadContextEntry[] {
   const entries: ThreadContextEntry[] = [];
   for (const window of windows) {
     if (window.id === ROOT_WINDOW_ID) continue;
     if (isNonPersistedWindow(window)) continue;
-    if (registry.isBuiltinFeatureType(window.class)) {
+    if (registry.isInlinePersisted(window.class)) {
       // 内置特性整窗 inline 落盘（state 即 context）。BaseContextWindow → ThreadContextEntry
       // 的 inline 分支等价于 ContextWindow union 的结构基，cast 安全。
       //

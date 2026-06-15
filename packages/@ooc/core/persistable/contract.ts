@@ -22,8 +22,16 @@ export interface PersistableContext {
 
 /** persistable 维度模块 —— `persistable/index.ts` 的 default export。 */
 export interface PersistableModule<Data = any> {
-  /** 把实例 Data 写盘。 */
-  save: (ctx: PersistableContext, data: Data) => void | Promise<void>;
-  /** 从盘读回实例 Data（无则返回 undefined，走缺省）。 */
-  load: (ctx: PersistableContext) => Data | undefined | Promise<Data | undefined>;
+  /**
+   * 持久化模式（class 自声明，取代旧的 registry `isBuiltinFeature` 标志）。
+   * - `"inline"`：实例是所属 thread 的**运行态自有窗**（会话窗等），整窗随该 thread 的
+   *   `thread-context.json` **inline 落盘**、不写独立 `state.json`——save/load 由 thread-context
+   *   底座代劳，本模块只声明 mode（薄壳）。
+   * - 缺省：**独立 object**，写自己的 `state.json`，thread-context 仅存 `_ref` 引用。
+   */
+  mode?: "inline";
+  /** 把实例 Data 写盘（inline 模式由底座代劳、不需要，故可选）。 */
+  save?: (ctx: PersistableContext, data: Data) => void | Promise<void>;
+  /** 从盘读回实例 Data（无则返回 undefined，走缺省；inline 模式不需要）。 */
+  load?: (ctx: PersistableContext) => Data | undefined | Promise<Data | undefined>;
 }

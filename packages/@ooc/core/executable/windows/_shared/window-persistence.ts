@@ -95,7 +95,7 @@ export class WindowPersistence {
   async saveData(thread: ThreadContext, instance: OocObjectInstance): Promise<void> {
     if (instance.id === ROOT_WINDOW_ID) return;
     if (isTransientInstance(instance)) return;
-    if (this.registry.isBuiltinFeatureType(instance.class)) return;
+    if (this.registry.isInlinePersisted(instance.class)) return;
     const ref = runtimeObjectRef(thread, instance);
     if (!ref) return;
     try {
@@ -108,7 +108,7 @@ export class WindowPersistence {
     }
     const custom = this.registry.resolvePersistable(instance.class);
     try {
-      if (custom) {
+      if (custom?.save) {
         await custom.save(persistableCtx(ref), instance.data);
       } else {
         // 系统默认：把 data 写进 state.json（包成最小信封以复用既有读写器；
@@ -137,7 +137,7 @@ export class WindowPersistence {
   ): Promise<unknown | undefined> {
     const custom = this.registry.resolvePersistable(classId);
     try {
-      if (custom) {
+      if (custom?.load) {
         return await custom.load(persistableCtx(ref));
       }
       const raw = await readRuntimeObjectState(ref);
@@ -174,7 +174,7 @@ export class WindowPersistence {
     for (const inst of this.instances.values()) {
       if (inst.id === ROOT_WINDOW_ID) continue;
       if (isTransientInstance(inst)) continue;
-      if (this.registry.isBuiltinFeatureType(inst.class)) {
+      if (this.registry.isInlinePersisted(inst.class)) {
         entries.push(inst as unknown as ThreadContextEntry);
       } else {
         const { data: _drop, ...envelope } = inst;
@@ -201,7 +201,7 @@ export class WindowPersistence {
   /** 实例移除：删 state.json + 刷 thread-context.json。 */
   async unpersistInstance(thread: ThreadContext, instance: OocObjectInstance): Promise<void> {
     if (instance.id === ROOT_WINDOW_ID) return;
-    if (!this.registry.isBuiltinFeatureType(instance.class)) {
+    if (!this.registry.isInlinePersisted(instance.class)) {
       const ref = runtimeObjectRef(thread, instance);
       if (ref) {
         try {

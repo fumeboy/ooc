@@ -9,7 +9,7 @@
  * state.json 的内容使用 ContextWindow 类型（含 type + 全部 type-specific 字段，object 维度）；
  * context-lifecycle 字段（status / parentWindowId / createdAt 等）属于 thread-context.json，
  * 不进 state.json（由 writeRuntimeObjectState 的 stripContextWindowsField + manager 的
- * isBuiltinFeature 分流保证）。
+ * inline 持久化分流保证，inline 经 class persistable.mode 声明、registry.isInlinePersisted 解析）。
  *
  * 双写期：与 flow-context.ts 的嵌套 context/<id>/window.json 并存。
  * 切读路径后即可逐步移除嵌套写。
