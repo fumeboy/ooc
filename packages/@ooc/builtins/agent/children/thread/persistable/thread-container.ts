@@ -144,13 +144,16 @@ async function hydrateContextWindows(
       };
       const loadFn = registry.resolvePersistable(env.class)?.load;
       if (loadFn) {
+        // 独立子窗 state.json 读不到/损坏 → data 留 undefined（下方填 {}），hydrate 不因单个
+        // 子窗读失败而整体中断（fail-soft，缺数据由渲染层处理）。
         data = await loadFn({
           baseDir: stateRef.baseDir,
           objectId: stateRef.objectId,
           sessionId: stateRef.sessionId,
           dir: objectDir(stateRef),
-        }).catch(() => undefined);
+        }).catch(() => undefined); // intentional: 子窗 state 读失败回落 undefined，不中断 hydrate
       } else {
+        // intentional: 同上——state.json 读失败回落 undefined，不中断整条 thread hydrate。
         const rawState = await readRuntimeObjectState(stateRef).catch(() => undefined);
         data = rawState ? (rawState as { data?: unknown }).data ?? rawState : undefined;
       }
