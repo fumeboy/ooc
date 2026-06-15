@@ -80,7 +80,7 @@
 
 **受影响**：agent / terminal / interpreter / knowledge_base / filesystem
 **根因**：agent 核心智能入口语义散落 `deferred_hooks`——talk 的 thread 创建+thinkloop 编排靠 `ctx.runtime.instantiate` 兜底、end 的 say 派送在 runtime 缺席退化为 thread.events 登记、pr 的 runtime 投递创建无正式入口。同时「tool-object 方法→instantiate child class」每个 tool-object 各写一遍守卫、且失败语义分裂：parent run 在 `ctx.runtime` 缺席返回错误文本(executable/index.ts:37)、child construct 在 `ctx.thread` 缺席 throw(index.ts:33)——同一能力链两端降级表现分裂。
-**方向**：(a) 补齐 RuntimeHandle 会话/派送/投递正式 API，使 agency 运行时语义在 method 内闭合；(b) 把「tool-object 方法→instantiate child」收成一等委托原语，带 thread/runtime 句柄完整性校验 + 统一 fail-loud vs 软返回语义。
+**方向**：(a) 补齐 RuntimeHandle 会话/派送/投递正式 API，使 agency 运行时语义在 method 内闭合；(b) 把「tool-object 方法→instantiate child」收成一等委托原语，带 thread/runtime 句柄完整性校验 + 统一 fail-loud vs 软返回语义；(c)[LOW] 把「runtime（对象世界语义层，元能力面）/ filesystem（字节层工具）/ persistable（落盘层）」三层契约边界划清成文——哪些能力算 runtime、哪些算 filesystem/persistable 当前无明确划分。
 **关系**：落实 class self.md 优化方向 3「组合收敛」的运行时契约层；与 Wave4 对象模型重构预期过渡态一致 → extends。
 **锚**：`packages/@ooc/builtins/agent/executable/method.talk.ts:54`；`method.end.ts:6`；`agent/children/pr/index.ts:6`；`terminal/executable/index.ts:29,37`
 
@@ -189,6 +189,7 @@
 | L12 | user/readable.md 实写「发给 user 对端消息怎么渲染」（inline UI token 协议），非 user 自身投影——槽位与对象模型角色错位 | user | `user/readable.md` | 回流+区分两类 agent-facing 文本（T10） |
 | L13 | example 五件套主体完全符合 OocClass 契约（无偏离，作正向锚） | example | `example/index.ts:14` | 无（正例） |
 | L14 | agent/supervisor 接线干净（kind/class/construct 槽 / data 经继承合成）无偏离（正向锚） | agent/supervisor | `agent/package.json:13`、`supervisor/package.json:13` | 无（正例） |
+| L15 | `object-model.md` 仍用术语 `constructor`（行 36/47/78）指非单例构造槽，落地契约统一是 `construct`（`ooc-class.ts:43-45` 因 `Object.prototype.constructor` 遮蔽改名）；多个 builtin doc 已用 `construct`，模型权威术语未对齐 | 模型层（agent/interpreter/runtime/example 均撞到） | `object-model.md:36,47,78`+`ooc-class.ts:43-45` | 回流 object-model.md 统一术语（T11/回流批） |
 
 ---
 
