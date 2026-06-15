@@ -131,6 +131,19 @@ export interface ObjectConstructor<Data = any, Args = any> {
   exec: (ctx: ConstructorContext, args: Args) => Data | Promise<Data>;
 }
 
+/**
+ * 对象 **destructor**（与 construct 对应）—— 对象销毁/卸载时的清理逻辑。
+ *
+ * `exec(ctx, self)` 在对象被销毁前执行清理（释放进程 / 关连接 / 级联归档 children…）；
+ * 与 construct 镜像：construct 产出初始 Data、destruct 消费末态 self 做收尾。
+ *
+ * 注：**暂仅接口定义**——runtime 何时调用 destruct（close 原语 / world 关停 / GC）的机制待实现。
+ */
+export interface ObjectDestructor<Data = any> {
+  description: string;
+  exec: (ctx: ConstructorContext, self: Data) => void | Promise<void>;
+}
+
 /** executable 维度模块 —— `executable/index.ts` 的 default export。 */
 export interface ExecutableModule<Data = any> {
   methods: ObjectMethod<Data>[];

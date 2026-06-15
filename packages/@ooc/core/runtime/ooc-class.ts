@@ -14,15 +14,28 @@
 import type {
   ExecutableModule,
   ObjectConstructor,
+  ObjectDestructor,
 } from "../executable/contract.js";
 import type { ReadableModule } from "../readable/contract.js";
 import type { PersistableModule } from "../persistable/contract.js";
 import type { WindowStatus } from "../_shared/types/context-window.js";
 
 /**
+ * OOC World 运行时句柄 —— class 的 `init` 在 World 启动时拿到它。
+ * 最小占位（机制实现时按需扩展：config / registry / runtime 句柄等）。
+ */
+export interface World {
+  baseDir: string;
+}
+
+/**
  * 一个 ooc class 的后端程序路由（`index.ts` 的 `export const Class`）。
  *
  * - construct   : 仅**非单例** class 注册（`exec(ctx, args)` 产出新实例初始 Data）；单例 class 省略
+ * - destruct    : 对象销毁清理（与 construct 对应；暂仅接口，机制待实现）
+ * - init        : **World 启动时执行**一次的 class 级初始化 `(world) => err`（返回错误信息，空=成功）；
+ *                 用于起后台通道/长连接等（如 feishu_app 起 lark event relay）。机制（World 启动时
+ *                 遍历调 init）待实现。
  * - executable  : object method（改数据 / 副作用）
  * - readable    : 投影成 context window + window method
  * - persistable : 自定义序列化（省略走系统默认）
@@ -33,6 +46,8 @@ import type { WindowStatus } from "../_shared/types/context-window.js";
  */
 export interface OocClass<Data = any> {
   construct?: ObjectConstructor<Data>;
+  destruct?: ObjectDestructor<Data>;
+  init?: (world: World) => string | Promise<string>;
   executable?: ExecutableModule<Data>;
   readable?: ReadableModule<Data>;
   persistable?: PersistableModule<Data>;
