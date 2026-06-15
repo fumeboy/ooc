@@ -4,9 +4,8 @@
  * ObjectMethod now has a required `description` field directly; this helper
  * simply returns it (kept for call-site ergonomics and single source of truth).
  */
-import type { ObjectMethod } from "../_shared/types/method.js";
-
-type DescribableMethod = Pick<ObjectMethod, "description">;
+/** 任何带 `description` 字段的 method（ObjectMethod / WindowMethod 都满足）。 */
+type DescribableMethod = { description: string };
 
 export function extractBasicDescription(entry: DescribableMethod): string | undefined {
   return entry.description;

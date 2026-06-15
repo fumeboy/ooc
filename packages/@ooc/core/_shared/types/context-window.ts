@@ -7,11 +7,10 @@
  * `.class` 后把 `.data` 断言成对应 class 的 `Data`（本文件 re-export 各 class 的 `Data`/`Win`
  * 供断言）。各 builtin types.ts 的 `@deprecated XxxWindow` 平铺别名已随之删除。
  *
- * base 部分（BaseContextWindow / WindowStatus / provenance / relevance / SharingState /
+ * base 部分（BaseContextWindow / WindowStatus / provenance / relevance /
  * 常量 / id 工具函数）也在本零依赖层定义。
  */
 
-import type { WindowDisplayState } from "./window-state.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 
 /**
@@ -71,7 +70,6 @@ export interface ContextWindowRelevance {
  * - parentWindowId：method_exec 必有 parent；其它类型不显式挂 parent 时默认在 root 下
  * - title：所有 window 强制必填
  * - windowKnowledgePaths：本 window 自身关联的 knowledge path（用于 close 时释放引用计数）
- * - sharing：跨 thread 引用模式；缺省 = mutable-ref（owner，可调全部 method）
  */
 export interface BaseContextWindow {
   id: string;
@@ -81,8 +79,6 @@ export interface BaseContextWindow {
   status: WindowStatus;
   createdAt: number;
   windowKnowledgePaths?: string[];
-  /** 跨 thread 引用模式；缺省 = mutable-ref（owner）。 */
-  sharing?: SharingState;
   /**
    * 上下文压缩档位。
    *
@@ -91,22 +87,8 @@ export interface BaseContextWindow {
    * - 2              → snapshot 仅元信息
    */
   compressLevel?: 0 | 1 | 2;
-  /**
-   * 该 window 的"有效可见渲染类型"——沿 parentClass 继承链回退后
-   * 首个能被前端 ContextSnapshotViewer 渲染的 type。
-   *
-   * undefined = 未计算或回退到原始 type。
-   */
-  effectiveVisibleType?: string;
   provenance?: ContextWindowProvenance;
   relevance?: ContextWindowRelevance;
-  boundFormId?: string;
-  /**
-   * 展示状态对象（viewport / lines / columns / transcriptViewport…）。
-   * 与业务数据分离，由 readable 维度的 WindowMethod 读写、readable 函数读取，随 window
-   * 持久化在 thread-context。缺省 = 无展示状态（按默认渲染）。
-   */
-  state?: WindowDisplayState;
   /**
    * Object 自我门面窗（id=type=objectId，由 initContextWindows 每次 thread 加载幂等重注入）。
    * 它从对象身份确定性重建、无独立 state.json，**不应持久化**——否则 thread-context.json 落成
@@ -121,38 +103,7 @@ export interface BaseContextWindow {
    * 写盘端经 isNonPersistedWindow 统一剔除。
    */
   isMemberWindow?: boolean;
-  /**
-   * Plain-string tip set by onFormChange. Only present on method_exec windows.
-   * Rendered directly on the form; replaces the old guidance-window machinery.
-   */
-  tip?: string;
 }
-
-/**
- * 跨 thread 引用模式
- *
- * 缺省（无 sharing 字段）= **mutable-ref**：所有者，可调该窗全部 method。
- * 显式 sharing 标记非缺省态：
- * - kind="readonly-ref"：我（当前 thread）持有只读引用，只能调 window method；
- *   owner 在 ownerThreadId；snapshot 是 share 时刻的 freeze。
- * - kind="mutable-ref"：我曾是 owner，已把 mutable 所有权 move 给 borrowerThreadId，
- *   自己降为只读 shadow（snapshot 冻结）。
- */
-export type SharingState =
-  | {
-      kind: "readonly-ref";
-      ownerThreadId: string;
-      lentByWindowId: string;
-      sharedAt: number;
-      snapshot: ContextWindow;
-    }
-  | {
-      kind: "mutable-ref";
-      borrowerThreadId: string;
-      lentToWindowId: string;
-      sharedAt: number;
-      snapshot: ContextWindow;
-    };
 
 /**
  * ContextWindow — canonical 形态（thread 维度，persist 到 thread-context.json）。

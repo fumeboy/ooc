@@ -19,6 +19,7 @@ import { Class as PrClass } from "@ooc/builtins/agent/pr";
 import { Class as KnowledgeClass } from "@ooc/builtins/knowledge_base/knowledge";
 import { Class as FileClass } from "@ooc/builtins/filesystem/file";
 import { Class as TodoClass } from "@ooc/builtins/agent/todo";
+import { Class as MethodExecFormClass } from "@ooc/builtins/agent/method_exec_form";
 import { Class as SearchClass } from "@ooc/builtins/filesystem/search";
 import { Class as SkillIndexClass } from "@ooc/builtins/agent/skill_index";
 import { Class as PlanClass } from "@ooc/builtins/agent/plan";
@@ -48,6 +49,8 @@ _reg.register("_builtin/agent/pr", PrClass);
 _reg.register("_builtin/knowledge_base/knowledge", KnowledgeClass);
 _reg.register("_builtin/filesystem/file", FileClass);
 _reg.register("_builtin/agent/todo", TodoClass);
+// method_exec_form：method 调用 form（占位 class；form 机制 Wave4 已废，仅类型归位）。
+_reg.register("_builtin/agent/method_exec_form", MethodExecFormClass);
 _reg.register("_builtin/filesystem/search", SearchClass);
 _reg.register("_builtin/agent/skill_index", SkillIndexClass);
 _reg.register("_builtin/agent/plan", PlanClass);

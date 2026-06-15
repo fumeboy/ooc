@@ -34,6 +34,7 @@
     "@ooc/builtins/filesystem/search": "workspace:*",
     "@ooc/builtins/agent/skill_index": "workspace:*",
     "@ooc/builtins/agent/todo": "workspace:*",
+    "@ooc/builtins/agent/method_exec_form": "workspace:*",
     "@ooc/core": "workspace:*",
     "@ooc/storybook": "workspace:*",
     "@ooc/web": "workspace:*",

@@ -10,6 +10,7 @@
     "@ooc/builtins/agent/skill_index": "workspace:*",
     "@ooc/builtins/agent/thread": "workspace:*",
     "@ooc/builtins/agent/todo": "workspace:*",
+    "@ooc/builtins/agent/method_exec_form": "workspace:*",
     "@ooc/builtins/feishu_app": "workspace:*",
     "@ooc/builtins/feishu_app/feishu_chat": "workspace:*",
     "@ooc/builtins/feishu_app/feishu_doc": "workspace:*",

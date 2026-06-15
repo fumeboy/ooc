@@ -71,7 +71,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
       const messages = filterTalkMessages(ctx.object.id, self, thread);
       children.push(
         ...renderTranscriptOrHandle(
-          { isCreatorWindow: self.isCreatorWindow, state: { transcriptViewport: win?.transcriptViewport } },
+          { isCreatorWindow: self.isCreatorWindow, transcriptViewport: win?.transcriptViewport },
           messages,
         ),
       );

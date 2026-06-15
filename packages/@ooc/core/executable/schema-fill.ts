@@ -5,15 +5,15 @@
  * （provided / missing / invalid）。Fail-soft：校验错误标记在 fill 里但不阻塞 refine。
  */
 import type { MethodCallSchema, MethodArgSpec } from "@ooc/core/_shared/types/intent.js";
-import type { MethodExecWindow } from "../_shared/types/method-exec.js";
+import type { Data as MethodExecFormData } from "@ooc/builtins/agent/method_exec_form";
 
 export function buildFillState(
   schema: MethodCallSchema | undefined,
   args: Record<string, unknown>,
-  existingFill?: MethodExecWindow["fill"],
-): MethodExecWindow["fill"] | undefined {
+  existingFill?: MethodExecFormData["fill"],
+): MethodExecFormData["fill"] | undefined {
   if (!schema) return undefined;
-  const fill: NonNullable<MethodExecWindow["fill"]> = {};
+  const fill: NonNullable<MethodExecFormData["fill"]> = {};
   for (const [argName, spec] of Object.entries(schema.args)) {
     const hasValue = argName in args && args[argName] !== undefined && args[argName] !== null && args[argName] !== "";
     const prev = existingFill?.[argName];

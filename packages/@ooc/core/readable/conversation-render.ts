@@ -17,7 +17,6 @@ import {
 /** 会话窗渲染所需的最小窗形态（talk / do 都满足）。 */
 interface ConversationWindowLike {
   isCreatorWindow?: boolean;
-  state?: { transcriptViewport?: TranscriptViewport };
   transcriptViewport?: TranscriptViewport;
 }
 
@@ -44,7 +43,7 @@ export function renderTranscriptOrHandle(
   }
 
   const viewport: TranscriptViewport =
-    window.state?.transcriptViewport ?? window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
+    window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
   const { visible, earlierCount } = applyTranscriptViewport(messages, viewport);
 
   const viewportAttrs: Record<string, string> = { total: String(messages.length) };

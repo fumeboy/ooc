@@ -5,14 +5,14 @@
  * The command_exec package is being deleted because form is an Object built-in feature
  * managed in core, not a stand-alone builtin object.
  */
-import type { MethodExecWindow } from "@ooc/core/_shared/types/method-exec.js";
+import type { Data as MethodExecFormData } from "@ooc/builtins/agent/method_exec_form";
 import React from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import { parseEditArgs, FileEditDiffView } from "./FileEditDiffView";
 import { formatJson, previewText, statusToTone } from "@ooc/builtins/_shared/visible/utils";
 
-export default function MethodExecWindowDetail({ window }: { window: MethodExecWindow }) {
+export default function MethodExecWindowDetail({ window }: { window: MethodExecFormData }) {
   return (
     <>
       <div className="llm-input-attrs">
