@@ -12,7 +12,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
-import type { ContextWindow } from "@ooc/core/extendable/_shared/types.js";
+import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import type { Data } from "../types.js";
 

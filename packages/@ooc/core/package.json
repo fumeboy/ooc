@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@ooc/builtins/feishu_app": "workspace:*",
+    "@ooc/builtins/feishu_chat": "workspace:*",
+    "@ooc/builtins/feishu_doc": "workspace:*",
     "@ooc/builtins/file": "workspace:*",
     "@ooc/builtins/knowledge": "workspace:*",
     "@ooc/builtins/plan": "workspace:*",

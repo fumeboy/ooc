@@ -16,7 +16,7 @@ import { flowsModule } from "./modules/flows";
 import { uiModule } from "./modules/ui";
 import { worldConfigModule } from "./modules/world-config";
 import { enqueueRunningThreadsAtBootstrap, startJobWorker } from "./runtime/worker";
-import { maybeForwardToLark, startLarkEventRelay } from "@ooc/core/extendable/lark";
+import { maybeForwardToLark, startLarkEventRelay } from "@ooc/builtins/feishu_app";
 
 /** AppServerError 类别码 → HTTP 状态码映射。 */
 const ERROR_HTTP_STATUS: Record<AppServerError["code"], number> = {

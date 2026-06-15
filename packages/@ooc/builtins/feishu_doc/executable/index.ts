@@ -1,10 +1,9 @@
 /**
- * feishu_doc —— 把飞书文档作为 OOC object（context window）引入。
+ * feishu_doc —— executable 维度（object method）。
  *
- * Wave 4 对象模型：一处 `export const Class: OocClass<Data>` 装配 construct + executable
- * （doc object methods）+ readable（投影成 window）。object method 签名 `(ctx, self, args)`，
- * 直接读写 self（业务 Data）；需 world 配置（租户 host）时从 ctx.thread.persistence 取。
- * 注册经 lark barrel side-effect import → `builtinRegistry.register("feishu_doc", Class)`。
+ * object method 签名 `(ctx, self, args)`，直接读写 self（飞书文档业务 Data）、可副作用
+ * （经 larkExec 调 lark-cli）。需 world 配置（租户 host）时从 ctx.thread.persistence.baseDir 取。
+ * 与 readable 维度（投影 + window method，在 ../readable/index.ts）物理分离。
  *
  * object methods：
  * - read：拉文档全文 / 段落到 content（无副作用）
@@ -22,19 +21,10 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "../../../executable/contract.js";
-import type { OocClass } from "../../../runtime/ooc-class.js";
-import type { ReadableContext, ReadableModule } from "../../../readable/contract.js";
-import { builtinRegistry } from "../../../runtime/object-registry.js";
-import type { Data } from "./types.js";
-import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { larkExec } from "../cli.js";
-import { readWorldConfig, DEFAULT_LARK_TENANT_HOST } from "../../../persistable/index.js";
-
-const MAX_RENDER_BYTES = 12288;
-const VALID_KINDS = ["doc", "docx", "sheet", "base", "wiki", "drive_md"] as const;
-
-// ─────────────────────────── object methods ────────────────────────────
+} from "@ooc/core/executable/contract.js";
+import { larkExec } from "@ooc/builtins/feishu_app/cli.js";
+import { readWorldConfig, DEFAULT_LARK_TENANT_HOST } from "@ooc/core/persistable";
+import type { Data } from "../types.js";
 
 const readMethod: ObjectMethod<Data> = {
   name: "read",
@@ -348,25 +338,6 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max) + `…(${text.length - max} more bytes)`;
 }
 
-// ─────────────────────────── readable 投影 ────────────────────────────
-
-function renderFeishuDoc(self: Data): XmlNode[] {
-  const children: XmlNode[] = [
-    xmlElement("doc_token", {}, [xmlText(self.docToken)]),
-    xmlElement("doc_kind", {}, [xmlText(self.docKind)]),
-    xmlElement("doc_title", {}, [xmlText(self.docTitle)]),
-    xmlElement("mode", {}, [xmlText(self.mode)]),
-    xmlElement("content_format", {}, [xmlText(self.content.format)]),
-  ];
-  if (self.versionId) children.push(xmlElement("version_id", {}, [xmlText(self.versionId)]));
-  if (self.lastFetchedAtMs) {
-    children.push(xmlElement("last_fetched", {}, [xmlText(new Date(self.lastFetchedAtMs).toISOString())]));
-  }
-  const body = self.content.body || "(尚未 read，content 为空)";
-  children.push(xmlElement("content", {}, [xmlText(truncateBytes(body, MAX_RENDER_BYTES))]));
-  return children;
-}
-
 const executable: ExecutableModule<Data> = {
   methods: [
     readMethod,
@@ -379,54 +350,4 @@ const executable: ExecutableModule<Data> = {
   ],
 };
 
-const readable: ReadableModule<Data> = {
-  readable: (_ctx: ReadableContext, self: Data) => ({
-    class: "feishu_doc",
-    content: renderFeishuDoc(self),
-  }),
-  window: [
-    {
-      class: "feishu_doc",
-      object_methods: ["read", "search_in_doc", "append", "patch_block", "share_link", "attach_to_chat", "close"],
-      window_methods: [],
-    },
-  ],
-};
-
-// ─────────────────────────── Class 装配 + 注册 ────────────────────────────
-
-export const Class: OocClass<Data> = {
-  construct: {
-    description: "Open a Feishu doc as a context window object.",
-    schema: {
-      args: {
-        doc_token: { type: "string", required: true, description: "飞书文档 token（doccnXXX / wikXXX）" },
-        doc_kind: { type: "string", enum: [...VALID_KINDS], description: "文档类型，默认 docx" },
-        doc_title: { type: "string", description: "文档标题（read 时会更新）" },
-      },
-    },
-    exec: (_ctx, args: Record<string, unknown>): Data => {
-      const docToken = typeof args.doc_token === "string" ? args.doc_token : "";
-      const rawKind = typeof args.doc_kind === "string" ? args.doc_kind : "docx";
-      const docKind = (VALID_KINDS as readonly string[]).includes(rawKind)
-        ? (rawKind as Data["docKind"])
-        : "docx";
-      const docTitle =
-        typeof args.doc_title === "string" && args.doc_title ? args.doc_title : docToken.slice(-8);
-      return {
-        docToken,
-        docKind,
-        docTitle,
-        content: { format: "markdown", body: "" },
-        mode: "read",
-      };
-    },
-  },
-  executable,
-  readable,
-};
-
-// feishu_doc 是窗类型（parentClass:null）；经 side-effect import 注册进 builtinRegistry。
-builtinRegistry.register("feishu_doc", Class, { parentClass: null });
-
-export type { Data } from "./types.js";
+export default executable;

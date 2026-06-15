@@ -531,3 +531,32 @@ snapshot·pipeline 类型收口 / ContextWindow union 残留收口。**范围内
   `thread.contextWindows`（现 `OocObjectInstance[]`）+ import 已删 `MethodExecWindow` + 用已删
   `registry.registerNewObjectType` → 须改 OocObjectInstance 夹具 + 新 registry API。
 - `executable/__tests__/wait.test.ts`：构造平铺 talk 窗字面量喂 wait（现读 `inst.data`）→ 须改信封+data 夹具。
+
+## feishu 集成搬出 core + 删 extendable 层 leaf（AgentOfExecutable，2026-06-15）
+
+把飞书集成从 `core/extendable/` 整体搬进 builtins 包，删除 extendable 层。**非测试源 tsc 0 错误。**
+
+### 已落地
+- **新建三包**：`@ooc/builtins/feishu_chat`（class，objectId `_builtin/feishu_chat`，parentClass:null）、
+  `@ooc/builtins/feishu_doc`（class，`_builtin/feishu_doc`，parentClass:null）、
+  `@ooc/builtins/feishu_app`（**单例 object**，objectId `feishu_app`，`ooc.kind:"object"` + `ooc.class:"feishu_app"`，
+  带 own executable open_chat/open_doc + readable 接入面板）。cli.ts(larkExec/larkCheckAuth) + event-relay/
+  (startLarkEventRelay/maybeForwardToLark) 收口进 feishu_app。
+- **feishu_app 装载链**：windows/index.ts `register("feishu_app", Class, {parentClass:"_builtin/agent"})`
+  注册名为 `feishu_app` 的 class（own method + 继承 agent）；BUILTIN_OBJECT_IDS 加 `feishu_app`；
+  bootstrap 据 package.json `kind:object`+`class:"feishu_app"` 建实例 `objects/feishu_app`（class 字段=`"feishu_app"`）；
+  dispatch 按实例 class 解析链 [feishu_app, agent, root]。
+- **register 清单内联**：extendable/index.ts 的 14 个 builtin register + 末尾 lark side-effect 全部内联进
+  `executable/windows/index.ts`（与 root/pr/reflect_request 并列），并补三个 feishu register。删 `import "../../extendable/index.js"`。
+- **_shared 壳 importer 改指 canonical**：10 个 importer 从 `@ooc/core/extendable/_shared/*` 改指
+  `@ooc/core/executable/windows/_shared/*`。
+- **删整个 `core/extendable/`**；`root/executable/index.ts` 删 open_feishu_chat/doc method + import；
+  `_shared/types.ts` 的 FeishuChat/Doc 类型 re-export 改指新 builtins 包；`app/server/index.ts` 的
+  maybeForwardToLark/startLarkEventRelay import 改指 `@ooc/builtins/feishu_app`；core package.json 加三包 dep。
+
+### 新增坏测试（extendable 删除所致的死 import 路径，只登记不修；均已在上文清单）
+- `executable/__tests__/{create-object,root.command.write-file.versioning,evolve-self,file-overlay-redirect}.test.ts`：
+  `import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types"` 路径已删 →
+  须改指 canonical `@ooc/core/executable/windows/_shared/method-types`（这些测试本就因承重墙在坏测试清单中）。
+- `thinkable/knowledge/__tests__/activator.expr.test.ts`：`await import("@ooc/core/extendable/_shared/registry.js")`
+  路径已删 → 改指 canonical registry（本就在坏测试清单中）。

@@ -3,9 +3,9 @@
  *
  * 两职：
  * 1. 对外暴露 ContextWindow 类型 / WindowManager / init / projection 等公共入口。
- * 2. **装载核心 builtin class**：root / pr / reflect_request 经 `export const Class` 显式
- *    `builtinRegistry.register(...)`；talk / method_exec 等核心载体经 side-effect import 注册；
- *    其余 builtin 经 `../../extendable/index.js` 装载。
+ * 2. **装载全部 builtin class**：root / pr / reflect_request / talk 等核心载体 + 各窗类型
+ *    （file / plan / search / … + 飞书 feishu_chat / feishu_doc + 单例 feishu_app）一处
+ *    `builtinRegistry.register(...)` 显式装载。
  *
  * Wave 4 对象模型重构已删除旧 deferred-hook 类型 re-export（ObjectDefinition / OnCloseHook /
  * RenderContext / ReadableFn）与旧 root method re-export（ROOT_METHODS / getOpenableMethods /
@@ -71,8 +71,33 @@ import { Class as RootClass } from "@ooc/builtins/root";
 import { Class as PrClass } from "@ooc/builtins/pr";
 import { Class as ReflectRequestClass } from "@ooc/builtins/reflect_request";
 
+import { Class as KnowledgeClass } from "@ooc/builtins/knowledge";
+import { Class as FileClass } from "@ooc/builtins/file";
+import { Class as TodoClass } from "@ooc/builtins/todo";
+import { Class as SearchClass } from "@ooc/builtins/search";
+import { Class as SkillIndexClass } from "@ooc/builtins/skill_index";
+import { Class as PlanClass } from "@ooc/builtins/plan";
+import { Class as TerminalProcessClass } from "@ooc/builtins/terminal_process";
+import { Class as InterpreterProcessClass } from "@ooc/builtins/interpreter_process";
+import { Class as FilesystemClass } from "@ooc/builtins/filesystem";
+import { Class as TerminalClass } from "@ooc/builtins/terminal";
+import { Class as InterpreterClass } from "@ooc/builtins/interpreter";
+import { Class as RuntimeClass } from "@ooc/builtins/runtime";
+import { Class as KnowledgeBaseClass } from "@ooc/builtins/knowledge_base";
+import { Class as ThreadClass } from "@ooc/builtins/thread";
+
+import { Class as FeishuChatClass } from "@ooc/builtins/feishu_chat";
+import { Class as FeishuDocClass } from "@ooc/builtins/feishu_doc";
+import { Class as FeishuAppClass } from "@ooc/builtins/feishu_app";
+
+import { Class as AgentClass } from "@ooc/builtins/agent";
+
 // root 是继承链终点基类（BASE_CLASS_ANCHOR 已 parentClass:null）；合入 root 的 executable/readable。
 _reg.register("_builtin/root", RootClass, { parentClass: null });
+// agent：OOC Agent 基类，承载 agency（talk/plan/todo/end）；继承 root。
+// 旧 extendable/index.ts 从未注册它（agent 仅作空 BASE_CLASS_ANCHOR），导致 supervisor/feishu_app
+// 等 agent 实例解析不到 agency——此处显式 register 补回。
+_reg.register("_builtin/agent", AgentClass);
 // pr：reviewer 评审窗（隐式继承 root）。
 _reg.register("_builtin/pr", PrClass);
 // reflect_request：super flow 反思会话窗（继承 _builtin/thread → talk）。
@@ -83,5 +108,26 @@ import "./talk/index.js";
 // method_exec 模块已删除（Wave 4 裁决：form 收集机制废弃，method 参数经 exec 直传 args）。
 // method_exec 仍作 BASE_CLASS_ANCHOR 保留在 object-registry，但无 methods/readable。
 
-// 其余 builtin class 通过 extendable/index.js 装载（含 thread / file / plan / … + 外部集成）。
-import "../../extendable/index.js";
+// 各窗类型 builtin class（继承父类取各包 package.json `ooc.class`，缺省 → 隐式 root）。
+_reg.register("_builtin/knowledge", KnowledgeClass);
+_reg.register("_builtin/file", FileClass);
+_reg.register("_builtin/todo", TodoClass);
+_reg.register("_builtin/search", SearchClass);
+_reg.register("_builtin/skill_index", SkillIndexClass);
+_reg.register("_builtin/plan", PlanClass);
+_reg.register("_builtin/terminal_process", TerminalProcessClass);
+_reg.register("_builtin/interpreter_process", InterpreterProcessClass);
+_reg.register("_builtin/filesystem", FilesystemClass);
+_reg.register("_builtin/terminal", TerminalClass);
+_reg.register("_builtin/interpreter", InterpreterClass);
+_reg.register("_builtin/runtime", RuntimeClass);
+_reg.register("_builtin/knowledge_base", KnowledgeBaseClass);
+// thread 继承 talk（package.json ooc.class: "talk"）。
+_reg.register("_builtin/thread", ThreadClass, { parentClass: "talk" });
+
+// 飞书集成：feishu_chat / feishu_doc 是窗类型（parentClass:null，由 feishu_app 开出）；
+// feishu_app 是带 own method 的单例 object，注册为继承 agent 的 class（实例 class="feishu_app"
+// 解析 own open_chat/open_doc + 继承 agent 的 agency）。
+_reg.register("_builtin/feishu_chat", FeishuChatClass, { parentClass: null });
+_reg.register("_builtin/feishu_doc", FeishuDocClass, { parentClass: null });
+_reg.register("feishu_app", FeishuAppClass, { parentClass: "_builtin/agent" });

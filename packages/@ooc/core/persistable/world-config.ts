@@ -58,7 +58,7 @@ export interface WorldConfig {
   larkTenantHost: string;
   /**
    * 飞书机器人凭证。配置后 OOC 启动 lark event-relay worker：通过 SDK ws 长连接接收
-   * im.message.receive_v1 事件，反向触发 OOC session（详见 src/extendable/lark/event-relay）。
+   * im.message.receive_v1 事件，反向触发 OOC session（详见 @ooc/builtins/feishu_app/event-relay）。
    * 缺省（任一字段为空）时不启动 relay。
    *
    * **安全**：larkAppSecret 是机密，不通过 GET /api/world/config 下发前端；

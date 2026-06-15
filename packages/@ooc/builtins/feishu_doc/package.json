@@ -1,0 +1,15 @@
+{
+  "name": "@ooc/builtins/feishu_doc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./*": "./*",
+    "./*.ts": "./*.ts",
+    "./*.tsx": "./*.tsx"
+  },
+  "ooc": {
+    "objectId": "_builtin/feishu_doc",
+    "kind": "class"
+  }
+}

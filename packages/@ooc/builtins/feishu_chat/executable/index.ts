@@ -1,10 +1,8 @@
 /**
- * feishu_chat —— 把飞书群聊 / 单聊作为 OOC object（context window）引入。
+ * feishu_chat —— executable 维度（object method）。
  *
- * Wave 4 对象模型：一处 `export const Class: OocClass<Data>` 装配 construct + executable
- * （chat object methods）+ readable（投影成 window）。object method 签名 `(ctx, self, args)`，
- * 直接读写 self（业务 Data）。注册经 lark barrel side-effect import →
- * `builtinRegistry.register("feishu_chat", Class)`。
+ * object method 签名 `(ctx, self, args)`，直接读写 self（飞书会话业务 Data）、可副作用
+ * （经 larkExec 调 lark-cli）。与 readable 维度（投影 + window method，在 ../readable/index.ts）物理分离。
  *
  * object methods：
  * - refresh：拉最近 N 条 / 增量拉（无副作用，改 buffer）
@@ -14,22 +12,16 @@
  * - subscribe：登记周期 refresh 意愿（仅写字段，poller TBD）
  * - close：释放对象
  *
- * 鉴权：send/reply 默认 `--as bot`（supervisor 决策），其它 user。
+ * 鉴权：send/reply 默认 `--as bot`，其它 user。
  */
 
 import type {
-  ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "../../../executable/contract.js";
-import type { OocClass } from "../../../runtime/ooc-class.js";
-import type { ReadableContext, ReadableModule } from "../../../readable/contract.js";
-import { builtinRegistry } from "../../../runtime/object-registry.js";
-import type { Data, FeishuChatMessage } from "./types.js";
-import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { larkExec } from "../cli.js";
+} from "@ooc/core/executable/contract.js";
+import { larkExec } from "@ooc/builtins/feishu_app/cli.js";
+import type { Data, FeishuChatMessage } from "../types.js";
 
-const MAX_RENDER_BYTES = 8192;
 const DEFAULT_TAIL = 30;
 const MAX_TAIL = 50;
 
@@ -109,7 +101,7 @@ function asString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function clampCount(raw: unknown, fallback: number): number {
+export function clampCount(raw: unknown, fallback: number): number {
   const n = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(n) || n <= 0) return fallback;
   return Math.min(Math.max(Math.floor(n), 1), MAX_TAIL);
@@ -328,99 +320,8 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max) + `…(${text.length - max} more bytes)`;
 }
 
-// ─────────────────────────── readable 投影 ────────────────────────────
-
-function renderFeishuChat(self: Data): XmlNode[] {
-  const children: XmlNode[] = [
-    xmlElement("chat_id", {}, [xmlText(self.chatId)]),
-    xmlElement("chat_name", {}, [xmlText(self.chatName)]),
-    xmlElement("mode", {}, [xmlText(self.mode)]),
-  ];
-  if (self.chatType) children.push(xmlElement("chat_type", {}, [xmlText(self.chatType)]));
-  if (self.tailCount && self.mode === "tail") {
-    children.push(xmlElement("tail_count", {}, [xmlText(String(self.tailCount))]));
-  }
-  if (self.searchQuery && self.mode === "search") {
-    children.push(xmlElement("search_query", {}, [xmlText(self.searchQuery)]));
-  }
-  if (self.lastRefreshAtMs) {
-    children.push(
-      xmlElement("last_refresh", {}, [xmlText(new Date(self.lastRefreshAtMs).toISOString())]),
-    );
-  }
-  if (self.subscribePollIntervalMs) {
-    children.push(
-      xmlElement("subscribe_interval_ms", {}, [xmlText(String(self.subscribePollIntervalMs))]),
-    );
-  }
-  const body = self.buffer.length === 0
-    ? "(buffer 为空，先 refresh)"
-    : self.buffer.map(formatMessageLine).join("\n");
-  children.push(xmlElement("messages", {}, [xmlText(truncateBytes(body, MAX_RENDER_BYTES))]));
-  return children;
-}
-
-function formatMessageLine(m: FeishuChatMessage): string {
-  const ts = new Date(m.createTimeMs).toISOString().slice(11, 19);
-  const reply = m.replyToMessageId ? ` ↩${m.replyToMessageId.slice(-6)}` : "";
-  const kind = m.senderKind ? `[${m.senderKind}]` : "";
-  return `${ts} ${kind}${m.sender} (${m.messageId.slice(-8)})${reply}: ${m.text}`;
-}
-
 const executable: ExecutableModule<Data> = {
   methods: [refreshMethod, searchMethod, sendMethod, replyMethod, subscribeMethod, closeMethod],
 };
 
-const readable: ReadableModule<Data> = {
-  readable: (_ctx: ReadableContext, self: Data) => ({
-    class: "feishu_chat",
-    content: renderFeishuChat(self),
-  }),
-  window: [
-    {
-      class: "feishu_chat",
-      object_methods: ["refresh", "search", "send", "reply", "subscribe", "close"],
-      window_methods: [],
-    },
-  ],
-};
-
-// ─────────────────────────── Class 装配 + 注册 ────────────────────────────
-
-export const Class: OocClass<Data> = {
-  construct: {
-    description: "Open a Feishu chat (group / p2p) as a context window object.",
-    schema: {
-      args: {
-        chat_id: { type: "string", required: true, description: "飞书 chat_id（oc_xxx）" },
-        chat_name: { type: "string", description: "群名 / 单聊对端名" },
-        chat_type: { type: "string", enum: ["group", "p2p", "topic"] },
-        tail_count: { type: "number", description: "初始 tail 条数，默认 30" },
-      },
-    },
-    exec: (_ctx, args: Record<string, unknown>): Data => {
-      const chatId = typeof args.chat_id === "string" ? args.chat_id : "";
-      const chatName =
-        typeof args.chat_name === "string" && args.chat_name ? args.chat_name : chatId.slice(-8);
-      const chatType =
-        args.chat_type === "group" || args.chat_type === "p2p" || args.chat_type === "topic"
-          ? (args.chat_type as "group" | "p2p" | "topic")
-          : undefined;
-      return {
-        chatId,
-        chatName,
-        chatType,
-        mode: "tail",
-        tailCount: clampCount(args.tail_count, DEFAULT_TAIL),
-        buffer: [],
-      };
-    },
-  },
-  executable,
-  readable,
-};
-
-// feishu_chat 是窗类型（parentClass:null）；经 side-effect import 注册进 builtinRegistry。
-builtinRegistry.register("feishu_chat", Class, { parentClass: null });
-
-export type { Data } from "./types.js";
+export default executable;

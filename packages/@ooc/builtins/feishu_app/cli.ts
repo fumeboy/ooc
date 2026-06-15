@@ -1,11 +1,11 @@
 /**
- * lark-cli 子进程调用层 — 飞书 window 类型共用的对外端口。
+ * lark-cli 子进程调用层 — feishu 集成共用的对外端口。
  *
- * 设计要点（见 meta/case.feishu-integration.doc.ts）：
- * - 唯一访问飞书 OAPI 的通道；window 命令实现不允许直接 spawn lark-cli。
+ * 设计要点：
+ * - 唯一访问飞书 OAPI 的通道；feishu_chat / feishu_doc 的方法实现不允许直接 spawn lark-cli。
  * - 鉴权完全由 lark-cli 自己管（OS keychain / device-code flow），OOC 不复制存储 secret。
  * - 默认 `--format json`，错误统一抛 LarkCliError，便于 observable 落盘与 reflectable 沉淀。
- * - 写类副作用必须显式 dryRun=true 走一遍预览，再二次确认，遵循 supervisor 拍板的"强制 dry-run"。
+ * - 写类副作用必须显式 dryRun=true 走一遍预览，再二次确认（强制 dry-run gate）。
  *
  * 不负责：
  * - 重试 / 配额（暂留 future work，未引入复杂调度器）。
@@ -13,9 +13,9 @@
  */
 
 export interface LarkExecOptions {
-  /** 命令以哪个身份执行；缺省 user。群聊 send 类命令请显式传 "bot"（见 supervisor 决策）。 */
+  /** 命令以哪个身份执行；缺省 user。群聊 send 类命令请显式传 "bot"。 */
   as?: "bot" | "user";
-  /** 写类方法必须 true 至少跑一次预览；细节由 window method 控制。 */
+  /** 写类方法必须 true 至少跑一次预览；细节由 method 控制。 */
   dryRun?: boolean;
   /** 进程超时（毫秒）；缺省 30s。 */
   timeoutMs?: number;
@@ -49,7 +49,6 @@ const LARK_CLI_BIN = process.env.LARK_CLI_BIN ?? "lark-cli";
  *
  * args 是面向 lark-cli 的"业务参数"——例如 ["im", "+messages-list", "--chat-id", "oc_xxx"]。
  * 本函数会自动追加：
- * - --format json
  * - --as <bot|user>（若 opts.as 非空）
  * - --dry-run（若 opts.dryRun=true）
  * - --page-all（若 opts.pageAll=true）
@@ -61,9 +60,7 @@ export async function larkExec(
   args: string[],
   opts: LarkExecOptions = {},
 ): Promise<LarkExecResult> {
-  // lark-cli 默认输出就是 JSON（见 `lark-cli <cmd> --help` 中 --format 默认值），
-  // 且部分 mutation 命令（im +messages-send / docs +update / 等）不接受 --format flag。
-  // 故本层不显式传 --format。
+  // lark-cli 默认输出就是 JSON，且部分 mutation 命令不接受 --format flag。故本层不显式传 --format。
   const fullArgs = [...args];
   if (opts.as) fullArgs.push("--as", opts.as);
   if (opts.dryRun) fullArgs.push("--dry-run");
@@ -74,7 +71,6 @@ export async function larkExec(
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   // Bun.spawn 是 OOC 项目的标准子进程入口（package 用 bun runtime）。
-  // 兼容 node 环境下通过 child_process 的退路在测试期不需要——bun:test 同样在 bun 下跑。
   let proc: ReturnType<typeof Bun.spawn>;
   try {
     proc = Bun.spawn([LARK_CLI_BIN, ...fullArgs], {

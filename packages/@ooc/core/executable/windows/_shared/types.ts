@@ -56,8 +56,8 @@ export type { PlanWindow, PlanWindowStep } from "@ooc/builtins/plan/types.js";
 export type { TerminalWindow } from "@ooc/builtins/terminal/types.js";
 export type { InterpreterWindow } from "@ooc/builtins/interpreter/types.js";
 export type { ThreadWindow } from "@ooc/builtins/thread/types.js";
-export type { FeishuChatWindow, FeishuChatMessage } from "../../../extendable/lark/feishu-chat/types.js";
-export type { FeishuDocWindow, FeishuDocBlock } from "../../../extendable/lark/feishu-doc/types.js";
+export type { FeishuChatWindow, FeishuChatMessage } from "@ooc/builtins/feishu_chat/types.js";
+export type { FeishuDocWindow, FeishuDocBlock } from "@ooc/builtins/feishu_doc/types.js";
 
 // 用 import 形式拿到具体类型构造 ContextWindow union
 import type { RootWindow } from "@ooc/builtins/root/types.js";
@@ -74,8 +74,8 @@ import type { PlanWindow } from "@ooc/builtins/plan/types.js";
 import type { TerminalWindow } from "@ooc/builtins/terminal/types.js";
 import type { InterpreterWindow } from "@ooc/builtins/interpreter/types.js";
 import type { ThreadWindow } from "@ooc/builtins/thread/types.js";
-import type { FeishuChatWindow } from "../../../extendable/lark/feishu-chat/types.js";
-import type { FeishuDocWindow } from "../../../extendable/lark/feishu-doc/types.js";
+import type { FeishuChatWindow } from "@ooc/builtins/feishu_chat/types.js";
+import type { FeishuDocWindow } from "@ooc/builtins/feishu_doc/types.js";
 
 /**
  * ContextWindow — canonical union type（thread 维度，persist 到 thread-context.json）。

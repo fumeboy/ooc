@@ -82,7 +82,7 @@ export interface StoneObjectRef {
 export const STONE_CHILDREN_SUBDIR = "children";
 
 /** Builtin object IDs that route to packages/@ooc/builtins/<id> instead of stones/<id>. */
-export const BUILTIN_OBJECT_IDS: ReadonlySet<string> = new Set(["supervisor", "user"]);
+export const BUILTIN_OBJECT_IDS: ReadonlySet<string> = new Set(["supervisor", "user", "feishu_app"]);
 
 /**
  * 把 "/" 分隔的 objectId 翻译成 children/ 嵌套的物理 path segments。

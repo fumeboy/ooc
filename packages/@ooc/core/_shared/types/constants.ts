@@ -3,7 +3,7 @@
  * `executable/windows/_shared/super-constants.ts` 迁入）。
  *
  * 任何需要 "super" 字面量的代码都从 `@ooc/core/_shared` 取；旧路径
- * (executable/extendable 下的 super-constants.ts) 现为 re-export 壳。
+ * (executable/windows/_shared 下的 super-constants.ts) 现为 re-export 壳。
  *
  * 详见 meta/object/reflectable concept。
  */

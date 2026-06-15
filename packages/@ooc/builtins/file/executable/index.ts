@@ -23,7 +23,7 @@ import type {
 } from "@ooc/core/executable/contract.js";
 import type { Data } from "../types.js";
 import { isString } from "@ooc/builtins/_shared/executable/utils.js";
-import { classifyPackagesPath } from "@ooc/core/extendable/_shared/session-path.js";
+import { classifyPackagesPath } from "@ooc/core/executable/windows/_shared/session-path.js";
 import { sessionUsesWorktree } from "@ooc/core/persistable/index.js";
 import { resolveStoneWorktreeTarget } from "./construct.js";
 

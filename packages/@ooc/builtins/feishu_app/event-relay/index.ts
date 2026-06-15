@@ -1,12 +1,12 @@
 /**
- * lark event-relay — OOC 反向通道：接收飞书 IM 事件，路由到 OOC session；
+ * feishu event-relay — OOC 反向通道：接收飞书 IM 事件，路由到 OOC session；
  * 同时把 OOC supervisor 回 user 的消息透传回飞书 chat。
  *
- * 设计要点（用户拍板）：
+ * 设计要点：
  *
  * 1. **走 SDK 而非 lark-cli event consume** — @larksuiteoapi/node-sdk 提供 WSClient
  *    长连接，毫秒级延迟；凭证（appId / appSecret）由 .world.json 提供。
- *    反向发消息也走同一 SDK Client，免去 dry-run gate（lark-cli 的设计），
+ *    反向发消息也走同一 SDK Client，免去 dry-run gate，
  *    交互场景下用户在飞书等回复，dry-run 二阶段确认会让体验断流。
  *
  * 2. **session 命名约定** — `lark-chat-{chat_id}-{startTs}`：
@@ -26,14 +26,14 @@
  */
 
 import * as lark from "@larksuiteoapi/node-sdk";
-import type { ServerConfig } from "../../../app/server/bootstrap/config.js";
-import type { ThreadActivationRef } from "../../../observable/index.js";
-import { readThread, readWorldConfig } from "../../../persistable/index.js";
+import type { ServerConfig } from "@ooc/core/app/server/bootstrap/config.js";
+import type { ThreadActivationRef } from "@ooc/core/observable";
+import { readThread, readWorldConfig } from "@ooc/core/persistable";
 
 /** session 命名前缀；前端 sidebar 看到这条前缀的 session 知道是 lark inbound 起的。 */
 const LARK_SESSION_PREFIX = "lark-chat-";
 
-/** 24h idle 后新建 session（用户拍板）。 */
+/** 24h idle 后新建 session。 */
 const SESSION_IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -41,7 +41,7 @@ const SESSION_IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
  *
  * 内存级（worker 进程内单实例）：
  * - 进程重启会重新建映射，但 sessionId 命名带 startTs，重启后从 .ooc-world/flows/
- *   重建（见 rehydrateFromDisk）。
+ *   重建。
  * - 一个 chat_id 同时只活跃一个 session；超 24h idle 即在收到新消息时新建。
  */
 interface RoutingEntry {
@@ -133,7 +133,7 @@ export async function startLarkEventRelay(config: ServerConfig): Promise<() => P
 
   return async () => {
     try {
-      // SDK 没有暴露明确的 close 接口；wsClient 内部有 disconnect，但 v1.65 sdk 没透；进程退出时 socket 会随之关闭。
+      // SDK 没有暴露明确的 close 接口；进程退出时 socket 会随之关闭。
       console.log("[lark-event-relay] stopping (process exit will close WS)");
     } catch {
       /* ignore */
@@ -142,7 +142,7 @@ export async function startLarkEventRelay(config: ServerConfig): Promise<() => P
   };
 }
 
-/** SDK domain：根据 .world.json 的 LarkTenantHost 派生（feishu.cn → Feishu / lark.com → Lark / .larkoffice.com → 默认 Feishu）。 */
+/** SDK domain：根据 .world.json 的 LarkTenantHost 派生（lark.com → Lark / 其余 → Feishu）。 */
 function deriveLarkDomain(host: string): lark.Domain {
   if (host.includes("lark.com")) return lark.Domain.Lark;
   return lark.Domain.Feishu;
@@ -168,7 +168,7 @@ async function handleP2MessageReceive(event: unknown): Promise<void> {
 
   // visibility-first：立刻给用户消息加 👀 reaction，告诉用户"机器人已读，正在思考"。
   // GLM 单轮可能 30-60s，没有这个信号用户分不清"丢消息"和"处理中"。fire-and-forget，
-  // 失败不阻断主流程（reaction 失败常见原因：bot 没 reaction scope，给提示但不影响业务）。
+  // 失败不阻断主流程。
   void ackReceived(messageId).catch(() => {/* 静默 */});
 
   const now = Date.now();
@@ -420,7 +420,7 @@ function chatIdFromSessionId(sessionId: string): string | null {
   return rest.slice(0, lastDash);
 }
 
-/** SDK 发文本消息到飞书 chat。bot 凭证（用户拍板）。 */
+/** SDK 发文本消息到飞书 chat。bot 凭证。 */
 async function sendToLark(chatId: string, text: string): Promise<void> {
   if (!state) return;
   try {

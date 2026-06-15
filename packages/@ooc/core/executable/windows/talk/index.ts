@@ -188,7 +188,7 @@ export const Class: OocClass<TalkData> = {
 
 // talk 是所有会话 class 的基类（parentClass:null，不继承 root）；isBuiltinFeature=固有特性，
 // 状态 inline 进所属 thread 的 context.json，不写独立 stone dir。
-// thread / reflect_request 经 class 链继承其会话行为（见 extendable/index.ts + windows/index.ts 注册）。
+// thread / reflect_request 经 class 链继承其会话行为（见 windows/index.ts 注册）。
 builtinRegistry.register("talk", Class, { parentClass: null, isBuiltinFeature: true });
 
 // creatorWindowIdOf 仍由 delivery / init 等会话路径使用——re-export 保持单一来源。

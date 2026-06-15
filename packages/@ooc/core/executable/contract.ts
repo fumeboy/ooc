@@ -10,7 +10,7 @@
  *   - self : Data —— 对象自身**业务数据**（由该 class 的 `types.ts` 定义；方法直接读写其字段）
  *   - args : 调用参数
  *
- * 与旧契约（`extendable/_shared/method-types.ts` 的 `ObjectMethod` + 单参 `MethodExecutionContext`
+ * 与旧契约（`_shared/method-types.ts` 的 `ObjectMethod` + 单参 `MethodExecutionContext`
  * 把 `ctx.self`=整窗、`ctx.args` 捆绑在 ctx）的差异：self / args 升为独立入参，self 收窄为纯 Data。
  */
 
