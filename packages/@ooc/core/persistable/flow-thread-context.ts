@@ -31,14 +31,19 @@ import {
   type BaseContextWindow,
   type ContextWindow,
 } from "../executable/windows/_shared/types.js";
+import { isTalkLikeClass } from "../_shared/types/constants.js";
 
 /**
  * thread-context.json 中一条 contextWindow 的形态：
  *   - 内置特性：完整 inline ContextWindow（含全部业务字段）
+ *     · talk-family（talk/reflect_request）inline 项**不写 class**——class 是 POV 投影
+ *       （context.md core 7），由 readThread 经 computeProjectionClass 在读回时重算；
+ *       磁盘只存窗形态（isForkWindow/isCreatorWindow）+ 展示状态。
  *   - 独立 flow object：只放轻量 ref，hydrate 时另读 `<refObjectId>/state.json`
  */
 export type ThreadContextEntry =
   | ContextWindow
+  | Omit<ContextWindow, "class">
   | { id: string; class: string; _ref: true; refObjectId: string };
 
 /** Thread context 文件 schema —— `{objectDir}/threads/{threadId}/thread-context.json` 的内容。 */
@@ -75,7 +80,14 @@ export function buildThreadContextEntries(
     if (registry.isBuiltinFeatureType(window.class)) {
       // 内置特性整窗 inline 落盘（state 即 context）。BaseContextWindow → ThreadContextEntry
       // 的 inline 分支等价于 ContextWindow union 的结构基，cast 安全。
-      entries.push(window as ContextWindow);
+      if (isTalkLikeClass(window.class)) {
+        // talk-family（talk/reflect_request）：class 是 POV 投影，不落盘——读回时由
+        // computeProjectionClass 据窗形态 + thread session 重算。仅剥 class，其余字段照常 inline。
+        const { class: _dropClass, ...rest } = window as ContextWindow;
+        entries.push(rest as Omit<ContextWindow, "class">);
+      } else {
+        entries.push(window as ContextWindow);
+      }
     } else {
       entries.push({
         id: window.id,

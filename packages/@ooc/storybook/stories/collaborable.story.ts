@@ -37,11 +37,15 @@ export async function runControlPlane(): Promise<StoryResult> {
 
     // TC-COLLAB-02: user.root 上挂了指向 target 的 talk_window（显式协作通道）
     // contextWindows 已从 thread.json 迁出，唯一权威是 thread-context.json
-    // （talk 是 builtin feature → 完整 inline，含 type/target）。
+    // （talk 是 builtin feature → 完整 inline，含 target/conversationId）。
+    // talk-family class 是 POV 投影（context.md core 7）：磁盘不落 class，读回时重算——
+    // 故按 target + conversationId 形态断言 entry 在场，而非按 stored class。
     {
       const userCtx = readThreadContextJson(baseDir, sid, "user", "root");
       const wins: any[] = userCtx?.contextWindows ?? [];
-      const talkWin = wins.find((w) => w?.class === "talk" && (w?.target === target || w?.targetObjectId === target));
+      const talkWin = wins.find(
+        (w) => (w?.target === target || w?.targetObjectId === target) && !!w?.conversationId,
+      );
       rec.ok("TC-COLLAB-02", "user.root 挂了指向 target 的 talk_window（cross-object talk 路由表）",
         !!talkWin, `windows=${JSON.stringify(wins.map((w) => ({ t: w?.class, tg: w?.target })))?.slice(0, 160)}`);
     }

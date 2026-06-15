@@ -12,7 +12,7 @@ import { loadObjectWindow } from "@ooc/core/runtime/server-loader";
 import { normalizeMethodOutcome } from "@ooc/core/_shared/types/method.js";
 import { enrichContextWindows } from "@ooc/core/thinkable/context/window-enrichment";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
-import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/executable/windows";
+import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread, computeProjectionClass } from "@ooc/core/executable/windows";
 import { deliverTalkMessage } from "@ooc/core/executable/windows/talk/delivery";
 import {
   ROOT_WINDOW_ID,
@@ -437,16 +437,18 @@ export function createFlowsService(deps: {
         };
       }
       const talkWindowId = generateWindowId("talk");
+      // user→target peer 会话窗：class 经 computeProjectionClass 投影（非 fork 非 creator → "talk"）；
+      // 返回 union 宽于 TalkWindow.class，故整窗 as TalkWindow（运行期值恒为 "talk"）。
       const talkWindow: TalkWindow = {
         id: talkWindowId,
-        class: "talk",
+        class: computeProjectionClass({ id: talkWindowId }, userThread),
         parentWindowId: ROOT_WINDOW_ID,
         title: targetObjectId,
         status: "open",
         createdAt: Date.now(),
         target: targetObjectId,
         conversationId: talkWindowId,
-      };
+      } as TalkWindow;
       userThread.contextWindows = [...(userThread.contextWindows ?? []), talkWindow];
 
       // 3) 派送 — talk-delivery 内部会在 target 下创建 callee thread 并写双方消息
@@ -567,16 +569,18 @@ export function createFlowsService(deps: {
       }
 
       const talkWindowId = generateWindowId("talk");
+      // user→target peer 会话窗：class 经 computeProjectionClass 投影（非 fork 非 creator → "talk"）；
+      // 返回 union 宽于 TalkWindow.class，故整窗 as TalkWindow（运行期值恒为 "talk"）。
       const talkWindow: TalkWindow = {
         id: talkWindowId,
-        class: "talk",
+        class: computeProjectionClass({ id: talkWindowId }, userThread),
         parentWindowId: ROOT_WINDOW_ID,
         title: target,
         status: "open",
         createdAt: Date.now(),
         target,
         conversationId: talkWindowId,
-      };
+      } as TalkWindow;
       userThread.contextWindows = [...(userThread.contextWindows ?? []), talkWindow];
 
       // initialMessage 缺省：仅持久化 talk_window；提供时走 deliverTalkMessage（同 seedSession）

@@ -29,8 +29,19 @@ export const L4_STORIES: Story[] = [
       const p = join(baseDir, "flows", sid, "objects", "user", "threads", userT.threadId, "thread-context.json");
       check(existsSync(p), `user thread-context.json 不存在`);
       const ctx = JSON.parse(readFileSync(p, "utf8"));
-      const hasTalk = (ctx.contextWindows ?? []).some((w: any) => w.class === "talk");
-      check(hasTalk, `user 线程无 talk_window：${JSON.stringify((ctx.contextWindows ?? []).map((w: any) => w.class))}`);
+      // talk-family class 是 POV 投影（context.md core 7）：磁盘不落 class，读回时由
+      // computeProjectionClass 重算。故按 talk 窗形态（target=obj_talk + 无 class）断言其 entry
+      // 仍持久化在 user 线程，而非按 stored class。
+      const entries = (ctx.contextWindows ?? []) as any[];
+      const talkEntry = entries.find((w) => w.target === "obj_talk" && w.conversationId);
+      check(
+        !!talkEntry,
+        `user 线程无指向 obj_talk 的 talk_window entry：${JSON.stringify(entries.map((w: any) => ({ id: w.id, class: w.class, target: w.target })))}`,
+      );
+      check(
+        talkEntry.class === undefined,
+        `talk-family class 不应落盘（应读回时重算）：class=${talkEntry.class}`,
+      );
     },
   }),
 

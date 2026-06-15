@@ -144,7 +144,10 @@ describe("constructor pathway integration", () => {
     expect(inlineEntry).toBeDefined();
     // builtin feature → completely inlined, NOT a `_ref` entry
     expect((inlineEntry as { _ref?: boolean })._ref).toBeUndefined();
-    expect((inlineEntry as { class: string }).class).toBe("talk");
+    // talk-family class is a POV projection (context.md core 7): NOT persisted on disk;
+    // recomputed at read by computeProjectionClass. In-memory window still carries class="talk".
+    expect((inlineEntry as { class?: string }).class).toBeUndefined();
+    expect(talkWindow!.class).toBe("talk");
     expect((inlineEntry as { target?: string }).target).toBe("peer_alice");
 
     // No independent dir for the talk_window

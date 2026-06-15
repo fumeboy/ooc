@@ -96,13 +96,20 @@ test("非持久化往返：member 窗不入 thread-context.json，readThread 重
     const tcPath = join(baseDir, "flows", "_test_comp", "objects", "supervisor", "threads", "root", "thread-context.json");
     expect(existsSync(tcPath)).toBe(true);
     const persisted = JSON.parse(readFileSync(tcPath, "utf8"));
-    const persistedClasses = (persisted.contextWindows ?? []).map((w: any) => w.class);
+    const persistedEntries = (persisted.contextWindows ?? []) as any[];
+    const persistedClasses = persistedEntries.map((w) => w.class);
     expect(persistedClasses).not.toContain("filesystem");
-    expect(persistedClasses).toContain("talk"); // 真业务窗仍持久化（对照）
+    // 真业务窗（talk）仍持久化为一条 entry（对照）；但 talk-family 的 class 是 POV 投影
+    // （context.md core 7），不落盘——读回时由 computeProjectionClass 重算。故按 id 断言其
+    // entry 存在、且磁盘上 class 字段缺省。
+    const talkEntry = persistedEntries.find((w) => w.id === "w_talk_x");
+    expect(talkEntry).toBeDefined();
+    expect(talkEntry.class).toBeUndefined();
 
-    // readThread 冷恢复时重注入 member 窗 → 再次可见、可 exec。
+    // readThread 冷恢复时重注入 member 窗 → 再次可见、可 exec；talk 窗 class 经 readThread 重算回 "talk"。
     const reread = await readThread({ baseDir, sessionId: "_test_comp", objectId: "supervisor" }, "root");
     expect(reread?.contextWindows?.some((w: any) => w.class === "filesystem")).toBe(true);
+    expect(reread?.contextWindows?.find((w: any) => w.id === "w_talk_x")?.class).toBe("talk");
   } finally {
     await rm(baseDir, { recursive: true, force: true });
   }

@@ -23,7 +23,7 @@ import {
   type TalkWindow,
 } from "./types.js";
 import { DEFAULT_TRANSCRIPT_VIEWPORT } from "./transcript-viewport.js";
-import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
+import { computeProjectionClass } from "./projection-class.js";
 import type { ReflectRequestWindow } from "@ooc/builtins/reflect_request/types.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {
@@ -128,11 +128,13 @@ export function initContextWindows(
   const creatorThreadId = opts.creatorThreadId ?? SESSION_CREATOR_THREAD_ID;
   const sameObject = isCreatorSelf(thread);
 
+  // class 是 POV 投影：由 computeProjectionClass 从窗形态（isForkWindow/isCreatorWindow）+
+  // thread session 单点算（同对象父子=fork 子窗→talk；跨对象 creator→super 取 reflect_request 否则 talk）。
   const creatorWindow: ContextWindow = sameObject
     ? ({
         id: creatorWindowId,
         // 同对象父子通道 = fork 子窗：creator 是父 thread，target=self object。
-        class: "talk",
+        class: computeProjectionClass({ id: creatorWindowId, isForkWindow: true, isCreatorWindow: true }, thread),
         parentWindowId: ROOT_WINDOW_ID,
         title: opts.initialTaskTitle,
         status: "open",
@@ -143,14 +145,14 @@ export function initContextWindows(
         conversationId: creatorWindowId,
         isCreatorWindow: true,
         state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
-      } satisfies TalkWindow)
+        // class 经 computeProjectionClass 投影（fork → "talk"），其返回 union 比
+        // TalkWindow.class 宽，故整窗 as TalkWindow（运行期值恒为 "talk"）。
+      } as TalkWindow)
     : ({
         id: creatorWindowId,
-        // super 反思 thread（sessionId="super"）的会话面用 reflect_request —— 同形会话窗，
-        // 额外挂 new_feat_branch / create_pr_and_invite_reviewers 沉淀方法；普通跨对象 callee 用 talk。
-        class: isSuperSessionId(thread.persistence?.sessionId ?? "")
-          ? "reflect_request"
-          : "talk",
+        // 跨对象 creator 窗：super 反思 thread（sessionId="super"）取 reflect_request —— 同形会话窗，
+        // 额外挂 new_feat_branch / create_pr_and_invite_reviewers 沉淀方法；普通跨对象 callee 取 talk。
+        class: computeProjectionClass({ id: creatorWindowId, isCreatorWindow: true }, thread),
         parentWindowId: ROOT_WINDOW_ID,
         title: opts.initialTaskTitle,
         status: "open",

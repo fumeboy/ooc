@@ -36,6 +36,7 @@ import { setTranscriptWindowCommandForTalk } from "./method.set-transcript-windo
 import { DEFAULT_TRANSCRIPT_VIEWPORT } from "../_shared/transcript-viewport.js";
 import { renderTranscriptOrHandle } from "../_shared/conversation-render.js";
 import { injectMemberWindowsIfObjectThread } from "../_shared/init.js";
+import { computeProjectionClass } from "../_shared/projection-class.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 import type { TalkWindow } from "./types.js";
@@ -202,14 +203,17 @@ function deriveChildPersistence(
 }
 
 function buildChildCreatorWindow(
-  childId: string,
+  child: ThreadContext,
   parentThreadId: string,
   selfObjectId: string,
   initialTitle: string,
 ): TalkWindow {
+  const id = creatorWindowIdOf(child.id);
+  // class 经 computeProjectionClass 投影（fork → "talk"）；其返回 union 比 TalkWindow.class 宽，
+  // 故整窗 as TalkWindow（运行期值恒为 "talk"）。
   return {
-    id: creatorWindowIdOf(childId),
-    class: "talk",
+    id,
+    class: computeProjectionClass({ id, isForkWindow: true, isCreatorWindow: true }, child),
     parentWindowId: ROOT_WINDOW_ID,
     title: initialTitle,
     status: "open",
@@ -217,10 +221,10 @@ function buildChildCreatorWindow(
     target: selfObjectId,
     targetThreadId: parentThreadId,
     isForkWindow: true,
-    conversationId: creatorWindowIdOf(childId),
+    conversationId: id,
     isCreatorWindow: true,
     state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
-  };
+  } as TalkWindow;
 }
 
 interface ShareWindowEntry {
@@ -337,9 +341,11 @@ async function execFork(
     parentThreadId: parent.id,
     creatorThreadId: parent.id,
     creatorObjectId: selfObjectId,
-    contextWindows: [buildChildCreatorWindow(childId, parent.id, selfObjectId, initialTitle)],
+    contextWindows: [],
     persistence: deriveChildPersistence(parent, childId),
   };
+  // creator fork 窗的 class 由 computeProjectionClass 据 child 视角投影——故 child 须先成型。
+  child.contextWindows = [buildChildCreatorWindow(child, parent.id, selfObjectId, initialTitle)];
 
   // fork 子线程是同 object 的 sub-thread——继承该 object 声明持有的 tool-object 成员（如 filesystem），
   // 否则子 agent 无法用工具。scheduler 直接驱动内存子线程、不走 readThread，故在此显式注入（IO 失败静默吞）。
@@ -363,9 +369,12 @@ async function execFork(
     configurable: true,
   });
 
+  const forkWindowId = generateWindowId("talk");
+  // 父侧 fork 子窗 class 由 computeProjectionClass 投影（isForkWindow → "talk"）；返回 union 宽于
+  // TalkWindow.class，故整窗 as TalkWindow（运行期值恒为 "talk"）。
   const forkWindow: TalkWindow = {
-    id: generateWindowId("talk"),
-    class: "talk",
+    id: forkWindowId,
+    class: computeProjectionClass({ id: forkWindowId, isForkWindow: true }, parent),
     parentWindowId: ROOT_WINDOW_ID,
     title: initialTitle,
     status: "open",
@@ -375,7 +384,7 @@ async function execFork(
     isForkWindow: true,
     conversationId: "",
     state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
-  };
+  } as TalkWindow;
   forkWindow.conversationId = forkWindow.id;
 
   if (wait) {
@@ -479,9 +488,11 @@ export const talkConstructor: ObjectMethod = {
     }
 
     const id = generateWindowId("talk");
+    // peer 会话窗 class 由 computeProjectionClass 投影（非 fork 非 creator → "talk"）；返回 union
+    // 宽于 TalkWindow.class，故整窗 as TalkWindow（运行期值恒为 "talk"）。
     const talkWindow: TalkWindow = {
       id,
-      class: "talk",
+      class: computeProjectionClass({ id }, thread),
       parentWindowId: ROOT_WINDOW_ID,
       title,
       status: "open",
@@ -489,7 +500,7 @@ export const talkConstructor: ObjectMethod = {
       target,
       conversationId: id,
       state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
-    };
+    } as TalkWindow;
     return { ok: true, window: talkWindow };
   },
 };

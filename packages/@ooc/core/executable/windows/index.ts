@@ -65,6 +65,10 @@ export { WindowManager } from "./_shared/manager.js";
 export { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "./_shared/init.js";
 export type { InitContextWindowsOpts } from "./_shared/init.js";
 
+// talk-family 投影 class 的唯一计算入口（context.md core 7：class 不持久化，每次构造/读回时算）。
+export { computeProjectionClass } from "./_shared/projection-class.js";
+export type { ProjectionClass } from "./_shared/projection-class.js";
+
 // root methods 的工具函数（仅服务 root level；非 root window 的 method 通过 object registry 查）
 export {
   ROOT_METHODS,

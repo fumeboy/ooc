@@ -88,7 +88,9 @@ async function main() {
     // 从 sb_demo thread 上拿 talk window 的 id（window id = talk_window id，用于
     // formatter 把 outbox 消息映射到 target）。
     // contextWindows 已迁出 thread.json → 读 thread-context.json（talk 是 builtin
-    // feature，完整 inline，含 id/type）。
+    // feature，完整 inline，含 id/target/conversationId）。
+    // talk-family class 是 POV 投影（context.md core 7）：磁盘不落 class——按 talk 窗
+    // 形态（有 target + conversationId）识别 entry，而非按 stored class。
     const sbThread = JSON.parse(await readFile(join(sbThreadDir, "thread.json"), "utf8"));
     let sbContextWindows: any[] = [];
     try {
@@ -98,7 +100,7 @@ async function main() {
       sbContextWindows = [];
     }
     const talkWindowId =
-      sbContextWindows.find((w: any) => w.class === "talk")?.id ??
+      sbContextWindows.find((w: any) => typeof w.target === "string" && !!w.conversationId)?.id ??
       (sbThread.creatorWindowId as string | undefined) ??
       "";
 

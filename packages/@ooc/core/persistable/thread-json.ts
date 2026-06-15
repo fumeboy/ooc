@@ -14,6 +14,8 @@ import {
   type ThreadContextEntry,
 } from "./flow-thread-context";
 import type { ContextWindow } from "../executable/windows/_shared/types";
+import { computeProjectionClass } from "../executable/windows/_shared/projection-class";
+import { isTalkLikeClass } from "../_shared/types/constants";
 import { persistInboxMessages, readInboxMessages } from "./inbox-store";
 import { observeWarn } from "../observable/log-aggregator";
 
@@ -168,7 +170,20 @@ export async function readThread(
             merged.push(win);
           } else {
             // inline ContextWindow（builtin feature）
-            const win = entry as ContextWindow;
+            const raw = entry as ContextWindow;
+            // talk-family（talk/reflect_request）的 class 是 POV 投影、写盘端不落盘
+            // （context.md core 7）：磁盘 entry 无 class 字段。据窗形态（isForkWindow/
+            // isCreatorWindow）+ thread session 用 computeProjectionClass 重算。
+            //
+            // 判定 talk-family entry：磁盘 talk-family 项恒带 `target`（peer/fork/creator
+            // 四个构造点都设），且 class 缺省或旧数据仍存 talk/reflect_request——以此与
+            // 「无 class 的废弃 legacy entry」（如旧 type=issue，无 target）区分，保留 drop 行为。
+            const isTalkFamilyEntry =
+              typeof (raw as { target?: unknown }).target === "string" &&
+              (!raw.class || isTalkLikeClass(raw.class));
+            const win: ContextWindow = isTalkFamilyEntry
+              ? ({ ...raw, class: computeProjectionClass(raw, restored) } as ContextWindow)
+              : raw;
             if (!knownTypes.has(win.class) && win.class !== persistence.objectId) {
               observeWarn(
                 "readThread.thread-context.unregistered-inline",
