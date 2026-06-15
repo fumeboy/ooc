@@ -3,14 +3,15 @@
  *
  * 初始 creator 对话 window：每个 thread 启动时必有一条与创建方的恒在通道。
  *
- * Creator window 一律是 talk_window，形态由 thread 与 creator 的关系决定：
+ * Creator window 一律是会话窗（inst.class=`_builtin/thread`，唯一会话载体注册 class）；投影 class
+ * （thread/talk/reflect_request）由 thread readable 内 computeProjectionClass 据窗形态算，不写 inst.class。
+ * 形态由 thread 与 creator 的关系决定（落 inst.data）：
  * - thread.creatorObjectId === thread.persistence?.objectId（含两者都缺省）→ fork 子窗
  *   同 object 内 fork 出的子线程；creator 是父 thread。
- *   creator window = class=talk, isForkWindow=true, target=self object, targetThreadId=父 thread id。
+ *   data: isForkWindow=true, target=self object, targetThreadId=父 thread id。
  * - thread.creatorObjectId 与 self 不同 → peer 会话窗
  *   跨对象 talk 派生 callee thread；creator 是 caller object 的某个 thread。
- *   creator window = class=talk, target=caller object, targetThreadId=caller thread。
- *   callee 通过该 talk_window.say 回复给 caller。
+ *   data: target=caller object, targetThreadId=caller thread。callee 通过该窗 say 回复给 caller。
  *
  * 两种形态共用 creatorWindowIdOf(threadId) 派生的稳定 id；幂等插入。
  */
@@ -21,7 +22,7 @@ import {
   creatorWindowIdOf,
 } from "./types.js";
 import { DEFAULT_TRANSCRIPT_VIEWPORT } from "./transcript-viewport.js";
-import { computeProjectionClass } from "./projection-class.js";
+import { THREAD_CLASS_ID } from "../../../_shared/types/constants.js";
 import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {
@@ -126,40 +127,35 @@ export function initContextWindows(
   const creatorThreadId = opts.creatorThreadId ?? SESSION_CREATOR_THREAD_ID;
   const sameObject = isCreatorSelf(thread);
 
-  // class 是 POV 投影：由 computeProjectionClass 从窗形态（isForkWindow/isCreatorWindow）+
-  // thread session 单点算（同对象父子=fork 子窗→talk；跨对象 creator→super 取 reflect_request 否则 talk）。
-  // Wave 4：creator 窗作为 OocObjectInstance——身份信封在顶层，talk-family 的投影态/会话字段
-  // （target/targetThreadId/conversationId/isForkWindow/transcriptViewport…）落 win。
-  const creatorClass = sameObject
-    ? computeProjectionClass({ id: creatorWindowId, isForkWindow: true, isCreatorWindow: true }, thread)
-    : computeProjectionClass({ id: creatorWindowId, isCreatorWindow: true }, thread);
-  const creatorWin: Record<string, unknown> = sameObject
+  // 会话窗 inst.class = `_builtin/thread`（唯一会话载体注册 class）。投影 class（thread/talk/
+  // reflect_request）不写进 inst.class——渲染期由 thread readable 内 computeProjectionClass 据窗
+  // 形态 + thread session 动态算（context.md 核心 2/8/9）。
+  // data/win 统一划分：会话业务字段（target/targetThreadId/isForkWindow/isCreatorWindow/
+  // conversationId）进 inst.data（ThreadData）；transcriptViewport 进 inst.win（ThreadWin）。
+  const creatorData: Record<string, unknown> = sameObject
     ? {
-        transient: true,
         target: thread.persistence?.objectId ?? thread.creatorObjectId ?? "",
         targetThreadId: creatorThreadId,
         isForkWindow: true,
         conversationId: creatorWindowId,
         isCreatorWindow: true,
-        state: { transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
       }
     : {
-        transient: true,
         target: thread.creatorObjectId!,
         targetThreadId: creatorThreadId,
         conversationId: creatorWindowId,
         isCreatorWindow: true,
-        transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT },
       };
   const creatorWindow: OocObjectInstance = {
     id: creatorWindowId,
-    class: creatorClass,
+    class: THREAD_CLASS_ID,
     parentObjectId: ROOT_WINDOW_ID,
     title: opts.initialTaskTitle,
     status: "open",
     createdAt: Date.now(),
-    data: {},
-    win: creatorWin,
+    data: creatorData,
+    // creator 窗每次 init 幂等重注入（transient：不持久化死 _ref）；transcriptViewport 投影态进 win。
+    win: { transient: true, transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
   };
 
   thread.contextWindows = [creatorWindow, ...list];

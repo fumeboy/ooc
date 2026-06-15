@@ -1,33 +1,38 @@
 /**
- * talk —— executable 维度（会话 3 原语之一 say + close + share 作为 object method）。
+ * thread —— 会话 object method（say / close / share）。
  *
- * talk 是所有会话 class 的基类（thread / reflect_request 经 class 链继承它的会话行为）。
- * 它提供会话的 object method：
+ * thread 是唯一会话载体注册 class（context.md 核心 2/8/9）；所有会话窗（creator/peer/sub/fork）
+ * 都是 thread 实例。这三个会话 method 全部归 thread：
  *   - say   : 发一条消息给对端（peer 走磁盘 talk-delivery / fork 走内存树派送）
  *   - close : 关本会话窗（fork 子窗 close → archive 子线程；creator 窗不可关）
  *   - share : 跨 thread 传 window 引用（仅 fork 子线程窗可用）
  *
- * 注：**wait 是 3 原语之一（非 method）**——经 `executable/tools/wait.ts` 独立 tool 入口表达，
- * 保持原语地位，不在此注册为 object method。
+ * 注：**wait 是 3 原语之一（非 method）**——经 `core/executable/tools/wait.ts` 独立 tool 入口表达。
  *
- * 签名 `(ctx, self=TalkData, args)`：self 是会话窗的业务数据（target / targetThreadId /
- * isForkWindow / isCreatorWindow / conversationId），ctx.object.id 是窗实例 id，ctx.thread 是
- * 当前执行 thread。
+ * 签名 `(ctx, self=Data, args)`：self 是会话窗的业务数据（target / targetThreadId / isForkWindow /
+ * isCreatorWindow / conversationId），ctx.object.id 是窗实例 id，ctx.thread 是当前执行 thread。
+ * say/close 的 delivery / fork 派送实现物保留在 core talk 域，本类 import 复用。
  *
- * deferred（agency 深层 thinkloop 语义，登记 WAVE4-WALL-broken-tests.md）：say 的 fork 派送
- * 完整运行时语义（子 thread thinkloop 启动、end 经 say 回报）仍依赖 scheduler/worker 协作，
- * 本轮保留行为骨架（写双方 inbox/outbox + 事件），不在 method 内闭合完整调度。
+ * deferred（agency 深层 thinkloop 语义，登记 WAVE4-WALL-broken-tests.md）：say 的 fork 派送完整
+ * 运行时语义（子 thread thinkloop 启动、end 经 say 回报）仍依赖 scheduler/worker 协作，本轮保留
+ * 行为骨架（写双方 inbox/outbox + 事件），不在 method 内闭合完整调度。share 的 owner 借/还机制随
+ * 对象模型重构重新设计，本轮只保留骨架 + 报告未支持。
  */
 import type {
   ExecutableContext,
-  ExecutableModule,
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
 import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
-import type { TalkData, TalkWindowView } from "../types.js";
-import { deliverTalkMessage } from "../delivery.js";
-import { archiveForkChild, findThreadInScope, makeMessage, appendInbox } from "../fork.js";
+import { deliverTalkMessage } from "@ooc/core/executable/windows/talk/delivery.js";
+import {
+  archiveForkChild,
+  findThreadInScope,
+  makeMessage,
+  appendInbox,
+} from "@ooc/core/executable/windows/talk/fork.js";
+import type { TalkWindowView } from "@ooc/core/executable/windows/talk/types.js";
+import type { Data } from "../types.js";
 
 // ─────────────────────────── say ──────────────────────────────
 
@@ -41,10 +46,10 @@ const SAY_SCHEMA: MethodCallSchema = {
  * 把当前会话窗的业务数据 + 实例 id 还原成 delivery 期望的扁平 TalkWindow 视图。
  * delivery 只读 id / target / targetThreadId / isCreatorWindow（并回填 targetThreadId）。
  */
-function asTalkWindowView(objectId: string, self: TalkData): TalkWindowView {
+function asTalkWindowView(objectId: string, self: Data): TalkWindowView {
   return {
     id: objectId,
-    class: "talk",
+    class: "_builtin/thread",
     target: self.target,
     targetThreadId: self.targetThreadId,
     isForkWindow: self.isForkWindow,
@@ -55,13 +60,13 @@ function asTalkWindowView(objectId: string, self: TalkData): TalkWindowView {
 
 async function executeSay(
   ctx: ExecutableContext,
-  self: TalkData,
+  self: Data,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
   const thread = ctx.thread;
-  if (!thread) return "[talk.say] 缺少 thread context。";
+  if (!thread) return "[thread.say] 缺少 thread context。";
   const content = typeof args.msg === "string" ? args.msg : "";
-  if (!content.trim()) return "[talk.say] 缺少 msg 参数（消息正文）。";
+  if (!content.trim()) return "[thread.say] 缺少 msg 参数（消息正文）。";
 
   // fork 子线程窗：走内存树寻址（同 session 同 job、不付磁盘 IO）。
   if (self.isForkWindow) {
@@ -80,20 +85,20 @@ async function executeSay(
     self.targetThreadId = view.targetThreadId;
     await ctx.reportDataEdit?.();
   }
-  return `[talk.say] 已发送给 ${result.calleeObjectId}（thread=${result.calleeThreadId}）。`;
+  return `[thread.say] 已发送给 ${result.calleeObjectId}（thread=${result.calleeThreadId}）。`;
 }
 
 /** fork 子窗 say：在内存线程树里寻址对端（子或父），写双方消息。 */
 function sayToForkPeer(
   ctx: ExecutableContext,
-  self: TalkData,
+  self: Data,
   content: string,
 ): string | undefined {
   const thread = ctx.thread as ThreadContext;
   const targetThreadId = self.targetThreadId;
-  if (!targetThreadId) return "[talk.say] fork 子窗缺少 targetThreadId。";
+  if (!targetThreadId) return "[thread.say] fork 子窗缺少 targetThreadId。";
   const peer = findThreadInScope(thread, targetThreadId);
-  if (!peer) return `[talk.say] 找不到对端 thread "${targetThreadId}"。`;
+  if (!peer) return `[thread.say] 找不到对端 thread "${targetThreadId}"。`;
 
   const message: ThreadMessage = makeMessage(thread.id, peer.id, content);
   message.windowId = ctx.object.id;
@@ -106,10 +111,10 @@ function sayToForkPeer(
     peer.inboxSnapshotAtWait = undefined;
     peer.waitingOn = undefined;
   }
-  return `[talk.say] 已发送给 fork 对端 thread "${peer.id}"。`;
+  return `[thread.say] 已发送给 fork 对端 thread "${peer.id}"。`;
 }
 
-export const sayMethod: ObjectMethod<TalkData> = {
+export const sayMethod: ObjectMethod<Data> = {
   name: "say",
   description:
     "Send a message to the peer. Peer conversation → disk talk-delivery; fork child window → in-memory thread-tree delivery.",
@@ -122,14 +127,14 @@ export const sayMethod: ObjectMethod<TalkData> = {
 
 // ─────────────────────────── close ──────────────────────────────
 
-const closeMethod: ObjectMethod<TalkData> = {
+const closeMethod: ObjectMethod<Data> = {
   name: "close",
   description:
     "Close this talk_window. Fork child windows archive the child thread; the creator talk_window cannot be closed.",
   permission: () => "allow",
   exec: (ctx, self) => {
     if (self.isCreatorWindow) {
-      return `[talk.close] window "${ctx.object.id}" 是初始 creator 会话窗，与 caller 的恒在通道，不可关闭。`;
+      return `[thread.close] window "${ctx.object.id}" 是初始 creator 会话窗，与 caller 的恒在通道，不可关闭。`;
     }
     // fork 子线程窗 close → archive 对应子线程（peer 会话窗纯关窗，无副作用）。
     if (self.isForkWindow && ctx.thread) {
@@ -143,15 +148,7 @@ const closeMethod: ObjectMethod<TalkData> = {
 
 // ─────────────────────────── share ──────────────────────────────
 
-/**
- * share —— 跨 thread 传 window 引用（仅 fork 子线程窗可用）。
- *
- * deferred（WAVE4-WALL-broken-tests.md）：旧 share 的所有权借/还机制依赖每窗 `sharing` 字段
- * （SharingState，新契约已删）+ ContextWindow 平铺 struct。新 OocObjectInstance 模型下，
- * window 引用的「借/还/move 所有权」语义需要重新设计（哪个 thread 持有实例、引用如何投影），
- * 牵连过深，本轮**只保留骨架 + 报告未支持**，不在 method 内做 sharing 字段写入。
- */
-const shareMethod: ObjectMethod<TalkData> = {
+const shareMethod: ObjectMethod<Data> = {
   name: "share",
   description:
     "Share (readonly-ref) or transfer ownership (move) of a window to the forked child/parent thread.",
@@ -161,16 +158,16 @@ const shareMethod: ObjectMethod<TalkData> = {
       mode: { type: "string", required: true, description: '"readonly-ref" 只读借用；"move" 移交所有权' },
     },
   },
-  exec: (_ctx, self) => {
+  exec: (_ctx, self: Data) => {
     if (!self.isForkWindow) {
-      return "[talk.share] share 只能在 fork 子线程窗（同对象父子通道）上调用。";
+      return "[thread.share] share 只能在 fork 子线程窗（同对象父子通道）上调用。";
     }
-    return "[talk.share] window 引用借/还机制正随对象模型重构（OocObjectInstance）重新设计，暂未支持（WAVE4 待续）。";
+    return "[thread.share] window 引用借/还机制正随对象模型重构（OocObjectInstance）重新设计，暂未支持（WAVE4 待续）。";
   },
 };
 
-const executable: ExecutableModule<TalkData> = {
-  methods: [sayMethod, closeMethod, shareMethod],
-};
-
-export default executable;
+export const sessionMethods: ObjectMethod<Data>[] = [
+  sayMethod,
+  closeMethod,
+  shareMethod,
+];

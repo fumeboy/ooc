@@ -31,19 +31,17 @@ import {
   type BaseContextWindow,
   type ContextWindow,
 } from "../executable/windows/_shared/types.js";
-import { isTalkLikeClass } from "../_shared/types/constants.js";
 
 /**
  * thread-context.json 中一条 contextWindow 的形态：
- *   - 内置特性：完整 inline ContextWindow（含全部业务字段）
- *     · talk-family（talk/reflect_request）inline 项**不写 class**——class 是 POV 投影
- *       （context.md core 7），由 readThread 经 computeProjectionClass 在读回时重算；
- *       磁盘只存窗形态（isForkWindow/isCreatorWindow）+ 展示状态。
+ *   - 内置特性：完整 inline ContextWindow（含全部业务字段 + 真实 inst.class）
+ *     · 会话窗 inst.class=`_builtin/thread`（真实注册 class）照常 inline；talk/reflect_request
+ *       投影 class 是 POV 派生值、不在 inst 里，渲染期由 thread readable 内 computeProjectionClass
+ *       动态算（context.md 核心 2/8/9），故磁盘也不存它。
  *   - 独立 flow object：只放轻量 ref，hydrate 时另读 `<refObjectId>/state.json`
  */
 export type ThreadContextEntry =
   | ContextWindow
-  | Omit<ContextWindow, "class">
   | { id: string; class: string; _ref: true; refObjectId: string };
 
 /** Thread context 文件 schema —— `{objectDir}/threads/{threadId}/thread-context.json` 的内容。 */
@@ -80,14 +78,11 @@ export function buildThreadContextEntries(
     if (registry.isBuiltinFeatureType(window.class)) {
       // 内置特性整窗 inline 落盘（state 即 context）。BaseContextWindow → ThreadContextEntry
       // 的 inline 分支等价于 ContextWindow union 的结构基，cast 安全。
-      if (isTalkLikeClass(window.class)) {
-        // talk-family（talk/reflect_request）：class 是 POV 投影，不落盘——读回时由
-        // computeProjectionClass 据窗形态 + thread session 重算。仅剥 class，其余字段照常 inline。
-        const { class: _dropClass, ...rest } = window;
-        entries.push(rest as Omit<ContextWindow, "class">);
-      } else {
-        entries.push(window as ContextWindow);
-      }
+      //
+      // 会话窗（inst.class=`_builtin/thread`）也走此分支整窗 inline：inst.class 是真实注册
+      // class（非 POV 投影值），正常落盘；talk/reflect_request 投影 class 本就不在 inst 里
+      // （渲染期由 thread readable 内 computeProjectionClass 动态算），无需特例剥离。
+      entries.push(window as ContextWindow);
     } else {
       entries.push({
         id: window.id,

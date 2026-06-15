@@ -19,19 +19,21 @@ export function isSuperSessionId(sessionId: string): boolean {
   return sessionId.trim().toLowerCase() === SUPER_SESSION_ID;
 }
 
+/** 唯一会话载体注册 class。所有会话窗（creator/peer/sub/fork）inst.class 一律是它。 */
+export const THREAD_CLASS_ID = "_builtin/thread";
+
 /**
- * "会话型" window class 谓词 —— talk / thread / reflect_request 三者同形
- *（持续会话 + creator 回报通道）。
+ * "会话型" window 谓词 —— 判一条 context window 是不是会话载体（thread）实例。
  *
- * - talk：other-view（与对端 peer/sub thread 的对话）。
- * - thread：self-view（thread 与其 creator 的对话；普通 flow 的 creator 窗）。
- * - reflect_request：super flow 的 self-view（反思自视，额外挂沉淀 method）。
+ * thread 是**唯一**会话载体注册 class：所有会话窗（creator/peer/sub/fork）的 inst.class 都是
+ * `_builtin/thread`。talk / reflect_request 不是注册 class，而是 thread readable 按视角（POV）
+ * 投影出的 **window class**（self-view 非 super→thread、other-view→talk、self-view super→
+ * reflect_request），投影值只在渲染期算、不写进 inst.class（context.md 核心 2/8/9）。
  *
- * thread / reflect_request 复用 talk 的渲染/会话/报回机制（class 链继承 talk）。凡是按
- * creator/对话语义处理会话窗的逻辑（end 自动代发回报、creator 不可关、wait、worker 兜底扫
- * callee 回报、transcript 归位），都用本谓词同时认这三个 class，避免把 self-view 窗换成
- * thread/reflect_request 后静默打断回报。
+ * 故凡按"会话窗"语义处理 inst 的逻辑（回信归位、peer 派生、wait、inbox 归窗），一律按
+ * inst.class === `_builtin/thread` 识别会话窗，再据 inst.data 的 isForkWindow/isCreatorWindow
+ * 区分形态——不再按投影值识别。
  */
 export function isTalkLikeClass(cls: string | undefined): boolean {
-  return cls === "talk" || cls === "thread" || cls === "reflect_request";
+  return cls === THREAD_CLASS_ID;
 }

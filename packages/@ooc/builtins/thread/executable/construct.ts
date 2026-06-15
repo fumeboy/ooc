@@ -1,33 +1,25 @@
 /**
- * talk —— 会话 class（OOC class 后端程序路由）。统一两种会话形态（2026-06-14，do_window 并入）：
+ * thread —— construct（造会话窗）。统一两种会话形态（do_window 早已并入 talk，现归 thread）：
  *
  * **A. peer 会话（跨对象）**：与另一个 flow object 通信（target=peer objectId / "user"）。
- *    constructor 校验 target stone 存在；`say` 走 talk-delivery 磁盘派送；transcript 按 windowId 过滤。
+ *    construct 校验 target stone 存在；`say` 走 talk-delivery 磁盘派送；transcript 按 windowId 过滤。
  * **B. fork 子线程（同对象）**：talk(target=自己 objectId) ⇒ fork 一条新子线程（旧 do）。
- *    `isForkWindow=true`，`targetThreadId`=子线程 id；`say` 走内存树寻址（同 session 同 job、不付磁盘 IO）；
- *    transcript 按 targetThreadId 过滤。
+ *    `isForkWindow=true`，`targetThreadId`=子线程 id；`say` 走内存树寻址（同 session 同 job、不付磁盘 IO）。
  *
- * 一处 `export const Class` 装配 construct（造会话）+ executable（say / close / share）+ readable
- * （投影 + set_transcript_window window method）。**wait 是 3 原语之一（非 method）**，经独立 tool 入口。
- *
- * talk 是所有会话 class 的基类（parentClass:null）；thread / reflect_request 经 class 链继承其会话行为。
+ * agent.talk 经 `runtime.instantiate("_builtin/thread", args)` 委托本 construct；runtime 把返回的
+ * Data 包成 `OocObjectInstance`（inst.class=`_builtin/thread`）。**wait 是 3 原语之一（非 method）**，
+ * 经独立 tool 入口。
  */
-
-import { builtinRegistry } from "../_shared/registry.js";
-import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
 import type { ConstructorContext, ObjectConstructor } from "@ooc/core/executable/contract.js";
 import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import { stat } from "node:fs/promises";
-import type { ThreadPersistenceRef } from "../../../persistable/common.js";
-import { stoneDir, resolveStoneIdentityRef } from "../../../persistable/index.js";
+import type { ThreadPersistenceRef } from "@ooc/core/persistable/common.js";
+import { stoneDir, resolveStoneIdentityRef } from "@ooc/core/persistable/index.js";
 import { SUPER_ALIAS_TARGET } from "@ooc/core/_shared/types/constants.js";
-import { creatorWindowIdOf } from "../_shared/types.js";
-import { injectMemberWindowsIfObjectThread } from "../_shared/init.js";
-import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
-import type { TalkData } from "./types.js";
-import { makeMessage, appendInbox } from "./fork.js";
-import executable from "./executable/index.js";
-import readable from "./readable/index.js";
+import { injectMemberWindowsIfObjectThread } from "@ooc/core/executable/windows/_shared/init.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
+import { makeMessage, appendInbox } from "@ooc/core/executable/windows/talk/fork.js";
+import type { Data } from "../types.js";
 
 const TALK_CONSTRUCTOR_TIP = `talk 开启一个持续会话 talk_window。
 - target=别的 objectId（"user" 也是）⇒ peer 跨对象会话。
@@ -52,7 +44,7 @@ function deriveChildPersistence(
 }
 
 /**
- * fork 形态 —— talk(target=自己) 派生子线程，返回父侧 fork 子窗的 TalkData。
+ * fork 形态 —— talk(target=自己) 派生子线程，返回父侧 fork 子窗的 Data。
  *
  * 1) 校验 msg 非空（fork 形态用 msg 作子线程初始消息）
  * 2) 生成 childId，构造 child ThreadContext（creator 关系指向父）
@@ -61,17 +53,17 @@ function deriveChildPersistence(
  * 5) wait=true 时父进 waiting + inboxSnapshotAtWait
  *
  * deferred（agency 深层 thinkloop 语义，登记 WAVE4-WALL-broken-tests.md）：
- * - 子 thread 的 creator self-view 窗（旧 buildChildCreatorWindow）随 self-view 窗 = OocObjectInstance
- *   投影模型重设计，本轮不在 construct 内造（子 thread 起 thinkloop 时由 init 投影）。
+ * - 子 thread 的 creator self-view 窗随 self-view 窗 = OocObjectInstance 投影模型重设计，
+ *   本轮不在 construct 内造（子 thread 起 thinkloop 时由 init 投影）。
  * - share_windows 初始随传（依赖已删的 sharing 字段）不再支持。
  */
-async function execFork(ctx: ConstructorContext, selfObjectId: string): Promise<TalkData> {
+async function execFork(ctx: ConstructorContext, selfObjectId: string): Promise<Data> {
   const parent = ctx.thread;
-  if (!parent) throw new Error("[talk] 缺少 thread context。");
+  if (!parent) throw new Error("[thread] 缺少 thread context。");
 
   const content = typeof ctx.args.msg === "string" ? ctx.args.msg : "";
   if (!content.trim()) {
-    throw new Error("[talk] fork（target=自己）形态缺少 msg 参数（给子线程的初始消息）。");
+    throw new Error("[thread] fork（target=自己）形态缺少 msg 参数（给子线程的初始消息）。");
   }
   const wait = ctx.args.wait === true;
 
@@ -119,10 +111,10 @@ async function execFork(ctx: ConstructorContext, selfObjectId: string): Promise<
 /**
  * construct —— 创建 talk_window。target=自己 objectId ⇒ fork 子线程；否则 peer 会话。
  *
- * 返回新实例的 TalkData（runtime 据此包成 OocObjectInstance 信封）。conversationId 缺省由
- * runtime 分配的实例 id 充当——construct 不知实例 id，故置空，readable/say 用 ctx.object.id。
+ * 返回新实例的 Data（runtime 据此包成 OocObjectInstance 信封）。conversationId 缺省由 runtime
+ * 分配的实例 id 充当——construct 不知实例 id，故置空，readable/say 用 ctx.object.id。
  */
-const talkConstructor: ObjectConstructor<TalkData> = {
+export const talkConstructor: ObjectConstructor<Data> = {
   description:
     "Open a talk_window: target=another object ⇒ peer conversation; target=self ⇒ fork a child thread.",
   schema: {
@@ -133,11 +125,11 @@ const talkConstructor: ObjectConstructor<TalkData> = {
       wait: { type: "boolean", required: false, default: false, description: "（fork）true 时父线程立刻进入 waiting，等子线程回写" },
     },
   } as MethodCallSchema,
-  exec: async (ctx: ConstructorContext, args: Record<string, unknown>): Promise<TalkData> => {
+  exec: async (ctx: ConstructorContext, args: Record<string, unknown>): Promise<Data> => {
     const thread = ctx.thread;
-    if (!thread) throw new Error("[talk] 缺少 thread context。");
+    if (!thread) throw new Error("[thread] 缺少 thread context。");
     const target = typeof args.target === "string" ? args.target.trim() : "";
-    if (!target) throw new Error(`[talk] 缺少 target 参数。\n${TALK_CONSTRUCTOR_TIP}`);
+    if (!target) throw new Error(`[thread] 缺少 target 参数。\n${TALK_CONSTRUCTOR_TIP}`);
 
     const selfObjectId = thread.persistence?.objectId;
     // fork 形态：target=自己 objectId ⇒ 派生同对象子线程（旧 do）。
@@ -147,7 +139,7 @@ const talkConstructor: ObjectConstructor<TalkData> = {
 
     // peer 形态：跨对象会话。
     const title = typeof args.title === "string" ? deriveTalkTitle(args.title) : "";
-    if (!title) throw new Error("[talk] peer 会话缺少 title 参数。");
+    if (!title) throw new Error("[thread] peer 会话缺少 title 参数。");
 
     if (target !== SUPER_ALIAS_TARGET && thread.persistence?.baseDir) {
       const stoneRef = await resolveStoneIdentityRef(
@@ -168,7 +160,7 @@ const talkConstructor: ObjectConstructor<TalkData> = {
       }
       if (!exists) {
         throw new Error(
-          `[talk] target \`${target}\` 不存在(本 session worktree 与 main canonical 均未找到该对象目录)。请检查 target 拼写是否正确;若是新对象,先 create_object 再 open talk_window。`,
+          `[thread] target \`${target}\` 不存在(本 session worktree 与 main canonical 均未找到该对象目录)。请检查 target 拼写是否正确;若是新对象,先 create_object 再 open talk_window。`,
         );
       }
     }
@@ -179,18 +171,3 @@ const talkConstructor: ObjectConstructor<TalkData> = {
     };
   },
 };
-
-export const Class: OocClass<TalkData> = {
-  construct: talkConstructor,
-  executable,
-  readable,
-};
-
-// talk 是所有会话 class 的基类（parentClass:null，不继承 root）；isBuiltinFeature=固有特性，
-// 状态 inline 进所属 thread 的 context.json，不写独立 stone dir。
-// thread / reflect_request 经 class 链继承其会话行为（见 windows/index.ts 注册）。
-builtinRegistry.register("talk", Class, { parentClass: null, isBuiltinFeature: true });
-
-// creatorWindowIdOf 仍由 delivery / init 等会话路径使用——re-export 保持单一来源。
-export { creatorWindowIdOf };
-export type { TalkData, TalkWin } from "./types.js";

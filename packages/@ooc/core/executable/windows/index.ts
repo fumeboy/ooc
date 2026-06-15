@@ -3,9 +3,10 @@
  *
  * 两职：
  * 1. 对外暴露 ContextWindow 类型 / WindowManager / init / projection 等公共入口。
- * 2. **装载全部 builtin class**：root / pr / reflect_request / talk 等核心载体 + 各窗类型
+ * 2. **装载全部 builtin class**：root / pr / thread（唯一会话载体）等核心载体 + 各窗类型
  *    （file / plan / search / … + 飞书 feishu_chat / feishu_doc + 单例 feishu_app）一处
- *    `builtinRegistry.register(...)` 显式装载。
+ *    `builtinRegistry.register(...)` 显式装载。talk / reflect_request 不再是注册 class——它们是
+ *    thread readable 按视角投影出的 window class。
  *
  * Wave 4 对象模型重构已删除旧 deferred-hook 类型 re-export（ObjectDefinition / OnCloseHook /
  * RenderContext / ReadableFn）与旧 root method re-export（ROOT_METHODS / getOpenableMethods /
@@ -61,7 +62,6 @@ export type { ProjectionClass } from "./_shared/projection-class.js";
 import { builtinRegistry as _reg } from "./_shared/registry.js";
 import { Class as RootClass } from "@ooc/builtins/root";
 import { Class as PrClass } from "@ooc/builtins/pr";
-import { Class as ReflectRequestClass } from "@ooc/builtins/reflect_request";
 
 import { Class as KnowledgeClass } from "@ooc/builtins/knowledge";
 import { Class as FileClass } from "@ooc/builtins/file";
@@ -92,11 +92,7 @@ _reg.register("_builtin/root", RootClass, { parentClass: null });
 _reg.register("_builtin/agent", AgentClass);
 // pr：reviewer 评审窗（隐式继承 root）。
 _reg.register("_builtin/pr", PrClass);
-// reflect_request：super flow 反思会话窗（继承 _builtin/thread → talk）。
-_reg.register("_builtin/reflect_request", ReflectRequestClass, { parentClass: "_builtin/thread" });
 
-// talk 是所有 Agent 的固有能力（统一 peer 会话 + fork 子线程两形态）——核心载体，side-effect 注册。
-import "./talk/index.js";
 // method_exec 模块已删除（Wave 4 裁决：form 收集机制废弃，method 参数经 exec 直传 args）。
 // method_exec 仍作 BASE_CLASS_ANCHOR 保留在 object-registry，但无 methods/readable。
 
@@ -114,8 +110,10 @@ _reg.register("_builtin/terminal", TerminalClass);
 _reg.register("_builtin/interpreter", InterpreterClass);
 _reg.register("_builtin/runtime", RuntimeClass);
 _reg.register("_builtin/knowledge_base", KnowledgeBaseClass);
-// thread 继承 talk（package.json ooc.class: "talk"）。
-_reg.register("_builtin/thread", ThreadClass, { parentClass: "talk" });
+// thread：**唯一**会话载体注册 class（talk/reflect_request 是它 readable 投影出的 window class，
+// 非注册 class）。继承 root 缺省；isBuiltinFeature=固有特性，会话窗状态 inline 进所属 thread 的
+// thread-context.json，不写独立 stone dir。
+_reg.register("_builtin/thread", ThreadClass, { isBuiltinFeature: true });
 
 // 飞书集成：feishu_chat / feishu_doc 是窗类型（parentClass:null，由 feishu_app 开出）；
 // feishu_app 是带 own method 的单例 object，注册为继承 agent 的 class（实例 class="feishu_app"

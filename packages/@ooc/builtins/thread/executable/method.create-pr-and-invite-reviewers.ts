@@ -1,7 +1,8 @@
 /**
- * reflect_request.create_pr_and_invite_reviewers method —— reflectable 沉淀的 finalizer（feat-branch PR 路径）。
+ * thread.create_pr_and_invite_reviewers method —— reflectable 沉淀的 finalizer（feat-branch PR 路径）。
  *
- * 挂在 reflect_request class 上（super flow 反思会话面），标 for_reflectable（仅 super flow surface）。
+ * 挂在 thread class 上（会话载体）；标 for_reflectable，仅在 reflect_request 投影窗（super flow
+ * 反思会话面）的 window decl 里 surface。
  * 名副其实：commit feat worktree → 算 reviewer 集 → createPrIssue → 投递 pr_window 给各 reviewer。
  *
  * 地基不变量（用户拍板）：`session-<sid>` worktree 是纯运行时派生物，**永不合入 main**。

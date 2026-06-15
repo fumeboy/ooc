@@ -14,7 +14,7 @@ import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import { normalizeMethodOutcome } from "@ooc/core/_shared/types/method.js";
 import { enrichContextWindows } from "@ooc/core/thinkable/context/window-enrichment";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
-import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread, computeProjectionClass } from "@ooc/core/executable/windows";
+import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/executable/windows";
 import { deliverTalkMessage } from "@ooc/core/executable/windows/talk/delivery";
 import type { TalkData } from "@ooc/core/executable/windows/talk/types";
 import {
@@ -26,6 +26,7 @@ import type { TalkWindowView } from "@ooc/core/executable/windows/talk/types";
 import {
   SUPER_SESSION_ID,
   isSuperSessionId,
+  THREAD_CLASS_ID,
 } from "@ooc/core/_shared/types/constants.js";
 import type {
   ListThreadsItem,
@@ -59,14 +60,16 @@ function buildUserTalkWindow(
   const data: TalkData = { target, conversationId: id };
   const instance: OocObjectInstance = {
     id,
-    class: "talk",
+    // 会话窗 inst.class = `_builtin/thread`（唯一会话载体注册 class）；other-view 投影 class=talk
+    // 由 thread readable 渲染期算，不写 inst.class。
+    class: THREAD_CLASS_ID,
     parentObjectId: ROOT_WINDOW_ID,
     title,
     status: "open",
     createdAt: Date.now(),
     data,
   };
-  const view = { id, class: "talk", target, conversationId: id } as TalkWindowView;
+  const view = { id, class: THREAD_CLASS_ID, target, conversationId: id } as TalkWindowView;
   return { id, instance, view };
 }
 

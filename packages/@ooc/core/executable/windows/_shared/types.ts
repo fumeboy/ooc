@@ -48,7 +48,6 @@ export type { Data as RootData } from "@ooc/builtins/root/types.js";
 export type { Data as TodoData } from "@ooc/builtins/todo/types.js";
 export type { TalkData, TalkWin } from "../talk/types.js";
 export type { Data as PrData } from "@ooc/builtins/pr/types.js";
-export type { Data as ReflectRequestData } from "@ooc/builtins/reflect_request/types.js";
 export type { Data as TerminalProcessData } from "@ooc/builtins/terminal_process/types.js";
 export type { Data as InterpreterProcessData } from "@ooc/builtins/interpreter_process/types.js";
 export type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";

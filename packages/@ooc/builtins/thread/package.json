@@ -10,7 +10,6 @@
   },
   "ooc": {
     "objectId": "_builtin/thread",
-    "kind": "class",
-    "class": "talk"
+    "kind": "class"
   }
 }

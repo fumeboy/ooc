@@ -685,3 +685,43 @@ runTsJs→createInterpreterSelf）；agent.end auto-reply 经 `ctx.runtime.say(c
   `_shared/types.ts` 取 `Data` 断言。
 - `builtins/example/__tests__/example.test.ts` import `ExampleWindow`：example/types.ts 已无此别名（P1 未删
   example——其早已只有 `Data`）；属既有承重墙坏测试。
+
+---
+
+## H2 —— talk/reflect_request 降级为 thread readable 投影 class（只登记，本轮不修）
+
+本轮把 talk + reflect_request 从「注册 class（继承体系 reflect_request→thread→talk）」降级为
+**thread readable 的投影 class**。thread 成为唯一会话载体注册 class；inst.class 所有会话窗统一
+= `_builtin/thread`；talk/reflect_request 仅由 thread readable 内 `computeProjectionClass` 渲染期算出。
+删除：talk 的 `index.ts(Class)`/`executable/`/`readable/`、整个 `builtins/reflect_request/` 包；
+会话 say/close/share + 沉淀 new_feat_branch/create_pr_and_invite_reviewers 全部归 `builtins/thread/executable/`；
+construct 迁 `builtins/thread/executable/construct.ts`（原 talkConstructor）。
+
+### 死 import（引用已删模块/路径，import 即失效）
+- `core/executable/__tests__/create-object.test.ts:19-20`、`core/executable/__tests__/evolve-self.test.ts:27-28`、
+  `tests/e2e/backend/stones-versioning.e2e.test.ts:28-29`、`builtins/pr/__tests__/pr-window.test.ts:278-279`：
+  import `@ooc/builtins/reflect_request/method.{new-feat-branch,create-pr-and-invite-reviewers}` —— reflect_request
+  包已删。`executeNewFeatBranch`/`executeCreatePrAndInviteReviewers` 现在 `@ooc/builtins/thread/executable/
+  method.{new-feat-branch,create-pr-and-invite-reviewers}`（同名导出），改 import 路径即可。
+- `core/persistable/session-aware-read.test.ts:14`：import `talkConstructor` from `@ooc/core/executable/windows/
+  talk/index` —— talk/index.ts 已删。talkConstructor 现在 `@ooc/builtins/thread/executable/construct.ts`。
+- `builtins/thread/__tests__/thread-say.test.ts`：已是既存坏测试（引用旧 `getObjectDefinition`/`method.say.js`/
+  `say.js`/`reflect_request`）；本轮架构进一步使其断言失效（say 同实例 delegation 模型已不存在——三投影
+  共享同一 thread.say 实例本就是同一 method）。统一修测试阶段改断 `resolveObjectMethods("_builtin/thread")` +
+  `resolveWindowClass("_builtin/thread", <投影>)`。
+
+### 行为/断言失效（fixture 把投影值写进 inst.class 或断 inst.class==talk/thread/reflect_request）
+本轮后 inst.class 一律 `_builtin/thread`；投影 class（talk/thread/reflect_request）只在
+`ReadableProjection.class` / 渲染输出 `<window class=...>` 里出现，不在 inst.class。任何构造
+`class:"talk"`/`class:"thread"`/`class:"reflect_request"` 会话窗夹具、或断言 inst.class 等于这些投影值的测试，
+夹具须改为 `class:"_builtin/thread"` + 会话字段进 `inst.data`、断言改读渲染投影 class。涉及（按现有承重墙清单交叠，
+未逐一跑实，统一修测试阶段核验）：
+- `core/executable/windows/__tests__/{talk-delivery,transcript-viewport-integration,sharing,manager-method-dispatch}.test.ts`
+- `core/executable/__tests__/{talk-fork-thread-tree,wait,tools,step2-windows,commands-execution}.test.ts`
+- `core/executable/windows/_shared/__tests__/constructor-pathway.test.ts`
+- `core/persistable/__tests__/thread-context-bypass-reload.test.ts`（剥 class 落盘特例已删——会话窗整窗 inline 落 inst.class=`_builtin/thread`）
+- `core/thinkable/context/__tests__/{attention-tiering,peer-object-derive}.test.ts`、`core/thinkable/__tests__/context.test.ts`、
+  `core/thinkable/context/renderers/__tests__/render-methods-node.test.ts`
+- `core/thinkable/knowledge/__tests__/activator{,.expr}.test.ts`
+- `tests/integration/{wait-state-transition,ooc6-object-unification.harness,super-flow-channel}.integration.test.ts`
+- `tests/e2e/backend/{plan-share-parent-child,backend-multi-turn-followup,context-compression-p0c-typed,stones-versioning}.e2e.test.ts`

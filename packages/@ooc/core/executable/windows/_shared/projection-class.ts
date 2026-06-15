@@ -1,8 +1,9 @@
 /**
- * computeProjectionClass —— talk-family（会话）窗 class 的**唯一计算入口**。
+ * computeProjectionClass —— 会话窗投影 class 的**唯一计算入口**，由 thread readable 内部调用。
  *
- * 设计依据（context.md core 7/9）：thread-context.json 只存 object id + 展示状态、**不存 class**；
- * class 是 POV 相关的投影，每次构造/读回时由本函数从 window 形态 + thread 视角动态算。
+ * 设计依据（context.md 核心 2/8/9）：会话窗 inst.class 一律 = `_builtin/thread`（唯一会话载体注册
+ * class）；talk/reflect_request 是 POV 投影出的 window class，每次渲染时由本函数从窗形态 + thread
+ * 视角动态算，作为 ReadableProjection.class 返回，**不持久化、不写 inst.class**。
  *
  * 两类视图（context.md core 9：self-view ≠ other-view）：
  * - **self-view（creator 窗，isCreatorWindow）= thread 自己与其 creator 的对话**：

@@ -12,11 +12,11 @@ import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { TalkData } from "../windows/talk/types.js";
+import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 interface WaitCandidate {
   id: string;
-  class: "talk" | "thread" | "reflect_request";
   hint: string;
 }
 
@@ -28,44 +28,31 @@ function talkDataOf(w: OocObjectInstance): Partial<TalkData> {
 /** open/可作为未来 IO 来源的 window 列表，附 hint 帮 LLM 自纠时选对。 */
 function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
   const out: WaitCandidate[] = [];
-  // contextWindows 是 OocObjectInstance[]：信封字段（id/class/status）直读，
-  // talk 业务字段（isCreatorWindow/isForkWindow/target/targetThreadId）从 inst.data 读。
+  // contextWindows 是 OocObjectInstance[]：会话窗 inst.class 一律 = `_builtin/thread`（唯一会话载体
+  // 注册 class）；形态（isCreatorWindow/isForkWindow/target/targetThreadId）从 inst.data 读。
   for (const w of thread.contextWindows ?? []) {
-    // 会话窗（talk peer / fork 子窗 / thread self-view / reflect_request）= 唯一可产生未来 IO 的
-    // window；alive=open。thread/reflect_request 是 self-view（等 creator 回复）。
-    switch (w.class) {
-      case "talk":
-      case "thread":
-      case "reflect_request": {
-        if (w.status !== "open") break;
-        const d = talkDataOf(w);
-        const cls = w.class as WaitCandidate["class"];
-        if (d.isForkWindow) {
-          // fork 子线程窗：等子线程（或父线程，creator fork 窗）回报。
-          out.push({
-            id: w.id,
-            class: cls,
-            hint: `fork (target_thread=${d.targetThreadId}) — 等${d.isCreatorWindow ? "父" : "子"}线程回报`,
-          });
-        } else if (d.isCreatorWindow) {
-          out.push({
-            id: w.id,
-            class: cls,
-            hint: `creator ${w.class} (target=${d.target}) — 等创建者发新消息`,
-          });
-        } else if (hasOutgoingSayOnTalk(thread, w.id)) {
-          out.push({
-            id: w.id,
-            class: cls,
-            hint: `自建 ${w.class} (target=${d.target}, 已 say 过) — 等对端回信`,
-          });
-        }
-        // 自建但未 say 过的 peer 会话窗不算合法候选——会在错误消息里单独点名
-        break;
-      }
-      default:
-        break;
+    // 会话窗（thread 实例：creator / peer / fork）= 唯一可产生未来 IO 的 window；alive=open。
+    if (w.class !== THREAD_CLASS_ID) continue;
+    if (w.status !== "open") continue;
+    const d = talkDataOf(w);
+    if (d.isForkWindow) {
+      // fork 子线程窗：等子线程（或父线程，creator fork 窗）回报。
+      out.push({
+        id: w.id,
+        hint: `fork (target_thread=${d.targetThreadId}) — 等${d.isCreatorWindow ? "父" : "子"}线程回报`,
+      });
+    } else if (d.isCreatorWindow) {
+      out.push({
+        id: w.id,
+        hint: `creator talk_window (target=${d.target}) — 等创建者发新消息`,
+      });
+    } else if (hasOutgoingSayOnTalk(thread, w.id)) {
+      out.push({
+        id: w.id,
+        hint: `自建 talk_window (target=${d.target}, 已 say 过) — 等对端回信`,
+      });
     }
+    // 自建但未 say 过的 peer 会话窗不算合法候选——会在错误消息里单独点名
   }
   return out;
 }
@@ -90,7 +77,7 @@ function renderCandidates(candidates: WaitCandidate[]): string {
   if (candidates.length === 0) {
     return "  （无可等待来源 —— 任务大概率已完成，请改用 end method 收尾）";
   }
-  return candidates.map((c) => `  - ${c.id} (${c.class}) — ${c.hint}`).join("\n");
+  return candidates.map((c) => `  - ${c.id} (talk_window) — ${c.hint}`).join("\n");
 }
 
 export const WAIT_TOOL: LlmTool = {
@@ -158,8 +145,9 @@ export async function handleWaitTool(
     );
   }
 
-  // R3: on 类型不合法（非会话窗 talk / thread / reflect_request）—— 同时盖掉 root/method_exec/file 等
-  if (target.class !== "talk" && target.class !== "thread" && target.class !== "reflect_request") {
+  // R3: on 类型不合法（非会话窗）—— 会话窗 inst.class 一律 = `_builtin/thread`；同时盖掉
+  // root/method_exec/file/process 等非会话窗。
+  if (target.class !== THREAD_CLASS_ID) {
     // 进程 window 给针对性提示:它是同步执行,结果已落在 history 里,不需要 wait
     const typeSpecificHint =
       target.class === "terminal_process" || target.class === "interpreter_process"
@@ -177,9 +165,9 @@ export async function handleWaitTool(
 
   const targetData = talkDataOf(target);
 
-  // 类型已收窄到 talk | thread | reflect_request；会话窗一律 alive=open。
+  // 已收窄到会话窗（inst.class=`_builtin/thread`）；会话窗一律 alive=open。
   if (target.status !== "open") {
-    const desc = targetData.isForkWindow ? "fork 子线程窗（子线程已结束）" : `${target.class}_window`;
+    const desc = targetData.isForkWindow ? "fork 子线程窗（子线程已结束）" : "talk_window";
     return errorOutput(
       `[wait] ${desc} "${onRaw}" 状态是 ${target.status}（非 open），不能再等它产生 IO。\n` +
         "当前合法候选：\n" +
@@ -206,7 +194,7 @@ export async function handleWaitTool(
 
   const targetDesc = targetData.isForkWindow
     ? `fork (target_thread=${targetData.targetThreadId})`
-    : `creator/自建 ${target.class} (target=${targetData.target})`;
+    : `creator/自建 talk_window (target=${targetData.target})`;
   const reasonSuffix = reason ? ` 原因：${reason}` : "";
   return successOutput(
     `[wait] 线程进入 waiting，等待 ${onRaw} (${targetDesc}) 上的未来 IO 事件。${reasonSuffix}`,
