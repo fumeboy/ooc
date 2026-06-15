@@ -10,6 +10,6 @@
   },
   "ooc": {
     "objectId": "_builtin/interpreter",
-    "kind": "class"
+    "kind": "object"
   }
 }

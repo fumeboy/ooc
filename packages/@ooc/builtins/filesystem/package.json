@@ -10,6 +10,6 @@
   },
   "ooc": {
     "objectId": "_builtin/filesystem",
-    "kind": "class"
+    "kind": "object"
   }
 }

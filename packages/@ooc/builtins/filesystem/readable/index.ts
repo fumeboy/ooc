@@ -9,23 +9,16 @@ import type {
   ReadableContext,
   ReadableModule,
 } from "@ooc/core/readable/contract.js";
-import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
 import type { Data } from "../types.js";
 
 /** filesystem 无展示投影态。 */
 export interface FilesystemWin {}
 
 const readable: ReadableModule<Data, FilesystemWin> = {
+  // content 极简：object method 的 description 已足够丰富，readable 不赘述。
   readable: (_ctx: ReadableContext, _self: Data, _win: FilesystemWin) => ({
     class: "filesystem",
-    content: [
-      xmlElement("about", {}, [
-        xmlText(
-          "文件系统对象（agent 持有的成员）。grep / glob 查询、open_file / write_file 读写——" +
-            "调它的方法会造出 search / file 对象。",
-        ),
-      ]),
-    ],
+    content: "文件系统",
   }),
   window: [
     {

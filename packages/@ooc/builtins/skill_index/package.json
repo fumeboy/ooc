@@ -13,6 +13,6 @@
   },
   "ooc": {
     "objectId": "_builtin/skill_index",
-    "kind": "class"
+    "kind": "object"
   }
 }

@@ -11,22 +11,16 @@ import type {
   ReadableContext,
   ReadableModule,
 } from "@ooc/core/readable/contract.js";
-import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
 import type { Data } from "../types.js";
 
 /** interpreter 无投影态。 */
 export interface InterpreterWin {}
 
 const readable: ReadableModule<Data, InterpreterWin> = {
+  // content 极简：object method 的 description 已足够丰富，readable 不赘述。
   readable: (_ctx: ReadableContext, _self: Data, _win: InterpreterWin) => ({
     class: "interpreter",
-    content: [
-      xmlElement("about", {}, [
-        xmlText(
-          "解释器对象（agent 持有的成员）。run 跑一段 ts/js 脚本——调它会造出 interpreter_process（sandbox + history）。",
-        ),
-      ]),
-    ],
+    content: "解释器",
   }),
   window: [
     {
