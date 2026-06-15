@@ -73,3 +73,43 @@
 **与 S2 接口**：thread-as-object 后所有 thread 统一 class=`_builtin/thread`（thread 是跨对象的协作载体、say/wait/end 通用）；talk window 的 targetThreadId 指向的 thread，其 class 由 persistence.objectId/类型推出、不存储 class 字符串 → 这是 S2 class-dynamic 对 thread/talk 窗的落点。
 
 **执行建议**：S3.1 起逐子步派聚焦 sub-agent，每步 verify+storybook 绿、双库提交；S3.7 前做持久化设计评审。**勿一把梭**（240+ 测试 + 持久化契约，Big Bang 会卡）。
+
+---
+
+## S3.4 / S3.6 / S2「心脏」定稿（2026-06-15，3 轮对抗 workflow 评审 + 用户拍板 self-model）
+
+> 来源：本会话对 S3.4/S3.6/S2 三耦合子步做了 3 轮对抗式评审（recon 核验代码 ground-truth → design-review v1 被破 → corrected verdict-v2 验证），逐条按真实代码裁决；唯一基础分叉「运行中 agent 的自我操作面」由**用户拍板 = Split**。下文为定稿，覆盖 S3 末节里 S3.4「待评审」与歧义 3 的悬置部分。
+
+### 核心裁决：self-model = **Split**（用户 2026-06-15 拍板）
+
+运行中 agent 的 context 含**两个**自我相关窗，各司其职、都合法：
+
+- **agent self 窗**（`id=objectId`，class=agent 自身 class）：承载 **agent 对象方法**——agency `talk`/`plan`/`todo` + 该 agent 自定义 object method。**仍是 `exec` 缺省窗**（window-less exec 落它）。身份正文走 instructions（self.md），此窗是**方法面**而非身份壳（与 context.md 3.2「不另起空 self 窗」不冲突：3.2 禁的是空身份壳，方法面保留）。
+- **thread 窗**（自视角，class=`thread`）：承载 **thread 行为** `say`(对 creator)/`end`(本 thread)；内容通道 = 本 thread 的 events + 与 creator 的对话（XML 只渲方法句柄、内容进 message 流并纳预算，context.md 核心 10）。
+- peer/sub → **talk 窗**（他者视角，远端 thread 投影）。
+
+> 放弃的 Unified 方案（一个 thread 窗即自我、承载 thread 行为 + agent 方法）：需让 thread 窗 per-POV `parentClass=owning-agent`，而 registry `resolveParentClassChain` 只认静态 class 字符串——要么改 registry 解析签名、要么在自视角做特例方法聚合，均属新机制，触「勿过度机制化」。Split 改动更小（self 窗与 exec 缺省逻辑不动）、OOP HAS-A 更干净（agent 持有 thread，非 IS-A）。
+
+### 落地裁决（逐条按代码核实，覆盖原 S3.4 / 歧义 3）
+
+1. **`end` → thread class**（实质化 thread.md 核心 3「end 是 thread 行为」）：从 `builtins/root/executable/index.ts` 的 `AGENCY_METHODS` 移除 end（agency 只留 talk/plan/todo），注册到 `_builtin/thread`（与 say 并列、可如 say 那样共享给会话窗）。LLM 显式 `exec(thread窗, "end", {result?})`——**end 不再 window-less**（可接受的调用约定变更，/goal 授权不保全存量）。
+2. **end 自动回 creator 改路由**：现 `method.end.ts` 用 class-keyed `findCreatorWindow`（找 `class∈{talk,reflect_request}&&isCreatorWindow` 窗）——collapse 后该窗 class 变会失效。改为：end（运行在 thread 上下文）由 **`thread.persistence`（creatorThreadId/creatorObjectId/creatorSessionId）+ 导出 `isCreatorSelf`** 算 fork/peer 路由，经 say 投递（已核实 thread.persistence 带齐这些字段、`sayToForkWindow`/`sayToPeerWindow`/`deliverTalkMessage` 跨 session 路由原语齐备）。supervisor 的 creator=passive `user` 仍是合法 creator（跨 session 投递到 user session）。
+3. **thread 窗 = 今 self-side creator 窗的 reframe**（歧义 3 定稿）：自视角 class `talk`/`reflect_request` → `thread`；events 折入其内容通道；渲染改为 XML 只渲方法 + 内容进 message 流（核心 10）；close 仍拒（自视角不可关，沿用今 creator 窗 `creator_talk_window_close_rejected`）。远端 thread（peer/sub）仍投影为 talk 窗。
+4. **`reflect_request` = super-session 自视角 thread 变体**（`parentClass=thread`）：super session 下自视角窗 class=`reflect_request`（而非 `thread`），从而既得 say/end 又保住 reflectable 方法（new_feat_branch/create_pr_and_invite_reviewers）。
+5. **S2 class-per-POV**（context.md 核心 2/7 落地，**只切 thread/talk 投影**）：thread/talk 投影 class 构建时算、**停持久化**——自视角=`thread`(super→`reflect_request`)、他者=`talk`；**reload 确定性**由 owning thread 持久化的 `sessionId` + 结构角色推出（本地总可知，无需读远端）；**非** thread/talk 窗 class=真实 ooc.class（registry/.flow.json）不变；`.flow.json` `FlowObjectMetadata.class` 绝不动（同名陷阱：投影 class ≠ ooc.class 继承链）。读旧 flow 时忽略已存 class、一律重算（tolerant read）。
+6. **`wait` 接 thread 窗**：`wait.ts` 的 `listValidWaitTargets`/`WaitCandidate` 加 `class='thread'`（否则「wait 等 creator 回复」落不到 thread 窗）。**wait 三面冗余**（`WAIT_TOOL` 原语 / talk·reflect_request 上的 `waitMethod` / `say(wait=true)`）= 独立退潮项，本弧只标记不并（S3.3 成立：wait 是原语非 method）。
+7. **`exec.ts` 缺省窗逻辑不改**（Split 红利）：agent self 窗仍在、仍是 window-less exec 落点。
+
+### 绿增量序（替代原 S3.4→S3.6 列序；勿一把梭）
+
+| 增量 | 内容 | 绿判据 |
+|---|---|---|
+| **H1** | thread/talk 投影 class **构建时算 + 停持久化**，值与今**完全一致**（behavior-identical）；窄域只碰 thread/talk/creator/fork 窗，其余窗 class 不动 | verify + storybook 绿、无行为变（de-risk 持久化机制，与语义翻转解耦） |
+| **H2a** | **end→thread**（S3.4）：agency 去 end、thread 注册 end、共享给会话窗、auto-reply 改 thread.persistence 路由、导出 isCreatorSelf | fork/peer/跨 session end 回复通；改/删旧 agency-end 测试 |
+| **H2b** | **thread 窗自视角**（S3.6 + 引入 `thread` class + 核心 10 渲染）：creator 窗→thread 窗、events 折入、reflect_request extends thread | self-view 渲染 + 投影测试；改旧 creator/self 窗形态断言 |
+| **H2c** | **wait 接 thread 窗**（surgical） | wait-for-creator-reply 落 thread 窗通 |
+| **S3.5** | thread readable + compressView（自视角渲染 + events 折叠） | |
+| **S3.7** | 持久化一致性收尾（接 S5） | |
+| **S5** | persistable 自定义（thread 持久化去特例化为 class override，next_todo #1） | |
+
+> 文档：context.md 核心 9/10 + 2/7 **已预先编码本设计**，实现多为补 code-vs-doc gap；**新增 doc** = context.md 3.2 段加 Split self-model 澄清（agent self 窗=方法面、与 thread 窗并存）+ object-model/agent/builtins 把 agency 措辞改 `talk/plan/todo`、thread 列 `say`+`end`。
