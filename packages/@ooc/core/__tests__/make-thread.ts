@@ -6,7 +6,7 @@
  */
 import type { ThreadContext } from "../thinkable/context";
 import type { ThreadPersistenceRef } from "../persistable/common";
-import { initContextWindows } from "../executable/windows";
+import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 
 export interface MakeThreadOpts {
   id?: string;

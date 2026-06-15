@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 // 全量 boot builtin registry（避免模块求值期 assert 顺序坑，见线 B 报告偏离点 #1）
-import "@ooc/core/executable/windows/index.js";
+import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { computeVisibleMethodSet } from "../xml.js";
 

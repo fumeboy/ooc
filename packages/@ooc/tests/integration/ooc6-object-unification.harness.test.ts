@@ -29,7 +29,7 @@ import {
   readRuntimeObjectState,
   runtimeObjectStateFile,
 } from "@ooc/core/persistable";
-import { builtinRegistry } from "@ooc/core/executable/windows";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { createStoneObject, writeReadable } from "@ooc/core/persistable";
 import { renderContextXml } from "@ooc/core/__tests__/render-context-xml";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
@@ -38,13 +38,13 @@ import {
   evaluateTrigger,
 } from "@ooc/core/thinkable/knowledge/activator.expr";
 import { derivePeerObjectWindows } from "@ooc/core/thinkable/context/object-windows";
-import { WindowManager } from "@ooc/core/executable/windows/_shared/manager";
+import { WindowManager } from "@ooc/core/executable/manager.js";
 import type {
   ContextWindow,
   TalkWindow,
   TodoWindow,
   KnowledgeWindow,
-} from "@ooc/core/executable/windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 
 describe("ooc-6 Object Unification harness cycle", () => {
   let baseDir: string;

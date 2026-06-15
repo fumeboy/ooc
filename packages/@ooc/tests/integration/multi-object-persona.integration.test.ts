@@ -34,7 +34,7 @@ import {
   llm,
   setupTempFlow,
 } from "./_fixture";
-import { initContextWindows } from "@ooc/core/executable/windows";
+import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 const ALICE_SELF = `

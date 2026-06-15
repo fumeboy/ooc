@@ -6,7 +6,7 @@ import {
   initContextWindows,
   injectPeerWindowsIfObjectThread,
   injectMemberWindowsIfObjectThread,
-} from "../executable/windows/_shared/init";
+} from "@ooc/core/thinkable/context/init.js";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import { builtinRegistry } from "../runtime/object-registry.js";
 import {
@@ -76,7 +76,7 @@ export async function writeThread(thread: ThreadContext): Promise<void> {
 async function persistContextWindows(thread: ThreadContext): Promise<void> {
   // 动态 import 防 persistable ↔ executable 循环。
   const { WindowPersistence } = await import(
-    "../executable/windows/_shared/window-persistence.js"
+    "@ooc/core/persistable/window-persistence.js"
   );
   const instances = new Map<string, OocObjectInstance>();
   for (const inst of thread.contextWindows ?? []) instances.set(inst.id, inst);

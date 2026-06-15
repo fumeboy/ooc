@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureSelfObjectTypeRegistered } from "../object-windows.js";
 import { makeThread } from "../../../__tests__/make-thread";
-import { createObjectRegistry } from "../../../executable/windows/_shared/registry.js";
+import { createObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { clearServerLoaderCache } from "../../../runtime/server-loader.js";
 import {
   createStoneObject,

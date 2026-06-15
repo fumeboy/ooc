@@ -34,14 +34,14 @@
  * 不在本模块负责：调度（由 worker 自然轮询）、UI 通知（控制面自己决定何时 refresh）。
  */
 
-import { readThread, writeThread, createFlowObject, createFlowSession, sessionMetadataFile, resolveSuperActor } from "../../../persistable/index.js";
+import { readThread, writeThread, createFlowObject, createFlowSession, sessionMetadataFile, resolveSuperActor } from "@ooc/core/persistable/index.js";
 import { stat } from "node:fs/promises";
-import { notifyThreadActivated } from "../../../observable/index.js";
-import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
-import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "../_shared/init.js";
+import { notifyThreadActivated } from "@ooc/core/observable/index.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
+import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
-import { creatorWindowIdOf } from "../_shared/types.js";
-import type { TalkData, TalkWindowView } from "./types.js";
+import { creatorWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
+import type { TalkData, TalkWindowView } from "../types.js";
 
 export interface TalkDeliveryInput {
   caller: { thread: ThreadContext; talkWindow: TalkWindowView };

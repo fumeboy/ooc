@@ -19,17 +19,17 @@ import type {
   WindowMethod,
 } from "@ooc/core/readable/contract.js";
 import type { XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { computeProjectionClass } from "@ooc/core/executable/windows/_shared/projection-class.js";
+import { computeProjectionClass } from "@ooc/core/readable/projection-class.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
   hasAnyTranscriptViewportField,
-} from "@ooc/core/executable/windows/_shared/transcript-viewport.js";
-import { renderTranscriptOrHandle } from "@ooc/core/executable/windows/_shared/conversation-render.js";
+} from "@ooc/core/readable/transcript-viewport.js";
+import { renderTranscriptOrHandle } from "@ooc/core/readable/conversation-render.js";
 import {
   filterTalkMessages,
   renderHead,
-} from "@ooc/core/executable/windows/talk/render.js";
+} from "@ooc/builtins/thread/readable/talk-render.js";
 import type { Data, ThreadWin } from "../types.js";
 
 const setTranscriptWindowMethod: WindowMethod<Data, ThreadWin> = {

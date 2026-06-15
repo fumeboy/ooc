@@ -34,13 +34,13 @@ import {
   writeSelf,
   writeThread,
 } from "@ooc/core/persistable";
-import { deliverTalkMessage } from "@ooc/core/executable/windows/talk/delivery";
+import { deliverTalkMessage } from "@ooc/builtins/thread/executable/talk-delivery.js";
+import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 import {
-  initContextWindows,
   ROOT_WINDOW_ID,
   generateWindowId,
   type TalkWindow,
-} from "@ooc/core/executable/windows";
+} from "@ooc/core/_shared/types/context-window.js";
 import {
   hasLlmEnv,
   llm,

@@ -1,7 +1,7 @@
 import type { ThreadContext } from "../thinkable/context";
 import type { LlmTool, LlmToolCall } from "../thinkable/llm/types";
-import type { ObjectRegistry } from "./windows/_shared/registry";
-import { builtinRegistry } from "./windows/index.js";
+import type { ObjectRegistry } from "../runtime/object-registry.js";
+import { builtinRegistry } from "../runtime/object-registry.js";
 import { handleCloseTool } from "./tools/close";
 import { buildAvailableTools } from "./tools/index";
 import { handleExecTool } from "./tools/exec";

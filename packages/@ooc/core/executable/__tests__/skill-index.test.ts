@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { synthesizeSkillIndex } from "../../../thinkable/context/skill-index";
 import { branchSkillsDir, clearStoneSkillsCache, objectSkillsDir } from "../../../persistable/stone-skills";
 import { makeThread } from "../../../__tests__/make-thread";
-import type { ContextWindow, SkillIndexWindow } from "../_shared/types";
+import type { ContextWindow, SkillIndexWindow } from "@ooc/core/_shared/types/context-window.js";
 
 let tempRoot: string | undefined;
 

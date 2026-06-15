@@ -29,5 +29,23 @@ export interface Data {
 
 /** thread 的**投影态**（与 Data 分离）：transcript 渲染窗口。window method `set_transcript_window` 读写。 */
 export interface ThreadWin {
-  transcriptViewport?: import("@ooc/core/executable/windows/_shared/transcript-viewport.js").TranscriptViewport;
+  transcriptViewport?: import("@ooc/core/_shared/types/viewport.js").TranscriptViewport;
+}
+
+/**
+ * talk-family 别名（talk 实现物归 thread 包后的会话业务类型）。
+ *
+ * 会话窗 inst.class 一律 = `_builtin/thread`；`talk` / `reflect_request` 是 thread readable 投影
+ * 出的 window class。会话实现（delivery / fork / render）按这些别名消费 thread 的会话业务 Data。
+ */
+export type TalkData = Data;
+export type TalkWin = ThreadWin;
+
+/**
+ * delivery 域内部的**扁平派送视图 DTO**（实例 id/class 信封 + TalkData 扁平）。
+ * 非持久化结构——say / fork 派送时把 `OocObjectInstance<TalkData>` 还原成 delivery 期望的扁平面。
+ */
+export interface TalkWindowView extends TalkData {
+  id: string;
+  class: string;
 }

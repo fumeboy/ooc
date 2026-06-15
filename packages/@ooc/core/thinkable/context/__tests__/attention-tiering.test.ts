@@ -4,10 +4,10 @@
  * - 与 **sub/peer** 窗的对话（次要 attention）：全文在该窗 XML transcript；message 流只出"新消息提示"（非全文）。
  */
 import { describe, expect, it } from "bun:test";
-import "@ooc/core/executable/windows"; // 注册窗类型
+import "@ooc/core/runtime/register-builtins.js"; // 注册窗类型
 import { buildInputItems } from "../index";
 import { makeThread } from "../../../__tests__/make-thread";
-import type { ContextWindow } from "../../../executable/windows/_shared/types";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 const CREATOR_WIN = {
   id: "w_creator", class: "talk", target: "user", isCreatorWindow: true,

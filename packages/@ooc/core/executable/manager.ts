@@ -24,20 +24,20 @@
  *   thread.contextWindows = mgr.toData();
  */
 
-import type { ThreadContext } from "../../../_shared/types/thread.js";
-import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
+import type { ThreadContext } from "../_shared/types/thread.js";
+import type { OocObjectInstance } from "../runtime/ooc-class.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type WindowStatus,
-} from "../../../_shared/types/context-window.js";
-import type { ObjectRegistry } from "../../../runtime/object-registry.js";
+} from "../_shared/types/context-window.js";
+import type { ObjectRegistry } from "../runtime/object-registry.js";
 import type {
   ExecutableContext,
   ConstructorContext,
   RuntimeHandle,
-} from "../../contract.js";
-import type { ReadableContext } from "../../../readable/contract.js";
+} from "./contract.js";
+import type { ReadableContext } from "../readable/contract.js";
 
 /** 可选的持久化回调（persist leaf 在构造时挂接；缺省 no-op，使墙内自洽）。 */
 export interface WindowManagerHooks {
@@ -73,7 +73,7 @@ export class WindowManager implements RuntimeHandle {
    */
   async attachPersistence(thread: ThreadContext): Promise<void> {
     if (this.hooks.reportContextEdit || this.hooks.reportDataEdit) return;
-    const { WindowPersistence } = await import("./window-persistence.js");
+    const { WindowPersistence } = await import("../persistable/window-persistence.js");
     const wp = new WindowPersistence(this.registry, this.instances);
     this.hooks = wp.hooksFor(thread);
   }

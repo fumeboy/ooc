@@ -37,7 +37,7 @@ import {
   type ObjectRegistry,
 } from "../../../runtime/object-registry.js";
 import type { ReadableContext, ReadableProjection } from "../../../readable/contract.js";
-import { extractBasicDescription, conciseDescription } from "../../../executable/windows/_shared/method-description.js";
+import { extractBasicDescription, conciseDescription } from "@ooc/core/executable/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 import { readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "../../../persistable/index.js";

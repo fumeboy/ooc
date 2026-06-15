@@ -24,8 +24,8 @@ import { join } from "node:path";
 import { getPermissionDecider } from "../observable";
 import { deriveStoneFromThread, stoneDir } from "../persistable/common";
 import type { ThreadContext } from "../thinkable/context";
-import type { ObjectRegistry } from "./windows/_shared/registry";
-import { builtinRegistry } from "./windows/index.js";
+import type { ObjectRegistry } from "../runtime/object-registry.js";
+import { builtinRegistry } from "../runtime/object-registry.js";
 
 /** 单档准入级别。 */
 export type PermissionLevel = "allow" | "ask" | "deny";

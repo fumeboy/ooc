@@ -1,4 +1,4 @@
-import type { BaseContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { BaseContextWindow } from "./context-window.js";
 
 /**
  * MethodExec form — 调用某 method 时的临时 sub-window。

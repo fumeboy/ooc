@@ -20,11 +20,11 @@ import {
   ROOT_WINDOW_ID,
   SESSION_CREATOR_THREAD_ID,
   creatorWindowIdOf,
-} from "./types.js";
-import { DEFAULT_TRANSCRIPT_VIEWPORT } from "./transcript-viewport.js";
-import { THREAD_CLASS_ID } from "../../../_shared/types/constants.js";
-import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
-import type { ThreadContext } from "../../../thinkable/context.js";
+} from "../../_shared/types/context-window.js";
+import { DEFAULT_TRANSCRIPT_VIEWPORT } from "../../readable/transcript-viewport.js";
+import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { ThreadContext } from "../context.js";
 import {
   deriveStoneFromThread,
   discoverStoneHierarchicalPeers,
@@ -32,7 +32,7 @@ import {
   resolveBuiltinReadDir,
   stoneDir,
   type StoneObjectRef,
-} from "../../../persistable/index.js";
+} from "../../persistable/index.js";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 

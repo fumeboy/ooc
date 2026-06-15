@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { execRootMethod } from "../windows";
-import { WindowManager, builtinRegistry } from "../windows";
-import { creatorWindowIdOf, type BaseContextWindow, type ContextWindow, type TalkWindow } from "../windows/_shared/types";
+import { execRootMethod } from "@ooc/core/executable/manager.js";
+import { WindowManager, builtinRegistry } from "@ooc/core/executable/manager.js";
+import { creatorWindowIdOf, type BaseContextWindow, type ContextWindow, type TalkWindow } from "@ooc/core/_shared/types/context-window.js";
 import { makeThread } from "../../__tests__/make-thread";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 

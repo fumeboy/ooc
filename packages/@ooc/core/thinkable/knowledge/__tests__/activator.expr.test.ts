@@ -9,7 +9,7 @@ import type { ThreadContext } from "../../context";
 import {
   MethodExecWindow,
   ContextWindow,
-} from "../../../executable/windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 
 function thread(overrides: Partial<ThreadContext> = {}): ThreadContext {
   return {
@@ -358,7 +358,7 @@ describe("evaluateTrigger", () => {
 
   // ── method:: 沿 parentClass 类链匹配（agency 在 agent self 窗的激活）──
   test("method:: 沿类链匹配：form 跑在 agent 子类自窗上，祖先 _builtin/agent / root 的 trigger 命中", async () => {
-    const { builtinRegistry } = await import("@ooc/core/extendable/_shared/registry.js");
+    const { builtinRegistry } = await import("@ooc/core/runtime/object-registry.js");
     const childType = `__test_agent_child_${Date.now()}`;
     // 链：childType → _builtin/agent → root（_builtin/agent 默认 parentClass=root）
     builtinRegistry.registerNewObjectType(childType as never, { methods: {}, parentClass: "_builtin/agent", readable: () => [] });

@@ -10,7 +10,7 @@
 import { describe, expect, it } from "bun:test";
 import { buildProtocolKnowledgeWindows } from "../protocol";
 import { makeThread } from "../../../__tests__/make-thread";
-import type { MethodExecWindow, ContextWindow } from "../../../executable/windows/_shared/types";
+import type { MethodExecWindow, ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 function paths(windows: { class: string; path?: string }[]): string[] {
   return windows.filter((w) => w.class === "knowledge").map((w) => w.path ?? "");

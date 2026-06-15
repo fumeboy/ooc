@@ -1,8 +1,7 @@
 /**
- * Session-aware path 的**纯字符串操作部分** —— canonical 源（从
- * `executable/windows/_shared/session-path.ts` 迁入）。
+ * Session-aware path 的**纯字符串操作部分** —— canonical 源。
  *
- * **留在 executable**（依赖 `existsSync` / `process.cwd()`，违反零 IO 原则）：
+ * **留在 persistable/session-path.ts**（依赖 `existsSync` / `process.cwd()`，违反零 IO 原则）：
  * - `resolveSessionPath`（读 process.cwd() fallback + ThreadContext）
  * - `classifyPackagesPath`（用 existsSync 探 package.json）
  * - `__testing` 导出

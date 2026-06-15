@@ -67,7 +67,7 @@ export const L4_STORIES: Story[] = [
     expectation: "talk window 是 isBuiltinFeature（inline 进 thread-context，不写独立 dir）",
     design: "collaborable：talk（peer + fork 两形态）是 Object 内置特性，状态 inline。windows/talk registerExecutable isBuiltinFeature",
     run: async () => {
-      await import("@ooc/core/executable/windows/index.js");
+      await import("@ooc/core/runtime/register-builtins.js");
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
       check(builtinRegistry.getObjectDefinition("talk").isBuiltinFeature === true, "talk 非 isBuiltinFeature");
     },

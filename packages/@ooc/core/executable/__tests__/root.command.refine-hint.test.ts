@@ -15,7 +15,7 @@ import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import "@ooc/builtins/filesystem";
 import "@ooc/builtins/terminal";
 import "@ooc/builtins/interpreter";
-import type { ObjectMethod } from "@ooc/core/executable/windows/_shared/method-types";
+import type { ObjectMethod } from "@ooc/core/_shared/types/method.js";
 import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
 
 /**

@@ -1,6 +1,5 @@
 /**
- * viewport 协议纯类型 + 纯函数 —— canonical 源（从
- * `executable/windows/_shared/viewport.ts` + `transcript-viewport.ts` 迁入）。
+ * viewport 协议纯类型 + 纯函数 —— canonical 源。
  *
  * 两套互补的"窗口节流"机制：
  * - file / knowledge window：行+列二维裁剪（`Viewport` / `applyViewport` / …）
@@ -8,7 +7,7 @@
  *
  * 不含 runtime 执行入口：`executeWindowSetViewport` /
  * `executeWindowSetTranscriptViewport` 依赖 `MethodExecutionContext` 且对
- * `ctx.self` 写副作用，留在 `executable/windows/_shared/{viewport,transcript-viewport}.ts`。
+ * `ctx.self` 写副作用，留在 `readable/{viewport,transcript-viewport}.ts`。
  */
 
 // ─────────────────────────── file / knowledge viewport ───────────────────────

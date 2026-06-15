@@ -20,7 +20,7 @@
 
 // Side-effect imports — register all builtin/core types into the object registry.
 import "@ooc/builtins/root/executable/index.js";
-import "@ooc/core/executable/windows/index.js";
+import "@ooc/core/runtime/register-builtins.js";
 import "@ooc/builtins/plan";
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";

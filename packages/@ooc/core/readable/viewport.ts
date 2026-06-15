@@ -7,14 +7,14 @@
  * `executeWindowSetViewport`（依赖 MethodExecutionContext + 写 ctx.self 副作用）。
  */
 
-import type { WindowMethodExecutionContext, WindowMethodOutcome } from "../../../_shared/types/window-method.js";
+import type { WindowMethodExecutionContext, WindowMethodOutcome } from "../_shared/types/window-method.js";
 import {
   DEFAULT_VIEWPORT,
   hasAnyViewportField,
   mergeViewport,
-} from "../../../_shared/types/viewport.js";
+} from "../_shared/types/viewport.js";
 
-export * from "../../../_shared/types/viewport.js";
+export * from "../_shared/types/viewport.js";
 
 /**
  * file / knowledge window 共享的 set_viewport 执行体（window method）。

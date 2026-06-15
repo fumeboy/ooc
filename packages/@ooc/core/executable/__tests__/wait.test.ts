@@ -13,7 +13,7 @@ import {
   ROOT_WINDOW_ID,
   type FileWindow,
   type TalkWindow,
-} from "../windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 
 function findCreatorTalkWindow(thread: ThreadContext): TalkWindow {
   const found = thread.contextWindows.find(

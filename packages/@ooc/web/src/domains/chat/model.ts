@@ -20,7 +20,7 @@ export type ThreadMessage = {
   replyToWindowId?: string;
 };
 
-/** 与后端 src/executable/windows/_shared/types.ts 对齐的最小子集，仅取前端渲染所需字段。 */
+/** 与后端 _shared/types/context-window.ts 对齐的最小子集，仅取前端渲染所需字段。 */
 export type ContextWindow =
   | {
       id: string;

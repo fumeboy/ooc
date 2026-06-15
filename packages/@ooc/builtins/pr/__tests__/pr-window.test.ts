@@ -33,7 +33,7 @@ import { applyPrApproval } from "../approval-flow";
 import type { PrWindow } from "../types";
 // 触发 pr window 注册（readable + methods）。
 import "../index";
-import { builtinRegistry } from "@ooc/core/executable/windows/index";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 
 let tempRoots: string[] = [];
 

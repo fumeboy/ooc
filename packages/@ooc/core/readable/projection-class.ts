@@ -16,9 +16,9 @@
  * 纯函数：不改 window / thread，仅返回投影 class。
  */
 
-import type { BaseContextWindow } from "../../../_shared/types/context-window.js";
+import type { BaseContextWindow } from "../_shared/types/context-window.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
-import type { ThreadContext } from "../../../thinkable/context.js";
+import type { ThreadContext } from "../thinkable/context.js";
 
 /** talk-family 投影 class 的取值域。 */
 export type ProjectionClass = "talk" | "reflect_request" | "thread";

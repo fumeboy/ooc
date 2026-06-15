@@ -9,7 +9,7 @@ import {
   ROOT_WINDOW_ID,
   type MethodExecWindow,
   type ContextWindow,
-} from "../../executable/windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 import { makeThread } from "../../__tests__/make-thread";
 
 /** 构造一个 method_exec window，便于 context render 测试 */

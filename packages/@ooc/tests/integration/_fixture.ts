@@ -5,7 +5,7 @@ import { createFlowObject } from "@ooc/core/persistable";
 import { createLlmClient } from "@ooc/core/thinkable/llm/client";
 import type { LlmClient } from "@ooc/core/thinkable/llm/types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
-import { initContextWindows } from "@ooc/core/executable/windows";
+import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 
 /** 当所有 OOC_* env 都设置时返回 true，否则集成测试自动 skip。 */
 export const hasLlmEnv = Boolean(

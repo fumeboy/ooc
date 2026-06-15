@@ -13,12 +13,12 @@ import { describe, expect, it } from "bun:test";
 
 import "@ooc/builtins/terminal_process"; // 触发 registerWindowClass side-effect import
 
-import { builtinRegistry } from "../_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import {
   ROOT_WINDOW_ID,
   type ProcessExecRecord,
   type TerminalProcessWindow,
-} from "../_shared/types.js";
+} from "@ooc/core/_shared/types/context-window.js";
 import { serializeXml } from "@ooc/core/_shared/types/xml.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {

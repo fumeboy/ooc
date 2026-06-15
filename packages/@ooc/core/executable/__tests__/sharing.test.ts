@@ -9,13 +9,13 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import { execRootMethod } from "../../windows";
+import { execRootMethod } from "@ooc/core/executable/manager.js";
 import { dispatchToolCall } from "../../tools";
-import { WindowManager, builtinRegistry } from "../../windows";
+import { WindowManager, builtinRegistry } from "@ooc/core/executable/manager.js";
 import { makeThread } from "../../../__tests__/make-thread";
 import type { ThreadContext } from "../../../thinkable/context";
 import type { ThreadPersistenceRef } from "../../../persistable/common";
-import type { ContextWindow, TalkWindow, FileWindow } from "../_shared/types";
+import type { ContextWindow, TalkWindow, FileWindow } from "@ooc/core/_shared/types/context-window.js";
 
 const SELF = "alice";
 const persistenceOf = (threadId: string): ThreadPersistenceRef => ({
@@ -213,7 +213,7 @@ describe("archiveForkChild 自动归还", () => {
     const child = findChild(parent);
 
     // 模拟 archive：直接调 archive helper（绕开 mgr 缓存层）
-    const { archiveForkChild } = await import("../talk/fork");
+    const { archiveForkChild } = await import("@ooc/builtins/thread/executable/talk-fork.js");
     const forkWindow = (parent.contextWindows ?? []).find((w) => w.id === forkWindowId);
     expect(forkWindow?.class).toBe("talk");
     if (forkWindow?.class === "talk") {

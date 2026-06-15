@@ -14,15 +14,15 @@ import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import { normalizeMethodOutcome } from "@ooc/core/_shared/types/method.js";
 import { enrichContextWindows } from "@ooc/core/thinkable/context/window-enrichment";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
-import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/executable/windows";
-import { deliverTalkMessage } from "@ooc/core/executable/windows/talk/delivery";
-import type { TalkData } from "@ooc/core/executable/windows/talk/types";
+import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
+import { deliverTalkMessage } from "@ooc/builtins/thread/executable/talk-delivery.js";
+import type { TalkData } from "@ooc/builtins/thread/types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
   type ContextWindow,
-} from "@ooc/core/executable/windows/_shared/types";
-import type { TalkWindowView } from "@ooc/core/executable/windows/talk/types";
+} from "@ooc/core/_shared/types/context-window.js";
+import type { TalkWindowView } from "@ooc/builtins/thread/types.js";
 import {
   SUPER_SESSION_ID,
   isSuperSessionId,

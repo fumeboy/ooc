@@ -46,11 +46,11 @@ export async function runControlPlane(): Promise<StoryResult> {
     // 回归守卫：曾经只渲 paths.join(",")（≈ method 名），LLM 看不懂每个 method 含义。
     // 方法菜单已从逐实例 <methods> 搬到 class 声明层一次（computeVisibleMethodSet）。
     {
-      await import("@ooc/core/executable/windows/index.js"); // boot builtin registry
+      await import("@ooc/core/runtime/register-builtins.js"); // boot builtin registry
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
       const { computeVisibleMethodSet } = await import("@ooc/core/thinkable/context/renderers/xml");
       const { extractBasicDescription } = await import(
-        "@ooc/core/executable/windows/_shared/method-description"
+        "@ooc/core/executable/method-description.js"
       );
       // file class 的 method（含 windowMethods）里挑一个有 *_BASIC 描述的
       const def = builtinRegistry.getObjectDefinition("file");

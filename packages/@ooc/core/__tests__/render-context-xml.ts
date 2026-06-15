@@ -14,7 +14,7 @@ import type { ThreadContext } from "../thinkable/context/index.js";
 import type {
   BaseContextWindow,
   ContextWindow,
-} from "../executable/windows/_shared/types.js";
+} from "@ooc/core/_shared/types/context-window.js";
 
 export async function renderContextXml(input: {
   thread: ThreadContext;

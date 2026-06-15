@@ -29,7 +29,7 @@ import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/reflect_request
 import { executeNewFeatBranch } from "@ooc/builtins/reflect_request/method.new-feat-branch";
 import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
 import { runRecoveryCheck } from "@ooc/core/app/server/bootstrap/recovery-check";
-import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
+import type { MethodExecutionContext } from "@ooc/core/_shared/types/method.js";
 
 let tempRoot: string | undefined;
 

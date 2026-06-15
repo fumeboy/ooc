@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
 import { ObjectRegistry } from "../runtime/object-registry.js";
-import { WindowManager } from "../executable/windows/_shared/manager.js";
+import { WindowManager } from "@ooc/core/executable/manager.js";
 import type { WindowMethod } from "../_shared/types/window-method.js";
 import { makeThread } from "./make-thread.js";
 

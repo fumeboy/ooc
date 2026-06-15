@@ -6,7 +6,7 @@ import { runBashExec, executeTerminalProcessExec } from "@ooc/builtins/terminal_
 import { runInterpreterExec } from "@ooc/builtins/interpreter_process";
 import { runExec as executeTerminalRun } from "@ooc/builtins/terminal/executable/index.js";
 import { runExec as executeInterpreterRun } from "@ooc/builtins/interpreter/executable/index.js";
-import type { TerminalProcessWindow } from "../windows/_shared/types";
+import type { TerminalProcessWindow } from "@ooc/core/_shared/types/context-window.js";
 import { createStoneObject, ensureStoneRepo, writeSelf } from "../../persistable";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 import { makeThread } from "../../__tests__/make-thread";

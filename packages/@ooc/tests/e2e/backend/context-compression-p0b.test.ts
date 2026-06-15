@@ -24,11 +24,11 @@ import { join } from "node:path";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { renderContextXml } from "@ooc/core/__tests__/render-context-xml";
-import { generateWindowId } from "@ooc/core/executable/windows/_shared/types";
-import type { FileWindow } from "@ooc/core/executable/windows/_shared/types";
+import { generateWindowId } from "@ooc/core/_shared/types/context-window.js";
+import type { FileWindow } from "@ooc/core/_shared/types/context-window.js";
 
 // 触发 windows/ 各 type 的 side-effect 注册(file_window 的 renderXml 需要这个)。
-import "@ooc/core/executable/windows";
+import "@ooc/core/runtime/register-builtins.js";
 
 describe("[p0b] context compression — compress(scope=windows) + expand 最小闭环", () => {
   it("compress → 压缩态 + 落事件;expand → 恢复 live + 再落事件", async () => {

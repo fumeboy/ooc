@@ -725,3 +725,42 @@ construct 迁 `builtins/thread/executable/construct.ts`（原 talkConstructor）
 - `core/thinkable/knowledge/__tests__/activator{,.expr}.test.ts`
 - `tests/integration/{wait-state-transition,ooc6-object-unification.harness,super-flow-channel}.integration.test.ts`
 - `tests/e2e/backend/{plan-share-parent-child,backend-multi-turn-followup,context-compression-p0c-typed,stones-versioning}.e2e.test.ts`
+
+## windows/ 目录解散 leaf（2026-06-15）—— 实体文件按维度归位 + 桥删除
+
+`packages/@ooc/core/executable/windows/` 整目录解散：桥文件删除收口 canonical、实体文件 git mv 按维度
+归位、`__tests__` 随被测源迁到新位置、删除整个 windows 目录。**非测试源 tsc 0 错误；下列测试只随源迁移
++改 import 路径，逻辑未修（多数本就是前几个 wave 登记的坏测试，因引用已删符号 execRootMethod /
+TalkWindow / FileWindow / MethodExecWindow 平铺别名 / 旧 mgr.openMethodExec 等）。**
+
+### 文件落点
+- `_shared/manager.ts` → `executable/manager.ts`；`_shared/schema-fill.ts` → `executable/schema-fill.ts`；
+  `_shared/method-description.ts` → `executable/method-description.ts`
+- `_shared/init.ts` → `thinkable/context/init.ts`
+- `_shared/window-persistence.ts` / `_shared/session-path.ts` → `persistable/`
+- `_shared/{viewport,transcript-viewport,conversation-render,projection-class}.ts` → `readable/`
+- `method_exec/types.ts` → `_shared/types/method-exec.ts`（仅 MethodExecWindow 类型，web 引用）
+- `talk/{delivery,fork}.ts` → `builtins/thread/executable/talk-{delivery,fork}.ts`；
+  `talk/render.ts` → `builtins/thread/readable/talk-render.ts`；
+  `talk/types.ts` 内容（TalkData/TalkWin/TalkWindowView）**合并去重进 `builtins/thread/types.ts`**
+  （TalkData=Data、TalkWin=ThreadWin 别名 + TalkWindowView），原文件删除。
+- 桥删除：`_shared/{registry,method-types,types}.ts` 删；`ContextWindow=OocObjectInstance` 覆盖 +
+  per-class Data/Win re-export 收口进 canonical `_shared/types/context-window.ts`。
+- 装载入口：`windows/index.ts` 的 builtin register 段 → 新模块 `runtime/register-builtins.ts`；
+  原 `import "@ooc/core/executable/windows[/index.js]"`（side-effect / 动态 import）改 import
+  `@ooc/core/runtime/register-builtins.js`。barrel 命名导出随各文件迁移直引新位置。
+
+### 随迁的测试（import 路径已改指新位置，逻辑未修——已坏的继续坏）
+- → `executable/__tests__/`：manager-method-dispatch / manager-dual-write / manager-refine-failed /
+  report-edits / constructor-pathway / method-inheritance / member-composition / process-history-viewport /
+  search-results-viewport / sharing / skill-index
+- → `readable/__tests__/`：viewport / viewport-integration / transcript-viewport / transcript-viewport-integration
+- → `persistable/__tests__/`：session-path
+- → `builtins/thread/__tests__/`：talk-delivery
+
+### 同源 source 收口（非测试，tsc 通过）
+- `thinkable/context/budget.ts`：ContextWindow import 从 canonical（现 = OocObjectInstance，无 base 展示
+  字段）改为 `BaseContextWindow as ContextWindow`——budget 实际读 provenance/relevance/compressLevel 等
+  base 字段，OocObjectInstance 结构满足 base 故 pipeline 单元仍可直接流入。仅 import + 注释，算法未动。
+- `executable/{permissions,tools,tools/exec,tools/close,tools/wait}.ts`、`web/.../MethodExecWindowDetail.tsx`：
+  原用 `./windows/...` / `../windows/...` 相对路径引桥/实体，改指新 canonical 位置。

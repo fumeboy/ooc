@@ -9,14 +9,14 @@
  */
 import { describe, expect, it } from "bun:test";
 
-import "../index.js"; // 触发 registerExecutable side-effect import
+import "@ooc/core/runtime/register-builtins.js";
 
-import { builtinRegistry } from "../_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import {
   ROOT_WINDOW_ID,
   type SearchMatch,
   type SearchWindow,
-} from "../_shared/types.js";
+} from "@ooc/core/_shared/types/context-window.js";
 import { serializeXml } from "@ooc/core/_shared/types/xml.js";
 import type { ThreadContext } from "../../../thinkable/context.js";
 import {

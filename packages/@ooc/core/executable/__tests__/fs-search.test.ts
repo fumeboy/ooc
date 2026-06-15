@@ -15,19 +15,19 @@ import { mkdtemp, rm, writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import "../windows/index";
+import "@ooc/core/runtime/register-builtins.js";
 import {
   generateWindowId,
   builtinRegistry,
   WindowManager,
   type SearchWindow,
-} from "../windows/index";
+} from "@ooc/core/executable/manager.js";
 import {
 } from "@ooc/builtins/search/readable.js";
 import { renderContextXml } from "../../__tests__/render-context-xml";
 import { makeThread } from "../../__tests__/make-thread";
 import type { Intent } from "@ooc/core/_shared/types/intent.js";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";
 
 /**
@@ -170,7 +170,7 @@ afterAll(async () => {
 
 // ---------- U2: file_window.edit ----------
 
-import type { FileWindow } from "../windows/index";
+import type { FileWindow } from "@ooc/core/executable/manager.js";
 
 /**
  * 创建一个临时文件 + 对应的 file_window + WindowManager，

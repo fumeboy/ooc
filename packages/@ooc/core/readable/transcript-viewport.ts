@@ -8,14 +8,14 @@
  * （依赖 MethodExecutionContext + 写 ctx.self 副作用）。
  */
 
-import type { WindowMethodExecutionContext, WindowMethodOutcome } from "../../../_shared/types/window-method.js";
+import type { WindowMethodExecutionContext, WindowMethodOutcome } from "../_shared/types/window-method.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   hasAnyTranscriptViewportField,
   mergeTranscriptViewport,
-} from "../../../_shared/types/viewport.js";
+} from "../_shared/types/viewport.js";
 
-export * from "../../../_shared/types/viewport.js";
+export * from "../_shared/types/viewport.js";
 
 /**
  * talk_window（peer 会话 + fork 子窗统一）的 set_transcript_window 执行体（window method）。

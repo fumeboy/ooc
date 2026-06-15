@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import "@ooc/core/executable/windows/index.js"; // 全量 boot + assertAllObjectDefinitionsRegistered
+import "@ooc/core/runtime/register-builtins.js"; // 全量 boot + assertAllObjectDefinitionsRegistered
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 
 test("file set_viewport / set_range are windowMethods, not object methods", () => {

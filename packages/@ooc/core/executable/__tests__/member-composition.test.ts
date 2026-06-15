@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { ensureStoneRepo, writeThread, readThread } from "@ooc/core/persistable";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 // named import 触发 windows/index.ts 模块求值 → 加载全部 builtin（含 filesystem 注册）。
-import { injectMemberWindowsIfObjectThread, WindowManager } from "@ooc/core/executable/windows";
+import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
+import { WindowManager } from "@ooc/core/executable/manager.js";
 
 function mkSupervisorThread(baseDir: string): any {
   return {

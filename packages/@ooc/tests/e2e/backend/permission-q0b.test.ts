@@ -38,8 +38,8 @@ import { think } from "@ooc/core/thinkable/thinkloop";
 import { spyOn } from "bun:test";
 
 // 触发 windows/ 各 type 的 side-effect 注册 (root commands 等)
-import "@ooc/core/executable/windows";
-import { builtinRegistry } from "@ooc/core/executable/windows/_shared/registry";
+import "@ooc/core/runtime/register-builtins.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 
 // ─────────────────────────── helpers ──────────────────────────────────────────
 

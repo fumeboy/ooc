@@ -5,7 +5,7 @@
  * （provided / missing / invalid）。Fail-soft：校验错误标记在 fill 里但不阻塞 refine。
  */
 import type { MethodCallSchema, MethodArgSpec } from "@ooc/core/_shared/types/intent.js";
-import type { MethodExecWindow } from "../method_exec/types.js";
+import type { MethodExecWindow } from "../_shared/types/method-exec.js";
 
 export function buildFillState(
   schema: MethodCallSchema | undefined,

@@ -26,7 +26,7 @@ import type {
   ContextWindow,
   FileWindow,
   RootWindow,
-} from "@ooc/core/executable/windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 import {
   buildWindowsSnapshot,
   computeWindowContentHash,

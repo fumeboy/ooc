@@ -9,8 +9,8 @@
  * 故 archive 不再做 returnBorrowedOwners；window 引用借/还语义在 OocObjectInstance 模型下待重设计。
  */
 
-import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
-import type { TalkWindowView } from "./types.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
+import type { TalkWindowView } from "../types.js";
 
 export function generateMessageId(): string {
   return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;

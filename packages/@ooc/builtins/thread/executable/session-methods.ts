@@ -24,14 +24,14 @@ import type {
 } from "@ooc/core/executable/contract.js";
 import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
-import { deliverTalkMessage } from "@ooc/core/executable/windows/talk/delivery.js";
+import { deliverTalkMessage } from "@ooc/builtins/thread/executable/talk-delivery.js";
 import {
   archiveForkChild,
   findThreadInScope,
   makeMessage,
   appendInbox,
-} from "@ooc/core/executable/windows/talk/fork.js";
-import type { TalkWindowView } from "@ooc/core/executable/windows/talk/types.js";
+} from "@ooc/builtins/thread/executable/talk-fork.js";
+import type { TalkWindowView } from "@ooc/builtins/thread/types.js";
 import type { Data } from "../types.js";
 
 // ─────────────────────────── say ──────────────────────────────

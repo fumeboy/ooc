@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { ROOT_METHODS, execRootMethod } from "../windows";
+import { ROOT_METHODS, execRootMethod } from "@ooc/core/executable/manager.js";
 import { makeThread } from "../../__tests__/make-thread";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 /**
  * 验证 root level method 在 ContextWindow 模型下的副作用。

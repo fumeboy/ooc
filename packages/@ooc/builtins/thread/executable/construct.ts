@@ -16,9 +16,9 @@ import { stat } from "node:fs/promises";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common.js";
 import { stoneDir, resolveStoneIdentityRef } from "@ooc/core/persistable/index.js";
 import { SUPER_ALIAS_TARGET } from "@ooc/core/_shared/types/constants.js";
-import { injectMemberWindowsIfObjectThread } from "@ooc/core/executable/windows/_shared/init.js";
+import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
-import { makeMessage, appendInbox } from "@ooc/core/executable/windows/talk/fork.js";
+import { makeMessage, appendInbox } from "@ooc/builtins/thread/executable/talk-fork.js";
 import type { Data } from "../types.js";
 
 const TALK_CONSTRUCTOR_TIP = `talk 开启一个持续会话 talk_window。

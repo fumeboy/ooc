@@ -15,11 +15,11 @@ import { join } from "node:path";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { buildInputItems } from "@ooc/core/thinkable/context";
 import { buildProtocolKnowledgeWindows } from "@ooc/core/thinkable/context/protocol";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/_shared/types";
+import type { MethodExecWindow } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
 // 触发 windows/ 各 type 注册（root commands "end" / "talk" 等）
-import "@ooc/core/executable/windows";
+import "@ooc/core/runtime/register-builtins.js";
 
 /** end-reflection.md body 的特征短语（仅出现在该篇中）。 */
 const END_REFLECTION_MARKER = "memory/<slug>.md";

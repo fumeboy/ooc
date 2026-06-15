@@ -21,7 +21,7 @@ import {
   classifyPackagesPath,
   relWithinObjectFromPackages,
   resolveSessionPath,
-} from "@ooc/core/executable/windows/_shared/session-path.js";
+} from "@ooc/core/persistable/session-path.js";
 import {
   sessionUsesWorktree,
   resolveStoneIdentityRef,

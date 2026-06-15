@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { ROOT_METHODS, getOpenableMethods, deriveRootIntentPaths } from "../windows";
+import { ROOT_METHODS, getOpenableMethods, deriveRootIntentPaths } from "@ooc/core/executable/manager.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { Intent } from "@ooc/core/_shared/types/intent.js";
 import type { MethodExecuteForm } from "@ooc/core/_shared/types/method.js";

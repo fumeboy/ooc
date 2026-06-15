@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { execRootMethod, WindowManager, builtinRegistry } from "../windows";
+import { execRootMethod, WindowManager, builtinRegistry } from "@ooc/core/executable/manager.js";
 import {
   ROOT_WINDOW_ID,
   creatorWindowIdOf,
@@ -10,12 +10,12 @@ import {
   type KnowledgeWindow,
   type TerminalProcessWindow,
   type TalkWindow,
-} from "../windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 import { createStoneObject, createPoolObject, poolKnowledgeDir } from "../../persistable";
 import { buildContext } from "../../thinkable/context";
 import { clearKnowledgeLoaderCache } from "../../thinkable/knowledge";
 import { makeThread } from "../../__tests__/make-thread";
-import type { ContextWindow } from "../windows/_shared/types";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 /**
  * Step 2 各 window 类型的端到端最小覆盖：创建 → 后续命令 → close。
@@ -276,7 +276,7 @@ describe("Step 2 window lifecycles", () => {
         creatorThreadId: "root",
         creatorObjectId: "user",
       });
-      const { initContextWindows } = await import("../windows/_shared/init");
+      const { initContextWindows } = await import("@ooc/core/thinkable/context/init.js");
       initContextWindows(assistantThread, { creatorThreadId: "root", initialTaskTitle: "user task" });
       // root.talk target 校验需要 bob stone 存在
       await createStoneObject({ baseDir: tempRoot, objectId: "bob" });

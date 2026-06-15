@@ -3,13 +3,13 @@ import { describe, expect, it } from "bun:test";
 // side-effects：注册 thread / talk / reflect_request 三个 class（say 是 thread 的行为，会话窗共享同一 method）。
 import "@ooc/builtins/thread";
 import "@ooc/builtins/reflect_request";
-import "@ooc/core/executable/windows"; // 注册 talk class
+import "@ooc/core/runtime/register-builtins.js"; // 注册 talk class
 
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { sayMethod } from "@ooc/builtins/thread/executable/method.say.js";
 import { executeSay } from "@ooc/builtins/thread/executable/say.js";
-import { execRootMethod, WindowManager } from "@ooc/core/executable/windows";
-import type { TalkWindow } from "@ooc/core/executable/windows/_shared/types";
+import { execRootMethod, WindowManager } from "@ooc/core/executable/manager.js";
+import type { TalkWindow } from "@ooc/core/_shared/types/context-window.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 

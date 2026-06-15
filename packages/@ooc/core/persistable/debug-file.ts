@@ -4,8 +4,8 @@ import { threadDir, toJson, type ThreadPersistenceRef } from "./common";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage } from "../thinkable/llm/types";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../thinkable/context";
 import type { OocObjectInstance } from "../runtime/ooc-class.js";
-import type { ObjectRegistry } from "../executable/windows/_shared/registry.js";
-import { builtinRegistry } from "../executable/windows/index.js";
+import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { WindowSnapshotEntry } from "@ooc/core/observable/window-hash";
 
 /**

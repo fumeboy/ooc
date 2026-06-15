@@ -3,7 +3,7 @@ import * as toolsModule from "../../executable/tools.ts";
 import * as observableModule from "../../observable/index.ts";
 import * as contextModule from "../context.ts";
 import type { LlmClient, LlmGenerateResult, LlmInputItem, LlmToolCall } from "../llm/types";
-import type { ContextWindow } from "../../executable/windows/_shared/types";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import { think } from "../thinkloop.ts";
 import { LlmTimeoutError } from "../llm/timeout.ts";
 

@@ -7,11 +7,11 @@
  *   的 activates_on 对当前 thread 逐篇匹配，命中才注入——Object 只在相关交互面看到对应切片。
  * - **creator-reply 协议**：动态按 creator do/talk window 的 id 生成，不属于静态 root 知识。
  */
-import { ROOT_WINDOW_ID } from "../../executable/windows/_shared/types.js";
+import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge/types.js";
-import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
-import { builtinRegistry } from "../../executable/windows/index.js";
+import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { computeActivations, loadKnowledgeIndexFromDir } from "../knowledge/index.js";
 import type { KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import { dirname, join } from "node:path";

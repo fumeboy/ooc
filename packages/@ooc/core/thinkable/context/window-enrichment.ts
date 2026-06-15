@@ -6,8 +6,8 @@
  * 保留 pipeline 相位占位以便后续 re-home 可见性时填回。
  */
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
-import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
-import { builtinRegistry } from "../../executable/windows/index.js";
+import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 
 /** Pass-through over context windows（effectiveVisibleType 解析本轮丢弃）。 */
 export function enrichContextWindows(

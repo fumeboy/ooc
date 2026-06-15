@@ -27,7 +27,7 @@
 import type { ThreadContext } from "../context";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
-import { builtinRegistry } from "@ooc/core/executable/windows/_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 
 /** trigger 抽象语法树——parse 一次，evaluate 多次。
  *  旧的 `window` kind 在 parse 时自动归一化为

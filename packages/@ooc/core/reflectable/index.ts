@@ -11,7 +11,7 @@
  * `@ooc/core/persistable`——reflectable 的 window 只渲染/驱动它们（face，非 god-object）。
  *
  * 此 barrel 仅作 side-effect 索引：re-export 两个 builtin 包以触发 registerWindowClass。
- * 由 executable/windows/index.ts 引入，保证 side-effect 注册在 load 期触发。
+ * 由 runtime/register-builtins.ts 引入，保证 side-effect 注册在 load 期触发。
  */
 
 // side-effect-only import：两个包都各自 export `Class` / `Data`，re-export 会撞名；

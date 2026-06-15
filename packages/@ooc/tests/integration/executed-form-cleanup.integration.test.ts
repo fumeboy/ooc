@@ -7,7 +7,7 @@ import {
   makeRootThread,
   setupTempFlow,
 } from "./_fixture";
-import type { MethodExecWindow } from "@ooc/core/executable/windows/_shared/types";
+import type { MethodExecWindow } from "@ooc/core/_shared/types/context-window.js";
 
 describe.skipIf(!hasLlmEnv)("integration: executed-form-cleanup", () => {
   let tempRoot: string;

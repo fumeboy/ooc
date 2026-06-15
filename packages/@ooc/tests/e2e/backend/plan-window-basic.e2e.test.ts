@@ -17,15 +17,16 @@
 
 import { describe, expect, it } from "bun:test";
 // side-effect: 触发 windows 注册（含 plan）
-import "@ooc/core/executable/windows";
-import { execRootMethod, WindowManager, builtinRegistry } from "@ooc/core/executable/windows";
+import "@ooc/core/runtime/register-builtins.js";
+import { execRootMethod, WindowManager } from "@ooc/core/executable/manager.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { renderContextXml } from "@ooc/core/__tests__/render-context-xml";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type {
   ContextWindow,
   PlanWindow,
   PlanWindowStep,
-} from "@ooc/core/executable/windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 // ─────────────────────────── helpers ──────────────────────────────────────────

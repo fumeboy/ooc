@@ -9,7 +9,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stoneDir as realStoneDir, resolveBuiltinReadDir } from "@ooc/core/persistable";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry";
-import { injectMemberWindowsIfObjectThread, WindowManager } from "@ooc/core/executable/windows";
+import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
+import { WindowManager } from "@ooc/core/executable/manager.js";
 import { mkServer, postJson, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult, type TcResult } from "../_harness/types";
 

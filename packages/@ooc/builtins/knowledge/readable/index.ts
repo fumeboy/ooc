@@ -21,7 +21,7 @@ import {
   applyViewport,
   mergeViewport,
   type Viewport,
-} from "@ooc/core/executable/windows/_shared/viewport.js";
+} from "@ooc/core/readable/viewport.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";

@@ -26,17 +26,18 @@
 import { describe, expect, it } from "bun:test";
 
 // side-effect: 触发 windows 注册（含 plan / talk）
-import "@ooc/core/executable/windows";
+import "@ooc/core/runtime/register-builtins.js";
 
-import { execRootMethod, WindowManager, builtinRegistry } from "@ooc/core/executable/windows";
+import { execRootMethod, WindowManager } from "@ooc/core/executable/manager.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
-import { archiveForkChild } from "@ooc/core/executable/windows/talk/fork";
+import { archiveForkChild } from "@ooc/builtins/thread/executable/talk-fork.js";
 import { makeThread, type MakeThreadOpts } from "@ooc/core/__tests__/make-thread";
 import type {
   ContextWindow,
   TalkWindow,
   PlanWindow,
-} from "@ooc/core/executable/windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 // ───────────────────────────── helpers ────────────────────────────────────────

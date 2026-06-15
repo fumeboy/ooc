@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { OOC_TOOLS, buildAvailableTools } from "../tools/index";
 import { dispatchToolCall } from "../tools";
 import { makeThread } from "../../__tests__/make-thread";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types.js";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 
 const SELF = "alice";

@@ -15,7 +15,7 @@ import type {
   ContextWindow,
   ContextWindowProvenance,
   ContextWindowRelevance,
-} from "../../../executable/windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 
 const bm = new BudgetManager();
 

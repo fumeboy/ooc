@@ -16,9 +16,10 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-// budget 只读 base 字段（id/title/provenance/relevance/compressLevel）；用 base 版 ContextWindow
-// 而非 builtins union，以接收 pipeline 流通的 OocObjectInstance（其结构满足 BaseContextWindow）。
-import type { ContextWindow } from "../../_shared/types/context-window.js";
+// budget 只读 base 字段（id/title/provenance/relevance/compressLevel）；用 BaseContextWindow
+// 而非 OocObjectInstance（=canonical ContextWindow，无 base 展示字段），以读到 provenance/relevance。
+// pipeline 流通的 OocObjectInstance 信封 + base 字段结构上满足 BaseContextWindow。
+import type { BaseContextWindow as ContextWindow } from "../../_shared/types/context-window.js";
 import { deriveStoneFromThread, stoneDir } from "../../persistable/common";
 import type { ThreadContext } from "./index";
 

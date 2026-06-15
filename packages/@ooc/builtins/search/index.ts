@@ -12,7 +12,7 @@
 import { Glob } from "bun";
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
 import type { ConstructorContext } from "@ooc/core/executable/contract.js";
-import { resolveSessionPath } from "@ooc/core/executable/windows/_shared/session-path.js";
+import { resolveSessionPath } from "@ooc/core/persistable/session-path.js";
 import {
   runRipgrep,
   runJsFallback,

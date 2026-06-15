@@ -12,7 +12,7 @@ import {
 } from "../../persistable";
 import type { ThreadContext } from "../context";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
-import type { ContextWindow } from "../../executable/windows/_shared/types";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import { runScheduler } from "../scheduler";
 import { clearObservableDebugState, disableDebug, enableDebug } from "../../observable";
 

@@ -8,13 +8,13 @@
  */
 import { describe, expect, it, beforeAll } from "bun:test";
 
-import "../index.js"; // 触发 registerExecutable 的 side-effect import
+import "@ooc/core/runtime/register-builtins.js";
 
-import { builtinRegistry } from "../_shared/registry.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import {
   ROOT_WINDOW_ID,
   type TalkWindow,
-} from "../_shared/types.js";
+} from "@ooc/core/_shared/types/context-window.js";
 import { serializeXml } from "@ooc/core/_shared/types/xml.js";
 import type { ThreadContext, ThreadMessage } from "../../../thinkable/context.js";
 

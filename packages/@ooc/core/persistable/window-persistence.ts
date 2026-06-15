@@ -14,15 +14,15 @@
  *
  * 所有 IO 失败 fail-soft（observeWarn，不抛），写盘不阻塞 LLM think loop。
  */
-import type { ThreadContext } from "../../../thinkable/context.js";
-import { ROOT_WINDOW_ID } from "../../../_shared/types/context-window.js";
-import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
-import type { ObjectRegistry } from "../../../runtime/object-registry.js";
+import type { ThreadContext } from "../thinkable/context.js";
+import { ROOT_WINDOW_ID } from "../_shared/types/context-window.js";
+import type { OocObjectInstance } from "../runtime/ooc-class.js";
+import type { ObjectRegistry } from "../runtime/object-registry.js";
 import type {
   FlowObjectRef,
   ThreadPersistenceRef,
-} from "../../../persistable/common.js";
-import type { PersistableContext } from "../../../persistable/contract.js";
+} from "./common.js";
+import type { PersistableContext } from "./contract.js";
 import {
   writeRuntimeObjectState,
   readRuntimeObjectState,
@@ -32,8 +32,8 @@ import {
   createFlowObject,
   objectDir,
   type ThreadContextEntry,
-} from "../../../persistable/index.js";
-import { observeWarn } from "../../../observable/log-aggregator.js";
+} from "./index.js";
+import { observeWarn } from "../observable/log-aggregator.js";
 
 /** 从 thread.persistence 构造 ThreadPersistenceRef（含 threadId）。 */
 export function threadPersistRef(thread: ThreadContext): ThreadPersistenceRef | undefined {

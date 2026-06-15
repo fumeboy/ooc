@@ -13,7 +13,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { WindowManager, builtinRegistry } from "../../index";
+import { WindowManager, builtinRegistry } from "@ooc/core/executable/manager.js";
 import type { FileWindow, KnowledgeWindow } from "../types";
 import { createStoneObject, createPoolObject, poolKnowledgeDir } from "../../../../persistable";
 import { buildContext } from "../../../../thinkable/context";

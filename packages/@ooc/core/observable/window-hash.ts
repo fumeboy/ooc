@@ -13,7 +13,7 @@
 
 import { readFile } from "node:fs/promises";
 
-import type { FileData } from "@ooc/core/executable/windows/_shared/types";
+import type { FileData } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 
 /**

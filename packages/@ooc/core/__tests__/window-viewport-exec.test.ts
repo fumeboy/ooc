@@ -1,6 +1,6 @@
 import { test, expect } from "bun:test";
-import { windowSetViewport } from "../executable/windows/_shared/viewport.js";
-import { windowSetTranscriptViewport } from "../executable/windows/_shared/transcript-viewport.js";
+import { windowSetViewport } from "@ooc/core/readable/viewport.js";
+import { windowSetTranscriptViewport } from "@ooc/core/readable/transcript-viewport.js";
 
 test("windowSetViewport returns new state, does not mutate input", () => {
   const windowState = { viewport: { lineStart: 0, lineEnd: 10, columnStart: 0, columnEnd: 80 } };

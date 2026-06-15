@@ -24,7 +24,7 @@ import { readThread, writeThread } from "@ooc/core/persistable/thread-json";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
 // 触发 windows/ 各 type 的 side-effect 注册。
-import "@ooc/core/executable/windows";
+import "@ooc/core/runtime/register-builtins.js";
 
 const SESSION_PREFIX = "_test_thinkable_p0f_events";
 const ts = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;

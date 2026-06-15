@@ -26,7 +26,7 @@ import {
 } from "@ooc/core/persistable";
 import { scanRunningThreads } from "@ooc/core/app/server/runtime/thread-query";
 import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
-import type { MethodExecutionContext } from "@ooc/core/executable/windows/_shared/method-types";
+import type { MethodExecutionContext } from "@ooc/core/_shared/types/method.js";
 
 let tempRoot: string | undefined;
 

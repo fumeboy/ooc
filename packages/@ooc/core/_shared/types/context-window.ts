@@ -1,19 +1,18 @@
 /**
- * ContextWindow 家族的 base 类型 —— canonical 源（从
- * `executable/windows/_shared/types.ts` 迁入 base 部分）。
+ * ContextWindow 家族类型 —— canonical 源。
  *
- * **分层说明：**
- * 完整的 `ContextWindow` discriminated union（`RootWindow | MethodExecWindow | …`）
- * 依赖 builtins 各包的具体 window 类型，**无法**放进零依赖的 `_shared`。因此：
- * - 本文件只导出 base：`ContextWindow = BaseContextWindow & { [k]: unknown }`，
- *   够"只读 base 字段"的调用方（thread / registry / method ctx）使用。
- * - 完整 union 的 canonical 源仍是 `executable/windows/_shared/types.ts`——它 import
- *   本文件的 base 类型再拼装具体 window union（覆盖 base 版同名 export）。
- * - 需要 discriminant narrowing 的调用方显式从 executable 版引。
+ * **对象模型收口（Wave 4）**：`ContextWindow` 不再是「每 class 一个平铺信封字段的成员」的
+ * discriminated union，而**直接等于** `OocObjectInstance`——信封（id/class/title/status/
+ * createdAt/parentObjectId）+ 业务 `.data` + 投影态 `.win`。需要按 class narrow 的调用方读
+ * `.class` 后把 `.data` 断言成对应 class 的 `Data`（本文件 re-export 各 class 的 `Data`/`Win`
+ * 供断言）。各 builtin types.ts 的 `@deprecated XxxWindow` 平铺别名已随之删除。
  *
+ * base 部分（BaseContextWindow / WindowStatus / provenance / relevance / SharingState /
+ * 常量 / id 工具函数）也在本零依赖层定义。
  */
 
 import type { WindowDisplayState } from "./window-state.js";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 
 /**
  * Window 状态值汇总。
@@ -156,12 +155,36 @@ export type SharingState =
     };
 
 /**
- * ContextWindow —— **base 版**（正名为 ContextWindow）。
+ * ContextWindow — canonical 形态（thread 维度，persist 到 thread-context.json）。
  *
- * 零依赖层只能表达"所有 window 至少有 BaseContextWindow 字段 + 任意扩展字段"。
- * 完整 discriminated union 在 `executable/windows/_shared/types.ts` 覆盖此 export。
+ * = `OocObjectInstance`：信封（id/class/title/status/createdAt/parentObjectId）+ 业务 `.data`
+ * + 投影态 `.win`。需要按 class narrow 的调用方读 `.class` 后断言 `.data`。
  */
-export type ContextWindow = BaseContextWindow;
+export type ContextWindow = OocObjectInstance;
+
+/** runtime object 实例信封 —— ContextWindow 的 canonical 形态。 */
+export type { OocObjectInstance } from "../../runtime/ooc-class.js";
+
+// ─────────────────────────── per-class Data / Win re-exports ──────────────────
+// 需要按 class narrow 的调用方：读 inst.class 后把 inst.data 断言成对应 Data。
+// 这些是 class 的纯业务数据（不含信封/不含旧平铺别名）。
+export type { Data as RootData } from "@ooc/builtins/root/types.js";
+export type { Data as TodoData } from "@ooc/builtins/todo/types.js";
+export type { TalkData, TalkWin, TalkWindowView } from "@ooc/builtins/thread/types.js";
+export type { Data as PrData } from "@ooc/builtins/pr/types.js";
+export type { Data as TerminalProcessData } from "@ooc/builtins/terminal_process/types.js";
+export type { Data as InterpreterProcessData } from "@ooc/builtins/interpreter_process/types.js";
+export type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";
+export type { Data as FileData } from "@ooc/builtins/file/types.js";
+export type { Data as KnowledgeData } from "@ooc/builtins/knowledge/types.js";
+export type { Data as SearchData, SearchMatch } from "@ooc/builtins/search/types.js";
+export type { Data as SkillIndexData, SkillEntry } from "@ooc/builtins/skill_index/types.js";
+export type { Data as PlanData, PlanWindowStep } from "@ooc/builtins/plan/types.js";
+export type { Data as TerminalData } from "@ooc/builtins/terminal/types.js";
+export type { Data as InterpreterData } from "@ooc/builtins/interpreter/types.js";
+export type { Data as ThreadData } from "@ooc/builtins/thread/types.js";
+export type { Data as FeishuChatData, FeishuChatMessage } from "@ooc/builtins/feishu_chat/types.js";
+export type { Data as FeishuDocData, FeishuDocBlock } from "@ooc/builtins/feishu_doc/types.js";
 
 /** Root object 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";

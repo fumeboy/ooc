@@ -12,22 +12,22 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "bun:test";
 
-import "../index.js"; // registerExecutable side-effects
+import "@ooc/core/runtime/register-builtins.js";
 
-import { WindowManager } from "../_shared/manager";
-import { builtinRegistry } from "../_shared/registry";
+import { WindowManager } from "@ooc/core/executable/manager.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import {
   createFlowObject,
   createFlowSession,
   createStoneObject,
   writeThread,
 } from "../../../persistable";
-import { initContextWindows } from "../_shared/init";
+import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 import {
   ROOT_WINDOW_ID,
   type FileWindow,
   type TalkWindow,
-} from "../_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext } from "../../../thinkable/context";
 
 const SELF = "alice";

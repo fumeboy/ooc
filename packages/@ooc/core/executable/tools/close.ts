@@ -12,7 +12,7 @@
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
 import { builtinRegistry, type ObjectRegistry } from "../../runtime/object-registry.js";
-import { WindowManager } from "../windows/_shared/manager.js";
+import { WindowManager } from "../manager.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 export const CLOSE_TOOL: LlmTool = {

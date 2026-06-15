@@ -13,7 +13,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { nestedObjectPath } from "@ooc/core/persistable";
 import type { ThreadContext, ProcessEvent, ThreadMessage } from "@ooc/core/thinkable/context";
-import type { ContextWindow } from "@ooc/core/executable/windows/_shared/types";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 // 重型依赖（Elysia / openai / executable 全家桶）走 lazy import — 测试 skip 时不触发，
 // 避免因 node_modules 未完整安装而连"能不能加载该 spec"都失败。

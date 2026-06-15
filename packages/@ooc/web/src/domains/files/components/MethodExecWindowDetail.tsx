@@ -5,7 +5,7 @@
  * The command_exec package is being deleted because form is an Object built-in feature
  * managed in core, not a stand-alone builtin object.
  */
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
+import type { MethodExecWindow } from "@ooc/core/_shared/types/method-exec.js";
 import React from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json as jsonLanguage } from "@codemirror/lang-json";

@@ -9,7 +9,7 @@ import {
   deleteRuntimeObject,
 } from "../flow-runtime-object";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
-import type { ContextWindow } from "../../executable/windows/_shared/types.js";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import type { FlowObjectRef } from "../common";
 
 describe("flow-runtime-object — ooc-6 P5'.1 flat runtime layout", () => {

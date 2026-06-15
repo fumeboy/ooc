@@ -11,7 +11,7 @@ import {
   generateWindowId,
   ROOT_WINDOW_ID,
   type TalkWindow,
-} from "@ooc/core/executable/windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {

@@ -30,7 +30,7 @@ import {
   isNonPersistedWindow,
   type BaseContextWindow,
   type ContextWindow,
-} from "../executable/windows/_shared/types.js";
+} from "@ooc/core/_shared/types/context-window.js";
 
 /**
  * thread-context.json 中一条 contextWindow 的形态：

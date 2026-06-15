@@ -24,9 +24,9 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep, join } from "node:path";
-import type { ThreadContext } from "../../../thinkable/context";
-import { nestedObjectPath } from "../../../_shared/types/thread";
-import { readWorldConfigSync } from "../../../persistable/index.js";
+import type { ThreadContext } from "../thinkable/context";
+import { nestedObjectPath } from "../_shared/types/thread";
+import { readWorldConfigSync } from "./index.js";
 
 /**
  * 把 LLM 传入的路径解析为绝对路径：

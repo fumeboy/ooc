@@ -21,16 +21,16 @@ import { join } from "node:path";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { renderContextXml } from "@ooc/core/__tests__/render-context-xml";
-import { generateWindowId } from "@ooc/core/executable/windows/_shared/types";
+import { generateWindowId } from "@ooc/core/_shared/types/context-window.js";
 import type {
   FileWindow,
   SearchWindow,
   TalkWindow,
-} from "@ooc/core/executable/windows/_shared/types";
+} from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context";
 
 // 触发各 window type 的 side-effect 注册(compressView hook 需要这个)。
-import "@ooc/core/executable/windows";
+import "@ooc/core/runtime/register-builtins.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 通用 helpers

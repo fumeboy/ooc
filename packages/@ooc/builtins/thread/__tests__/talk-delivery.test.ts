@@ -14,10 +14,10 @@ import { tmpdir } from "node:os";
 import { mkdir } from "node:fs/promises";
 import { createFlowObject, createFlowSession, readThread, writeThread, nestedObjectPath } from "../../../persistable";
 import { stoneDir, STONES_MAIN_BRANCH } from "../../../persistable/common";
-import { deliverTalkMessage } from "../talk/delivery";
+import { deliverTalkMessage } from "@ooc/builtins/thread/executable/talk-delivery.js";
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
-import { initContextWindows } from "../_shared/init";
-import { ROOT_WINDOW_ID, generateWindowId, type TalkWindow } from "../_shared/types";
+import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
+import { ROOT_WINDOW_ID, generateWindowId, type TalkWindow } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext } from "../../../thinkable/context";
 
 async function setupCaller(opts: {

@@ -7,8 +7,8 @@ import {
   type PoolObjectRef,
   type StoneObjectRef,
 } from "../../persistable";
-import type { ObjectRegistry } from "../../executable/windows/_shared/registry.js";
-import { builtinRegistry } from "../../executable/windows/index.js";
+import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { parseKnowledgeFile } from "./parser";
 import type { KnowledgeDoc, KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 

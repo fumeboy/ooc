@@ -44,8 +44,8 @@ import { createPauseStore } from "@ooc/core/app/server/runtime/pause-store";
 import { AppServerError } from "@ooc/core/app/server/bootstrap/errors";
 
 // 触发 windows 各 type 副作用注册
-import "@ooc/core/executable/windows";
-import { builtinRegistry } from "@ooc/core/executable/windows/_shared/registry";
+import "@ooc/core/runtime/register-builtins.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 
 // ─────────────────────────── helpers ──────────────────────────────────────────
 

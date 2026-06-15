@@ -1,6 +1,5 @@
 /**
- * Object Method 相关类型 —— canonical 源（从
- * `executable/windows/_shared/method-types.ts` 迁入）。
+ * Object Method 相关类型 —— canonical 源。
  *
  * - ObjectMethod：单个 method 的完整定义（description / intents / schema / exec + 可见性标记）
  * - MethodExecutionContext：method 的 exec 函数运行时入参
@@ -149,7 +148,7 @@ export interface ObjectMethod {
  * - form：被 submit 消费的 form 自身（base ContextWindow；runtime 层 narrow 到 MethodExecWindow）
  * - self：method 被调用的 ContextWindow（receiver；OOP semantics）
  * - manager：当前调度的 WindowManager —— 零依赖层声明为 `unknown`，executable 层定义带
- *   具体 WindowManager 类型的 subtype（见 executable/windows/_shared/method-types.ts）
+ *   具体 WindowManager 类型的 subtype（见 executable/manager.ts）
  * - args：最终参数（form.accumulatedArgs，或直接调用时的入参）
  */
 export interface MethodExecutionContext<TSelf extends ContextWindow = ContextWindow> {

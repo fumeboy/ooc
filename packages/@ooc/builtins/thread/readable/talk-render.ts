@@ -10,7 +10,7 @@
  */
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
-import type { TalkData } from "./types.js";
+import type { TalkData } from "../types.js";
 
 /**
  * 会话窗的 transcript 过滤——两种形态寻址不同：
