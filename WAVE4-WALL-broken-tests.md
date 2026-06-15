@@ -764,3 +764,32 @@ TalkWindow / FileWindow / MethodExecWindow 平铺别名 / 旧 mgr.openMethodExec
   base 字段，OocObjectInstance 结构满足 base 故 pipeline 单元仍可直接流入。仅 import + 注释，算法未动。
 - `executable/{permissions,tools,tools/exec,tools/close,tools/wait}.ts`、`web/.../MethodExecWindowDetail.tsx`：
   原用 `./windows/...` / `../windows/...` 相对路径引桥/实体，改指新 canonical 位置。
+
+## persistable：thread 容器持久化下沉到 thread builtin（2026-06-16）
+
+**原则**（用户拍板）：thread 是 builtin object，core 只提供框架与 API，不含 thread 序列化逻辑。
+把 thread 的会话持久化**逻辑**（thread.json strip / thread-context inline 嵌入 vs `_ref` / inbox /
+hydrate / writeSnapshot）从 `core/persistable/{thread-json,flow-thread-context,window-persistence}`
+迁入 **thread builtin** `builtins/agent/thread/persistable/thread-container.ts`，经新契约
+`PersistableModule.container`（`ThreadContainerPersistence`）注册；core 的 `writeThread`/`readThread`
+与 manager persist hook 经 registry dispatch **委托**调用，core 仅留框架（object-data.ts 通用单对象
+data IO、flow-thread-context 文件原语、串行写、路径原语）。
+
+### 行为变更（fail-loud）
+- `writeThread`/`readThread` 现**要求 thread builtin 已注册**（`resolvePersistable("_builtin/agent/thread").container`）；
+  缺失则 throw（旧码在空 registry 下 `isInlinePersisted=false` 静默降级）。**用 bare `createObjectRegistry()`
+  且不 import register-builtins 的单元测试会从「降级 pass」变「throw fail」**——属预期，修法：测试 setup
+  `import "@ooc/core/runtime/register-builtins.js"`（boot 全量 builtin registry）。
+- 受影响（运行时新坏，逻辑未变，待统一修时补 registration）：
+  - `core/persistable/__tests__/thread-context-bypass-reload.test.ts`
+  - `core/persistable/__tests__/thread-json-registry-read.test.ts`
+  （二者本就在 tsc 坏堆；现运行时亦需 builtin 注册）
+
+### 顺带退潮（非测试，源码）
+- `core/reflectable/index.ts`：删除 dangling `import "@ooc/builtins/reflect_request"`（reflect_request 已
+  退役为 thread 投影 class、包不存在，此 import 令整条 register-builtins 链 runtime 崩）。
+
+## thread 初始 context 补全局单例成员（2026-06-16）
+- `thinkable/context/init.ts` 的 `injectMemberWindowsIfObjectThread`：每个 agent thread 初始 context
+  恒补 `_builtin/{filesystem,terminal,interpreter}` + `_builtin/agent/skill_index`（composition HAS-A
+  默认成员，旧 `ooc.members` 声明退役的落地替代）；transient 重注入、user thread 不补、幂等。非测试 tsc 0。

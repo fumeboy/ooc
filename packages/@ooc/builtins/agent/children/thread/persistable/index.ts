@@ -1,18 +1,22 @@
 /**
- * thread —— persistable 维度（声明 **inline 持久化**）。
+ * thread —— persistable 维度。
  *
- * thread 是 agent 运行过程的载体、也是所属 thread 自己的运行态自有窗（会话窗 self/peer/fork/
- * reflect_request 投影都是 thread 实例）。它经 `mode:"inline"` 声明：整窗随该 thread 的
- * `thread-context.json` inline 落盘、不写独立 `state.json`。
- *
- * 薄壳委托底座：inline 的实际落盘由 core 的 thread-context 底座（thread-json /
- * flow-thread-context）代劳——thread 的运行态（context / inbox / outbox / events / status）
- * 持久化机制属 persistable 维度底座、集中在 `core/persistable/`，本模块只**声明策略**，
- * 故无 save / load（取代旧的 registry `isBuiltinFeature` 硬编码标志）。
+ * thread 是 builtin object，它的持久化**逻辑全在自己这里**：
+ * - `mode:"inline"`：thread **作为别的 context 里的一个窗**时，整窗随所属 thread 的
+ *   `thread-context.json` inline 落盘、不写独立 state.json（会话窗 self/peer/fork/reflect_request
+ *   投影都是 thread 实例）。
+ * - `container`：thread **作为运行会话容器**时的持久化逻辑（thread.json + thread-context.json +
+ *   inbox + hydrate）。core 只提供框架与 API（runtime 引擎 / 串行写 / 路径原语 / 默认 state.json IO
+ *   / registry dispatch），经 `writeThread`/`readThread` 与 manager persist hook **委托**到这里，
+ *   core 不内含 thread 序列化逻辑（object-model 核心 7）。
  */
 import type { PersistableModule } from "@ooc/core/persistable/contract.js";
 import type { Data } from "../types.js";
+import { threadContainer } from "./thread-container.js";
 
-const persistable: PersistableModule<Data> = { mode: "inline" };
+const persistable: PersistableModule<Data> = {
+  mode: "inline",
+  container: threadContainer,
+};
 
 export default persistable;

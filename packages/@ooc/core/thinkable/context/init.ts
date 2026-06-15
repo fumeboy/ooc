@@ -325,19 +325,36 @@ async function readDeclaredMembers(ref: StoneObjectRef): Promise<string[]> {
  *
  * 幂等：已存在则跳过。IO 失败静默吞（debug log），不阻塞 thread 启动。
  */
+/**
+ * 每个 agent thread 初始 context 默认补充的**全局单例成员**（composition HAS-A 默认成员）：
+ * filesystem / terminal / interpreter 三件全局单例 tool-object + skill_index。
+ *
+ * 这是 thread 作为 agent 智能运行载体的组合默认——agent 一开窗即可 exec 这些工具、看见技能索引。
+ * 旧的 `ooc.members` 包级声明已退役（见 class 维度组合段）；此处是其落地替代。member 窗 transient
+ * 重注入（不持久化），每次 thread 加载 / construct 幂等补齐。
+ */
+const GLOBAL_SINGLETON_TOOL_MEMBERS = [
+  "_builtin/filesystem",
+  "_builtin/terminal",
+  "_builtin/interpreter",
+  "_builtin/agent/skill_index",
+] as const;
+
 export async function injectMemberWindowsIfObjectThread(thread: ThreadContext): Promise<void> {
   const persistence = thread.persistence;
   const selfId = persistence?.objectId;
   if (!persistence || !selfId || selfId === "user") return;
 
-  let members: string[];
+  // 全局单例成员恒补；再并入对象自声明的 members（若有；声明读取失败不影响单例补充）。
+  const members: string[] = [...GLOBAL_SINGLETON_TOOL_MEMBERS];
   try {
-    members = await readDeclaredMembers(deriveStoneFromThread(persistence));
+    for (const m of await readDeclaredMembers(deriveStoneFromThread(persistence))) {
+      if (!members.includes(m)) members.push(m);
+    }
   } catch (err) {
     console.debug(
-      `[member-windows] read io_error self=${selfId} msg=${(err as Error).message}`,
+      `[member-windows] declared-members read io_error self=${selfId} msg=${(err as Error).message}`,
     );
-    return;
   }
   if (members.length === 0) return;
 

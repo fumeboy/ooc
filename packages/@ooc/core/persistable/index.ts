@@ -102,16 +102,30 @@ export {
   type ContextParams,
 } from "./flow-context-registry";
 
-// thread context.json (state vs context split)
+// thread context.json 文件原语（state vs context split）。
+// 注：buildThreadContextEntries（entry 形态逻辑）已迁出 core → thread builtin 的
+// persistable.container；core 仅留 thread-context.json 的路径 + 串行写/读原语。
 export {
   threadContextFile,
   writeThreadContext,
   readThreadContext,
-  buildThreadContextEntries,
   type ThreadContextRef,
   type ThreadContextEntry,
   type ThreadContextFile,
 } from "./flow-thread-context";
+
+// 单对象 data 持久化（系统默认 / class 自定义 persistable 的通用编织点，object-model 核心 7）。
+export {
+  saveObjectData,
+  loadObjectData,
+  isTransientInstance,
+  threadPersistRef,
+  runtimeObjectRef,
+  persistableCtx,
+} from "./object-data";
+export type {
+  ThreadContainerPersistence,
+} from "./contract";
 
 export {
   // stone-worktree: session identity 的 worktree 统一访问层（取代 plain overlay）
