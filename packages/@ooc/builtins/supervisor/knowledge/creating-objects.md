@@ -42,12 +42,12 @@ activates_on:
 
 ### 3. 用 `create_object` 落盘骨架（业务 session）
 
-建一个全新对象用 root method `create_object`（**不是** `write_file`——新对象还没
+建一个全新对象用 runtime 成员对象的 `create_object` 方法（**不是** `write_file`——新对象还没
 package.json，裸 write_file 会被判 workspace-level 资源拒写）。它原子地落
 `objects/<newId>/{package.json, self.md, readable.md[, knowledge/*]}`。
 
 ```
-open(method="create_object",
+exec(window_id="runtime", method="create_object",
      args={
        objectId: "<newId>",
        selfMd: "# <newId> — <一句话角色>\n\n我是 <newId>...",
@@ -69,17 +69,17 @@ open(method="create_object",
 
 骨架还在 session worktree——session 是运行时派生物，**永不合入 main**。要让新对象永久存在，
 进 super flow 走一条 feat 分支 PR：`new_feat_branch(intent)` 从 main 派生 feat 分支并绑定本 thread →
-在 feat 分支上把新对象目录 `objects/<newId>/...` write_file 落齐 → `evolve_self` 提交并开 PR。
+在 feat 分支上把新对象目录 `objects/<newId>/...` write_file 落齐 → `create_pr_and_invite_reviewers` 提交并开 PR。
 
 ```
-open(method="new_feat_branch", args={ intent: "feat: introduce <newId> agent" })
-open(method="write_file", args={ path: "stones/<newId>/self.md", content: … })   # 直接落 feat 分支
+exec(method="new_feat_branch", args={ intent: "feat: introduce <newId> agent" })
+exec(window_id="filesystem", method="write_file", args={ path: "stones/<newId>/self.md", content: … })  # 直接落 feat 分支
 …（把 package.json/self/readable[/knowledge] 落齐 feat 分支）…
-open(method="evolve_self")                              # commit + 开 PR
+exec(method="create_pr_and_invite_reviewers")          # commit + 开 PR
 ```
 
 新对象 `objects/<newId>/` 不在我（supervisor）自己的自治区 `objects/supervisor/` 下 → 变更越界，
-`evolve_self` 算 reviewer 时会拉相关对象进 review（新对象无既有 owner 时 reviewer = {supervisor}）。
+`create_pr_and_invite_reviewers` 算 reviewer 时会拉相关对象进 review（新对象无既有 owner 时 reviewer = {supervisor}）。
 我恒在 reviewer 集，经 pr_window method 或控制面端点审批；全 approve 后按 `.world.json prAutoMerge`
 合入（缺省 false → 我经 `POST /api/runtime/pr-issues/<N>/resolve` body `{ "decision": "merge" }` 落锤）。
 
@@ -90,7 +90,7 @@ open(method="evolve_self")                              # commit + 开 PR
 supervisor 只负责"开 World 的接生"，不替后续维护。
 
 如果确实需要 supervisor 帮某 Object 改它**已存在**的 stone（修补 bug、迁移等），在 super flow
-`new_feat_branch` 后于 feat 分支上 write_file 写 `stones/<otherId>/...`，再 `evolve_self` —— 变更触及
+`new_feat_branch` 后于 feat 分支上 write_file 写 `stones/<otherId>/...`，再 `create_pr_and_invite_reviewers` —— 变更触及
 别人领地，PR 把那个对象拉进 review，我也在 reviewer 集。
 
 #### executable/index.ts 唯一正确写法
@@ -128,7 +128,7 @@ LLM 路径不消费 `data`。
 
 ### 6. 验证 + 移交
 
-PR 合入 main 后通过 `open(method="talk", args={ target: "<newId>" })` 派单一次确认新
+PR 合入 main 后通过 `exec(method="talk", args={ target: "<newId>", title: "上线确认" })` 派单一次确认新
 Object 能响应，然后向用户回报新 Object 已就绪。
 
 ## 模板：最小 self.md
@@ -159,9 +159,9 @@ Object 能响应，然后向用户回报新 Object 已就绪。
 | `WORKTREE` | session worktree 建失败（兜底回 main，拒绝直写 main） | 上报；通常是 world 状态异常，需研判 |
 
 沉淀阶段（feat 分支 PR）的错误：
-- `evolve_self` 返回 `kind: "pr-issue"` + `issueId` → 这是预期的，PR 已开、等 reviewer 审批；
+- `create_pr_and_invite_reviewers` 返回 `kind: "pr-issue"` + `issueId` → 这是预期的，PR 已开、等 reviewer 审批；
   全 approve 后经控制面端点 `POST /api/runtime/pr-issues/:issueId/resolve`（body `{ decision: "merge" }`）落锤合入。
-- 忘了先 `new_feat_branch` 直接 `evolve_self` → fail-loud 提示先开分支；先 `new_feat_branch(intent)` 再编辑。
+- 忘了先 `new_feat_branch` 直接 `create_pr_and_invite_reviewers` → fail-loud 提示先开分支；先 `new_feat_branch(intent)` 再编辑。
 - 想改其它 Object 的**已有** stone（非新建）→ 同样在 super flow `new_feat_branch` → feat 分支上 write_file →
-  `evolve_self`（PR 把那个对象拉进 review，我也在 reviewer 集）；或回滚历史经
+  `create_pr_and_invite_reviewers`（PR 把那个对象拉进 review，我也在 reviewer 集）；或回滚历史经
   `POST /api/runtime/stones/:objectId/rollback`（body `{ targetCommit }`）。

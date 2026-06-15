@@ -38,7 +38,7 @@ const readable: ReadableModule<Data, TodoWin> = {
   window: [
     {
       class: "todo",
-      object_methods: [],
+      object_methods: ["mark_done"],
       window_methods: [],
     },
   ],

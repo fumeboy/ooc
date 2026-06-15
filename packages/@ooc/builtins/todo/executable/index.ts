@@ -1,16 +1,31 @@
 /**
  * todo —— executable 维度（object method）。
  *
- * todo 是静态待办卡片，**没有 LLM 可调用的 object method**（旧实现里它只能被 close，
- * 而 close 是纯生命周期、无业务副作用——归 runtime 信封管理，不作 object method）。
- * 构造逻辑在 ../index.ts 的 `Class.construct`。故 methods 为空。
+ * todo 是待办卡片，持 open/done 业务态。唯一 object method `mark_done` 把
+ * status 从 open 翻成 done——这是真实业务态迁移（改 object data），故归 executable，
+ * 区别于纯生命周期 close（归 runtime 信封管理）。构造逻辑在 ../index.ts 的 `Class.construct`。
  */
 
-import type { ExecutableModule } from "@ooc/core/executable/contract.js";
+import type {
+  ExecutableContext,
+  ExecutableModule,
+  ObjectMethod,
+} from "@ooc/core/executable/contract.js";
 import type { Data } from "../types.js";
 
+const markDone: ObjectMethod<Data> = {
+  name: "mark_done",
+  description: "Mark this todo as done.",
+  exec: async (ctx: ExecutableContext, self: Data) => {
+    if (self.status === "done") return "已是 done 状态。";
+    self.status = "done";
+    await ctx.reportDataEdit?.();
+    return "已标记为 done。";
+  },
+};
+
 const executable: ExecutableModule<Data> = {
-  methods: [],
+  methods: [markDone],
 };
 
 export default executable;

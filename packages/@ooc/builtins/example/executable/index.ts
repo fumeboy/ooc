@@ -2,7 +2,7 @@
  * example —— executable 维度（object method）样板。
  *
  * object method 签名 `(ctx, self, args)`，**可改 self（Data）、可副作用**。
- * 与 readable 维度（投影 + window method，在 ../readable.ts）物理分离。
+ * 与 readable 维度（投影 + window method，在 ../readable/index.ts）物理分离。
  */
 
 import type {

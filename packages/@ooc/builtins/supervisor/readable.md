@@ -17,11 +17,13 @@ OOC World 的中枢 Object，默认与 user 沟通的接口。
 
 ## 怎么找我
 
-开一个 talk_window：
+向我开一个 talk_window（peer 会话，target=我；同一对象复用同一窗，别每条消息重开）：
 
 ```
-open(type="talk", target="supervisor", initial_text="<你的需求>")
+exec(method="talk", args={ target: "supervisor", title: "<你的需求主题>" })
 ```
+
+开窗后在该 talk_window 上 `say` 把具体诉求发给我。
 
 或在 web 控制面侧栏选 `supervisor` 直接发消息。
 

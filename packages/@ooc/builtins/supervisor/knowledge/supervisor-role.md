@@ -33,18 +33,18 @@ activates_on:
 
 先判断协作类型：
 - **同 stone peer**（同级或我的 children，已经在我的 contextWindows 中出现）→ 直接 `exec(window_id="<objectId>", method="...", args={...})`，1 跳返回结果。这是**首选**。
-- **跨 session / 异步 / 需要对方独立思考** → 开 `talk_window(target=<peer object>)` 把需求转述
-- **复杂任务、需要子 thread 独立调度** → `talk(target=自己)` fork 新子 thread 处理（带 `share_windows` 共享必要上下文）
+- **跨 session / 异步 / 需要对方独立思考** → `exec(method="talk", args={ target: "<peer object>", title: "<主题>" })` 开 talk_window 转述需求
+- **复杂任务、需要子 thread 独立调度** → `exec(method="talk", args={ target: "<我自己的 objectId>", msg: "<子任务>" })` fork 新子 thread 处理（可带 `wait` / `share_windows` 共享必要上下文）
 
 > 不要对同 stone peer 先 talk 再 exec——链路从 3 跳变 1 跳，延迟和出错概率都降一个数量级。只有确实不满足"同 stone peer"时才走 talk。
 
 派完后：
-- exec 路径直接读返回值合成回复
-- talk/do 路径等子方完成 → 把结果转给用户
+- exec 直调路径直接读返回值合成回复
+- talk（peer / fork）路径等子方完成 → 把结果转给用户
 
 **创建 Object 类（现有 Object 不够）**：
 - 与用户确认身份 / 接口 / 边界
-- 用 `create_object` 落新对象骨架 → super flow `new_feat_branch` → 编辑 → `evolve_self` 开 PR 沉淀（见 `creating-objects.md`）
+- 业务 session `create_object` 落新对象骨架 → super flow `new_feat_branch` → 编辑 → `create_pr_and_invite_reviewers` 开 PR 沉淀（见 `creating-objects.md`）
 - 验证 + 移交
 
 **审阅类（PR-Issue / rollback）**：
@@ -77,13 +77,13 @@ activates_on:
 
 ## 我的 method 优先级
 
-按使用频率粗略排序：
+按使用频率粗略排序（self 窗 agency = talk/plan/todo/end，缺省 window_id；成员对象方法指定对应成员窗）：
 
-1. **say**（在 talk_window 上回复用户）
-2. **talk**（开新 talk_window 转述需求给其它 Object）
-3. **do**（派生子 thread 处理任务）
-4. **create_object**（落新对象骨架）/ **write_file / edit**（改已存在对象的 stone，本 session 试验）→ super flow `new_feat_branch` → 编辑 → `evolve_self` 开 PR 沉淀进 canonical
-5. **open_file / write_file / glob / grep**（探索或修改 World 文件）
+1. **say**（在某个 talk_window 上回复用户/对方）
+2. **talk**（`target=别的对象` 开 peer 会话转述需求；`target=自己` fork 子 thread 派活）
+3. **plan / todo**（把任务拆成可见步骤 / 登记待办）
+4. **create_object**（runtime 成员落新对象骨架）/ **write_file / edit**（改已存在对象的 stone，本 session 试验）→ super flow `new_feat_branch` → 编辑 → `create_pr_and_invite_reviewers` 开 PR 沉淀进 canonical
+5. **open_file / write_file / glob / grep**（filesystem 成员：探索或修改 World 文件）
 6. **end**（标记本轮 thread 结束）
 
 治理动作（resolve PR-Issue / rollback stone）不是 method，而是经控制面 HTTP 端点 enact，见上文「审阅类」。
