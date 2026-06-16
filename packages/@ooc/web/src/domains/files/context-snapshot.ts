@@ -63,7 +63,7 @@ type _ContextWindowData =
         }>;
       };
     }
-  | { class: "do"; data: { targetThreadId: string; isCreatorWindow?: boolean } }
+  | { class: "do"; data: { targetThreadId: string } }
   | { class: "todo"; data: { content: string; activatesOn?: string[]; status?: "open" | "done" } }
   | {
       // 会话窗三 class 同形（后端 talk/types.ts + thread/types.ts + reflect_request/types.ts）：
@@ -75,7 +75,6 @@ type _ContextWindowData =
       data: {
         target: string;
         conversationId: string;
-        isCreatorWindow?: boolean;
         targetThreadId?: string;
         isForkWindow?: boolean;
       };
@@ -227,6 +226,14 @@ interface _ContextWindowEnvelope {
  */
 export type ContextWindow = _ContextWindowEnvelope & _ContextWindowData;
 
+/**
+ * creator 窗身份编码在 window id 里（镜像后端 `creatorWindowIdOf`：id=`w_creator_<threadId>`）——
+ * 不再有 `data.isCreatorWindow` 字段，前端按 id 派生「这是不是 creator 窗」。
+ */
+export function isCreatorWindowId(id: string | undefined): boolean {
+  return !!id && id.startsWith("w_creator_");
+}
+
 /** 取 window 的父对象 id（兼容旧 parentWindowId 字段）。 */
 export function windowParentId(window: ContextWindow): string | undefined {
   return window.parentObjectId ?? window.parentWindowId;
@@ -365,7 +372,7 @@ function windowSummary(window: ContextWindow): string {
     case "method_exec":
       return `${window.data.method} (${window.status})`;
     case "do":
-      return `→ ${window.data.targetThreadId}${window.data.isCreatorWindow ? " · creator" : ""}`;
+      return `→ ${window.data.targetThreadId}${isCreatorWindowId(window.id) ? " · creator" : ""}`;
     case "todo":
       return previewText(window.data.content);
     case "talk":

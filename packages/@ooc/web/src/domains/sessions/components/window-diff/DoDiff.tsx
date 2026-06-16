@@ -7,7 +7,7 @@
  * Diff 形态：
  *   - status 变化（running → archived 用大字号）
  *   - targetThreadId 变化
- *   - title / isCreatorWindow 字段 diff
+ *   - title 字段 diff（creator 窗身份已编码在 id，不再有 isCreatorWindow data 字段可 diff）
  */
 
 import type { WindowDiffProps } from "./window-diff-props";
@@ -62,11 +62,6 @@ export default function DoDiff({ previous, current }: WindowDiffProps) {
           cur={readString(cur, "targetThreadId")}
         />
         <FieldDiffLine label="title" prev={readString(prev, "title")} cur={readString(cur, "title")} />
-        <FieldDiffLine
-          label="isCreatorWindow"
-          prev={(prev as Record<string, unknown>).isCreatorWindow}
-          cur={(cur as Record<string, unknown>).isCreatorWindow}
-        />
       </Section>
     </div>
   );

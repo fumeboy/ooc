@@ -16,7 +16,8 @@ import {
 
 /** 会话窗渲染所需的最小窗形态（talk / do 都满足）。 */
 interface ConversationWindowLike {
-  isCreatorWindow?: boolean;
+  /** 渲染计算入参：本窗是否是 creator 窗（caller 用 isCreatorWindowId(id) 算好传入；非持久化字段）。 */
+  isCreator?: boolean;
   transcriptViewport?: TranscriptViewport;
 }
 
@@ -31,7 +32,7 @@ export function renderTranscriptOrHandle(
   window: ConversationWindowLike,
   messages: ThreadMessage[],
 ): XmlNode[] {
-  if (window.isCreatorWindow) {
+  if (window.isCreator) {
     return [
       xmlElement("is_creator_window", {}, [xmlText("true")]),
       xmlElement(

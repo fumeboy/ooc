@@ -47,6 +47,13 @@ declare -a FORBIDDEN_PATTERNS=(
   # —— readme.md 退役（2026-06-12）：legacy readable.md 前身，端点/字段/磁盘文件名全迁 readable。
   #    精确小写 `readme\.md`，不命中根 README.md（大写，grep 默认大小写敏感）。
   "readme\\.md"
+  # —— thread container indirection 退役（2026-06-16）：thread 持久化改标准 persistable.save/load，
+  #    删 PersistableModule.container / ThreadContainerPersistence / threadContainer。
+  "ThreadContainerPersistence"
+  "\\bthreadContainer\\b"
+  # —— isCreatorWindow 去状态化（2026-06-16）：creator 窗身份编码在 id（creatorWindowIdOf），不存
+  #    data flag。精确禁「字段重声明」isCreatorWindow?:（不命中 isCreatorWindowId helper / .isCreatorWindow 访问）。
+  "isCreatorWindow\\?:"
 )
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）
@@ -60,6 +67,7 @@ ALLOW_LIST=(
   "scripts/check-no-deprecated-symbols.sh"
   "scripts/check-doc-deprecated-drift.sh"  # 文档漂移检查的 FORBIDDEN_PATTERNS 列了这些废弃符号字面量
   "packages/@ooc/core/persistable/__tests__/stone.test.ts"  # 守门断言：writeReadable 不再写 readme.md，须引用该字面量
+  "packages/@ooc/builtins/agent/children/thread/TODO.md"  # 计划文档：记述 container/ThreadContainerPersistence 退役过程，须引用字面量
 )
 
 EXCLUDE_DIRS=(

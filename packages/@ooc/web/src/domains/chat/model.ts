@@ -51,7 +51,6 @@ export type ContextWindow =
       title: string;
       status: "running" | "archived";
       targetThreadId: string;
-      isCreatorWindow?: boolean;
       createdAt?: number;
     }
   | {
@@ -76,7 +75,6 @@ export type ContextWindow =
       /** 对端 thread id；首条消息派送时由 talk-delivery 回填。 */
       targetThreadId?: string;
       conversationId: string;
-      isCreatorWindow?: boolean;
       createdAt?: number;
     }
   | {

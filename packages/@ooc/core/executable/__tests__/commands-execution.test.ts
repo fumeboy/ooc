@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { ROOT_METHODS, execRootMethod } from "@ooc/core/executable/manager.js";
 import { makeThread } from "../../__tests__/make-thread";
-import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import { type ContextWindow, isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
 
 /**
  * 验证 root level method 在 ContextWindow 模型下的副作用。
@@ -78,7 +78,7 @@ describe("method execution side effects", () => {
       configurable: true,
     });
     const creatorBefore = child.contextWindows.find(
-      (w) => w.class === "talk" && (w as { isCreatorWindow?: boolean }).isCreatorWindow,
+      (w) => w.class === "talk" && isCreatorWindowId(w.id),
     );
     expect(creatorBefore?.class).toBe("talk");
     expect((creatorBefore as { isForkWindow?: boolean }).isForkWindow).toBe(true);
@@ -119,7 +119,7 @@ describe("method execution side effects", () => {
     windows.find(
       (w) =>
         w.class === "talk" &&
-        !(w as { isCreatorWindow?: boolean }).isCreatorWindow &&
+        !isCreatorWindowId(w.id) &&
         !(w as { isForkWindow?: boolean }).isForkWindow,
     );
 

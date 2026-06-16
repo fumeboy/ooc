@@ -2,7 +2,7 @@ import { describe, it, expect } from "bun:test";
 import { OOC_TOOLS, buildAvailableTools } from "../tools/index";
 import { dispatchToolCall } from "../tools";
 import { makeThread } from "../../__tests__/make-thread";
-import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import { type ContextWindow, isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 
 const SELF = "alice";
@@ -192,7 +192,7 @@ describe("executable tools (ContextWindow model)", () => {
 
   it("close creator talk_window 时被拒绝并写 inject 事件", async () => {
     const thread = makeThread();
-    const creator = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "talk" && w.isCreatorWindow);
+    const creator = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "talk" && isCreatorWindowId(w.id));
     expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {
       id: "call_1",
@@ -207,7 +207,7 @@ describe("executable tools (ContextWindow model)", () => {
   it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait + waitingOn", async () => {
     const thread = makeThread({ inbox: [] });
     const creator = (thread.contextWindows as ContextWindow[]).find(
-      (w) => w.class === "talk" && w.isCreatorWindow,
+      (w) => w.class === "talk" && isCreatorWindowId(w.id),
     );
     expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {
