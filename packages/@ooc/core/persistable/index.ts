@@ -102,9 +102,9 @@ export {
   type ContextParams,
 } from "./flow-context-registry";
 
-// thread context.json 文件原语（state vs context split）。
-// 注：buildThreadContextEntries（entry 形态逻辑）已迁出 core → thread builtin 的
-// persistable.container；core 仅留 thread-context.json 的路径 + 串行写/读原语。
+// thread context.json 文件原语（窗状态 vs 对象 data 的分层）。
+// 注：窗状态 entry 形态（inline vs `_ref`）是 thread builtin 的逻辑（thread/persistable/thread-persist）；
+// core 仅留 thread-context.json 的路径 + 串行写/读原语。
 export {
   threadContextFile,
   writeThreadContext,
@@ -123,9 +123,6 @@ export {
   runtimeObjectRef,
   persistableCtx,
 } from "./object-data";
-export type {
-  ThreadContainerPersistence,
-} from "./contract";
 
 export {
   // stone-worktree: session identity 的 worktree 统一访问层（取代 plain overlay）

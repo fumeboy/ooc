@@ -45,10 +45,10 @@ export interface ThreadContextFile {
   contextWindows: ThreadContextEntry[];
 }
 
-// buildThreadContextEntries 已迁出 core —— thread-context 的 entry 形态（inline 嵌入 vs `_ref`）
-// 是 thread builtin 的**逻辑**，现在 `@ooc/builtins/agent/thread/persistable/thread-container.ts`。
-// core 仅保留 thread-context.json 的**文件原语**（路径 + 串行写/读），见下；entry 生成由 thread
-// builtin 经 `persistable.container` 实现、core 经 `writeThread`/manager hook dispatch 调用。
+// thread-context 的 entry 形态（窗状态：inline 嵌入 vs `_ref`）是 thread builtin 的**逻辑**，
+// 在 `@ooc/builtins/agent/thread/persistable/thread-persist.ts`。core 仅保留 thread-context.json 的
+// **文件原语**（路径 + 串行写/读），见下；entry 生成由 thread builtin 的标准 `save` 实现、core 经
+// `writeThread`/manager hook dispatch 调用。
 
 /**
  * 别名 —— 让调用方不必每次 import `ThreadPersistenceRef`，

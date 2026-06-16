@@ -7,7 +7,7 @@
  *   优先 `registry.resolvePersistable(class).save/load`，否则系统默认 JSON 序列化。
  *
  * thread 容器（thread.json / thread-context.json / inbox / hydrate）的**逻辑**不在此——那是
- * thread builtin 自己的 persistable.container 实现；本模块只提供它与 manager 复用的通用 data IO。
+ * thread builtin 自己的标准 `persistable.save`/`load` 实现；本模块只提供它与 manager 复用的通用 data IO。
  *
  * 所有 IO 失败 fail-soft（observeWarn，不抛），写盘不阻塞 LLM think loop。
  */

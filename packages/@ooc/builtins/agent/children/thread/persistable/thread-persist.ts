@@ -1,18 +1,20 @@
 /**
- * thread —— **容器持久化逻辑**（thread builtin 自有，不属 core）。
+ * thread —— **容器持久化逻辑**的标准 `save`/`load` 实现（thread builtin 自有，不属 core）。
  *
  * thread 是 builtin object：它怎么把自己的会话运行态落盘/读回是 thread 自己的逻辑——
- * thread.json（元数据，strip 掉易变内存字段）+ thread-context.json（子窗信封+win，inline 嵌入
- * vs `_ref`）+ inbox（per-message）+ hydrate（冷恢复重建）。core 只提供框架与 API：串行写、
- * 路径原语、默认 state.json IO（`saveObjectData`）、inbox per-message 原语、registry dispatch
- * 与 `isInlinePersisted` 判定；本模块经 `persistable.container` 注册、被 core 的 `writeThread`/
- * `readThread` 与 manager persist hook 委托调用（object-model 核心 7 + persistable
- * 「core=框架+API、builtin=逻辑」边界）。
+ * thread.json（thread 自身对象数据：status/events/outbox/… strip 掉易变内存字段）+
+ * thread-context.json（窗状态：信封 + win，inline class 整窗 vs 独立对象 `_ref`）+
+ * inbox（per-message 目录）+ hydrate（冷恢复重建）。core 只提供框架与 API：串行写、路径原语、
+ * 默认 state.json IO（`saveObjectData`）、inbox per-message 原语、registry dispatch；本模块经标准
+ * `persistable.save`/`load` 注册（不再有专属 `container` 契约），被 core 的 `writeThread`/`readThread`
+ * 与 manager persist hook 用 thread 作用域 ctx（含 threadId）dispatch 调用（object-model 核心 7 +
+ * persistable「core=框架+API、builtin=逻辑」边界）。
  *
- * 落盘维度区分（关键不变量，沿用历史布局）：
+ * 归属（窗持引用、对象持数据）：
+ * - thread.json（thread 对象自身数据）：不含 contextWindows / inbox（各有独立权威，避免双写漂移）。
+ * - thread-context.json（thread 维度的**窗状态**）：该 thread 的窗信封 + win；inline class 整窗、
+ *   独立对象仅 `_ref`（被指对象数据各自落 state.json，不内联）。
  * - state.json（object 维度）：独立子窗自身 data，跨线程共享。
- * - thread-context.json（thread 维度）：该 thread 的子窗信封+win；inline class 整窗、独立 object 仅 `_ref`。
- * - thread.json（thread 元数据）：不含 contextWindows / inbox（各有独立权威，避免双写漂移）。
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type {
@@ -37,7 +39,7 @@ import {
   persistInboxMessages,
   readInboxMessages,
 } from "@ooc/core/persistable/inbox-store.js";
-import type { ThreadContainerPersistence } from "@ooc/core/persistable/contract.js";
+import type { PersistableContext } from "@ooc/core/persistable/contract.js";
 import {
   ROOT_WINDOW_ID,
   isNonPersistedWindow,
@@ -56,11 +58,11 @@ import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import { observeWarn } from "@ooc/core/observable/log-aggregator.js";
 
 /**
- * 把一组内存里的 contextWindow 序列化成 thread-context.json 的 entry 数组（**唯一**生成规则）。
+ * 把一组内存里的 contextWindow 序列化成 thread-context.json 的窗状态 entry 数组（**唯一**生成规则）。
  *   - root window 跳过
  *   - isNonPersistedWindow（volatile derived + self 门面窗）跳过——无 state.json，落 `_ref` 必报 missing
  *   - inline class（运行态自有窗）→ 整窗 inline（state 即 context）
- *   - 否则（独立 flow object）→ 轻量 `_ref`，hydrate 时另读 `<id>/state.json`
+ *   - 否则（独立对象）→ 轻量 `_ref`，hydrate 时另读 `<id>/state.json`（被指对象数据各自落，不内联）
  */
 function buildEntries(
   windows: Iterable<BaseContextWindow>,
@@ -102,7 +104,7 @@ function stripVolatileForPersist(thread: ThreadContext): Omit<ThreadContext, "co
 /**
  * 把 thread-context.json 的 entry hydrate 成内存 OocObjectInstance[]。
  * - inline class：data 随 entry inline，直接成实例。
- * - 独立 object：entry 剥了 data（在各自 state.json），另读合回 inst.data。
+ * - 独立对象：entry 剥了 data（在各自 state.json），另读合回 inst.data。
  * 未注册 class 的实例丢弃（打 warn）。
  */
 async function hydrateContextWindows(
@@ -173,84 +175,78 @@ async function hydrateContextWindows(
 }
 
 /**
- * thread 容器持久化实现 —— 由 thread builtin 的 `persistable.container` 注册，core dispatch 调用。
+ * 标准 `persistable.save` —— 把整个 thread（thread.json + thread-context.json + 各独立子窗
+ * state.json + inbox）落盘。thread（ctx 的 data）自带 persistence ref（权威定位）；未携带则静默跳过。
  */
-export const threadContainer: ThreadContainerPersistence = {
-  /** 把 live 实例 map 的 thread-context 快照落盘（manager reportContextEdit 用）。 */
-  async writeSnapshot(
-    thread: ThreadContext,
-    instances: Map<string, OocObjectInstance>,
-    registry: ObjectRegistry,
-  ): Promise<void> {
-    const tref = threadPersistRef(thread);
-    if (!tref) return;
-    const entries = buildEntries(instances.values(), registry);
-    await writeThreadContext(tref, entries);
-  },
+export async function saveThread(_ctx: PersistableContext, thread: ThreadContext): Promise<void> {
+  if (!thread.persistence) return;
+  const registry = builtinRegistry;
+  await mkdir(threadDir(thread.persistence), { recursive: true });
+  // inbox → 独立 per-message 目录（append-only，并发安全），再从 thread.json strip 掉。
+  await persistInboxMessages(thread.persistence, thread.inbox);
+  // contextWindows（OocObjectInstance[]）→ thread-context.json（窗状态：信封 + win + 引用）+
+  // 各独立对象 data 落各自 state.json（不内联）。
+  const tref = threadPersistRef(thread);
+  if (tref) {
+    await writeThreadContext(tref, buildEntries(thread.contextWindows ?? [], registry));
+  }
+  for (const inst of thread.contextWindows ?? []) {
+    if (isTransientInstance(inst)) continue;
+    await saveObjectData(registry, thread, inst);
+  }
+  // thread.json = thread 对象自身数据（strip 掉 contextWindows / inbox / 内存字段）。
+  await writeFile(threadFile(thread.persistence), toJson(stripVolatileForPersist(thread)), "utf8");
+}
 
-  /** 把整个 thread（thread.json + thread-context.json + 各独立子窗 state.json + inbox）落盘。 */
-  async write(thread: ThreadContext): Promise<void> {
-    if (!thread.persistence) return;
-    const registry = builtinRegistry;
-    await mkdir(threadDir(thread.persistence), { recursive: true });
-    // inbox → 独立 per-message 目录（append-only，并发安全），再从 thread.json strip 掉。
-    await persistInboxMessages(thread.persistence, thread.inbox);
-    // contextWindows（OocObjectInstance[]）→ thread-context.json（信封+win）+ 各 data state.json。
-    const instances = new Map<string, OocObjectInstance>();
-    for (const inst of thread.contextWindows ?? []) instances.set(inst.id, inst);
-    await this.writeSnapshot(thread, instances, registry);
-    for (const inst of instances.values()) {
-      if (isTransientInstance(inst)) continue;
-      await saveObjectData(registry, thread, inst);
+/**
+ * 标准 `persistable.load` —— 从盘 hydrate 一个 thread，并把 persistence ref 重新挂上。
+ * ctx 携带 thread 二级寻址（baseDir/sessionId/objectId + threadId）；缺 threadId 视为不可定位 → undefined。
+ */
+export async function loadThread(ctx: PersistableContext): Promise<ThreadContext | undefined> {
+  if (!ctx.threadId) return undefined;
+  const registry = builtinRegistry;
+  const persistence: ThreadPersistenceRef = {
+    baseDir: ctx.baseDir,
+    sessionId: ctx.sessionId ?? "",
+    objectId: ctx.objectId,
+    threadId: ctx.threadId,
+  };
+  let raw: string;
+  try {
+    raw = await readFile(threadFile(persistence), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+  const parsed = JSON.parse(raw) as ThreadContext;
+  // feat 分支绑定随 thread.json 持久化在 parsed.persistence；ctx 只含
+  // {baseDir,sessionId,objectId,threadId}，恢复时把绑定从磁盘读回挂上。
+  if (parsed.persistence?.stonesBranch) {
+    persistence.stonesBranch = parsed.persistence.stonesBranch;
+    if (parsed.persistence.sedimentIntent) {
+      persistence.sedimentIntent = parsed.persistence.sedimentIntent;
     }
-    const sanitized = stripVolatileForPersist(thread);
-    await writeFile(threadFile(thread.persistence), toJson(sanitized), "utf8");
-  },
-
-  /** 从盘恢复线程上下文，并把 persistence ref 重新挂上。 */
-  async read(
-    ref: FlowObjectRef,
-    threadId: string,
-    registry: ObjectRegistry,
-  ): Promise<ThreadContext | undefined> {
-    const persistence: ThreadPersistenceRef = { ...ref, threadId };
-    let raw: string;
-    try {
-      raw = await readFile(threadFile(persistence), "utf8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-      throw error;
-    }
-    const parsed = JSON.parse(raw) as ThreadContext;
-    // feat 分支绑定随 thread.json 持久化在 parsed.persistence；caller 传的 ref 只含
-    // {baseDir,sessionId,objectId}，恢复时把绑定从磁盘读回挂上。
-    if (parsed.persistence?.stonesBranch) {
-      persistence.stonesBranch = parsed.persistence.stonesBranch;
-      if (parsed.persistence.sedimentIntent) {
-        persistence.sedimentIntent = parsed.persistence.sedimentIntent;
-      }
-    }
-    const restored: ThreadContext = {
-      ...parsed,
-      contextWindows: [],
-      persistence,
-    };
-    // inbox 以独立 per-message 目录为权威，merge 历史 thread.json.inbox（平滑迁移：按 id 去重并入）。
-    const dirInbox = await readInboxMessages(persistence);
-    const seenInbox = new Set(dirInbox.map((m) => m.id));
-    restored.inbox = [
-      ...dirInbox,
-      ...((parsed.inbox ?? []).filter((m) => !seenInbox.has(m.id))),
-    ];
-    restored.contextWindows = await hydrateContextWindows(persistence, registry);
-    // 兜底注入：缺 creator window 时补一个（初始 creator 对话 window）。
-    initContextWindows(restored, {
-      creatorThreadId: restored.creatorThreadId,
-      initialTaskTitle: `thread ${restored.id}`,
-    });
-    // peer / member window 注入：冷恢复时补齐 sibling + children + 声明成员。
-    await injectPeerWindowsIfObjectThread(restored);
-    await injectMemberWindowsIfObjectThread(restored);
-    return restored;
-  },
-};
+  }
+  const restored: ThreadContext = {
+    ...parsed,
+    contextWindows: [],
+    persistence,
+  };
+  // inbox 以独立 per-message 目录为权威，merge 历史 thread.json.inbox（平滑迁移：按 id 去重并入）。
+  const dirInbox = await readInboxMessages(persistence);
+  const seenInbox = new Set(dirInbox.map((m) => m.id));
+  restored.inbox = [
+    ...dirInbox,
+    ...((parsed.inbox ?? []).filter((m) => !seenInbox.has(m.id))),
+  ];
+  restored.contextWindows = await hydrateContextWindows(persistence, registry);
+  // 兜底注入：缺 creator window 时补一个（初始 creator 对话 window）。
+  initContextWindows(restored, {
+    creatorThreadId: restored.creatorThreadId,
+    initialTaskTitle: `thread ${restored.id}`,
+  });
+  // peer / member window 注入：冷恢复时补齐 sibling + children + 声明成员。
+  await injectPeerWindowsIfObjectThread(restored);
+  await injectMemberWindowsIfObjectThread(restored);
+  return restored;
+}
