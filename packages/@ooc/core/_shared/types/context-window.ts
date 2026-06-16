@@ -167,9 +167,23 @@ export function generateWindowId(type: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
+/** creator 会话窗 id 的稳定前缀（creator 窗身份编码在 id 里，不另存 isCreatorWindow flag）。 */
+export const CREATOR_WINDOW_ID_PREFIX = "w_creator_";
+
 /** 派生稳定的 creator 会话窗 id（talk window，指向 creator）。 */
 export function creatorWindowIdOf(threadId: string): string {
-  return `w_creator_${threadId}`;
+  return `${CREATOR_WINDOW_ID_PREFIX}${threadId}`;
+}
+
+/**
+ * 该窗是不是某 thread 的 creator 窗（self-view 与 creator 的恒在通道）。
+ *
+ * creator 窗身份编码在 id（`creatorWindowIdOf`）里，故纯由 id 判定——取代旧的持久化
+ * `data.isCreatorWindow` flag。一条 thread 的 context 里至多一条 creator 窗（id=`w_creator_<本thread.id>`）；
+ * 其余窗（peer=对端objectId / self/member=类型串 / 工具窗=生成id）都不以此前缀开头。
+ */
+export function isCreatorWindowId(id: string): boolean {
+  return id.startsWith(CREATOR_WINDOW_ID_PREFIX);
 }
 
 /**

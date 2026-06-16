@@ -20,6 +20,7 @@ import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
+  isCreatorWindowId,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
 import type { TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
@@ -49,8 +50,8 @@ const USER_OBJECT_ID = "user";
  *
  * 返回：
  * - instance：挂进 thread.contextWindows 的 OocObjectInstance（信封 + data=TalkData）。
- * - view    ：传给 deliverTalkMessage 的扁平 TalkWindowView 视图（delivery 只读 id/target/targetThreadId/
- *             isCreatorWindow，并回填 targetThreadId——回填后同步回 instance.data）。
+ * - view    ：传给 deliverTalkMessage 的扁平 TalkWindowView 视图（delivery 只读 id/target/targetThreadId，
+ *             并回填 targetThreadId——回填后同步回 instance.data；creator 窗身份由 id 派生）。
  */
 function buildUserTalkWindow(
   target: string,
@@ -538,7 +539,7 @@ export function createFlowsService(deps: {
       const existing = (userThread.contextWindows ?? []).find((inst) => {
         if (inst.class !== "talk") return false;
         const d = (inst.data ?? {}) as TalkData;
-        return !d.isCreatorWindow && d.target === target;
+        return !isCreatorWindowId(inst.id) && d.target === target;
       });
       if (existing) {
         const existingData = existing.data as TalkData;
@@ -849,7 +850,7 @@ export function createFlowsService(deps: {
       // Wave 4：会话窗是 OocObjectInstance，业务字段在 inst.data（=TalkData）。
       const talkWindows = (userThread.contextWindows ?? []).filter((inst) => {
         if (inst.class !== "talk") return false;
-        return !((inst.data ?? {}) as TalkData).isCreatorWindow;
+        return !isCreatorWindowId(inst.id);
       });
       const targetInstance = targetWindowId
         ? talkWindows.find((inst) => inst.id === targetWindowId)

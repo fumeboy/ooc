@@ -6,8 +6,9 @@
  * thread 实例（inst.class=`_builtin/thread`）；talk / reflect_request 不是注册 class，而是 thread
  * readable 按视角（POV）投影出的 window class。
  *
- * **ThreadData**（inst.data）= 会话业务字段：target / targetThreadId / isForkWindow /
- * isCreatorWindow / conversationId。投影 class 由这些形态标记 + thread session 算出，不持久化。
+ * **ThreadData**（inst.data）= 会话窗状态（指向某 thread 的引用）：target / targetThreadId /
+ * isForkWindow / conversationId。creator 窗身份编码在 id（`creatorWindowIdOf`）里，不存 flag；
+ * 投影 class 由窗形态 + id 派生的 self/other-view + thread session 算出，不持久化。
  * **ThreadWin**（inst.win）= 投影态：transcript 渲染窗口（window method `set_transcript_window` 读写）。
  *
  * 信封字段（id / class / title / status / createdAt / parentObjectId）由 runtime 管理
@@ -21,8 +22,6 @@ export interface Data {
   targetThreadId?: string;
   /** true ⇒ fork 子线程窗（同对象，旧 do_window）；缺省 ⇒ peer 跨对象会话窗。 */
   isForkWindow?: boolean;
-  /** 标记为初始 creator 窗（指向 caller），不可被 close。 */
-  isCreatorWindow?: boolean;
   /** 同 target 多窗口区分；当前固定等于 windowId（= 实例 id）。 */
   conversationId: string;
 }

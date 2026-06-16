@@ -7,10 +7,11 @@
  *   - **talk**（other-view）：与对端 peer/sub thread 的对话（含父侧 fork 子窗）。
  *   - **reflect_request**（self-view super）：super flow 的反思自视，额外 surface 沉淀 method。
  *
- * 投影 class 由 readable 内部调 `computeProjectionClass(...)` 从窗形态（isForkWindow /
- * isCreatorWindow）+ thread session 动态算，作为 `ReadableProjection.class` 返回——**不持久化**。
- * 三种投影对应 `window` 数组里的 3 个 window decl，渲染期 `resolveWindowClass(_builtin/thread,
- * 投影 class)` 据此决定该窗展示哪些 method。会话 transcript 三种投影同款渲染（renderHead +
+ * 投影 class 由 readable 内部调 `computeProjectionClass(...)` 从 id 派生的 self/other-view
+ * （creator 窗 = `isCreatorWindowId(id)`）+ thread session 动态算，作为 `ReadableProjection.class`
+ * 返回——**不持久化**。三种投影对应 `window` 数组里的 3 个 window decl，渲染期 `resolveWindowClass(
+ * _builtin/thread, 投影 class)` 据此决定该窗展示哪些 method（self-view 不 surface close）。
+ * 会话 transcript 三种投影同款渲染（renderHead +
  * filterTalkMessages + renderTranscriptOrHandle），实现物保留在 core talk 域，本 readable import 复用。
  */
 import type {
@@ -20,6 +21,7 @@ import type {
 } from "@ooc/core/readable/contract.js";
 import type { XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { computeProjectionClass } from "@ooc/core/readable/projection-class.js";
+import { isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
@@ -60,10 +62,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
     const thread = ctx.thread;
     // 投影 class：POV 派生（self-view 非 super→thread / other-view→talk / self-view super→reflect_request）。
     const projectionClass = thread
-      ? computeProjectionClass(
-          { id: ctx.object.id, isForkWindow: self.isForkWindow, isCreatorWindow: self.isCreatorWindow },
-          thread,
-        )
+      ? computeProjectionClass({ id: ctx.object.id }, thread)
       : "thread";
 
     const children: XmlNode[] = renderHead(self);
@@ -71,7 +70,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
       const messages = filterTalkMessages(ctx.object.id, self, thread);
       children.push(
         ...renderTranscriptOrHandle(
-          { isCreatorWindow: self.isCreatorWindow, transcriptViewport: win?.transcriptViewport },
+          { isCreatorWindow: isCreatorWindowId(ctx.object.id), transcriptViewport: win?.transcriptViewport },
           messages,
         ),
       );
@@ -79,24 +78,24 @@ const readable: ReadableModule<Data, ThreadWin> = {
     return { class: projectionClass, content: children };
   },
   window: [
-    // self-view 非 super：thread 与 creator 的对话；会话 3 method。
+    // self-view 非 super：thread 与 creator 的恒在通道。**不 surface close**——creator 窗不可关，
+    // 由投影可见性表达（取代旧 close 里的 data.isCreatorWindow 检查）。
     {
       class: "thread",
-      object_methods: ["say", "close", "share"],
+      object_methods: ["say", "share"],
       window_methods: [setTranscriptWindowMethod],
     },
-    // other-view：与对端 peer/sub 的对话；会话 3 method。
+    // other-view：与对端 peer/sub 的对话（含父侧 fork 子窗）；可关。
     {
       class: "talk",
       object_methods: ["say", "close", "share"],
       window_methods: [setTranscriptWindowMethod],
     },
-    // self-view super：反思自视；会话 3 method + 2 个 reflectable 沉淀 method。
+    // self-view super：反思自视（恒在通道，同样不 surface close）；会话 method + 2 个 reflectable 沉淀 method。
     {
       class: "reflect_request",
       object_methods: [
         "say",
-        "close",
         "share",
         "new_feat_branch",
         "create_pr_and_invite_reviewers",

@@ -9,8 +9,9 @@
  *
  * 注：**wait 是 3 原语之一（非 method）**——经 `core/executable/tools/wait.ts` 独立 tool 入口表达。
  *
- * 签名 `(ctx, self=Data, args)`：self 是会话窗的业务数据（target / targetThreadId / isForkWindow /
- * isCreatorWindow / conversationId），ctx.object.id 是窗实例 id，ctx.thread 是当前执行 thread。
+ * 签名 `(ctx, self=Data, args)`：self 是会话窗状态（target / targetThreadId / isForkWindow /
+ * conversationId），ctx.object.id 是窗实例 id，ctx.thread 是当前执行 thread。creator 窗（self-view）
+ * 不可 close 由 readable 投影可见性表达（不 surface close），不在 method 内查 flag。
  * say/close 的 delivery / fork 派送实现物保留在 core talk 域，本类 import 复用。
  *
  * deferred（agency 深层 thinkloop 语义，登记 WAVE4-WALL-broken-tests.md）：say 的 fork 派送完整
@@ -43,8 +44,8 @@ const SAY_SCHEMA: MethodCallSchema = {
 };
 
 /**
- * 把当前会话窗的业务数据 + 实例 id 还原成 delivery 期望的扁平 TalkWindow 视图。
- * delivery 只读 id / target / targetThreadId / isCreatorWindow（并回填 targetThreadId）。
+ * 把当前会话窗的状态 + 实例 id 还原成 delivery 期望的扁平 TalkWindow 视图。
+ * delivery 只读 id / target / targetThreadId（并回填 targetThreadId）；creator 窗身份由 id 派生。
  */
 function asTalkWindowView(objectId: string, self: Data): TalkWindowView {
   return {
@@ -53,7 +54,6 @@ function asTalkWindowView(objectId: string, self: Data): TalkWindowView {
     target: self.target,
     targetThreadId: self.targetThreadId,
     isForkWindow: self.isForkWindow,
-    isCreatorWindow: self.isCreatorWindow,
     conversationId: self.conversationId,
   } as TalkWindowView;
 }
@@ -130,12 +130,11 @@ export const sayMethod: ObjectMethod<Data> = {
 const closeMethod: ObjectMethod<Data> = {
   name: "close",
   description:
-    "Close this talk_window. Fork child windows archive the child thread; the creator talk_window cannot be closed.",
+    "Close this talk_window. Fork child windows archive the child thread.",
   permission: () => "allow",
   exec: (ctx, self) => {
-    if (self.isCreatorWindow) {
-      return `[thread.close] window "${ctx.object.id}" 是初始 creator 会话窗，与 caller 的恒在通道，不可关闭。`;
-    }
+    // creator 窗（self-view）不可关 —— 由 readable 投影可见性表达（thread/reflect_request 不 surface
+    // close），故本 impl 只服务 talk（other-view）窗，不再做 isCreatorWindow 运行时检查。
     // fork 子线程窗 close → archive 对应子线程（peer 会话窗纯关窗，无副作用）。
     if (self.isForkWindow && ctx.thread) {
       archiveForkChild(ctx.thread, asTalkWindowView(ctx.object.id, self));

@@ -13,14 +13,15 @@ import type {
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
+import { isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
 import type { Data } from "../types.js";
 
 /**
  * creator（self-view）窗的归一化视图。
  *
  * Wave 4 对象模型：contextWindows 元素是 `OocObjectInstance`（信封 + data 分离）。
- * 会话业务字段（isCreatorWindow / target / targetThreadId / isForkWindow）落 `inst.data`
- * （=TalkData），`id` 落信封。本视图把两侧拍平给 end 的 auto-reply / 持久化通知用。
+ * 会话窗状态（target / targetThreadId / isForkWindow）落 `inst.data`（=TalkData），`id` 落信封。
+ * 本视图把两侧拍平给 end 的 auto-reply / 持久化通知用。
  */
 type CreatorWindow = {
   id: string;
@@ -32,23 +33,21 @@ type CreatorWindow = {
 function findCreatorWindow(ctx: ExecutableContext): CreatorWindow | undefined {
   const list = ctx.thread?.contextWindows ?? [];
   for (const inst of list) {
-    // creator 窗（self-view）一律恒有 data.isCreatorWindow=true，且每 thread 唯一。它的 class 随
-    // POV 投影（普通 flow=thread / super flow=reflect_request / fork-creator 同 flag）——故按 flag
-    // 识别（class-agnostic + forward-compatible），不枚举 class 字面量。会话字段从 inst.data 读。
+    // creator 窗（self-view）每 thread 唯一，身份编码在 id（id=`w_creator_<thread.id>`）——故按
+    // isCreatorWindowId(id) 识别（class-agnostic + forward-compatible），不再读 data.isCreatorWindow。
+    // 会话字段从 inst.data 读。
+    if (!isCreatorWindowId(inst.id)) continue;
     const data = (inst.data ?? {}) as {
-      isCreatorWindow?: boolean;
       target?: string;
       targetThreadId?: string;
       isForkWindow?: boolean;
     };
-    if (data.isCreatorWindow === true) {
-      return {
-        id: inst.id,
-        target: data.target,
-        targetThreadId: data.targetThreadId,
-        isForkWindow: data.isForkWindow,
-      };
-    }
+    return {
+      id: inst.id,
+      target: data.target,
+      targetThreadId: data.targetThreadId,
+      isForkWindow: data.isForkWindow,
+    };
   }
   return undefined;
 }

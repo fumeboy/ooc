@@ -40,7 +40,7 @@ import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
-import { creatorWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
+import { creatorWindowIdOf, isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
 import type { TalkData, TalkWindowView } from "../types.js";
 
 export interface TalkDeliveryInput {
@@ -102,7 +102,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   //   super-alice 在 "super" session 回报 user-session 的创建者）→ 派回 creatorSessionId。
   //   这条覆盖 reflectable super→origin 回报通道：creator talk_window 必须能跨 session
   //   找到创建者 thread，否则 readThread(calleeSessionId=自身 session) 永远找不到对端。
-  const isCreatorReply = callerWindow.isCreatorWindow === true && callerWindow.target === callerRef.objectId;
+  const isCreatorReply = isCreatorWindowId(callerWindow.id) && callerWindow.target === callerRef.objectId;
   const crossSessionCreatorReply =
     isCreatorReply &&
     callerThread.creatorSessionId !== undefined &&
