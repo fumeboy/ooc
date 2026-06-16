@@ -110,8 +110,10 @@ const persistable: PersistableModule = {
   `Data.isCreatorWindow` 字段、`close` 里的 isCreatorWindow 运行时检查。
 - **保留（归属原则证明它们是对的）**：`thread-context.json` / `_ref` / per-object `state.json`（窗=引用、
   对象=数据的分层）、`object-data.ts` 的 custom-or-default dispatch、路径原语、串行写、inbox per-message 目录。
-- **可选理顺（不阻塞，落地时定）**：`thread-context.json` 是否并入 thread.json 单文件；`conversationId` /
-  `isForkWindow` 同属 id 镜像/可退化为寻址提示——本轮**不动**，只登记方向。
+- **conversationId 去状态化（2026-06-16 已落地）**：`conversationId` 恒等于窗实例 id，删 `Data` 字段；
+  消费方一律用 `ctx.object.id` / `window.id`（readable renderHead 传入 id；前端 TalkWindowDetail 显示 window.id）。
+- **可选理顺（不阻塞，落地时定）**：`thread-context.json` 是否并入 thread.json 单文件；`isForkWindow`
+  可退化为寻址提示（findThreadInScope 命中与否自动判定 fork/peer 派送）——本轮**不动**，只登记方向。
 
 ## 验证
 
@@ -135,3 +137,10 @@ const persistable: PersistableModule = {
   `builtins/agent/children/thread/__tests__/{talk-delivery,thread-say}.test.ts`、
   `tests/e2e/backend/{context-compression-p0c-typed,plan-share-parent-child}.e2e.test.ts`、
   `tests/integration/{wait-state-transition,ooc6-object-unification}` 等。
+
+### conversationId 去状态化
+- **已知 tsc 报错**：`core/thinkable/__tests__/context.test.ts` 的 `as ContextWindow[]` cast（已就地删 conversationId 行）。
+- **语义债**（在 data 里写 `conversationId: "..."`，无害的 dead 字段、不影响断言）：`wait` / `manager-method-dispatch` /
+  `member-composition` / `peer-object-derive` / `attention-tiering` / `transcript-viewport-integration` /
+  `thread-context-bypass-reload` 等测试 + 几个 e2e/integration——读取点早已用 id，SET 是 dead 字面量，
+  最终修测试时随手删即可。

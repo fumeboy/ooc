@@ -113,14 +113,13 @@ async function execFork(ctx: ConstructorContext, selfObjectId: string): Promise<
     target: selfObjectId,
     targetThreadId: childId,
     isForkWindow: true,
-    conversationId: "",
   };
 }
 
 /**
  * construct —— 创建 talk_window。target=自己 objectId ⇒ fork 子线程；否则 peer 会话。
- * 返回新实例的 Data（runtime 据此包成 OocObjectInstance 信封）。conversationId 缺省由 runtime
- * 分配的实例 id 充当——construct 不知实例 id，故置空，readable/say 用 ctx.object.id。
+ * 返回新实例的 Data（runtime 据此包成 OocObjectInstance 信封）。会话身份（conversationId）恒等于
+ * runtime 分配的实例 id——不入 Data，readable/say 一律用 ctx.object.id。
  */
 const talkConstructor: ObjectConstructor<Data> = {
   description:
@@ -175,7 +174,6 @@ const talkConstructor: ObjectConstructor<Data> = {
 
     return {
       target,
-      conversationId: "",
     };
   },
 };

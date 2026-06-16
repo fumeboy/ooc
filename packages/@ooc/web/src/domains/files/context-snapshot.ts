@@ -74,7 +74,6 @@ type _ContextWindowData =
       class: "talk" | "thread" | "reflect_request";
       data: {
         target: string;
-        conversationId: string;
         targetThreadId?: string;
         isForkWindow?: boolean;
       };

@@ -65,7 +65,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
       ? computeProjectionClass({ id: ctx.object.id }, thread)
       : "thread";
 
-    const children: XmlNode[] = renderHead(self);
+    const children: XmlNode[] = renderHead(self, ctx.object.id);
     if (thread) {
       const messages = filterTalkMessages(ctx.object.id, self, thread);
       children.push(

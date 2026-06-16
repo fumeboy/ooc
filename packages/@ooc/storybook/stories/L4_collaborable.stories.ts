@@ -33,7 +33,7 @@ export const L4_STORIES: Story[] = [
       // computeProjectionClass 重算。故按 talk 窗形态（target=obj_talk + 无 class）断言其 entry
       // 仍持久化在 user 线程，而非按 stored class。
       const entries = (ctx.contextWindows ?? []) as any[];
-      const talkEntry = entries.find((w) => w.target === "obj_talk" && w.conversationId);
+      const talkEntry = entries.find((w) => w.target === "obj_talk");
       check(
         !!talkEntry,
         `user 线程无指向 obj_talk 的 talk_window entry：${JSON.stringify(entries.map((w: any) => ({ id: w.id, class: w.class, target: w.target })))}`,

@@ -48,12 +48,13 @@ export function filterTalkMessages(
   return messages;
 }
 
-/** transcript head：peer 渲 target / conversation_id；fork 渲 target_thread。 */
-export function renderHead(self: TalkData): XmlNode[] {
+/** transcript head：peer 渲 target / conversation_id（= 窗实例 id）；fork 渲 target_thread。 */
+export function renderHead(self: TalkData, objectId: string): XmlNode[] {
   return self.isForkWindow
     ? [xmlElement("target_thread", {}, [xmlText(self.targetThreadId ?? "")])]
     : [
         xmlElement("target", {}, [xmlText(self.target)]),
-        xmlElement("conversation_id", {}, [xmlText(self.conversationId)]),
+        // conversation_id 恒等于窗实例 id（不再存 data.conversationId，按 id 派生）。
+        xmlElement("conversation_id", {}, [xmlText(objectId)]),
       ];
 }

@@ -100,7 +100,7 @@ async function main() {
       sbContextWindows = [];
     }
     const talkWindowId =
-      sbContextWindows.find((w: any) => typeof w.target === "string" && !!w.conversationId)?.id ??
+      sbContextWindows.find((w: any) => typeof w.target === "string")?.id ??
       (sbThread.creatorWindowId as string | undefined) ??
       "";
 

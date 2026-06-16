@@ -130,21 +130,18 @@ export function initContextWindows(
   // 会话窗 inst.class = `_builtin/thread`（唯一会话载体注册 class）。投影 class（thread/talk/
   // reflect_request）不写进 inst.class——渲染期由 thread readable 内 computeProjectionClass 据窗
   // 形态 + thread session 动态算（context.md 核心 2/8/9）。
-  // data/win 统一划分：会话窗状态（target/targetThreadId/isForkWindow/conversationId）进 inst.data
-  // （ThreadData）；transcriptViewport 进 inst.win（ThreadWin）。creator 窗身份编码在 id
-  // （creatorWindowId=creatorWindowIdOf(thread.id)）里，不存 isCreatorWindow flag——消费方按
-  // isCreatorWindowId(id) 派生。
+  // data/win 统一划分：会话窗状态（target/targetThreadId/isForkWindow）进 inst.data（ThreadData）；
+  // transcriptViewport 进 inst.win（ThreadWin）。creator 窗身份 + 会话身份（conversationId）都编码在
+  // id（creatorWindowId=creatorWindowIdOf(thread.id)）里，不存 data flag——消费方按 id 派生。
   const creatorData: Record<string, unknown> = sameObject
     ? {
         target: thread.persistence?.objectId ?? thread.creatorObjectId ?? "",
         targetThreadId: creatorThreadId,
         isForkWindow: true,
-        conversationId: creatorWindowId,
       }
     : {
         target: thread.creatorObjectId!,
         targetThreadId: creatorThreadId,
-        conversationId: creatorWindowId,
       };
   const creatorWindow: OocObjectInstance = {
     id: creatorWindowId,

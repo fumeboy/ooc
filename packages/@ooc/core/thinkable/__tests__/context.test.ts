@@ -158,7 +158,6 @@ describe("buildContext (ContextWindow model)", () => {
           target: "alice",
           targetThreadId: "t_creator",
           isForkWindow: true,
-          conversationId: "w_fork_other",
         },
         // creator fork 窗应被优先选中
         {
@@ -172,7 +171,6 @@ describe("buildContext (ContextWindow model)", () => {
           targetThreadId: "t_creator",
           isForkWindow: true,
           isCreatorWindow: true,
-          conversationId: "w_fork_creator",
         },
       ] as ContextWindow[],
     });
@@ -435,7 +433,6 @@ describe("buildContext (ContextWindow model)", () => {
           target: "alice",
           targetThreadId: "t_child",
           isForkWindow: true,
-          conversationId: "w_fork_child",
         },
       ] as ContextWindow[],
     });

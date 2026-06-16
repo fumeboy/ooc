@@ -9,7 +9,7 @@ import React from "react";
 import type { ContextWindow } from "../../context-snapshot";
 
 export default function TalkWindowDetail({ window }: { window: ContextWindow }) {
-  const data = (window.data ?? {}) as { target?: string; conversationId?: string };
+  const data = (window.data ?? {}) as { target?: string };
   return (
     <div className="llm-input-attrs">
       <div className="llm-input-attr-row">
@@ -17,8 +17,9 @@ export default function TalkWindowDetail({ window }: { window: ContextWindow }) 
         <span className="llm-input-attr-value">{data.target}</span>
       </div>
       <div className="llm-input-attr-row">
+        {/* conversation id 恒等于窗实例 id（不再存 data.conversationId）。 */}
         <span className="llm-input-attr-key">conversation</span>
-        <span className="llm-input-attr-value">{data.conversationId}</span>
+        <span className="llm-input-attr-value">{window.id}</span>
       </div>
     </div>
   );

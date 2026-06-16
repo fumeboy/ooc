@@ -58,7 +58,7 @@ function buildUserTalkWindow(
   title: string,
 ): { id: string; instance: OocObjectInstance; view: TalkWindowView } {
   const id = generateWindowId("talk");
-  const data: TalkData = { target, conversationId: id };
+  const data: TalkData = { target };
   const instance: OocObjectInstance = {
     id,
     // 会话窗 inst.class = `_builtin/thread`（唯一会话载体注册 class）；other-view 投影 class=talk
@@ -70,7 +70,7 @@ function buildUserTalkWindow(
     createdAt: Date.now(),
     data,
   };
-  const view = { id, class: THREAD_CLASS_ID, target, conversationId: id } as TalkWindowView;
+  const view = { id, class: THREAD_CLASS_ID, target } as TalkWindowView;
   return { id, instance, view };
 }
 
@@ -548,7 +548,6 @@ export function createFlowsService(deps: {
           class: "talk",
           target,
           targetThreadId: existingData.targetThreadId,
-          conversationId: existingData.conversationId,
         } as TalkWindowView;
         // 无 initialMessage：纯幂等创建窗口语义，无消息要送，早返回。
         if (!initialMessage || !initialMessage.trim()) {
@@ -868,7 +867,6 @@ export function createFlowsService(deps: {
         class: "talk",
         target: targetData.target,
         targetThreadId: targetData.targetThreadId,
-        conversationId: targetData.conversationId,
       } as TalkWindowView;
 
       const delivered = await deliverTalkMessage({

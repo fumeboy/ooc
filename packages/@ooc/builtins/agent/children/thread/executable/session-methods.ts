@@ -9,8 +9,8 @@
  *
  * 注：**wait 是 3 原语之一（非 method）**——经 `core/executable/tools/wait.ts` 独立 tool 入口表达。
  *
- * 签名 `(ctx, self=Data, args)`：self 是会话窗状态（target / targetThreadId / isForkWindow /
- * conversationId），ctx.object.id 是窗实例 id，ctx.thread 是当前执行 thread。creator 窗（self-view）
+ * 签名 `(ctx, self=Data, args)`：self 是会话窗状态（target / targetThreadId / isForkWindow），
+ * ctx.object.id 是窗实例 id（= 会话身份），ctx.thread 是当前执行 thread。creator 窗（self-view）
  * 不可 close 由 readable 投影可见性表达（不 surface close），不在 method 内查 flag。
  * say/close 的 delivery / fork 派送实现物保留在 core talk 域，本类 import 复用。
  *
@@ -54,7 +54,6 @@ function asTalkWindowView(objectId: string, self: Data): TalkWindowView {
     target: self.target,
     targetThreadId: self.targetThreadId,
     isForkWindow: self.isForkWindow,
-    conversationId: self.conversationId,
   } as TalkWindowView;
 }
 

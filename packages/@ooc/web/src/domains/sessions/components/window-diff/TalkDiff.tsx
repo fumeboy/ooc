@@ -5,7 +5,7 @@
  * 签名收敛到 WindowDiffProps ({previous, current})，删去 windowId 引用。
  *
  * Diff 形态：
- *   - target / conversationId / status / title 字段 diff
+ *   - target / status / title 字段 diff（conversation id 恒等于窗实例 id，不再有 data 字段可 diff）
  *   - transcript（或 messages）消息级 diff，按 id 配对，退化按 index
  */
 
@@ -59,11 +59,6 @@ export default function TalkDiff({ previous, current }: WindowDiffProps) {
   const fields = (
     <Section title="fields" testId="talk-fields">
       <FieldDiffLine label="target" prev={readString(prev, "target")} cur={readString(cur, "target")} />
-      <FieldDiffLine
-        label="conversationId"
-        prev={readString(prev, "conversationId")}
-        cur={readString(cur, "conversationId")}
-      />
       <FieldDiffLine label="status" prev={readString(prev, "status")} cur={readString(cur, "status")} />
       <FieldDiffLine label="title" prev={readString(prev, "title")} cur={readString(cur, "title")} />
     </Section>
