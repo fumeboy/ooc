@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeThread, readThread } from "./thread-json";
-import { persistInboxMessages, readInboxMessages } from "./inbox-store";
-import type { ThreadContext, ThreadMessage } from "../_shared/types/thread";
+import { writeThread, readThread } from "../persistable/thread-json";
+import { persistInboxMessages, readInboxMessages } from "../persistable/inbox-store";
+import type { ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread";
 
 /**
- * Inbox 独立存储 — collaborable 并发回报竞态根治回归。
+ * Inbox 独立存储 — collaborable 并发回报竞态根治回归（thread builtin 自有持久化逻辑）。
  *
  * 核心场景：worker 持 caller in-memory 跑很久，期间外部 deliverTalkMessage append 新消息；
  * worker 跑完用它的 stale in-memory inbox writeThread。旧实现（inbox 在 thread.json）下

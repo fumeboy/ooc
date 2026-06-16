@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createJobManager } from "./job-manager";
 import { resumePausedThreadsInSession } from "./resume-orchestration";
-import { readThread, nestedObjectPath } from "@ooc/core/persistable";
+import { nestedObjectPath } from "@ooc/core/persistable";
+import { readThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 /**

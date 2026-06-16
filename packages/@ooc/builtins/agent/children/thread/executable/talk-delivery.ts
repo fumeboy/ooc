@@ -34,7 +34,8 @@
  * 不在本模块负责：调度（由 worker 自然轮询）、UI 通知（控制面自己决定何时 refresh）。
  */
 
-import { readThread, writeThread, createFlowObject, createFlowSession, sessionMetadataFile, resolveSuperActor } from "@ooc/core/persistable/index.js";
+import { createFlowObject, createFlowSession, sessionMetadataFile, resolveSuperActor } from "@ooc/core/persistable/index.js";
+import { readThread, writeThread } from "../persistable/thread-json.js";
 import { stat } from "node:fs/promises";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";

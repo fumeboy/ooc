@@ -7,7 +7,7 @@
  *
  * 当前字段：
  *   - siteName: 网页 Logo 下方显示的站名；默认 "Oriented Object Context"。
- *   - externalSkillsDir: 外部 skills 目录绝对路径；skill_index window 构造索引时
+ *   - externalSkillsDir: 外部 skills 目录绝对路径；skill_index 的 readable 渲染期算索引时
  *     会同时扫描这个目录（与 stones/<branch>/skills 与 object 级 skills 合并）。
  *     支持 `~` 起手与相对 baseDir 的路径写法；空值或目录不存在 → 视为未配置。
  *
@@ -15,7 +15,7 @@
  *   - 文件缺失：返回默认值，不报错。
  *   - 文件存在但 JSON 解析失败：记录 console.warn，返回默认值（不阻断 server 启动）。
  *   - 文件存在但字段类型不对：跳过该字段，使用默认值。
- *   - 10s TTL 缓存（与 stone-skills 同 pattern；测试通过 clearWorldConfigCache）。
+ *   - 10s TTL 缓存（与 skill_index builtin scan 同 pattern；测试通过 clearWorldConfigCache）。
  *
  * 与 ServerConfig 的关系：ServerConfig 是 sync 启动期常量；world-config 是按需读
  * （server 跑起来后随时 reload）。两者不交叉：ServerConfig 持有 baseDir，下游消费

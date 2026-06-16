@@ -30,10 +30,9 @@ import {
   createFlowObject,
   createFlowSession,
   createStoneObject,
-  readThread,
   writeSelf,
-  writeThread,
 } from "@ooc/core/persistable";
+import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 import {

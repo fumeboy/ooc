@@ -21,12 +21,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createFlowObject,
-  readThread,
-  writeThread,
   writeRuntimeObjectState,
-  threadFile,
   __resetSerialQueueForTests,
 } from "../index";
+import { readThread, writeThread, threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../common";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import { createObjectRegistry } from "../../runtime/object-registry";

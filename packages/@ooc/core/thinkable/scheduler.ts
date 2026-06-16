@@ -1,7 +1,7 @@
 import type { LlmClient } from "./llm/types";
 import type { ThreadContext, ThreadMessage } from "./context";
 import { think } from "./thinkloop";
-import { writeThread } from "../persistable";
+import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 
 /** Scheduler 的运行参数。 */
 export interface SchedulerOptions {

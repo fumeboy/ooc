@@ -16,11 +16,11 @@ import {
   ensureStoneRepo,
   __resetSerialQueueForTests,
   readPrIssue,
-  readThread,
   createFeatBranchWorktree,
   commitAndOpenPr,
   approvePrIssue,
 } from "@ooc/core/persistable";
+import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import {
@@ -187,7 +187,7 @@ describe("pr_window method", () => {
     // 先建 super(foo) thread（PR 由它发起；authorThreadId 指向它）
     const superFooThreadId = "t_superfoo";
     const superFoo = reviewerThread(baseDir, "foo", superFooThreadId);
-    await import("@ooc/core/persistable").then((m) => m.writeThread(superFoo));
+    await writeThread(superFoo);
 
     const { issueId } = await openPr(
       baseDir, "foo", "share into supervisor land",
@@ -281,7 +281,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
 
     // super(foo) thread（沉淀发起者）
     const superFoo = reviewerThread(baseDir, "foo", "t_superfoo");
-    await import("@ooc/core/persistable").then((m) => m.writeThread(superFoo));
+    await writeThread(superFoo);
 
     // ① new_feat_branch(intent) 绑定
     const open1 = await executeNewFeatBranch({ thread: superFoo, args: { intent: "share into bob" } } as never);

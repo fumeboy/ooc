@@ -1,7 +1,7 @@
 import { decidePermission, type PendingToolCall } from "../executable/permissions";
 import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
-import { writeThread } from "../persistable";
+import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { buildInputItems, type ProcessEvent, type ThreadContext } from "./context";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "./llm/types";
 import { LlmTimeoutError } from "./llm/timeout";

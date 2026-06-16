@@ -1,5 +1,5 @@
 /**
- * stone-skills.test — skills 目录扫描器与 10s 缓存测试。
+ * scan.test — skills 目录扫描器与 10s 缓存测试（skill_index builtin 私有 IO）。
  */
 
 import { afterEach, describe, expect, test } from "bun:test";
@@ -12,7 +12,7 @@ import {
   listBranchSkills,
   listObjectSkills,
   objectSkillsDir,
-} from "../stone-skills";
+} from "../scan";
 
 let tempRoot: string | undefined;
 

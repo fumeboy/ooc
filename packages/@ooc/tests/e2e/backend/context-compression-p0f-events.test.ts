@@ -20,7 +20,7 @@ import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
 import type { ProcessEvent } from "@ooc/core/thinkable/context";
 import { buildInputItems } from "@ooc/core/thinkable/context";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-json";
+import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
 // 触发 windows/ 各 type 的 side-effect 注册。

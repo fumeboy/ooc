@@ -266,7 +266,8 @@ describe("Step 2 window lifecycles", () => {
   it("talk_window: cross-object 回信落到正确的对端 talk_window 上,而非 creator window", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-talk-reply-"));
     try {
-      const { createFlowObject, readThread } = await import("../../persistable");
+      const { createFlowObject } = await import("../../persistable");
+      const { readThread } = await import("@ooc/builtins/agent/thread/persistable/thread-json");
       await createFlowObject({ baseDir: tempRoot, sessionId: "s1", objectId: "assistant" });
 
       // assistant.t_user 是 user 派生的 assistant 主 thread

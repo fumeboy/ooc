@@ -37,11 +37,10 @@ import {
   createFlowSession,
   createStoneObject,
   flowMetadataFile,
-  readThreadContext,
   runtimeObjectStateFile,
-  threadContextFile,
   __resetSerialQueueForTests,
 } from "../../../../persistable";
+import { readThreadContext, threadContextFile } from "@ooc/builtins/agent/thread/persistable/flow-thread-context";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../../persistable/common";
 import type { ThreadContext } from "../../../../thinkable/context";
 import type { PlanWindow } from "@ooc/builtins/agent/plan/types.js";

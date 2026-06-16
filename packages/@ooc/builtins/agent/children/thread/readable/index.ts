@@ -20,14 +20,14 @@ import type {
   WindowMethod,
 } from "@ooc/core/readable/contract.js";
 import type { XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { computeProjectionClass } from "@ooc/core/readable/projection-class.js";
+import { computeProjectionClass } from "./projection-class.js";
 import { isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
   hasAnyTranscriptViewportField,
 } from "@ooc/core/readable/transcript-viewport.js";
-import { renderTranscriptOrHandle } from "@ooc/core/readable/conversation-render.js";
+import { renderTranscriptOrHandle } from "./conversation-render.js";
 import {
   filterTalkMessages,
   renderHead,

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { runScheduler } from "@ooc/core/thinkable/scheduler";
-import { threadFile } from "@ooc/core/persistable";
+import { threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import {
   countFormExecutions,
   hasLlmEnv,

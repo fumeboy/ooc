@@ -3,11 +3,10 @@ import {
   createFlowSession,
   ensureSessionWorktree,
   objectDir,
-  readThread,
   threadDir,
-  writeThread,
   STONE_CHILDREN_SUBDIR,
 } from "@ooc/core/persistable";
+import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { loadStoneClass } from "@ooc/core/runtime/server-loader";
 import { resolveStoneIdentityRef } from "@ooc/core/persistable";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
@@ -145,9 +144,9 @@ function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
  * 都是每轮派生);explicit knowledge 与其它持久 window 的 id/createdAt 是真实状态,
  * 原样保留。
  *
- * 同样要剔除每轮 derive 的 skill_index：id 稳定（SKILL_INDEX_WINDOW_ID）但
- * createdAt=Date.now() 每次都新，否则 hash 永远翻动。skills 数组本身是稳定排序的
- * 内容字段，参与 hash。
+ * 同样要剔除每轮 derive 的 skill_index member window：它由 injectMemberWindowsIfObjectThread
+ * 每次 readThread 幂等重注入，createdAt=Date.now() 每次都新（class=`_builtin/agent/skill_index`），
+ * 否则 hash 永远翻动。skills 由其 readable 渲染期自算、不入本 payload，无需参与 hash。
  *
  * 历史：移除 IssueWindow strip 分支（issue 看板已整体下线）。
  */
@@ -161,8 +160,8 @@ function stripVolatileForHash(payload: { contextWindows?: OocObjectInstance[] })
         const { id: _id, createdAt: _createdAt, ...rest } = window;
         return rest;
       }
-      // skill_index 也是每轮 derive 出来的非持久化 window;createdAt=Date.now() 每次都新。
-      if (window.class === "skill_index") {
+      // skill_index member window 也是每轮 derive 出来的非持久化 window;createdAt=Date.now() 每次都新。
+      if (window.class === "_builtin/agent/skill_index") {
         const { createdAt: _createdAt, ...rest } = window;
         return rest;
       }

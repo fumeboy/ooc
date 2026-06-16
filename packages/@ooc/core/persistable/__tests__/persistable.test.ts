@@ -7,12 +7,11 @@ import {
   flowMetadataFile,
   llmInputFile,
   llmOutputFile,
-  readThread,
   writeDebugInput,
   writeDebugOutput,
-  writeThread,
-  writeThreadContext
 } from "../index";
+import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { writeThreadContext } from "@ooc/builtins/agent/thread/persistable/flow-thread-context";
 import type { ThreadContext } from "../../thinkable/context";
 
 let tempRoot: string | undefined;

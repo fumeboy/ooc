@@ -42,5 +42,6 @@ export interface PersistableModule<Data = any> {
 }
 
 // 注：thread 容器持久化（thread.json + thread-context.json + inbox + hydrate）现在就是 thread
-// builtin 的标准 `save`/`load`（`thread/persistable`），经 `writeThread`/`readThread` 与 manager
-// persist hook 用 thread 作用域 ctx（含 threadId）dispatch——不再有专属 `container` 契约。
+// builtin 的标准 `save`/`load`（`thread/persistable`）。其落盘 API `writeThread`/`readThread` 也在
+// thread builtin（`@ooc/builtins/agent/thread/persistable/thread-json`）——core 不再有 registry-dispatch
+// 壳或专属 `container` 契约；runtime 引擎直接 import 本 builtin 的 API。

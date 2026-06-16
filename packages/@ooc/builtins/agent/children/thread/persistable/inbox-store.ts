@@ -1,5 +1,8 @@
 /**
- * Inbox 独立存储（collaborable 并发回报竞态根治）。
+ * Inbox 独立存储（collaborable 并发回报竞态根治）—— thread builtin 自有持久化逻辑。
+ *
+ * thread 是 builtin object：它的会话 inbox 怎么落盘是 thread 自己的逻辑，不属 core
+ * （object-model 核心 7）。原 `core/persistable/inbox-store.ts` 已退潮收纳到此。
  *
  * 问题：inbox 此前随 thread.json 整体 read-modify-write。worker 持 caller in-memory
  * 跑很久（含 LLM），期间外部 deliverTalkMessage / syncCrossObjectCalleeEnds 对 caller.inbox
@@ -18,8 +21,8 @@
 
 import { mkdir, readFile, writeFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { threadDir, type ThreadPersistenceRef } from "./common";
-import type { ThreadMessage } from "../_shared/types/thread";
+import { threadDir, type ThreadPersistenceRef } from "@ooc/core/persistable/common.js";
+import type { ThreadMessage } from "@ooc/core/_shared/types/thread.js";
 
 /** `<threadDir>/inbox/` —— per-message 文件目录。 */
 export function inboxDir(ref: ThreadPersistenceRef): string {

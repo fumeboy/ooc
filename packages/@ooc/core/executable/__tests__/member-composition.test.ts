@@ -10,7 +10,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureStoneRepo, writeThread, readThread } from "@ooc/core/persistable";
+import { ensureStoneRepo } from "@ooc/core/persistable";
+import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 // named import 触发 windows/index.ts 模块求值 → 加载全部 builtin（含 filesystem 注册）。
 import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";

@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "bun:test";
-import { readThread } from "@ooc/core/persistable";
+import { readThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { readServerConfig } from "../bootstrap/config";
 import { buildServer } from "../index";
 

@@ -50,12 +50,6 @@ export {
 } from "./flow-object";
 
 export {
-  readThread,
-  threadFile,
-  writeThread
-} from "./thread-json";
-
-export {
   llmInputFile,
   llmOutputFile,
   loopInputFile,
@@ -101,18 +95,6 @@ export {
   type ContextMember,
   type ContextParams,
 } from "./flow-context-registry";
-
-// thread context.json 文件原语（窗状态 vs 对象 data 的分层）。
-// 注：窗状态 entry 形态（inline vs `_ref`）是 thread builtin 的逻辑（thread/persistable/thread-persist）；
-// core 仅留 thread-context.json 的路径 + 串行写/读原语。
-export {
-  threadContextFile,
-  writeThreadContext,
-  readThreadContext,
-  type ThreadContextRef,
-  type ThreadContextEntry,
-  type ThreadContextFile,
-} from "./flow-thread-context";
 
 // 单对象 data 持久化（系统默认 / class 自定义 persistable 的通用编织点，object-model 核心 7）。
 export {
@@ -275,15 +257,6 @@ export {
   readVisibleSource,
   writeVisibleSource,
 } from "./stone-client";
-export type { SkillEntry } from "./stone-skills";
-export {
-  branchSkillsDir,
-  objectSkillsDir,
-  listBranchSkills,
-  listObjectSkills,
-  listExternalSkills,
-  clearStoneSkillsCache,
-} from "./stone-skills";
 export type { WorldConfig } from "./world-config";
 export {
   DEFAULT_SITE_NAME,

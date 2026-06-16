@@ -22,12 +22,12 @@ import type {
   ThreadPersistenceRef,
 } from "@ooc/core/persistable/common.js";
 import { threadDir, toJson } from "@ooc/core/persistable/common.js";
-import { threadFile } from "@ooc/core/persistable/thread-json.js";
+import { threadFile } from "./thread-json.js";
 import {
   writeThreadContext,
   readThreadContext,
   type ThreadContextEntry,
-} from "@ooc/core/persistable/flow-thread-context.js";
+} from "./flow-thread-context.js";
 import { readRuntimeObjectState } from "@ooc/core/persistable/flow-runtime-object.js";
 import { objectDir } from "@ooc/core/persistable/common.js";
 import {
@@ -38,7 +38,7 @@ import {
 import {
   persistInboxMessages,
   readInboxMessages,
-} from "@ooc/core/persistable/inbox-store.js";
+} from "./inbox-store.js";
 import type { PersistableContext } from "@ooc/core/persistable/contract.js";
 import {
   ROOT_WINDOW_ID,

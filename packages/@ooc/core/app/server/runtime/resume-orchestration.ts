@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { readThread } from "@ooc/core/persistable";
+import { readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import type { createJobManager } from "./job-manager";
 import { scanPausedThreads } from "./thread-query";
 import { canResumeThread } from "./thread-transition";

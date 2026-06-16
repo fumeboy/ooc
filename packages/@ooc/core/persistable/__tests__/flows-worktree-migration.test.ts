@@ -21,9 +21,9 @@ import {
   createFlowSession,
   createFlowObject,
   sessionMetadataFile,
-  writeThread,
   __resetSerialQueueForTests,
 } from "@ooc/core/persistable";
+import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { scanRunningThreads } from "@ooc/core/app/server/runtime/thread-query";
 import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
 import type { MethodExecutionContext } from "@ooc/core/_shared/types/method.js";

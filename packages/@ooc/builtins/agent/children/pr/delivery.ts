@@ -20,10 +20,9 @@ import { stat } from "node:fs/promises";
 import {
   createFlowObject,
   createFlowSession,
-  readThread,
-  writeThread,
   sessionMetadataFile,
 } from "@ooc/core/persistable/index.js";
+import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";

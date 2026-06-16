@@ -7,9 +7,8 @@ import {
   llmInputFile,
   llmOutputFile,
   loopMetaFile,
-  readThread,
-  threadFile
 } from "../../persistable";
+import { readThread, threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import type { ThreadContext } from "../context";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";

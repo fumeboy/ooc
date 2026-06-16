@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it } from "bun:test";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
 import type { ThreadContext } from "../context";
 import { runScheduler } from "../scheduler";
-import { createFlowObject, threadFile } from "../../persistable";
+import { createFlowObject } from "../../persistable";
+import { threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { makeThread } from "../../__tests__/make-thread";
 
 function makeResult(

@@ -24,12 +24,11 @@ import { makeThread } from "@ooc/core/__tests__/make-thread";
 import * as toolsModule from "@ooc/core/executable/tools";
 import * as observableModule from "@ooc/core/observable";
 import {
-  writeThread,
-  readThread,
   deriveStoneFromThread,
   stoneDir,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
+import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import * as contextModule from "@ooc/core/thinkable/context";
 import type {
   LlmClient,

@@ -13,7 +13,7 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeThread, readThread, threadFile } from "../thread-json";
+import { writeThread, readThread, threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import {
   writeRuntimeObjectState,
   writeContextRegistry,

@@ -3,7 +3,8 @@ import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createFlowObject, writeThread } from "@ooc/core/persistable";
+import { createFlowObject } from "@ooc/core/persistable";
+import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import { scanPausedThreads, scanRunningThreads } from "./thread-query";
 

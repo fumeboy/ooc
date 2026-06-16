@@ -16,18 +16,17 @@ import {
   loopOutputFile,
   readPrIssue,
   readPrIssueIndex,
-  readThread,
   resolvePrIssue,
   rollback,
   SUPERVISOR_OBJECT_ID,
   threadDir,
-  writeThread,
   type PrApproveAction,
   type PrApprovalVerdict,
   type PrIssueDecision,
   type PrIssueRecord,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
+import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { applyPrApproval } from "@ooc/builtins/agent/pr/approval-flow";
 import type { ListLoopsResponse, LoopListEntry, LoopMeta } from "./model";
 import { readLlmEnv } from "@ooc/core/thinkable/llm/env";

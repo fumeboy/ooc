@@ -20,8 +20,8 @@ import {
   createFlowObject,
   createFlowSession,
   createStoneObject,
-  writeThread,
 } from "../../../persistable";
+import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 import {
   ROOT_WINDOW_ID,

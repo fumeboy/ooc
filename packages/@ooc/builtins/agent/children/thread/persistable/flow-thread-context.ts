@@ -1,5 +1,8 @@
 /**
- * Flow-layer thread context IO。
+ * thread-context.json 持久化 —— thread builtin 自有逻辑（不属 core）。
+ *
+ * thread 是 builtin object：它的窗状态怎么落盘是 thread 自己的逻辑（object-model 核心 7）。
+ * 原 `core/persistable/flow-thread-context.ts` 已退潮收纳到此（core 不再持有 thread 序列化入口）。
  *
  * 把每个 thread 的 contextWindows 数组持久化到独立文件:
  *   `{baseDir}/flows/{sessionId}/{objectId}/threads/{threadId}/thread-context.json`
@@ -10,12 +13,6 @@
  *       · 内置特性 (talk/do/todo/method_exec) 完整 inline，因为它们没有独立 state.json
  *       · 独立 flow object (plan/program/file/...) 仅放 ref `{ id, type, _ref: true, refObjectId }`
  *
- * 与同目录的 `context.json`（legacy contextRegistry，flow-context-registry.ts）共存：
- *   `context.json`        — legacy `{ version, members[] }` 视角参数注册表
- *   `thread-context.json` — 真正的 thread contextWindows 落盘（state ≠ context 实施点）
- *
- * 两者会在 cleanup 阶段合并/裁剪；当前阶段保持双写互不干扰。
- *
  * 写盘通过 enqueueSessionWrite 串行化，per-(objectId, threadId) 一个 key，
  * 避免同 thread 多路并发写互相覆盖。同 stone-object / flow-context / flow-runtime-object
  * 模式一致。
@@ -23,8 +20,8 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { threadDir, toJson, type ThreadPersistenceRef } from "./common.js";
-import { enqueueSessionWrite } from "../runtime/serial-queue.js";
+import { threadDir, toJson, type ThreadPersistenceRef } from "@ooc/core/persistable/common.js";
+import { enqueueSessionWrite } from "@ooc/core/runtime/serial-queue.js";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 /**
@@ -44,11 +41,6 @@ export interface ThreadContextFile {
   threadId: string;
   contextWindows: ThreadContextEntry[];
 }
-
-// thread-context 的 entry 形态（窗状态：inline 嵌入 vs `_ref`）是 thread builtin 的**逻辑**，
-// 在 `@ooc/builtins/agent/thread/persistable/thread-persist.ts`。core 仅保留 thread-context.json 的
-// **文件原语**（路径 + 串行写/读），见下；entry 生成由 thread builtin 的标准 `save` 实现、core 经
-// `writeThread`/manager hook dispatch 调用。
 
 /**
  * 别名 —— 让调用方不必每次 import `ThreadPersistenceRef`，

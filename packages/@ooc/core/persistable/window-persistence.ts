@@ -6,7 +6,7 @@
  *   `saveObjectData`，object-model 核心 7 的「自定义 persistable / 系统默认」编织点）。
  * - `reportContextEdit()`：thread context（窗增删 / win 改）改变 → 把 manager 的 live 实例 map
  *   同步进 `thread.contextWindows`，再 `writeThread` 整份落盘（thread 自身数据 + 窗状态 + inbox）。
- *   thread 序列化形态是 thread builtin 的逻辑，`writeThread` 经 registry dispatch 到其标准 `save`
+ *   thread 序列化形态是 thread builtin 的逻辑，`writeThread` 直接调其 `saveThread`
  *   ——core 不内含 thread 序列化逻辑（persistable「core=框架+API、builtin=逻辑」边界）。
  *
  * 持 manager 的 **live `instances` Map** 引用，snapshot 时取最新全量；IO 失败 fail-soft（不阻塞 think loop）。
@@ -15,7 +15,7 @@ import type { ThreadContext } from "../thinkable/context.js";
 import type { OocObjectInstance } from "../runtime/ooc-class.js";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import { saveObjectData } from "./object-data.js";
-import { writeThread } from "./thread-json.js";
+import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { observeWarn } from "../observable/log-aggregator.js";
 
 export class WindowPersistence {

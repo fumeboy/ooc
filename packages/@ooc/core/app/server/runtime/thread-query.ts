@@ -1,7 +1,8 @@
 import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
 import { join } from "node:path";
-import { readThread, STONE_CHILDREN_SUBDIR } from "@ooc/core/persistable";
+import { STONE_CHILDREN_SUBDIR } from "@ooc/core/persistable";
+import { readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 
 /**
  * 扫 flows/{sessionId}/objects/ 下所有 object 的 threads/，

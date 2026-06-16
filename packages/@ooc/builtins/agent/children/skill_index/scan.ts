@@ -1,16 +1,15 @@
-import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
-import { stoneDir, type StoneObjectRef } from "./common";
-import { parseKnowledgeFile } from "../thinkable/knowledge/parser";
-
 /**
- * stone skills 目录扫描。
+ * skill_index —— stones 上 skills 目录的扫描逻辑（skill_index builtin object 的私有 IO）。
  *
- * 双层 skills 目录：
+ * 这是 skill_index 这个 builtin object 自己的程序，不属 core——原 `core/persistable/stone-skills.ts`
+ * 已退潮收纳到此（object-model 核心 4/7：扫描+合并是 skill_index 把自身投影成 window 的内部逻辑）。
+ *
+ * 双层 + 外部 skills 目录：
  * - Workspace 级: `{baseDir}/stones/@ooc/skills/<skill-name>/SKILL.md`
  *   跨 Object 共享的公共 skill 库（原 branch 级）
  * - Object 级: `{baseDir}/stones/{objectId}/skills/<skill-name>/SKILL.md`
  *   属于具体 Object 的私有 skill
+ * - External: 由 `.world.json` 的 externalSkillsDir 指定（与 stone 无关）
  *
  * 每个 skill 子目录至少含 SKILL.md（带 frontmatter description）；
  * 其它辅助文件（references / scripts / 子 .md）随 skill 自由组织，OOC 不约束结构。
@@ -20,23 +19,11 @@ import { parseKnowledgeFile } from "../thinkable/knowledge/parser";
  * - 重复调用 ≤ 10s 走缓存；> 10s 重新 readdir + 解析
  * - clearStoneSkillsCache() 测试钩子
  */
-
-/** 单个 skill 索引项（SkillEntry）。 */
-export interface SkillEntry {
-  /** skill 名（目录名）。 */
-  name: string;
-  /** SKILL.md frontmatter 的 description；缺失或解析失败时为 "(无描述)"。 */
-  description: string;
-  /** SKILL.md 的绝对路径，用作 open_file 提示。 */
-  skillFilePath: string;
-  /**
-   * 来源 scope：
-   * - workspace — 公共：stones/@ooc/skills/<name>/SKILL.md（原 branch）
-   * - object  — 私有：stones/<objectId>/skills/<name>/SKILL.md
-   * - external — 外部目录：由 .world.json 的 externalSkillsDir 指定（与 stone 无关）
-   */
-  scope: "workspace" | "object" | "external";
-}
+import { readFile, readdir } from "node:fs/promises";
+import { join } from "node:path";
+import { stoneDir, type StoneObjectRef } from "@ooc/core/persistable/index.js";
+import { parseKnowledgeFile } from "@ooc/core/thinkable/knowledge";
+import type { SkillEntry } from "./types.js";
 
 /** workspace 级 skills 目录绝对路径（跨 Object 共享，不挂 branch）。 */
 export function branchSkillsDir(baseDir: string): string {

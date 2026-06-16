@@ -22,10 +22,9 @@ import type { MethodExecWindow } from "../types";
 import type { PlanWindow } from "@ooc/builtins/agent/plan/types.js";
 import {
   runtimeObjectStateFile,
-  threadContextFile,
-  readThreadContext,
   __resetSerialQueueForTests,
 } from "../../../../persistable";
+import { threadContextFile, readThreadContext } from "@ooc/builtins/agent/thread/persistable/flow-thread-context";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../../../../persistable/common";
 import type { ThreadContext } from "../../../../thinkable/context";
 import type { ContextWindow } from "../types";

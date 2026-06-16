@@ -7,10 +7,10 @@
  *   `thread-context.json` inline 落盘、不写独立 state.json（会话窗 self/peer/fork/reflect_request
  *   投影都是 thread 实例）。
  * - `save` / `load`：thread **作为运行会话容器**时的持久化（thread.json + thread-context.json +
- *   inbox + hydrate），实现在 `./thread-persist`。core 只提供框架与 API（runtime 引擎 / 串行写 /
- *   路径原语 / 默认 state.json IO / registry dispatch），经 `writeThread`/`readThread`（thread 作用域
- *   ctx，含 threadId）与 manager persist hook **委托**到这里，core 不内含 thread 序列化逻辑
- *   （object-model 核心 7）。
+ *   inbox + hydrate），实现在 `./thread-persist`。thread 的落盘 API（`writeThread`/`readThread` +
+ *   thread.json/thread-context/inbox 文件原语）现在**全在本 builtin**（`./thread-json`、
+ *   `./flow-thread-context`、`./inbox-store`）；core 不再持有 thread 序列化入口或 registry-dispatch
+ *   壳——runtime 引擎直接 import 本 builtin 的 `writeThread`/`readThread`（object-model 核心 7）。
  */
 import type { PersistableModule } from "@ooc/core/persistable/contract.js";
 import { saveThread, loadThread } from "./thread-persist.js";

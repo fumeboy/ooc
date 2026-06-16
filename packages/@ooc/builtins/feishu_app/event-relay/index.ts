@@ -28,7 +28,8 @@
 import * as lark from "@larksuiteoapi/node-sdk";
 import type { ServerConfig } from "@ooc/core/app/server/bootstrap/config.js";
 import type { ThreadActivationRef } from "@ooc/core/observable";
-import { readThread, readWorldConfig } from "@ooc/core/persistable";
+import { readWorldConfig } from "@ooc/core/persistable";
+import { readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 
 /** session 命名前缀；前端 sidebar 看到这条前缀的 session 知道是 lark inbound 起的。 */
 const LARK_SESSION_PREFIX = "lark-chat-";

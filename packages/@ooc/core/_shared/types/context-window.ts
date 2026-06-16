@@ -140,9 +140,6 @@ export type { Data as FeishuDocData, FeishuDocBlock } from "@ooc/builtins/feishu
 /** Root object 的固定 id。 */
 export const ROOT_WINDOW_ID = "root";
 
-/** Skill 索引 object 的固定 id（每个 thread 唯一一份）。 */
-export const SKILL_INDEX_WINDOW_ID = "skill_index";
-
 /** root thread 的 creator 约定值。 */
 export const SESSION_CREATOR_THREAD_ID = "__session__";
 
@@ -158,7 +155,6 @@ export function generateWindowId(type: string): string {
     knowledge: "w_kn",
     search: "w_search",
     relation: "w_rel",
-    skill_index: "w_skills",
     feishu_chat: "w_fschat",
     feishu_doc: "w_fsdoc",
     plan: "w_plan",

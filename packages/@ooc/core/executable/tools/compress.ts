@@ -403,7 +403,7 @@ export async function handleCompressTool(
     // 检测 missing 中的 synthetic id 模式 — 给 LLM 解释为什么这些 id 看见但 compress 不到
     // (synthetic windows 由 synthesizer 每轮 derive,不在 thread.contextWindows 持久化)
     const syntheticMissing = result.missing.filter(
-      (id) => id.startsWith("w_rel_") || id === "w_skill_index" || id.startsWith("w_skill_"),
+      (id) => id.startsWith("w_rel_") || id === "_builtin/agent/skill_index" || id.startsWith("w_skill_"),
     );
     const syntheticHint =
       syntheticMissing.length > 0
