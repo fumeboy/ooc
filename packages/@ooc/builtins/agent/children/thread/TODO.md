@@ -1,8 +1,10 @@
 # thread 持久化统一到标准 object 模型（计划）
 
-> 状态：**设计已定，待落地**。本篇把 thread 持久化收敛成 object-model 标准 `save/load`，**退役**上一版
-> 引入的 `PersistableModule.container` / `ThreadContainerPersistence`（那层 indirection 方向错了，见「为什么」），
-> 并顺带把 `isCreatorWindow` 去状态化。
+> 状态：**已落地（2026-06-16，增量 0-3 全完成）**。本篇把 thread 持久化收敛成 object-model 标准 `save/load`，
+> **退役**了上一版引入的 `PersistableModule.container` / `ThreadContainerPersistence`（那层 indirection 方向错了，见「为什么」），
+> 并把 `isCreatorWindow` 去状态化（id 派生 + close 投影可见性）。非测试源码 tsc 0；round-trip 验通；guard 全绿；
+> doc 已回流对象树（push ooc-0）。剩 `conversationId`/`isForkWindow` 同属 id 镜像/寻址提示，本轮未动（见下）；
+> 574 composition 测试基线非本重构责任，未碰。
 > 设计权威：`.ooc-world-meta/.../children/class/knowledge/object-model.md` 核心 4 / 7；
 > persistable 边界 `.ooc-world-meta/.../children/persistable/knowledge/core-framework-vs-builtin-logic.md`（落地后须回流修正）。
 
