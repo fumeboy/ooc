@@ -85,9 +85,19 @@ export class ServerLoader {
     registry: ObjectRegistry,
   ): Promise<boolean> {
     const loaded = await this.loadStoneClass(stoneRef);
-    if (!loaded) return false;
-    registry.register(objectId, loaded.cls, { parentClass: loaded.parentClass });
-    return true;
+    if (loaded) {
+      registry.register(objectId, loaded.cls, { parentClass: loaded.parentClass });
+      return true;
+    }
+    // 无 index.ts（纯 self.md / readable.md 对象，如 supervisor）：仍读 package.json 的 ooc.class
+    // 注册其 parentClass（空 Class）——让它经**单跳继承**拿到该 class 的 object method + seed knowledge
+    // （否则 supervisor 等 agent 实例 getClass().parentClass 为空，既丢 agency 又丢 class 知识）。
+    const parentClass = await readStoneClass(stoneRef);
+    if (parentClass != null) {
+      registry.register(objectId, {}, { parentClass });
+      return true;
+    }
+    return false;
   }
 
   /** 使单个 stone 的缓存条目失效（热更新用）。 */

@@ -66,12 +66,13 @@ export async function loadKnowledgeIndex(
     stoneKnowledgeDir({ ...refs.stone, objectId: id }),
   );
 
-  // parentClass 继承链 seed 目录列表（closest → farthest）。
-  // 自定义 stone 对象可能尚未注册 → resolveParentClassChain 返回 []，安全降级。
-  const parentClassChain = registry.resolveParentClassChain(refs.stone.objectId as any);
-  const parentClassRoots = parentClassChain.map((id) =>
-    stoneKnowledgeDir({ ...refs.stone, objectId: id }),
-  );
+  // 单跳继承的 parentClass seed 目录：用**原始** parentClass id（保留 `_builtin/` 前缀，
+  // 否则 resolveBuiltinReadDir 命不中框架包 knowledge——见 builtin-dir.ts；归一后的裸 `agent` 解析失败）。
+  // 自定义 stone 对象可能尚未注册 → getClass 返回 undefined，安全降级为 []。
+  const rawParentClass = registry.getClass(refs.stone.objectId)?.parentClass ?? undefined;
+  const parentClassRoots = rawParentClass
+    ? [stoneKnowledgeDir({ ...refs.stone, objectId: rawParentClass })]
+    : [];
 
   // 收集所有 md 文件（目录祖先 + 父类链 + self stone + self pool）。
   const ancestorFilesByRoot: Array<{ root: string; files: Awaited<ReturnType<typeof collectMdFiles>> }> = [];
