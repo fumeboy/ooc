@@ -8,6 +8,7 @@
  * - **creator-reply 协议**：动态按 creator talk window 的 id 生成，不属于静态 builtin 知识。
  */
 import { ROOT_WINDOW_ID, isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
+import { KNOWLEDGE_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
@@ -53,7 +54,8 @@ function makeKnowledgeWindow(
 ): OocObjectInstance<KnowledgeData> {
   return {
     id: nextSyntheticId(),
-    class: "knowledge",
+    // 注册 class id（非投影名 "knowledge"）——使 resolveReadable 命中 knowledge readable。
+    class: KNOWLEDGE_CLASS_ID,
     parentObjectId: ROOT_WINDOW_ID,
     title: path,
     status: "open",

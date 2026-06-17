@@ -30,9 +30,15 @@ interface SearchArgs {
   path?: string;
   glob?: string;
   case_insensitive?: boolean;
+  mode?: "grep" | "glob";
 }
 
+// glob vs grep 优先看调用方显式 `mode`（filesystem.grep/glob 两 method 各自传 "grep"/"glob"）；
+// 无 mode 时回退按 args 形状启发式（带 path/glob/case_insensitive → grep）。显式 mode 避免
+// 「grep 仅传 pattern 无 path → 误判 glob」「glob 把 pattern 放进 glob 字段 → 误判 grep」两类歧义。
 function isGrepArgs(args: SearchArgs): boolean {
+  if (args.mode === "grep") return true;
+  if (args.mode === "glob") return false;
   return (
     typeof args.path === "string" ||
     typeof args.glob === "string" ||

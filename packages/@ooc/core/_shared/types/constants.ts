@@ -21,6 +21,19 @@ export function isSuperSessionId(sessionId: string): boolean {
 export const THREAD_CLASS_ID = "_builtin/agent/thread";
 
 /**
+ * knowledge 子对象的注册 class id（knowledge_base 经 open_knowledge 实例化的 doc 窗）。
+ * 合成的协议/召回 knowledge 窗（protocol.ts / activator-windows.ts）与真实 open_knowledge 窗
+ * 都用它当 inst.class，使 resolveReadable 能命中 knowledge readable（投影回 window class "knowledge"）；
+ * 直接写投影名 "knowledge" 会 resolve 不到 readable → 渲染成 placeholder。
+ */
+export const KNOWLEDGE_CLASS_ID = "_builtin/knowledge_base/knowledge";
+
+/** 该 window 是不是 knowledge 实例（合成或真实 open_knowledge 窗，inst.class === KNOWLEDGE_CLASS_ID）。 */
+export function isKnowledgeClass(cls: string | undefined): boolean {
+  return cls === KNOWLEDGE_CLASS_ID;
+}
+
+/**
  * "会话型" window 谓词 —— 判一条 context window 是不是会话载体（thread）实例。
  *
  * thread 是**唯一**会话载体注册 class：所有会话窗（creator/peer/sub/fork）的 inst.class 都是

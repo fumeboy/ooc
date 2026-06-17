@@ -5,6 +5,7 @@
  * KnowledgeWindow entries with source="activator".
  */
 import { ROOT_WINDOW_ID } from "../../_shared/types/context-window.js";
+import { KNOWLEDGE_CLASS_ID, isKnowledgeClass } from "../../_shared/types/constants.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ThreadContext } from "./index.js";
@@ -40,7 +41,7 @@ export async function buildActivatorKnowledgeWindows(
 
   const explicitPaths = new Set(
     (thread.contextWindows ?? [])
-      .filter((w) => w.class === "knowledge" && (w.data as KnowledgeData | undefined)?.source === "explicit")
+      .filter((w) => isKnowledgeClass(w.class) && (w.data as KnowledgeData | undefined)?.source === "explicit")
       .map((w) => (w.data as KnowledgeData).path),
   );
 
@@ -56,7 +57,8 @@ export async function buildActivatorKnowledgeWindows(
       const body = act.presentation === "full" ? truncateKnowledgeBody(act.doc.body) : "";
       out.push({
         id: nextSyntheticId(),
-        class: "knowledge",
+        // 注册 class id（非投影名 "knowledge"）——使 resolveReadable 命中 knowledge readable。
+        class: KNOWLEDGE_CLASS_ID,
         parentObjectId: ROOT_WINDOW_ID,
         title: act.path,
         status: "open",

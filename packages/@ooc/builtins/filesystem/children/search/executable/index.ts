@@ -21,6 +21,10 @@ import type { Data } from "../types.js";
 /** open_match 在 file 对象上套的上下文行数（match.line ± 该值）。 */
 const FILE_WINDOW_LINE_CONTEXT = 40;
 
+// file 对象的注册 class id（与 filesystem.open_file 的 FILE_CLASS 一致）；
+// 裸名 "file" 在 registry 解析不到 constructor（注册键为 _builtin/filesystem/file）。
+const FILE_CLASS = "_builtin/filesystem/file";
+
 const closeMethod: ObjectMethod<Data> = {
   name: "close",
   description: "Close this search window (does not affect matched files).",
@@ -72,7 +76,7 @@ const openMatchMethod: ObjectMethod<Data> = {
       ? match.path
       : resolve(self.searchRoot ?? process.cwd(), match.path);
 
-    await runtime.instantiate("file", { path: absPath, lines });
+    await runtime.instantiate(FILE_CLASS, { path: absPath, lines });
     return undefined;
   },
 };

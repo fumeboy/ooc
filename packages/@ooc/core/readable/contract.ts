@@ -30,10 +30,14 @@ export interface ReadableContext {
  * readable 投影结果 —— object 经 readable 算出的「这一刻它作为 context window 的样子」。
  * - class   : 动态算出的 window class（同一 object 不同视角/状态可投影成不同 class）
  * - content : 渲染内容（结构化 XmlNode[] 或纯文本）
+ * - consumedMessageIds : 本窗 transcript **已渲染**的 thread inbox/outbox 消息 id（会话窗投影把
+ *   归属本窗的消息收进 transcript）。渲染器据此从顶层 `<inbox>`/`<outbox>` 兜底里**剔除**这些消息，
+ *   保证「信息只渲一次」（context.md 核心 10）——一条消息要么进某窗 transcript、要么进顶层兜底，不重复。
  */
 export interface ReadableProjection {
   class: string;
   content: XmlNode[] | string;
+  consumedMessageIds?: string[];
 }
 
 /**

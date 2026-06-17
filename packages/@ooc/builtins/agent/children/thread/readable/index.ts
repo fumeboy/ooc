@@ -66,8 +66,11 @@ const readable: ReadableModule<Data, ThreadWin> = {
       : "thread";
 
     const children: XmlNode[] = renderHead(self, ctx.object.id);
+    let consumedMessageIds: string[] | undefined;
     if (thread) {
       const messages = filterTalkMessages(ctx.object.id, self, thread);
+      // 这些消息已进本窗 transcript → 报给渲染器，从顶层 inbox/outbox 兜底剔除（信息只渲一次）。
+      consumedMessageIds = messages.map((m) => m.id);
       children.push(
         ...renderTranscriptOrHandle(
           { isCreator: isCreatorWindowId(ctx.object.id), transcriptViewport: win?.transcriptViewport },
@@ -75,7 +78,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
         ),
       );
     }
-    return { class: projectionClass, content: children };
+    return { class: projectionClass, content: children, consumedMessageIds };
   },
   window: [
     // self-view 非 super：thread 与 creator 的恒在通道。**不 surface close**——creator 窗不可关，

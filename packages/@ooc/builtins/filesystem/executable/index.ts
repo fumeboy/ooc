@@ -67,8 +67,10 @@ const globMethod: ObjectMethod<Data> = {
     const pattern = typeof args.pattern === "string" ? args.pattern : "";
     if (!pattern) throw new Error("[filesystem.glob] 缺少必填参数 pattern");
     const runtime = requireRuntime(ctx, "glob");
+    // glob 通配符走 search 的 `pattern` 入参（glob 字段是 grep 的文件名过滤器，语义不同）；
+    // 显式 mode="glob" 让 search 构造器走 glob 分支。
     await runtime.instantiate(SEARCH_CLASS, {
-      glob: pattern,
+      pattern,
       cwd: args.cwd,
       mode: "glob",
     });

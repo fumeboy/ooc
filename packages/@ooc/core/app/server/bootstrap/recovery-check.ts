@@ -1,6 +1,6 @@
 /**
  * Recovery 启动自检（U8）—— Server 启动时遍历 `stones/main/objects/` 下所有用户 Object，
- * 试加载它们的 `executable/index.ts`；任何 Object 加载失败则在 super session 创一条
+ * 试加载它们的 `index.ts`（`export const Class` 装配入口）；任何 Object 加载失败则在 super session 创一条
  * `[recovery-needed]` PR-Issue（不带 prPayload，因为这不是元编程修改而是诊断信号），
  * 让 Supervisor 在自己的 super flow 中看到并决定是否触发 rollback（控制面 governance
  * 端点 `POST /api/runtime/stones/<id>/rollback`）。
@@ -13,14 +13,13 @@
  *
  * 枚举走 StoneRegistry（canonical `stones/main/objects/` + versioning worktree，含 children/
  * 嵌套），只看 kind="stone"（用户/实例对象——builtin class 是框架代码，不受自我编程腐化）。
- * 扫描目标从 deprecated `<world>/packages/` 改回 canonical，并随 packages/ 兼容层移除
- * 修正文件名 `server/index.ts → executable/index.ts`（已重命名）。
+ * load-detection 直接走 `loadStoneClass`：无 `index.ts` 的纯 self.md/readable.md 对象返回
+ * undefined（无后端程序、不算 broken，跳过）；有 `index.ts` 但 import/语法/装配出错则 throw → broken。
  */
 
 import {
   createRecoveryIssue,
   readPrIssueIndex,
-  readExecutableSource,
   type PrIssueRecord,
 } from "@ooc/core/persistable";
 import { loadStoneClass } from "@ooc/core/runtime/server-loader";
@@ -55,17 +54,10 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
   const broken: BrokenObject[] = [];
   for (const def of stones) {
     const stoneRef = { baseDir: opts.baseDir, objectId: def.objectId };
-    // 只校验有 executable/index.ts 的 Object（绝大多数 stone 没有可执行方法）。
-    // readExecutableSource 双读：优先 executable/，fallback legacy server/。
-    let source: string | undefined;
     try {
-      source = await readExecutableSource(stoneRef);
-    } catch {
-      source = undefined;
-    }
-    if (!source) continue;
-    try {
-      // load-detection：import 该 stone 的 `export const Class`（坏 import / 语法错误会 throw）。
+      // load-detection：import 该 stone 的 `export const Class`（index.ts 装配入口）。
+      // 无 index.ts → undefined（无后端程序，绝大多数 stone 如此，跳过）；
+      // 有 index.ts 但坏 import / 语法 / 缺 Class 导出 → throw → broken。
       await loadStoneClass(stoneRef);
     } catch (err) {
       broken.push({
@@ -100,7 +92,7 @@ export async function runRecoveryCheck(opts: { baseDir: string }): Promise<Recov
       issue = await createRecoveryIssue({
         baseDir: opts.baseDir,
         title,
-        description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/executable/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider rollback via 控制面 governance 端点 \`POST /api/runtime/stones/<id>/rollback\` to a previous commit, or directly fix the stone.`,
+        description: `Server startup self-check failed to load stones/main/objects/${b.objectId}/index.ts.\n\nReason:\n${b.reason}\n\nSupervisor: consider rollback via 控制面 governance 端点 \`POST /api/runtime/stones/<id>/rollback\` to a previous commit, or directly fix the stone.`,
         createdByObjectId: "supervisor",
       });
     } catch {

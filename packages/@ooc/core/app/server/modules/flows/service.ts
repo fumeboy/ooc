@@ -26,6 +26,7 @@ import {
   SUPER_SESSION_ID,
   isSuperSessionId,
   THREAD_CLASS_ID,
+  isKnowledgeClass,
 } from "@ooc/core/_shared/types/constants.js";
 import type {
   ListThreadsItem,
@@ -155,7 +156,7 @@ function stripVolatileForHash(payload: { contextWindows?: OocObjectInstance[] })
     ...payload,
     contextWindows: payload.contextWindows.map((window) => {
       const source = (window.data as { source?: string } | undefined)?.source;
-      if (window.class === "knowledge" && source !== undefined && source !== "explicit") {
+      if (isKnowledgeClass(window.class) && source !== undefined && source !== "explicit") {
         const { id: _id, createdAt: _createdAt, ...rest } = window;
         return rest;
       }

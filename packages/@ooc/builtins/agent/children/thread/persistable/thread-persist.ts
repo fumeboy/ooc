@@ -43,7 +43,6 @@ import type { PersistableContext } from "@ooc/core/persistable/contract.js";
 import {
   ROOT_WINDOW_ID,
   isNonPersistedWindow,
-  type BaseContextWindow,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
@@ -65,7 +64,7 @@ import { observeWarn } from "@ooc/core/observable/log-aggregator.js";
  *   - 否则（独立对象）→ 轻量 `_ref`，hydrate 时另读 `<id>/state.json`（被指对象数据各自落，不内联）
  */
 function buildEntries(
-  windows: Iterable<BaseContextWindow>,
+  windows: Iterable<ContextWindow>,
   registry: ObjectRegistry,
 ): ThreadContextEntry[] {
   const entries: ThreadContextEntry[] = [];

@@ -393,9 +393,16 @@ export class XmlRenderer {
       threadChildren.push(contextWindowsNode);
     }
 
-    // Top-level inbox/outbox fallback（消息已消费去重由 transcript 投影自身负责，本层只兜未消费）。
-    appendNode(threadChildren, renderMessagesNode("inbox", threadForRender.inbox));
-    appendNode(threadChildren, renderMessagesNode("outbox", threadForRender.outbox));
+    // Top-level inbox/outbox 兜底：只渲**未被任何会话窗 transcript 收纳**的消息（信息只渲一次，
+    // context.md 核心 10）。各窗投影经 consumedMessageIds 报告已收纳的消息，这里统一从兜底剔除。
+    const consumed = new Set<string>();
+    for (const p of projected) {
+      for (const id of p.projection.consumedMessageIds ?? []) consumed.add(id);
+    }
+    const unconsumed = (messages: ThreadMessage[] | undefined): ThreadMessage[] | undefined =>
+      consumed.size === 0 ? messages : messages?.filter((m) => !consumed.has(m.id));
+    appendNode(threadChildren, renderMessagesNode("inbox", unconsumed(threadForRender.inbox)));
+    appendNode(threadChildren, renderMessagesNode("outbox", unconsumed(threadForRender.outbox)));
 
     const rootChildren: XmlNode[] = [
       ...renderSelfNodes(threadForRender.persistence?.objectId),

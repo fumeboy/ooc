@@ -89,20 +89,6 @@ export interface BaseContextWindow {
   compressLevel?: 0 | 1 | 2;
   provenance?: ContextWindowProvenance;
   relevance?: ContextWindowRelevance;
-  /**
-   * Object 自我门面窗（id=type=objectId，由 initContextWindows 每次 thread 加载幂等重注入）。
-   * 它从对象身份确定性重建、无独立 state.json，**不应持久化**——否则 thread-context.json 落成
-   * 指向缺失 state.json 的死 _ref，reload 刷屏 `references missing object <id>`。
-   * 写盘端经 isNonPersistedWindow 统一剔除。
-   */
-  isSelfWindow?: boolean;
-  /**
-   * Member-facade 窗（agent 经组合声明持有的 tool-object 成员，如 filesystem）。
-   * 与 self 窗同理：由 injectMemberWindowsIfObjectThread 每次 thread 加载幂等重注入、
-   * 从类声明确定性重建、无独立 state.json，**不应持久化**——否则 thread-context.json 落死 _ref。
-   * 写盘端经 isNonPersistedWindow 统一剔除。
-   */
-  isMemberWindow?: boolean;
 }
 
 /**
@@ -184,10 +170,19 @@ export function isCreatorWindowId(id: string): boolean {
 }
 
 /**
- * 不应持久化进 thread-context.json 的窗：self 门面窗。
- * 由 init 每轮确定性重建，落盘只会变成死 _ref 刷屏（见 isSelfWindow 标记）。
- * 写盘端用本谓词统一剔除。
+ * 不应持久化进 thread-context.json 的窗：self 门面窗 + member 门面窗。
+ *
+ * 两者都由 init 每轮从对象身份/类声明确定性重注入（initContextWindows /
+ * injectMemberWindowsIfObjectThread），无独立 state.json，**不应持久化**——否则落成指向缺失
+ * state.json 的死 _ref，reload 刷屏 `references missing object <id>`。
+ *
+ * 标记落在窗的**投影态 `win`** 上（`win:{transient:true,isSelfWindow:true}` /
+ * `win:{transient:true,isMemberWindow:true}`），不在信封顶层——故本谓词读 `win`。写盘端
+ * （thread-persist.buildEntries）用它统一剔除。
  */
-export function isNonPersistedWindow(window: BaseContextWindow): boolean {
-  return window.isSelfWindow === true || window.isMemberWindow === true;
+export function isNonPersistedWindow(window: { win?: unknown }): boolean {
+  const win = window.win as
+    | { isSelfWindow?: boolean; isMemberWindow?: boolean }
+    | undefined;
+  return win?.isSelfWindow === true || win?.isMemberWindow === true;
 }
