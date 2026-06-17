@@ -30,7 +30,6 @@
     "@ooc/builtins/filesystem/file": "workspace:*",
     "@ooc/builtins/knowledge_base/knowledge": "workspace:*",
     "@ooc/builtins/agent/plan": "workspace:*",
-    "@ooc/builtins/root": "workspace:*",
     "@ooc/builtins/filesystem/search": "workspace:*",
     "@ooc/builtins/agent/skill_index": "workspace:*",
     "@ooc/builtins/agent/todo": "workspace:*",

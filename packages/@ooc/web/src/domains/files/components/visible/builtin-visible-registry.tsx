@@ -7,12 +7,12 @@
  * 与 HANDLED_WINDOW_TYPES 硬编码集合。
  *
  * 收拢的组件：
- * - 实存 builtin `visible/index.tsx`（file/knowledge/todo/search/skill_index/plan/terminal_process/interpreter_process/root）
+ * - 实存 builtin `visible/index.tsx`（file/knowledge/todo/search/skill_index/plan/terminal_process/interpreter_process）
  * - method_exec（本地 ./MethodExecWindowDetail）
  * - 从 viewer 内联抽出的 feishu_chat / feishu_doc / do / talk
  *
- * supervisor / user 不注册——它们返回 null、不接 window prop、不在 RENDERABLE_VISIBLE_TYPES，
- * 自然落 resolveWindowVisible 的 JSON 兜底（无害）。
+ * supervisor / user / root 窗不注册——它们返回 null / 落 JSON 兜底，不接 window prop、
+ * 不在 RENDERABLE_VISIBLE_TYPES（root 窗是虚拟根容器，渲染期落 resolveWindowVisible 兜底，无害）。
  */
 import type { ComponentType } from "react";
 import type { ContextWindow } from "../../context-snapshot";
@@ -25,7 +25,6 @@ import SkillIndexWindowDetail from "@ooc/builtins/agent/skill_index/visible/inde
 import PlanWindowDetail from "@ooc/builtins/agent/plan/visible/index";
 import TerminalProcessWindowDetail from "@ooc/builtins/terminal/terminal_process/visible/index";
 import InterpreterProcessWindowDetail from "@ooc/builtins/interpreter/interpreter_process/visible/index";
-import RootWindowDetail from "@ooc/builtins/root/visible/index";
 import MethodExecWindowDetail from "../MethodExecWindowDetail";
 import FeishuChatWindowDetail from "./FeishuChatWindowDetail";
 import FeishuDocWindowDetail from "./FeishuDocWindowDetail";
@@ -48,7 +47,6 @@ export const BUILTIN_VISIBLE: Record<string, ComponentType<{ window: ContextWind
   plan: PlanWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   terminal_process: TerminalProcessWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   interpreter_process: InterpreterProcessWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  root: RootWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   method_exec: MethodExecWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   feishu_chat: FeishuChatWindowDetail,
   feishu_doc: FeishuDocWindowDetail,

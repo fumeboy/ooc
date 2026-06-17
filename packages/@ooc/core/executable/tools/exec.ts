@@ -38,7 +38,7 @@ export const EXEC_TOOL: LlmTool = {
         type: "string",
         description:
           "目标 window 的 id；缺省 = 你自己（agent 的 self 窗，agency 命令所在）。" +
-          "工具方法在成员对象窗上：filesystem / terminal / world / knowledge_base —— 调它们的方法时 window_id 指向对应成员窗。",
+          "工具方法在成员对象窗上：filesystem / terminal / interpreter / knowledge_base / runtime —— 调它们的方法时 window_id 指向对应成员窗。",
       },
       method: {
         type: "string",
@@ -46,8 +46,8 @@ export const EXEC_TOOL: LlmTool = {
           "要在 target window 上调用的 method 名。" +
           "你自己的 self 窗上有 agency：talk/plan/todo/end（+ example）。" +
           "talk 统一两形态：target=别的对象 ⇒ peer 会话；target=自己 ⇒ fork 一条子线程。" +
-          "工具方法在成员对象窗上：filesystem 有 grep/glob/open_file/write_file；terminal 有 program；" +
-          "world 有 create_object；knowledge_base 有 open_knowledge —— 调用时 window_id 指向对应成员窗。" +
+          "工具方法在成员对象窗上：filesystem 有 grep/glob/open_file/write_file；terminal / interpreter 有 run；" +
+          "runtime 有 create_object；knowledge_base 有 open_knowledge —— 调用时 window_id 指向对应成员窗。" +
           "其它 window 上注册的方法也通过本字段传入，运行时按 window_id 路由。" +
           "调整信息展示的通用方法（任意窗可用）：compress（折叠，args={scope:\"windows\"|\"events\",...}）/ expand（展开压缩窗）。",
       },

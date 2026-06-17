@@ -2,10 +2,10 @@
  * Protocol knowledge windows — source="protocol" 的协议知识。
  *
  * 两类：
- * - **root builtin knowledge**：`builtins/root/knowledge/*.md`（交互核心 / root method 菜单 /
- *   talk·super / do·move / form / skills / 自我演化 / super flow / end 反思）。按各篇 frontmatter
- *   的 activates_on 对当前 thread 逐篇匹配，命中才注入——Object 只在相关交互面看到对应切片。
- * - **creator-reply 协议**：动态按 creator do/talk window 的 id 生成，不属于静态 root 知识。
+ * - **builtin 协议 knowledge**：各 builtin 包 `knowledge/*.md`（交互核心 / agency / talk·super /
+ *   skills / 自我演化 / super flow / end 反思 / pr-review / search）。按各篇 frontmatter 的
+ *   activates_on 对当前 thread 逐篇匹配，命中才注入——Object 只在相关交互面看到对应切片。
+ * - **creator-reply 协议**：动态按 creator talk window 的 id 生成，不属于静态 builtin 知识。
  */
 import { ROOT_WINDOW_ID, isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
@@ -20,14 +20,14 @@ import type { ThreadContext } from "./index.js";
 
 /**
  * 全部 builtin 包的 knowledge 目录（随框架包发布，与 world 无关）。
- * 每个 builtin class/object 都可携带自己的 knowledge/ (agency 知识在 agent、飞书知识在
- * feishu_app、基类协议在 root)；遍历 packages/@ooc/builtins 各包全量收集，新增包的知识
- * 自动加载、无需改本 loader。按各篇 activates_on 逐 thread 匹配。
+ * 每个 builtin class/object 都可携带自己的 knowledge/ (agency / 自我演化 / pr-review 知识在 agent、
+ * search 知识在 filesystem、飞书知识在 feishu_app)；遍历 packages/@ooc/builtins 各顶层包全量收集，
+ * 新增包的知识自动加载、无需改本 loader（锚点用 agent 包定位 builtins/ 根）。按各篇 activates_on 逐 thread 匹配。
  */
 function resolveBuiltinKnowledgeDirs(): string[] {
   try {
     const builtinsRoot = dirname(
-      dirname(Bun.resolveSync("@ooc/builtins/root/package.json", process.cwd())),
+      dirname(Bun.resolveSync("@ooc/builtins/agent/package.json", process.cwd())),
     );
     const dirs: string[] = [];
     for (const name of readdirSync(builtinsRoot)) {

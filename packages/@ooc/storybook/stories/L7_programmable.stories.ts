@@ -10,22 +10,23 @@ export const L7_STORIES: Story[] = [
   story({
     id: "L7-EXEC-HOTRELOAD",
     layer: "programmable",
-    expectation: "改写 executable/index.ts 后 loadObjectWindow 加载到新 method",
-    design: "programmable：Object 自写方法库，运行时热更（fs.watch）。runtime/server-loader",
+    expectation: "改写 stone index.ts 后 loadStoneClass 加载到新 object method",
+    design: "programmable（Wave4）：Object 自写 `export const Class`（executable.methods），运行时热更（按 index.ts mtime）。runtime/server-loader",
     run: async ({ app, baseDir }) => {
       const id = "prog_obj";
       await postJson(app, "/api/stones", { objectId: id });
-      const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { alpha: { description: "alpha", intents: ["alpha"], exec: async () => ({ ok: true }) } } };`);
+      const { loadStoneClass } = await import("@ooc/core/runtime/server-loader");
+      const names = (loaded: any): string[] => (loaded?.cls?.executable?.methods ?? []).map((m: any) => m.name);
+      writeStoneFile(baseDir, id, "index.ts",
+        `export const Class = { executable: { methods: [{ name: "alpha", description: "alpha", exec: async () => ({}) }] } };`);
       await sleep(350);
-      const w1 = await loadObjectWindow({ baseDir, objectId: id });
-      check(!!w1?.methods?.alpha, "首版 method alpha 未加载");
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { beta: { description: "beta", intents: ["beta"], exec: async () => ({ ok: true }) } } };`);
+      const w1 = await loadStoneClass({ baseDir, objectId: id });
+      check(names(w1).includes("alpha"), "首版 method alpha 未加载");
+      writeStoneFile(baseDir, id, "index.ts",
+        `export const Class = { executable: { methods: [{ name: "beta", description: "beta", exec: async () => ({}) }] } };`);
       await sleep(350);
-      const w2 = await loadObjectWindow({ baseDir, objectId: id });
-      check(!!w2?.methods?.beta && !w2?.methods?.alpha, `热更未反映新 method：${JSON.stringify(Object.keys(w2?.methods ?? {}))}`);
+      const w2 = await loadStoneClass({ baseDir, objectId: id });
+      check(names(w2).includes("beta") && !names(w2).includes("alpha"), `热更未反映新 method：${JSON.stringify(names(w2))}`);
     },
   }),
 
@@ -33,17 +34,17 @@ export const L7_STORIES: Story[] = [
     id: "L7-UI-METHOD-HOTRELOAD",
     layer: "programmable",
     expectation: "改 for_ui_access 方法后 /call_method 反映新逻辑",
-    design: "programmable：for_ui_access 方法热更后 HTTP 调用走新实现。server-loader 热更 + api.call-method",
+    design: "programmable（Wave4）：for_ui_access object method 热更后 HTTP 调用走新实现。server-loader 热更（index.ts mtime）+ api.call-method",
     run: async ({ app, baseDir }) => {
       const id = "prog_ui";
       await postJson(app, "/api/stones", { objectId: id });
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { f: { description: "f", for_ui_access: true, exec: () => ({ ok: true, data: { v: 1 } }) } } };`);
+      writeStoneFile(baseDir, id, "index.ts",
+        `export const Class = { executable: { methods: [{ name: "f", description: "f", for_ui_access: true, exec: () => ({ data: { v: 1 } }) }] } };`);
       await sleep(350);
       let r = await postJson(app, `/api/stones/${id}/call_method`, { method: "f", args: {} });
       check(JSON.stringify(r.json?.data) === JSON.stringify({ v: 1 }), `v1 data=${JSON.stringify(r.json?.data)}`);
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { f: { description: "f", for_ui_access: true, exec: () => ({ ok: true, data: { v: 2 } }) } } };`);
+      writeStoneFile(baseDir, id, "index.ts",
+        `export const Class = { executable: { methods: [{ name: "f", description: "f", for_ui_access: true, exec: () => ({ data: { v: 2 } }) }] } };`);
       await sleep(350);
       r = await postJson(app, `/api/stones/${id}/call_method`, { method: "f", args: {} });
       check(JSON.stringify(r.json?.data) === JSON.stringify({ v: 2 }), `热更后 data=${JSON.stringify(r.json?.data)}`);

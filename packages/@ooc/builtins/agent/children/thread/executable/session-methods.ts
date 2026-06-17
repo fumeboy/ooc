@@ -144,28 +144,7 @@ const closeMethod: ObjectMethod<Data> = {
   },
 };
 
-// ─────────────────────────── share ──────────────────────────────
-
-const shareMethod: ObjectMethod<Data> = {
-  name: "share",
-  description:
-    "Share (readonly-ref) or transfer ownership (move) of a window to the forked child/parent thread.",
-  schema: {
-    args: {
-      window_id: { type: "string", required: true, description: "要传的 window id" },
-      mode: { type: "string", required: true, description: '"readonly-ref" 只读借用；"move" 移交所有权' },
-    },
-  },
-  exec: (_ctx, self: Data) => {
-    if (!self.isForkWindow) {
-      return "[thread.share] share 只能在 fork 子线程窗（同对象父子通道）上调用。";
-    }
-    return "[thread.share] window 引用借/还机制正随对象模型重构（OocObjectInstance）重新设计，暂未支持（WAVE4 待续）。";
-  },
-};
-
 export const sessionMethods: ObjectMethod<Data>[] = [
   sayMethod,
   closeMethod,
-  shareMethod,
 ];

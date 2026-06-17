@@ -182,7 +182,7 @@ export async function handleWaitTool(
     return errorOutput(
       `[wait] talk_window "${onRaw}" (target=${targetData.target}) 是你自建的，` +
         "但尚未 say 过任何消息——对端不知道有人在等回信。请先发出消息再 wait：\n" +
-        `  open(parent_window_id="${target.id}", method="say", title="...", args={ content: "..." })\n` +
+        `  open(parent_window_id="${target.id}", method="say", title="...", args={ msg: "..." })\n` +
         "或换一个已建立通讯的 window：\n" +
         renderCandidates(candidates),
     );

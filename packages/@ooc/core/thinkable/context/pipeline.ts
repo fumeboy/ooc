@@ -10,7 +10,6 @@ import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { ContextSnapshot } from "./snapshot.js";
 import { BudgetManager, loadBudgetThresholds } from "./budget.js";
 import { SystemProcessor } from "./processors/system.js";
-import { WindowEnrichmentProcessor } from "./processors/enrichment.js";
 import { ActivatorProcessor } from "./processors/activator.js";
 import { PeerProcessor } from "./processors/peer.js";
 
@@ -59,17 +58,15 @@ export class ContextPipeline {
 
 /**
  * 默认 pipeline 的相位顺序：
- * 1. SystemProcessor — root builtin protocol knowledge + creator-reply + skill_index + self 类型注册
- * 2. WindowEnrichmentProcessor — 沿 parentClass 链解析各窗口的 effectiveVisibleType
- * 3. ActivatorProcessor — frontmatter activates_on 触发的世界 stone/pool 知识激活
- * 4. PeerProcessor — peer/children Object 窗口
+ * 1. SystemProcessor — builtin protocol knowledge + creator-reply + skill_index + self 类型注册
+ * 2. ActivatorProcessor — frontmatter activates_on 触发的世界 stone/pool 知识激活
+ * 3. PeerProcessor — peer/children Object 窗口
  *
  * BudgetManager.allocate 在所有相位之后于 pipeline.run() 内执行。
  */
 export function createDefaultPipeline(): ContextPipeline {
   const p = new ContextPipeline();
   p.addPhase(SystemProcessor);
-  p.addPhase(WindowEnrichmentProcessor);
   p.addPhase(ActivatorProcessor);
   p.addPhase(PeerProcessor);
   return p;

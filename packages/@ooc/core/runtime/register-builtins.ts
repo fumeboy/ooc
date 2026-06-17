@@ -13,7 +13,6 @@
  */
 
 import { builtinRegistry as _reg } from "./object-registry.js";
-import { Class as RootClass } from "@ooc/builtins/root";
 import { Class as PrClass } from "@ooc/builtins/agent/pr";
 
 import { Class as KnowledgeClass } from "@ooc/builtins/knowledge_base/knowledge";
@@ -38,14 +37,12 @@ import { Class as FeishuAppClass } from "@ooc/builtins/feishu_app";
 
 import { Class as AgentClass } from "@ooc/builtins/agent";
 
-// root 是继承链终点基类（BASE_CLASS_ANCHOR 已 parentClass:null）；合入 root 的 executable/readable。
-_reg.register("_builtin/root", RootClass, { parentClass: null });
-// agent：OOC Agent 基类，承载 agency（talk/plan/todo/end）；继承 root。
+// agent：OOC Agent class，承载 agency（talk/plan/todo/end）；class 不继承 class，object 经 ooc.class 继承它即成 agent 实例。
 _reg.register("_builtin/agent", AgentClass);
-// pr：reviewer 评审窗（隐式继承 root）。
+// pr：reviewer 评审窗（无父，class 天然有四 facet）。
 _reg.register("_builtin/agent/pr", PrClass);
 
-// 各窗类型 builtin class（继承父类取各包 package.json `ooc.class`，缺省 → 隐式 root）。
+// 各窗类型 builtin class（class 天然有四 facet；缺省无父、无 root 回退）。
 _reg.register("_builtin/knowledge_base/knowledge", KnowledgeClass);
 _reg.register("_builtin/filesystem/file", FileClass);
 _reg.register("_builtin/agent/todo", TodoClass);
@@ -62,7 +59,7 @@ _reg.register("_builtin/interpreter", InterpreterClass);
 _reg.register("_builtin/runtime", RuntimeClass);
 _reg.register("_builtin/knowledge_base", KnowledgeBaseClass);
 // thread：**唯一**会话载体注册 class（talk/reflect_request 是它 readable 投影出的 window class，
-// 非注册 class）。继承 root 缺省；inline 持久化由 ThreadClass.persistable.mode="inline" 自声明。
+// 非注册 class）。无父（class 天然有四 facet）；inline 持久化由 ThreadClass.persistable.mode="inline" 自声明。
 _reg.register("_builtin/agent/thread", ThreadClass);
 
 // 飞书集成：feishu_chat / feishu_doc 是窗类型（parentClass:null，由 feishu_app 开出）；

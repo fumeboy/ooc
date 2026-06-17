@@ -1,7 +1,7 @@
 /**
  * SystemProcessor — produces protocol knowledge windows + ensures self object type registered.
  *
- * Covers: root builtin knowledge（按 activates_on 命中）、creator-reply 协议、self 类型注册。
+ * Covers: builtin protocol knowledge（按 activates_on 命中）、creator-reply 协议、self 类型注册。
  * skill_index 不再走本 processor 旁路——它作为 member-window（init.ts）注入，skills 由其 readable
  * 渲染期自算（object-model 核心 4）。
  */

@@ -8,6 +8,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stoneDir as realStoneDir, resolveBuiltinReadDir } from "@ooc/core/persistable";
+// side-effect 装载全部 builtin class 进 builtinRegistry（filesystem/terminal/agent/… 的
+// executable/readable）；不 import 它 registry 为空，下面 getClass/resolveObjectMethod 全落空。
+import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry";
 import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { WindowManager } from "@ooc/core/executable/manager.js";
@@ -22,14 +25,16 @@ export async function runControlPlane(): Promise<StoryResult> {
   try {
     const { instantiateBuiltinClassObjects } = await import("@ooc/core/app/server/bootstrap/instantiate-classes");
 
-    // TC-CLASS-01: instantiate_with_new_world 幂等实例化 supervisor class → objects/ object
+    // TC-CLASS-01: bootstrap 幂等把 kind:"object" 的 builtin（supervisor 等）实例化为 objects/ object。
+    // supervisor instance 经 ooc.class 继承 _builtin/agent（agent 基类），其 self.md 是身份拷贝。
+    // user / feishu_app 同为 kind:"object"，亦被实例化（被动占位 / 接入点）；本 TC 只校验 supervisor。
     {
       const res = await instantiateBuiltinClassObjects({ baseDir });
       const pkgOk = existsSync(join(supDir, "package.json"))
-        && JSON.parse(readFileSync(join(supDir, "package.json"), "utf8")).ooc?.class === "_builtin/supervisor";
+        && JSON.parse(readFileSync(join(supDir, "package.json"), "utf8")).ooc?.class === "_builtin/agent";
       const selfOk = existsSync(join(supDir, "self.md")) && readFileSync(join(supDir, "self.md"), "utf8").includes("总管");
-      rec.ok("TC-CLASS-01", "instantiate_with_new_world：supervisor class 实例化为 objects/ object（拷贝 self.md + ooc.class）",
-        res.instantiated.includes("supervisor") && !res.instantiated.includes("user") && pkgOk && selfOk,
+      rec.ok("TC-CLASS-01", "bootstrap：supervisor (kind:object) 实例化为 objects/ object（拷贝 self.md + ooc.class=_builtin/agent）",
+        res.instantiated.includes("supervisor") && pkgOk && selfOk,
         `instantiated=${JSON.stringify(res.instantiated)}, pkgOk=${pkgOk}, selfOk=${selfOk}`);
     }
 
@@ -42,19 +47,28 @@ export async function runControlPlane(): Promise<StoryResult> {
         res.skipped.includes("supervisor") && preserved, `skipped=${JSON.stringify(res.skipped)}, preserved=${preserved}`);
     }
 
-    // TC-CLASS-03: instance 经 class 链继承框架 class 的 seed knowledge
+    // TC-CLASS-03: instance 经 ooc.class 单跳继承其 class 的 seed knowledge（loader Step 1b，
+    // 无条件继承、不门控 inheritable）。建一个 base class（写 seed knowledge 进其 stone 目录）+
+    // 一个 instance（parentClass 单跳指向它），验 instance 加载时纳入 class 的 seed。
     {
+      const { mkdir, writeFile } = await import("node:fs/promises");
       const { loadKnowledgeIndex } = await import("@ooc/core/thinkable/knowledge/loader");
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
+      const { stoneKnowledgeDir } = await import("@ooc/core/persistable");
       const reg = createObjectRegistry();
-      reg.registerNewObjectType("_builtin/supervisor" as any, { methods: {} });
-      reg.registerNewObjectType("supervisor" as any, { methods: {}, parentClass: "_builtin/supervisor" });
+      reg.register("base_role", { executable: { methods: [] } } as never, { parentClass: null });
+      reg.register("my_agent", { executable: { methods: [] } } as never, { parentClass: "base_role" });
+      const classKnowledgeDir = stoneKnowledgeDir({ baseDir, objectId: "base_role" } as never);
+      await mkdir(classKnowledgeDir, { recursive: true });
+      await writeFile(join(classKnowledgeDir, "nine-dimensions.md"), "---\ntitle: 九维度\n---\nbody", "utf8");
+      await writeFile(join(classKnowledgeDir, "world-vocabulary.md"), "---\ntitle: world vocab\n---\nbody", "utf8");
       const idx = await loadKnowledgeIndex(
-        { stone: { baseDir, objectId: "supervisor" }, pool: { baseDir, objectId: "supervisor" } }, reg);
+        { stone: { baseDir, objectId: "my_agent" }, pool: { baseDir, objectId: "my_agent" } }, reg);
       const paths = [...idx.byPath.keys()];
-      rec.ok("TC-CLASS-03", "instance 经 class 链继承框架 class 的 seed knowledge（nine-dimensions / world-vocabulary）",
-        paths.some((p) => p.includes("nine-dimensions")) && paths.some((p) => p.includes("world-vocabulary")),
-        `inherited=${JSON.stringify(paths)}`);
+      rec.ok("TC-CLASS-03", "instance 经 ooc.class 单跳继承 class 的 seed knowledge（nine-dimensions / world-vocabulary）",
+        reg.resolveParentClassChain("my_agent").join() === "base_role"
+          && paths.some((p) => p.includes("nine-dimensions")) && paths.some((p) => p.includes("world-vocabulary")),
+        `chain=${JSON.stringify(reg.resolveParentClassChain("my_agent"))} inherited=${JSON.stringify(paths)}`);
     }
 
     // TC-CLASS-04: class 不可交互 —— seedSession 拒绝 _builtin/ class 目标
@@ -68,66 +82,74 @@ export async function runControlPlane(): Promise<StoryResult> {
 
     // ─────────────── 组合（agent 像持有 data 一样持有 tool-object 成员）───────────────
 
-    // TC-COMP-01: filesystem 成员对象类注册（grep/glob/open_file/write_file + readable）
+    // TC-COMP-01: filesystem 成员对象类注册（grep/glob/open_file/write_file object method + readable）
     {
-      const def = builtinRegistry.getObjectDefinition("filesystem");
-      const ok = !!(def.methods?.grep && def.methods?.glob && def.methods?.open_file && def.methods?.write_file && def.readable);
+      const cls = builtinRegistry.getClass("filesystem");
+      const names = new Set((cls?.executable?.methods ?? []).map((m) => m.name));
+      const ok = names.has("grep") && names.has("glob") && names.has("open_file") && names.has("write_file")
+        && !!builtinRegistry.resolveReadable("filesystem");
       rec.ok("TC-COMP-01", "filesystem 成员对象类注册：grep/glob/open_file/write_file + readable",
-        ok, `methods=${Object.keys(def.methods ?? {}).join(",")}`);
+        ok, `methods=${[...names].join(",")} readable=${!!builtinRegistry.resolveReadable("filesystem")}`);
     }
 
-    // TC-COMP-02: agent 基类声明成员 + supervisor 经 ooc.class 继承 agent（Object/Agent split 结构）
+    // TC-COMP-02: supervisor 经 ooc.class 继承 _builtin/agent（Object/Agent split：supervisor=object 实例，
+    // agent=承载 agency 的基类）。agency（talk/plan/todo/end）注册在 _builtin/agent class 上、经单跳继承可达。
     {
-      const agentDir = resolveBuiltinReadDir({ objectId: "_builtin/agent" });
       const supDir = resolveBuiltinReadDir({ objectId: "_builtin/supervisor" });
-      let members: unknown; let supClass: unknown;
-      try { members = JSON.parse(readFileSync(join(agentDir!, "package.json"), "utf8"))?.ooc?.members; } catch { /* */ }
+      let supClass: unknown;
       try { supClass = JSON.parse(readFileSync(join(supDir!, "package.json"), "utf8"))?.ooc?.class; } catch { /* */ }
-      const m = Array.isArray(members) ? (members as string[]) : [];
-      rec.ok("TC-COMP-02", "agent 基类声明 filesystem+terminal+interpreter+runtime+knowledge_base 五成员，supervisor 经 ooc.class 继承 _builtin/agent",
-        m.includes("filesystem") && m.includes("terminal") && m.includes("interpreter") && m.includes("runtime") && m.includes("knowledge_base") && supClass === "_builtin/agent",
-        `agentMembers=${JSON.stringify(members)} supClass=${JSON.stringify(supClass)}`);
+      const agentAgency = ["talk", "plan", "todo", "end"].every(
+        (m) => !!builtinRegistry.resolveObjectMethod("_builtin/agent", m),
+      );
+      rec.ok("TC-COMP-02", "supervisor 经 ooc.class 继承 _builtin/agent，agency(talk/plan/todo/end) 在 agent 基类",
+        supClass === "_builtin/agent" && agentAgency,
+        `supClass=${JSON.stringify(supClass)} agentAgency=${agentAgency}`);
     }
 
-    // TC-COMP-03: 组合注入 —— supervisor thread 经类声明注入两个 member 窗（非持久化）
+    // TC-COMP-03: 组合注入 —— agent thread 默认补齐 6 个全局单例 member 窗（非持久化）。
+    // 成员 class 是 `_builtin/<id>` 前缀串；isMemberWindow 标记在投影态 win 上（win.isMemberWindow）。
     {
       const thread: any = { id: "root", status: "running",
         persistence: { baseDir, sessionId: "sb-comp", objectId: "supervisor", threadId: "root" }, contextWindows: [] };
       await injectMemberWindowsIfObjectThread(thread);
-      const injected = (cls: string) => thread.contextWindows.find((w: any) => w.class === cls && w.isMemberWindow === true);
-      const fsWin = injected("filesystem");
-      const tmWin = injected("terminal");
-      const inWin = injected("interpreter");
-      const rtWin = injected("runtime");
-      const kbWin = injected("knowledge_base");
-      rec.ok("TC-COMP-03", "组合注入：supervisor thread 经类声明注入 filesystem + terminal + interpreter + runtime + knowledge_base member 窗（isMemberWindow 非持久化）",
-        !!fsWin && !!tmWin && !!inWin && !!rtWin && !!kbWin,
-        `members=${thread.contextWindows.filter((w: any) => w.isMemberWindow).map((w: any) => w.class).join(",")}`);
+      const memberClasses = new Set(
+        thread.contextWindows.filter((w: any) => w.win?.isMemberWindow === true).map((w: any) => w.class),
+      );
+      const expected = [
+        "_builtin/filesystem", "_builtin/terminal", "_builtin/interpreter",
+        "_builtin/knowledge_base", "_builtin/runtime", "_builtin/agent/skill_index",
+      ];
+      rec.ok("TC-COMP-03", "组合注入：agent thread 默认注入 6 个全局单例 member 窗（filesystem/terminal/interpreter/knowledge_base/runtime/skill_index，win.isMemberWindow 非持久化）",
+        expected.every((c) => memberClasses.has(c)),
+        `members=${[...memberClasses].join(",")}`);
     }
 
-    // TC-COMP-04（机制命门）: exec(filesystem, grep) 经成员方法造出 search 对象
+    // TC-COMP-04（机制命门）: exec(filesystem, grep) 经成员方法造出 search 对象。
+    // grep object method 经 ctx.runtime.instantiate("_builtin/filesystem/search", …) 造子对象，
+    // 其 data 含 kind/matches（业务字段在 instance.data，信封字段 id/class/title 由 runtime 管理）。
     {
       const thread: any = { id: "root", status: "running",
         persistence: { baseDir, sessionId: "sb-comp", objectId: "supervisor", threadId: "root" },
-        contextWindows: [{ id: "filesystem", class: "filesystem", parentWindowId: "root",
-          title: "member: filesystem", status: "open", createdAt: Date.now(), isMemberWindow: true }] };
+        contextWindows: [{ id: "filesystem", class: "filesystem", parentObjectId: "root",
+          title: "member: filesystem", status: "open", createdAt: Date.now(), data: {},
+          win: { transient: true, isMemberWindow: true } }] };
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
-      await mgr.openMethodExec({ thread, parentWindowId: "filesystem", method: "grep", title: "grep",
-        args: { pattern: "version", path: baseDir } });
-      const search = mgr.list().find((w) => w.class === "search") as any;
-      const routed = !!search && search.kind === "grep" && (search.matches?.length ?? 0) > 0;
-      rec.ok("TC-COMP-04", "组合机制命门：exec(filesystem, grep) 经成员方法真跑出 grep 命中（search.kind=grep, matches>0）",
-        routed, `search=${search ? `kind=${search.kind} matches=${search.matches?.length}` : "none"}`);
+      await mgr.execObjectMethod("filesystem", "grep", { pattern: "version", path: baseDir }, thread);
+      const search = mgr.list().find((w) => w.class === "_builtin/filesystem/search") as any;
+      const data = search?.data;
+      const routed = !!data && data.kind === "grep" && (data.matches?.length ?? 0) > 0;
+      rec.ok("TC-COMP-04", "组合机制命门：exec(filesystem, grep) 经成员方法真跑出 grep 命中（search.data.kind=grep, matches>0）",
+        routed, `search=${data ? `kind=${data.kind} matches=${data.matches?.length}` : "none"}`);
     }
 
     // TC-COMP-05: Object/Agent 边界 —— tool-object 成员**不是 Agent**（有自己工具方法，无 agency）
     {
-      const fsGrep = !!builtinRegistry.resolveMethod("filesystem", "grep");
-      const tmRun = !!builtinRegistry.resolveMethod("terminal", "run");
-      const inRun = !!builtinRegistry.resolveMethod("interpreter", "run");
-      const fsNoTalk = !builtinRegistry.resolveMethod("filesystem", "talk");
-      const tmNoTalk = !builtinRegistry.resolveMethod("terminal", "talk");
-      const agentHasTalk = !!builtinRegistry.resolveMethod("_builtin/agent", "talk"); // agency 在 agent 基类
+      const fsGrep = !!builtinRegistry.resolveObjectMethod("filesystem", "grep");
+      const tmRun = !!builtinRegistry.resolveObjectMethod("terminal", "run");
+      const inRun = !!builtinRegistry.resolveObjectMethod("interpreter", "run");
+      const fsNoTalk = !builtinRegistry.resolveObjectMethod("filesystem", "talk");
+      const tmNoTalk = !builtinRegistry.resolveObjectMethod("terminal", "talk");
+      const agentHasTalk = !!builtinRegistry.resolveObjectMethod("_builtin/agent", "talk"); // agency 在 agent 基类
       rec.ok("TC-COMP-05", "Object/Agent 边界：filesystem/terminal/interpreter 有自己工具方法但无 agency(talk)，agency 属 _builtin/agent",
         fsGrep && tmRun && inRun && fsNoTalk && tmNoTalk && agentHasTalk,
         `fsGrep=${fsGrep} tmRun=${tmRun} inRun=${inRun} fsNoTalk=${fsNoTalk} tmNoTalk=${tmNoTalk} agentTalk=${agentHasTalk}`);
@@ -136,13 +158,13 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-COMP-06: runtime / knowledge_base 成员 —— create_object / open_knowledge 迁出 root 落到工具对象上，
     //             同样不是 Agent（无 agency）。
     {
-      const rtCreate = !!builtinRegistry.resolveMethod("runtime", "create_object");
-      const kbOpen = !!builtinRegistry.resolveMethod("knowledge_base", "open_knowledge");
-      const rtNoTalk = !builtinRegistry.resolveMethod("runtime", "talk");
-      const kbNoTalk = !builtinRegistry.resolveMethod("knowledge_base", "talk");
-      // root 类自身不再直接持有这些方法（已迁出）。
-      const rootNoCreate = !builtinRegistry.getObjectDefinition("root").methods?.create_object;
-      const rootNoOpenKn = !builtinRegistry.getObjectDefinition("root").methods?.open_knowledge;
+      const rtCreate = !!builtinRegistry.resolveObjectMethod("runtime", "create_object");
+      const kbOpen = !!builtinRegistry.resolveObjectMethod("knowledge_base", "open_knowledge");
+      const rtNoTalk = !builtinRegistry.resolveObjectMethod("runtime", "talk");
+      const kbNoTalk = !builtinRegistry.resolveObjectMethod("knowledge_base", "talk");
+      // root 窗（虚拟根容器投影器）自身不持任何 object method —— create_object/open_knowledge 已迁出。
+      const rootNoCreate = !builtinRegistry.resolveObjectMethod("root", "create_object");
+      const rootNoOpenKn = !builtinRegistry.resolveObjectMethod("root", "open_knowledge");
       rec.ok("TC-COMP-06", "runtime.create_object / knowledge_base.open_knowledge 迁出 root 落到工具对象，且无 agency",
         rtCreate && kbOpen && rtNoTalk && kbNoTalk && rootNoCreate && rootNoOpenKn,
         `rtCreate=${rtCreate} kbOpen=${kbOpen} rtNoTalk=${rtNoTalk} kbNoTalk=${kbNoTalk} rootNoCreate=${rootNoCreate} rootNoOpenKn=${rootNoOpenKn}`);

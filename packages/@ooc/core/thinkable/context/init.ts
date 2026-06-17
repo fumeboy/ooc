@@ -324,7 +324,7 @@ async function readDeclaredMembers(ref: StoneObjectRef): Promise<string[]> {
  */
 /**
  * 每个 agent thread 初始 context 默认补充的**全局单例成员**（composition HAS-A 默认成员）：
- * filesystem / terminal / interpreter 三件全局单例 tool-object + skill_index。
+ * filesystem / terminal / interpreter / knowledge_base / runtime 全局单例 tool-object + skill_index。
  *
  * 这是 thread 作为 agent 智能运行载体的组合默认——agent 一开窗即可 exec 这些工具、看见技能索引。
  * 旧的 `ooc.members` 包级声明已退役（见 class 维度组合段）；此处是其落地替代。member 窗 transient
@@ -334,6 +334,8 @@ const GLOBAL_SINGLETON_TOOL_MEMBERS = [
   "_builtin/filesystem",
   "_builtin/terminal",
   "_builtin/interpreter",
+  "_builtin/knowledge_base",
+  "_builtin/runtime",
   "_builtin/agent/skill_index",
 ] as const;
 

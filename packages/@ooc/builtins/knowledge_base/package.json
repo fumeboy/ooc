@@ -10,6 +10,6 @@
   },
   "ooc": {
     "objectId": "_builtin/knowledge_base",
-    "kind": "class"
+    "kind": "object"
   }
 }

@@ -217,9 +217,9 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
         // form 必须 open 才视为"该 method 当前活跃"——success/failed 不算
         if (!isOpen(w)) continue;
         const parentType = parentTypeOf(w, byId);
-        // 沿 parentClass 类链匹配（与方法解析同语义）：trigger.objectType 命中 parent 自身
-        // 或其任一祖先。例：agency(talk/end) 跑在 agent 的 self 窗（class=objectId），其链
-        // 含 _builtin/agent / root → `method::_builtin/agent::talk` 命中；create_object 跑在
+        // 单跳 parentClass 匹配（与方法解析同语义）：trigger.objectType 命中 parent 自身
+        // 或其单一父类。例：agency(talk/end) 跑在 agent 的 self 窗（class=objectId，ooc.class=_builtin/agent），
+        // 其单一父类 = _builtin/agent → `method::_builtin/agent::talk` 命中；create_object 跑在
         // world 成员窗（parentClass=null）→ 仅 `method::world::create_object` 精确命中。
         if (parentType === trigger.objectType) return true;
         if (builtinRegistry.resolveParentClassChain(parentType).includes(trigger.objectType)) return true;

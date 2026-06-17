@@ -1,61 +1,83 @@
 /**
- * L3 — Executable（方法 / registry 维度劈分 / tool 原语）。
- * Object = 数据字段 + 程序方法；executable 与 readable 两维度分注册。
+ * L3 — Executable（object method / registry 维度劈分 / tool 原语）。
+ *
+ * Wave4 对象模型：class 经一处 `register(classId, OocClass, {parentClass?})` 注册——OocClass 把
+ * executable（object method）/ readable（window method）/ construct / persistable 装配进一个对象；
+ * registry 单跳继承解析（resolveObjectMethod(s) / resolveWindowMethod / resolveConstructor /
+ * resolveParentClassChain）。退役旧双入口 registerExecutable/registerReadable + registerWindowClass +
+ * getObjectDefinition + resolveMethod + lookupConstructor + 多级 parentClass 链 + root 回退。
  */
 import { setTimeout as sleep } from "node:timers/promises";
 import { postJson, writeStoneFile } from "../_harness/control-plane";
 import { story, check, type Story } from "../_harness/story";
 
+/** builtin file class 的归一 id（register-builtins 注册键 `_builtin/filesystem/file` → strip `_builtin/`）。 */
+const FILE_CLASS = "filesystem/file";
+
 export const L3_STORIES: Story[] = [
   story({
     id: "L3-REG-EXECUTABLE",
     layer: "executable",
-    expectation: "registerExecutable 只注册 object methods + 类元，拒绝 readable 字段",
-    design: "executable：维度劈分入口。runtime/object-registry.ts:registerExecutable",
+    expectation: "register 一个 OocClass 的 executable.methods，经 resolveObjectMethod 命中",
+    design: "executable：维度装配入口 register(classId, OocClass)。runtime/object-registry.ts:register",
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const reg = createObjectRegistry();
-      // 新窗类型经 registerWindowClass seed（不再预置于 BASE），再由维度入口增量合入。
-      reg.registerWindowClass({ type: "t_reg_exec", methods: {} });
-      const m = { paths: ["x"], intent: () => [], exec: () => undefined } as any;
-      reg.registerExecutable("t_reg_exec", { methods: { x: m } });
-      check(!!reg.getObjectDefinition("t_reg_exec").methods.x, "registerExecutable 未注册 method");
+      reg.register("t_reg_exec", {
+        executable: { methods: [{ name: "x", description: "x", exec: () => undefined }] },
+      });
+      check(!!reg.getClass("t_reg_exec")?.executable?.methods.find((m) => m.name === "x"),
+        "register 未装配 executable method");
+      check(!!reg.resolveObjectMethod("t_reg_exec", "x"), "resolveObjectMethod 未命中 method");
     },
   }),
 
   story({
     id: "L3-REG-READABLE",
     layer: "executable",
-    expectation: "registerReadable 注册 windowMethods/readable，与 executable 互不覆盖",
-    design: "readable：维度劈分入口；两维度分注册不互相 clobber。object-registry.ts:registerReadable",
+    expectation: "同一 OocClass 的 readable.window_methods 与 executable.methods 各自解析、互不覆盖",
+    design: "readable/executable：两维度同 class 装配；resolveWindowMethod / resolveObjectMethod 分别命中。object-registry.ts",
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const reg = createObjectRegistry();
-      reg.registerWindowClass({ type: "t_reg_readable", methods: {} });
-      const wm = { paths: ["set_viewport"], intent: () => [], exec: (c: any) => ({ ok: true, state: c.windowState }) } as any;
-      const om = { paths: ["reload"], intent: () => [], exec: () => undefined } as any;
-      reg.registerReadable("t_reg_readable", { windowMethods: { set_viewport: wm } });
-      reg.registerExecutable("t_reg_readable", { methods: { reload: om } });
-      const def = reg.getObjectDefinition("t_reg_readable");
-      check(!!def.windowMethods?.set_viewport, "readable 维度被覆盖");
-      check(!!def.methods.reload, "executable 维度被覆盖");
+      reg.register("t_reg_readable", {
+        executable: { methods: [{ name: "reload", description: "reload", exec: () => undefined }] },
+        readable: {
+          readable: () => ({ class: "t_reg_readable", content: [] }),
+          window: [{
+            class: "t_reg_readable",
+            object_methods: ["reload"],
+            window_methods: [{ name: "set_viewport", description: "v", exec: (_c, _s, before) => before }],
+          }],
+        },
+      });
+      check(!!reg.resolveWindowMethod("t_reg_readable", "set_viewport"), "readable 维度 window method 未解析");
+      check(!!reg.resolveObjectMethod("t_reg_readable", "reload"), "executable 维度 object method 未解析");
     },
   }),
 
   story({
     id: "L3-METHOD-COLLISION",
     layer: "executable",
-    expectation: "同一 type 上 object method 与 window method 同名 → 注册期 fail-loud",
-    design: "executable/readable：exec 名全局唯一，dispatch 无歧义。assertNoMethodNameCollision",
+    expectation: "同一 class 上 object method 与 window method 同名 → register 期 fail-loud",
+    design: "executable/readable：exec 名 dispatch 唯一，重名歧义。object-registry.ts:assertNoMethodNameCollision",
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const reg = createObjectRegistry();
-      reg.registerWindowClass({ type: "t_collision", methods: {} });
-      const om = { paths: ["set_viewport"], intent: () => [], exec: () => undefined } as any;
-      const wm = { paths: ["set_viewport"], intent: () => [], exec: (c: any) => ({ ok: true, state: c.windowState }) } as any;
-      reg.registerExecutable("t_collision", { methods: { set_viewport: om } });
       let threw = false;
-      try { reg.registerReadable("t_collision", { windowMethods: { set_viewport: wm } }); } catch { threw = true; }
+      try {
+        reg.register("t_collision", {
+          executable: { methods: [{ name: "set_viewport", description: "x", exec: () => undefined }] },
+          readable: {
+            readable: () => ({ class: "t_collision", content: [] }),
+            window: [{
+              class: "t_collision",
+              object_methods: [],
+              window_methods: [{ name: "set_viewport", description: "v", exec: (_c, _s, before) => before }],
+            }],
+          },
+        });
+      } catch { threw = true; }
       check(threw, "method↔windowMethod 同名未 fail-loud");
     },
   }),
@@ -63,54 +85,60 @@ export const L3_STORIES: Story[] = [
   story({
     id: "L3-FILE-WINDOWMETHOD",
     layer: "executable",
-    expectation: "builtin file 的 set_viewport 是 windowMethod，不在 object methods 表",
-    design: "readable：展示控制方法归 windowMethods（readable 维度），与业务 method 分离。builtins/file/readable.ts",
+    expectation: "builtin file 的 set_viewport 是 window method，不在 object methods 表",
+    design: "readable：展示控制方法归 window_methods，与业务 object method 分离。builtins/filesystem/children/file/readable",
     run: async () => {
-      await import("@ooc/builtins/filesystem/file");
+      await import("@ooc/core/runtime/register-builtins");
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
-      const def = builtinRegistry.getObjectDefinition("file");
-      check(!!def.windowMethods?.set_viewport, "file.set_viewport 不是 windowMethod");
-      check(!def.methods?.set_viewport, "file.set_viewport 误进 object methods");
+      check(!!builtinRegistry.resolveWindowMethod(FILE_CLASS, "set_viewport"), "file.set_viewport 不是 window method");
+      check(!builtinRegistry.resolveObjectMethod(FILE_CLASS, "set_viewport"), "file.set_viewport 误进 object methods");
     },
   }),
 
   story({
     id: "L3-CONSTRUCTOR-LOOKUP",
     layer: "executable",
-    expectation: "kind=constructor 的 method 经 lookupConstructor 命中",
-    design: "executable：root 命令委托到 Object constructor。object-registry.ts:lookupConstructor",
+    expectation: "非单例 class file 的 construct 经 resolveConstructor 命中",
+    design: "executable：非单例 class 的实例化委托到 construct。object-registry.ts:resolveConstructor",
     run: async () => {
-      await import("@ooc/builtins/filesystem/file");
+      await import("@ooc/core/runtime/register-builtins");
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
-      check(!!builtinRegistry.lookupConstructor("file" as any), "file constructor 未命中");
+      check(!!builtinRegistry.resolveConstructor(FILE_CLASS), "file construct 未命中");
     },
   }),
 
   story({
     id: "L3-PARENTCLASS-CHAIN",
     layer: "executable",
-    expectation: "未注册 type 经 parentClass 链回退解析 method",
-    design: "class/executable：method 沿 parentClass 链回退（缺省继承 root）。resolveMethod",
+    expectation: "object 经 ooc.class 单跳继承父类，子类未声明的 method 沿父类解析",
+    design: "class/executable：object→class 单跳继承（class 不继承 class、无 root 回退）。object-registry.ts:resolveParentClassChain",
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const reg = createObjectRegistry();
-      const m = { paths: ["greet"], intent: () => [], exec: () => undefined } as any;
-      reg.registerNewObjectType("base_x" as any, { methods: { greet: m } });
-      reg.registerNewObjectType("child_x" as any, { methods: {}, parentClass: "base_x" });
-      check(!!reg.resolveMethod("child_x", "greet"), "未沿 parentClass 链解析 method");
+      reg.register("base_x", {
+        executable: { methods: [{ name: "greet", description: "g", exec: () => undefined }] },
+      });
+      reg.register("child_x", { executable: { methods: [] } }, { parentClass: "base_x" });
+      check(JSON.stringify(reg.resolveParentClassChain("child_x")) === JSON.stringify(["base_x"]),
+        "单跳父类链解析不对");
+      check(!!reg.resolveObjectMethod("child_x", "greet"), "未沿单跳父类解析 method");
     },
   }),
 
   story({
     id: "L3-UI-METHOD-CALL",
     layer: "executable",
-    expectation: "Object 的 for_ui_access 方法经 HTTP /call_method 执行并 data 通道返回结果",
-    design: "executable：for_ui_access 方法是 Object 暴露给 UI 的方法（经 HTTP）。modules/stones/api.call-method.ts",
+    expectation: "Object 的 for_ui_access object method 经 HTTP /call_method 执行并 data 通道返回结果",
+    design: "executable：for_ui_access object method 是 Object 暴露给 UI 的方法（经 HTTP）。modules/stones/api.call-method.ts",
     run: async ({ app, baseDir }) => {
       const id = "calc_obj";
       await postJson(app, "/api/stones", { objectId: id });
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { add: { description: "add", for_ui_access: true, exec: ({ args }) => ({ ok: true, data: { sum: args.x + args.y } }) } } };`);
+      writeStoneFile(baseDir, id, "index.ts",
+        `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
+         export const Class: OocClass = { executable: { methods: [
+           { name: "add", description: "add", for_ui_access: true,
+             exec: (_ctx, _self, args) => ({ data: { sum: args.x + args.y } }) },
+         ] } };`);
       await sleep(350);
       const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "add", args: { x: 2, y: 3 } });
       check(JSON.stringify(r.json?.data) === JSON.stringify({ sum: 5 }), `data=${JSON.stringify(r.json?.data)}`);
@@ -120,16 +148,20 @@ export const L3_STORIES: Story[] = [
   story({
     id: "L3-WINDOW-COMMAND-LOAD",
     layer: "executable",
-    expectation: "Object 的 window.methods（LLM 路径命令）经 loadObjectWindow 可加载",
-    design: "executable：window.methods 是 Object 暴露给 LLM 的命令面。runtime/server-loader",
+    expectation: "Object 的 executable.methods（LLM 命令面）经 loadStoneClass 可加载",
+    design: "executable：executable.methods 是 Object 暴露给 LLM 的命令面。runtime/server-loader:loadStoneClass",
     run: async ({ app, baseDir }) => {
       const id = "cmd_obj";
       await postJson(app, "/api/stones", { objectId: id });
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { run: { description: "run", intents: ["run"], exec: async () => ({ ok: true }) } } };`);
-      const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
-      const win = await loadObjectWindow({ baseDir, objectId: id });
-      check(!!win?.methods?.run, `window.methods.run 未加载：${JSON.stringify(Object.keys(win?.methods ?? {}))}`);
+      writeStoneFile(baseDir, id, "index.ts",
+        `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
+         export const Class: OocClass = { executable: { methods: [
+           { name: "run", description: "run", exec: async () => ({ message: "ok" }) },
+         ] } };`);
+      const { loadStoneClass } = await import("@ooc/core/runtime/server-loader");
+      const loaded = await loadStoneClass({ baseDir, objectId: id });
+      const names = (loaded?.cls?.executable?.methods ?? []).map((m) => m.name);
+      check(names.includes("run"), `executable.methods.run 未加载：${JSON.stringify(names)}`);
     },
   }),
 ];

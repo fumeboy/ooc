@@ -11,7 +11,6 @@ import { loadStoneClass } from "@ooc/core/runtime/server-loader";
 import { resolveStoneIdentityRef } from "@ooc/core/persistable";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import { normalizeMethodOutcome } from "@ooc/core/_shared/types/method.js";
-import { enrichContextWindows } from "@ooc/core/thinkable/context/window-enrichment";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
@@ -804,7 +803,7 @@ export function createFlowsService(deps: {
         events: (thread.events ?? []).filter(
           (e) => !(e.category === "llm_interaction" && e.kind === "call_started"),
         ),
-        contextWindows: enrichContextWindows(thread.contextWindows),
+        contextWindows: thread.contextWindows ?? [],
       };
       return { ...payload, hash: hashJson(stripVolatileForHash(payload)) };
     },

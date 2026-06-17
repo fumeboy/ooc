@@ -26,39 +26,44 @@ export const L2_STORIES: Story[] = [
   }),
 
   story({
-    id: "L2-ROOT-KNOWLEDGE",
-    layer: "thinkable",
-    expectation: "root method 菜单知识（root-methods.md）列出可用 root method",
-    design: "thinkable：root window 按 activates_on 注入 builtins/root/knowledge/*.md；root-methods.md 列出能调哪些 root method。",
-    run: async () => {
-      const { readFileSync } = await import("node:fs");
-      const { dirname, join } = await import("node:path");
-      const md = readFileSync(
-        join(dirname(Bun.resolveSync("@ooc/builtins/root/package.json", process.cwd())), "knowledge", "root-methods.md"),
-        "utf8",
-      );
-      check(md.length > 50, "root-methods.md 缺失");
-      // agency（talk）+ tool-object 成员方法（run = terminal/interpreter 跑代码，旧名 program 已退役）。
-      check(/talk/.test(md) && /\brun\b/.test(md), "root-methods.md 未列出 talk/run");
-    },
-  }),
-
-  story({
     id: "L2-KNOWLEDGE-INHERIT",
     layer: "thinkable",
-    expectation: "instance 经 class 链继承框架 class 的 seed knowledge",
-    design: "thinkable+class：knowledge 沿 parentClass 链回退继承。loader + 继承链",
+    expectation: "object 经 ooc.class 单跳继承其 class 的 seed knowledge",
+    design:
+      "thinkable+object 模型：object 经 ooc.class 继承一个 class（对象模型核心 2），其 class 的 seed knowledge 无条件流向 instance。" +
+      "loader.ts:loadKnowledgeIndex Step 1b（parentClass 链 seed，单跳）+ object-registry.ts:resolveParentClassChain（单跳）。",
     run: async ({ baseDir }) => {
-      const { instantiateBuiltinClassObjects } = await import("@ooc/core/app/server/bootstrap/instantiate-classes");
-      await instantiateBuiltinClassObjects({ baseDir });
+      const { mkdir, writeFile } = await import("node:fs/promises");
+      const { join } = await import("node:path");
       const { loadKnowledgeIndex } = await import("@ooc/core/thinkable/knowledge/loader");
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
+      const { stoneKnowledgeDir } = await import("@ooc/core/persistable");
+
+      // class（被继承）+ instance（经 parentClass 单跳继承该 class）。
       const reg = createObjectRegistry();
-      reg.registerNewObjectType("_builtin/supervisor" as any, { methods: {} });
-      reg.registerNewObjectType("supervisor" as any, { methods: {}, parentClass: "_builtin/supervisor" });
-      const idx = await loadKnowledgeIndex({ stone: { baseDir, objectId: "supervisor" }, pool: { baseDir, objectId: "supervisor" } }, reg);
+      reg.register("base_role", { executable: { methods: [] } } as never, { parentClass: null });
+      reg.register("my_agent", { executable: { methods: [] } } as never, { parentClass: "base_role" });
+      check(
+        JSON.stringify(reg.resolveParentClassChain("my_agent")) === JSON.stringify(["base_role"]),
+        `parentClass 链应单跳 [base_role]：${JSON.stringify(reg.resolveParentClassChain("my_agent"))}`,
+      );
+
+      // class 的 seed knowledge 落其 stone knowledge 目录。
+      const classKnowledgeDir = stoneKnowledgeDir({ baseDir, objectId: "base_role" } as never);
+      await mkdir(classKnowledgeDir, { recursive: true });
+      await writeFile(
+        join(classKnowledgeDir, "nine-dimensions.md"),
+        "---\ntitle: 九维度\n---\nthinkable / executable / …",
+        "utf8",
+      );
+
+      // instance 加载时无条件继承 class 的 seed knowledge（Step 1b 不门控 inheritable）。
+      const idx = await loadKnowledgeIndex(
+        { stone: { baseDir, objectId: "my_agent" }, pool: { baseDir, objectId: "my_agent" } },
+        reg,
+      );
       const paths = [...idx.byPath.keys()];
-      check(paths.some((p) => p.includes("nine-dimensions")), `未继承 nine-dimensions：${JSON.stringify(paths)}`);
+      check(paths.some((p) => p.includes("nine-dimensions")), `未继承 class 的 nine-dimensions：${JSON.stringify(paths)}`);
     },
   }),
 

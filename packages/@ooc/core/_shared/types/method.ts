@@ -43,10 +43,22 @@ export type MethodOutcome = {
   data?: unknown;
 };
 
-/** 把 exec 的三种返回形态（undefined / 裸 string / MethodOutcome）规范化为 MethodOutcome。 */
+/**
+ * 把 exec 的返回形态规范化为 MethodOutcome（运行态信封）：
+ * - void / undefined → `{ ok: true }`
+ * - 裸 string（sugar）→ `{ ok: true, result }`
+ * - ObjectMethodResult `{ message?, data?, err? }`（method 作者形态）→ message→result / err→error / ok=!err
+ * - 已是 MethodOutcome（运行态自产，含 `ok`）→ 原样透传
+ */
 export function normalizeMethodOutcome(raw: unknown): MethodOutcome {
-  if (raw && typeof raw === "object" && "ok" in raw) return raw as MethodOutcome;
   if (typeof raw === "string") return { ok: true, result: raw };
+  if (raw && typeof raw === "object") {
+    if ("ok" in raw) return raw as MethodOutcome;
+    const r = raw as { message?: string; data?: unknown; err?: string };
+    if ("message" in r || "data" in r || "err" in r) {
+      return { ok: r.err == null, result: r.message, error: r.err, data: r.data };
+    }
+  }
   return { ok: true };
 }
 

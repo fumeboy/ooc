@@ -26,6 +26,7 @@
 
 import type { ThreadContext } from "../_shared/types/thread.js";
 import type { OocObjectInstance } from "../runtime/ooc-class.js";
+import { normalizeMethodOutcome } from "../_shared/types/method.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -238,7 +239,9 @@ export class WindowManager implements RuntimeHandle {
     const result = await method.exec(ctx, instance.data, args);
     // method 可能就地改了 instance.data（self 即 instance.data 引用）；刷盘。
     await this.hooks.reportDataEdit?.(objectId);
-    return result;
+    // exec 返回形态规范化（ObjectMethodResult / 裸 string / void）→ 取面向 LLM 的结果文本。
+    const outcome = normalizeMethodOutcome(result);
+    return outcome.error ?? outcome.result;
   }
 
   // ── window method dispatch（四参）──

@@ -119,7 +119,8 @@ export type { OocObjectInstance } from "../../runtime/ooc-class.js";
 // ─────────────────────────── per-class Data / Win re-exports ──────────────────
 // 需要按 class narrow 的调用方：读 inst.class 后把 inst.data 断言成对应 Data。
 // 这些是 class 的纯业务数据（不含信封/不含旧平铺别名）。
-export type { Data as RootData } from "@ooc/builtins/root/types.js";
+// root 窗（每条 thread 的虚拟根容器）无业务数据；`_builtin/root` 类已退役，类型就地定义。
+export type RootData = Record<string, never>;
 export type { Data as TodoData } from "@ooc/builtins/agent/todo/types.js";
 export type { TalkData, TalkWin, TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
 export type { Data as PrData } from "@ooc/builtins/agent/pr/types.js";

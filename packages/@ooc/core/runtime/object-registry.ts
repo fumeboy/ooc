@@ -7,8 +7,9 @@
  *
  * 核心职责：
  * - 注册 class：`register(classId, oocClass, meta?)`，class id 归一（strip `_builtin/` 前缀）。
- * - 单链继承解析：沿 parentClass 自底向上，返回一个对象可用的 construct / object method /
- *   window method / readable / persistable（首个命中胜出；保留 MAX_DEPTH/seen 防环）。
+ * - 单跳继承解析：object 经 ooc.class 继承**一个** class（非多级链、无 root 回退；class 不继承 class）；
+ *   返回该对象可用的 construct / object method / window method / readable / persistable
+ *   （self 优先、其单一父类次之；首个命中胜出）。
  *
  * **class id 归一**：`thread` 与 `_builtin/thread`、`agent` 与 `_builtin/agent` 命中同一类。
  * register / lookup 一律先 `normalizeClassId` strip `_builtin/` 前缀再操作 store。
@@ -63,18 +64,25 @@ function assertNoMethodNameCollision(classId: string, cls: OocClass): void {
 }
 
 /**
+ * root **窗**（每条 thread 的虚拟根容器，id=ROOT_WINDOW_ID）的投影器——空 content，
+ * 外层包装 + 调度器 commands 块已足够表达。它是渲染期虚拟窗，**不是继承基类**
+ * （对象模型无「万物之根」；class 不继承 class，object 经 ooc.class 单跳继承一个 class）。
+ */
+const rootWindowReadable: ReadableModule = {
+  readable: () => ({ class: "root", content: [] }),
+  window: [{ class: "root", object_methods: [], window_methods: [] }],
+};
+
+/**
  * Base anchors seeded into every new ObjectRegistry. Map key = 归一后的 class id。
  *
- * 只留真正的基类锚点（继承链终点 / 临时载体）；窗类型由各 builtins 包经 `register`
- * side-effect import 自声明，不在此硬编码。
- * - `root`         : 默认 parentClass 终点。
- * - `method_exec`  : method 调用过程的临时载体（inline 持久化的运行态载体，经 persistable.mode 声明）。
- * - `agent`        : OOC Agent 基类（承载 agency；归一去掉 `_builtin/` 前缀）。
+ * 只留两个非继承的运行时锚点；窗类型由各 builtins 包经 `register` side-effect import 自声明。
+ * - `root`         : root **窗**（虚拟根容器）的投影器——非继承终点（`_builtin/root` 类已退役）。
+ * - `method_exec`  : method 调用过程的临时载体（inline 持久化经 persistable.mode 声明）。
  */
 const BASE_CLASS_ANCHORS: Array<[string, RegisteredClass]> = [
-  ["root", { parentClass: null }],
+  ["root", { readable: rootWindowReadable }],
   ["method_exec", { parentClass: null, persistable: { mode: "inline" } }],
-  ["agent", {}],
 ];
 
 export class ObjectRegistry {
@@ -131,26 +139,13 @@ export class ObjectRegistry {
     return this.resolvePersistable(classId)?.mode === "inline";
   }
 
-  /** 单链继承：从 startClass 自底向上的祖先 id 序列（不含自身），防环（MAX_DEPTH/seen）。 */
+  /**
+   * object→class 单跳继承：返回 startClass 的（至多一个）父类 id。
+   * class 不继承 class、无「万物之根」回退——parentClass 为 null/undefined 即无父（自身即终点）。
+   */
   resolveParentClassChain(startClass: string): string[] {
-    const start = normalizeClassId(startClass);
-    const chain: string[] = [];
-    const seen = new Set<string>([start]);
-    const MAX_DEPTH = 64;
-    let cur: string | undefined = start;
-    while (cur && chain.length < MAX_DEPTH) {
-      const def = this.store.get(cur);
-      if (!def) break;
-      const next =
-        def.parentClass === undefined ? "root" : def.parentClass ?? undefined;
-      if (!next) break;
-      const nextKey = normalizeClassId(next);
-      if (seen.has(nextKey)) break;
-      seen.add(nextKey);
-      chain.push(nextKey);
-      cur = nextKey;
-    }
-    return chain;
+    const parent = this.store.get(normalizeClassId(startClass))?.parentClass;
+    return parent ? [normalizeClassId(parent)] : [];
   }
 
   /** 沿继承链自底向上的 class 序列（含自身在最前）。 */

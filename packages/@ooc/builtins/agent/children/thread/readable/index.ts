@@ -82,13 +82,13 @@ const readable: ReadableModule<Data, ThreadWin> = {
     // 由投影可见性表达（取代旧 close 里的 data.isCreatorWindow 检查）。
     {
       class: "thread",
-      object_methods: ["say", "share"],
+      object_methods: ["say"],
       window_methods: [setTranscriptWindowMethod],
     },
     // other-view：与对端 peer/sub 的对话（含父侧 fork 子窗）；可关。
     {
       class: "talk",
-      object_methods: ["say", "close", "share"],
+      object_methods: ["say", "close"],
       window_methods: [setTranscriptWindowMethod],
     },
     // self-view super：反思自视（恒在通道，同样不 surface close）；会话 method + 2 个 reflectable 沉淀 method。
@@ -96,7 +96,6 @@ const readable: ReadableModule<Data, ThreadWin> = {
       class: "reflect_request",
       object_methods: [
         "say",
-        "share",
         "new_feat_branch",
         "create_pr_and_invite_reviewers",
       ],

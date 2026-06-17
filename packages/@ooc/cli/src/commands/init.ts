@@ -117,7 +117,6 @@ export default async function init(argv: string[]): Promise<void> {
       "@ooc/web": DEFAULT_OOC_VERSION,
       "@ooc/builtins/supervisor": DEFAULT_OOC_VERSION,
       "@ooc/builtins/user": DEFAULT_OOC_VERSION,
-      "@ooc/builtins/root": DEFAULT_OOC_VERSION,
       "@ooc/builtins/filesystem/file": DEFAULT_OOC_VERSION,
       "@ooc/builtins/agent/plan": DEFAULT_OOC_VERSION,
       "@ooc/builtins/agent/todo": DEFAULT_OOC_VERSION,

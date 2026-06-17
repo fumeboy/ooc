@@ -1,18 +1,23 @@
 /**
  * Story: programmable —— Object 自定义方法（executable）。
  *
- * 能力：Object 通过 executable/index.ts 的 `window.methods` 定义自定义方法。标 `for_ui_access`
- * 的方法经 HTTP `call_method` 被外部调用，响应即标准 MethodOutcome（结构化数据走 `data`）；
- * 改源码后热更新立即生效。规格见 programmable 对象 knowledge/tests.md（.ooc-world-meta）。
+ * 能力（Wave4 对象模型）：Object 通过 stone 根 `index.ts` 的 `export const Class`
+ * （`executable.methods` 数组，方法签名 `(ctx, self, args)`）定义自定义 object method。
+ * 标 `for_ui_access` 的方法经 HTTP `call_method` 被外部调用，响应即标准 MethodOutcome
+ * （结构化数据走 `data`）；改源码后热更新（按 index.ts mtime）立即生效。
+ * 规格见 programmable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { setTimeout as sleep } from "node:timers/promises";
 import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
 import { seedTask, waitJob, processTrace, getStoneSelfWithRetry, threadLlmInfraFailed, calledMethodOk } from "../_harness/agent-native";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
-/** 包一个只含 methods 的 stone executable 源。 */
-const M = (methods: string) => `export const window = { methods: ${methods} };`;
-/** dev hot-reload（fs.watch）失效有 debounce —— 改 executable 源码后等其生效再调用。 */
+/**
+ * 包一个 stone 的 `index.ts`（Wave4 对象模型：一处 `export const Class: OocClass`）。
+ * `methods` 是 ObjectMethod 数组源码片段（含 name/description/exec(ctx,self,args)）。
+ */
+const M = (methods: string) => `export const Class = { executable: { methods: ${methods} } };`;
+/** dev hot-reload（fs.watch）失效有 debounce —— 改 index.ts 源码后等其生效再调用。 */
 const HOT = 350;
 
 export async function runControlPlane(): Promise<StoryResult> {
@@ -24,8 +29,8 @@ export async function runControlPlane(): Promise<StoryResult> {
     {
       const id = "echo_agent";
       await postJson(app, "/api/stones", { objectId: id });
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        M(`{ echo: { description: "echo", for_ui_access: true, exec: ({ args }) => ({ ok: true, data: { youSaid: args.text } }) } }`));
+      writeStoneFile(baseDir, id, "index.ts",
+        M(`[{ name: "echo", description: "echo", for_ui_access: true, exec: (_ctx, _self, args) => ({ data: { youSaid: args.text } }) }]`));
       const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "echo", args: { text: "hello" } });
       rec.eq("TC-PROG-01", "for_ui_access 方法经 HTTP 调用，data 通道返回正确值", r.json?.data, { youSaid: "hello" });
     }
@@ -34,35 +39,37 @@ export async function runControlPlane(): Promise<StoryResult> {
     {
       const id = "data_shaper";
       await postJson(app, "/api/stones", { objectId: id });
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        M(`{ shape: { description: "shape", for_ui_access: true, exec: ({ args }) => ({ ok: true, data: { items: [args.a, args.b], count: 2 } }) } }`));
+      writeStoneFile(baseDir, id, "index.ts",
+        M(`[{ name: "shape", description: "shape", for_ui_access: true, exec: (_ctx, _self, args) => ({ data: { items: [args.a, args.b], count: 2 } }) }]`));
       const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "shape", args: { a: 1, b: 2 } });
       rec.eq("TC-PROG-02", "for_ui_access 方法经 data 通道返回嵌套结构化数据", r.json?.data, { items: [1, 2], count: 2 });
     }
 
-    // TC-PROG-03: 不带 for_ui_access 的 LLM 路径自定义命令经 loadObjectWindow 加载
+    // TC-PROG-03: 不带 for_ui_access 的 LLM 路径自定义 object method 经 loadStoneClass 加载
+    // （Wave4：loader 加载 `export const Class`，方法在 cls.executable.methods 数组里）
     {
       const id = "cmd_demo";
       await postJson(app, "/api/stones", { objectId: id });
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        M(`{ greet: { description: "greet", intents: ["greet"], exec: async () => ({ ok: true, result: "hi" }) } }`));
-      const { loadObjectWindow } = await import("@ooc/core/runtime/server-loader");
-      const win = await loadObjectWindow({ baseDir, objectId: id });
-      const ok = !!win?.methods?.greet && JSON.stringify(win?.methods?.greet?.intents) === JSON.stringify(["greet"]);
-      rec.ok("TC-PROG-03", "window.methods（LLM 路径自定义命令）经 loader 加载", ok,
-        `hasGreet=${!!win?.methods?.greet}, intents=${JSON.stringify(win?.methods?.greet?.intents)}`);
+      writeStoneFile(baseDir, id, "index.ts",
+        M(`[{ name: "greet", description: "greet", intents: [{ name: "greet", description: "say hi" }], exec: async () => ({ message: "hi" }) }]`));
+      const { loadStoneClass } = await import("@ooc/core/runtime/server-loader");
+      const loaded = await loadStoneClass({ baseDir, objectId: id });
+      const greet = loaded?.cls?.executable?.methods?.find((m: any) => m.name === "greet");
+      const ok = !!greet && JSON.stringify(greet.intents) === JSON.stringify([{ name: "greet", description: "say hi" }]);
+      rec.ok("TC-PROG-03", "Class.executable.methods（LLM 路径 object method）经 loadStoneClass 加载", ok,
+        `hasGreet=${!!greet}, intents=${JSON.stringify(greet?.intents)}`);
     }
 
     // TC-PROG-04: 热更新 —— 改 executable 后已有方法变更 + 新增方法立即生效
     {
       const id = "hot_prog";
       await postJson(app, "/api/stones", { objectId: id });
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        M(`{ ping: { description: "ping", for_ui_access: true, exec: () => ({ ok: true, data: "v1" }) } }`));
+      writeStoneFile(baseDir, id, "index.ts",
+        M(`[{ name: "ping", description: "ping", for_ui_access: true, exec: () => ({ data: "v1" }) }]`));
       await sleep(HOT);
       const r1 = await postJson(app, `/api/stones/${id}/call_method`, { method: "ping" });
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        M(`{ ping: { description: "ping", for_ui_access: true, exec: () => ({ ok: true, data: "v2" }) }, pong: { description: "pong", for_ui_access: true, exec: () => ({ ok: true, data: "pong" }) } }`));
+      writeStoneFile(baseDir, id, "index.ts",
+        M(`[{ name: "ping", description: "ping", for_ui_access: true, exec: () => ({ data: "v2" }) }, { name: "pong", description: "pong", for_ui_access: true, exec: () => ({ data: "pong" }) }]`));
       await sleep(HOT);
       const r2 = await postJson(app, `/api/stones/${id}/call_method`, { method: "ping" });
       const r3 = await postJson(app, `/api/stones/${id}/call_method`, { method: "pong" });

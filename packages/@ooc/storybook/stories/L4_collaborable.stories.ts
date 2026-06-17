@@ -7,6 +7,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { postJson, getJson } from "../_harness/control-plane";
 import { story, check, skip, type Story } from "../_harness/story";
+import { normalizeClassId } from "@ooc/core/runtime/object-registry";
 
 async function seed(app: any, target: string, sid: string, msg = "hi") {
   await postJson(app, "/api/stones", { objectId: target, self: `# ${target}` });
@@ -18,8 +19,8 @@ export const L4_STORIES: Story[] = [
   story({
     id: "L4-USER-TALK",
     layer: "collaborable",
-    expectation: "seedSession 在 user 线程上建对 target 的 talk_window",
-    design: "collaborable：跨对象会话经 talk_window 投递。modules/flows/api.seed-session + windows/talk",
+    expectation: "seedSession 在 user 线程上建对 target 的会话窗（stored class=_builtin/agent/thread）",
+    design: "collaborable：跨对象会话经会话窗投递。windows stored class = thread stone objectId（projection-class.ts 投影 talk）",
     run: async ({ app, baseDir }) => {
       const sid = "sb-c-talk";
       await seed(app, "obj_talk", sid);
@@ -29,18 +30,23 @@ export const L4_STORIES: Story[] = [
       const p = join(baseDir, "flows", sid, "objects", "user", "threads", userT.threadId, "thread-context.json");
       check(existsSync(p), `user thread-context.json 不存在`);
       const ctx = JSON.parse(readFileSync(p, "utf8"));
-      // talk-family class 是 POV 投影（context.md core 7）：磁盘不落 class，读回时由
-      // computeProjectionClass 重算。故按 talk 窗形态（target=obj_talk + 无 class）断言其 entry
-      // 仍持久化在 user 线程，而非按 stored class。
+      // Wave4 对象模型：会话窗 stored class = thread 的 stone objectId "_builtin/agent/thread"
+      //（"talk" 是 readable computeProjectionClass 按 POV 算的投影 class，不落盘）。
+      // user 线程的 entry 是 _ref 指针，**不再 inline target**——target 落在被引窗自己的
+      // state.json（flows/<sid>/objects/<windowId>/state.json 的 data.target）。
       const entries = (ctx.contextWindows ?? []) as any[];
-      const talkEntry = entries.find((w) => w.target === "obj_talk");
+      const sessionEntry = entries.find((w) => normalizeClassId(w.class ?? "") === "agent/thread");
       check(
-        !!talkEntry,
-        `user 线程无指向 obj_talk 的 talk_window entry：${JSON.stringify(entries.map((w: any) => ({ id: w.id, class: w.class, target: w.target })))}`,
+        !!sessionEntry,
+        `user 线程无会话窗 entry（stored class=_builtin/agent/thread）：${JSON.stringify(entries.map((w: any) => ({ id: w.id, class: w.class, ref: w.refObjectId })))}`,
       );
+      const winId: string = sessionEntry.refObjectId ?? sessionEntry.id;
+      const statePath = join(baseDir, "flows", sid, "objects", winId, "state.json");
+      check(existsSync(statePath), `会话窗 state.json 不存在：${statePath}`);
+      const state = JSON.parse(readFileSync(statePath, "utf8"));
       check(
-        talkEntry.class === undefined,
-        `talk-family class 不应落盘（应读回时重算）：class=${talkEntry.class}`,
+        state?.data?.target === "obj_talk",
+        `会话窗未指向 obj_talk：state.data=${JSON.stringify(state?.data)}`,
       );
     },
   }),
@@ -62,14 +68,20 @@ export const L4_STORIES: Story[] = [
   }),
 
   story({
-    id: "L4-TALK-BUILTIN-FEATURE",
+    id: "L4-TALK-INLINE-PERSISTED",
     layer: "collaborable",
-    expectation: "talk window 是 isBuiltinFeature（inline 进 thread-context，不写独立 dir）",
-    design: "collaborable：talk（peer + fork 两形态）是 Object 内置特性，状态 inline。windows/talk registerExecutable isBuiltinFeature",
+    expectation: "会话窗 class（_builtin/agent/thread）是 inline 持久化（persistable.mode=inline）",
+    design: "collaborable：会话窗（peer + fork 两形态）是 thread 实例，整窗随 thread-context inline 落盘。thread persistable mode:inline；isBuiltinFeature 标志已退役 → isInlinePersisted",
     run: async () => {
       await import("@ooc/core/runtime/register-builtins.js");
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
-      check(builtinRegistry.getObjectDefinition("talk").isBuiltinFeature === true, "talk 非 isBuiltinFeature");
+      // Wave4：旧 isBuiltinFeature 标志 + getObjectDefinition 已退役。会话窗的「inline 持久化」
+      // 现由 thread class 自己的 persistable.mode="inline" 声明，经 isInlinePersisted 解析。
+      // "talk" 不再是注册 class（它是 readable 投影 class），故查 stored class _builtin/agent/thread。
+      check(
+        builtinRegistry.isInlinePersisted("_builtin/agent/thread") === true,
+        "_builtin/agent/thread 非 inline 持久化（persistable.mode 应为 inline）",
+      );
     },
   }),
 

@@ -8,7 +8,7 @@ import type { ServerConfig } from "../bootstrap/config";
 import type { RuntimeJob } from "./types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
+import { SUPER_SESSION_ID, isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 
 /**
  * talk 对象的会话视图字段（target / targetThreadId）。
@@ -288,7 +288,8 @@ async function syncCrossObjectCalleeEnds(
     // super alias 是自指目标:派送到 caller 自身在 super session 下的 thread。
     // 这里的 callee 解析必须与 talk-delivery.ts 严格一致 — 否则 readThread 会
     // 读错路径(在 sessions/super/objects/super/ 找不到任何东西)。
-    const isSuperAlias = view.target === SUPER_ALIAS_TARGET;
+    // 与 talk-delivery.ts 同源判定（isSuperSessionId trim+lowercase 归一），逐字一致防大小写绕过。
+    const isSuperAlias = isSuperSessionId(view.target ?? "");
     // super-alias 的 callee = super-flow actor。canonical caller → 自身（透明）；
     // 新对象（仅 session 内、未 canonical）→ 冒泡到最近 canonical 祖先（顶层兜底 supervisor），
     // 由其代为发起沉淀 super flow。必须与 talk-delivery.ts 严格一致（同 resolveSuperActor）。

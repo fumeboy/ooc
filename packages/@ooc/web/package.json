@@ -25,7 +25,6 @@
     "@ooc/builtins/agent/plan": "workspace:*",
     "@ooc/builtins/terminal/terminal_process": "workspace:*",
     "@ooc/builtins/interpreter/interpreter_process": "workspace:*",
-    "@ooc/builtins/root": "workspace:*",
     "@ooc/builtins/filesystem/search": "workspace:*",
     "@ooc/builtins/agent/skill_index": "workspace:*",
     "@ooc/builtins/agent/todo": "workspace:*",

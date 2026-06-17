@@ -13,7 +13,7 @@ activates_on:
 
 1. 第一次开口：`exec(method="talk", args={ target: "<对方 objectId>", title: "…" })` 建一个
    talk_window。target 既可以是 `"user"`（人类用户），也可以是任意其它 flow object 的 objectId。
-2. 之后所有消息走该 talk_window 的 `say`：`exec(window_id="<talk_window>", method="say", args={ content: "…" })`。
+2. 之后所有消息走该 talk_window 的 `say`：`exec(window_id="<talk_window>", method="say", args={ msg: "…" })`。
 
 **talk_window 是持续会话窗口，应复用**：同一对象在同一 thread 内只需一个 talk_window，
 后续消息全走它的 say，不要每发一条就 close 再 open。只有对话真正结束才 close。

@@ -7,7 +7,7 @@
  * 四种 source：
  * - explicit  ：LLM 通过 `open_knowledge(path)` constructor 显式 pin；持久化；可被 LLM `close` 释放。
  *               render 时从 stone knowledge loader 取正文（body 通常空）。
- * - protocol  ：按 activates_on 注入的 root builtin knowledge（builtins/root/knowledge/*.md）
+ * - protocol  ：按 activates_on 注入的 builtin 协议 knowledge（各 builtin 包 knowledge/*.md）
  *               与 creator-reply 等协议派生条目；不持久化，每轮合成；LLM 不可 close。
  * - activator ：pools/objects/{id}/knowledge/*.md 经 intentPaths 命中激活的条目；
  *               同样合成、不持久化、不可 close；额外携带 presentation=full|summary。

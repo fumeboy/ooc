@@ -54,7 +54,7 @@ export async function runControlPlane(): Promise<StoryResult> {
         rec.ok("TC-VIS-02", "Vite serve /@fs visible 组件返回模块代码",
           resp.status === 200 && body.includes("export default"), `status=${resp.status}`);
         const ep = join(dirOf("ui_demo"), "executable", "index.ts");
-        writeStoneFile(baseDir, "ui_demo", "executable/index.ts", `export const window = { methods: {} };`);
+        writeStoneFile(baseDir, "ui_demo", "executable/index.ts", `export default { methods: [] };`);
         const er = await fetch(`${VITE}/@fs${ep}`);
         const eb = await er.text();
         rec.ok("TC-VIS-03", "Vite 安全边界：拒绝 serve executable 路径（403）",
@@ -89,14 +89,17 @@ export async function runControlPlane(): Promise<StoryResult> {
       }
     }
 
-    // TC-VIS-05: UI↔行为闭环 —— visible 组件存在 + callMethod 端点调通 executable
+    // TC-VIS-05: UI↔行为闭环 —— visible 组件存在 + callMethod 端点调通 executable。
+    // 新模型：visible/index.tsx 是前端组件（callMethod 经 HTTP 调后端）；executable 程序路由由
+    // stone 根 index.ts 的 `export const Class`（OocClass）装配，object method 三参 `(ctx, self, args)`、
+    // 返回 ObjectMethodResult `{ data }`。call_method 经 server-loader 从根 index.ts 取 for_ui_access 方法。
     {
       const id = "ui_loop";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "visible/index.tsx",
         `export default function Demo({ callMethod }: any) { const onClick = () => callMethod?.("greet", { name: "ooc" }); return null; }`);
-      writeStoneFile(baseDir, id, "executable/index.ts",
-        `export const window = { methods: { greet: { description: "greet", for_ui_access: true, exec: ({ args }) => ({ ok: true, data: { hello: args.name } }) } } };`);
+      writeStoneFile(baseDir, id, "index.ts",
+        `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";\nexport const Class: OocClass = { executable: { methods: [{ name: "greet", description: "greet", for_ui_access: true, exec: (ctx, self, args) => ({ data: { hello: args.name } }) }] } };`);
       await sleep(300);
       const urlResp = await getJson(app, `/api/objects/stone/${id}/client-source-url`);
       const callResp = await postJson(app, `/api/stones/${id}/call_method`, { method: "greet", args: { name: "ooc" } });

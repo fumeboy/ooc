@@ -45,6 +45,10 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-THINK-03: class 声明层（<window_classes>/<class>）渲染 method 的语义 description（非仅 name/paths）。
     // 回归守卫：曾经只渲 paths.join(",")（≈ method 名），LLM 看不懂每个 method 含义。
     // 方法菜单已从逐实例 <methods> 搬到 class 声明层一次（computeVisibleMethodSet）。
+    //
+    // Wave4 对象模型：registry 存 RegisteredClass（executable.methods + readable.window[].window_methods），
+    // 不再有旧 getObjectDefinition({methods,windowMethods})。file 投影窗 ownerClass="filesystem/file"、
+    // projectionClass="file"。computeVisibleMethodSet(ownerClass, projectionClass, thread, registry)。
     {
       await import("@ooc/core/runtime/register-builtins.js"); // boot builtin registry
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
@@ -52,21 +56,31 @@ export async function runControlPlane(): Promise<StoryResult> {
       const { extractBasicDescription } = await import(
         "@ooc/core/executable/method-description.js"
       );
-      // file class 的 method（含 windowMethods）里挑一个有 *_BASIC 描述的
-      const def = builtinRegistry.getObjectDefinition("file");
-      const all = { ...(def?.methods ?? {}), ...(def?.windowMethods ?? {}) };
+      const ownerClass = "filesystem/file";
+      const projectionClass = "file";
+      const cls = builtinRegistry.getClass(ownerClass);
+      // 候选 method：该投影窗声明的 object method（沿继承链）+ window method，里挑一个有 *_BASIC 描述的。
+      const decl = cls?.readable?.window?.find((w) => w.class === projectionClass);
+      const objMethods = new Map(
+        builtinRegistry.resolveObjectMethods(ownerClass).map((m) => [m.name, m as any]),
+      );
+      const candidates = [
+        ...(decl?.object_methods ?? []).map((n) => objMethods.get(n)).filter(Boolean),
+        ...(decl?.window_methods ?? []),
+      ];
       let descMethod = "";
       let snippet = "";
-      for (const [name, entry] of Object.entries(all)) {
+      for (const entry of candidates) {
         const d = extractBasicDescription(entry as any);
         if (d && d.trim().length > 0) {
-          descMethod = name;
+          descMethod = (entry as any).name;
           // 折叠空白、去引号后取片段，与 conciseDescription 对齐
           snippet = d.replace(/\s+/g, " ").replace(/["\\]/g, "").trim().slice(0, 16);
           break;
         }
       }
-      const set = computeVisibleMethodSet({ id: "f1", class: "file" } as never, {} as never, builtinRegistry);
+      const thread = { persistence: { sessionId: "tc-think-03" } } as never;
+      const set = computeVisibleMethodSet(ownerClass, projectionClass, thread, builtinRegistry);
       const serialized = JSON.stringify(set?.methodNodes ?? []);
       // description 文本片段须出现在 class 声明的 method 节点里——否则说明又退回只渲 name/paths
       const descRendered = descMethod !== "" && snippet.length > 0 && serialized.includes(snippet);

@@ -3,7 +3,7 @@
  *
  * `ooc://` 是 OOC 暴露给 Agent 知识侧的稳定寻址协议——Agent 只产出 `ooc://client/...`
  * 字符串，前端在这里 1:1 映射成 SPA in-app 路由，不让 react-router path / 端口细节漏进
- * Agent 知识（见 builtins/root/knowledge/self-evolution.md 的 flow client page 形态）。
+ * Agent 知识（见 builtins/agent/knowledge/self-evolution.md 的 flow client page 形态）。
  *
  * URI 契约（权威见 .ooc-world-meta visible 对象 knowledge/ooc-uri-addressing.md）：
  * - ooc://client/flows/<sid>/<self>/pages/<name>  ↔  /flows/<sid>/<self>/pages/<name>

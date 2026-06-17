@@ -99,7 +99,7 @@ export interface ConstructorContext {
  * - for_ui_access: 是否可经前端 HTTP API（visible UI）请求（见 object-model 核心 6）
  * - public      : 是否对 peer object 可见可调
  * - for_reflectable: 是否仅在 super flow（反思 session）下 surface
- * - exec        : (ctx, self, args) → 结果文本（或 undefined）；**可改 self、可副作用**
+ * - exec        : (ctx, self, args) → 结果（`ObjectMethodResult`{message?/data?/err?}，或裸 string = sugar for {message}，或 void/undefined）；**可改 self、可副作用**
  */
 export interface ObjectMethod<Data = any, Args = any> {
   name: string;
@@ -108,6 +108,8 @@ export interface ObjectMethod<Data = any, Args = any> {
   for_ui_access?: boolean;
   public?: boolean;
   for_reflectable?: boolean;
+  /** 权限谓词：调用前按 args 算 `allow` / `ask` / `deny`（缺省 allow）；判定归 observable 的 permission 模型。 */
+  permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
 
   intents?: {name: string, description: string}[]
   route?: (ctx: ExecutableContext, self: Data, args: Args) => ObjectMethodIntents;
@@ -115,7 +117,7 @@ export interface ObjectMethod<Data = any, Args = any> {
     ctx: ExecutableContext,
     self: Data,
     args: Args,
-  ) => Promise<ObjectMethodResult>;
+  ) => ObjectMethodResult | string | void | Promise<ObjectMethodResult | string | void>;
 }
 
 // ObjectMethodIntents

@@ -1,3 +1,6 @@
+// side-effect：注册全部 builtin class 进 builtinRegistry（server 渲染/持久化/方法解析依赖；
+// 缺则 `_builtin/agent/thread` 等在 server registry 内未知 → inline 持久化退化、方法解析落空）。
+import "@ooc/core/runtime/register-builtins.js";
 import { Elysia } from "elysia";
 import { setPauseChecker, setThreadActivationNotifier } from "@ooc/core/observable";
 import { createWorldRuntime, type WorldRuntime } from "@ooc/core/runtime/world-runtime";

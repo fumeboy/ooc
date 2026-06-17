@@ -21,7 +21,6 @@
     "@ooc/builtins/interpreter/interpreter_process": "workspace:*",
     "@ooc/builtins/knowledge_base": "workspace:*",
     "@ooc/builtins/knowledge_base/knowledge": "workspace:*",
-    "@ooc/builtins/root": "workspace:*",
     "@ooc/builtins/runtime": "workspace:*",
     "@ooc/builtins/supervisor": "workspace:*",
     "@ooc/builtins/terminal": "workspace:*",
