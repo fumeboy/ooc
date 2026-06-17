@@ -339,7 +339,7 @@ function maybeBuildOutboundSayLine(
 ): ChatLine | undefined {
   if (event.toolName !== "open") return undefined;
   const args = isRecord(event.arguments) ? event.arguments : undefined;
-  if (!args || args.method !== "say" && args.method !== "say") return undefined;
+  if (!args || args.method !== "say") return undefined;
   const parentWindowId = typeof args.parent_window_id === "string" ? args.parent_window_id : undefined;
   if (!parentWindowId) return undefined;
   const target = talkWindowTargets.get(parentWindowId);

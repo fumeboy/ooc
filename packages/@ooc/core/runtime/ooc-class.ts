@@ -2,7 +2,7 @@
  * OOC class 装配契约 —— 一个 ooc class `index.ts` 的 `export const Class` 形状，
  * 以及 runtime 持有的「object 实例信封」。
  *
- * 设计权威：`.ooc-world-meta/.../children/class/knowledge/object-model.md`
+ * 设计权威：`.ooc-world-meta/.../children/object/self.md`
  * 接口模板：同目录 `example.md`。
  *
  * class = self.md + readable + executable + visible + persistable + types.ts + index.ts
@@ -56,7 +56,7 @@ export interface OocClass<Data = any> {
 /**
  * `package.json` 的 `ooc` 元信息（object-model 细节补充）。
  * - kind  : 这份 stone 是 class（定义）还是 object（实例）
- * - class : 继承谁（父类 id，单链继承）；省略=隐式继承基类
+ * - class : object 经 ooc.class 继承的那**一个** class（父类 id，单跳继承）；省略=无父类（自身即终点，无隐式基类回退；_builtin/root 类已退役）
  */
 export interface OocPackageMeta {
   objectId: string;

@@ -1,7 +1,7 @@
 /**
  * readable 维度契约 —— ooc object **怎么投影成 context window** 给 LLM 看 + window method。
  *
- * 设计权威：`.ooc-world-meta/.../children/class/knowledge/object-model.md`（对象模型单一权威）
+ * 设计权威：`.ooc-world-meta/.../children/object/self.md`（对象模型单一权威）
  * 接口模板：同目录 `example.md`。本文件是该模板在 core 的**可编译落字**。
  *
  * 对象模型核心 4：object 持自身 Data（业务数据），由 readable 把 Data **投影**成 context window

@@ -1,7 +1,7 @@
 /**
  * executable 维度契约 —— ooc class 的 **object method** 接口。
  *
- * 设计权威：`.ooc-world-meta/.../children/class/knowledge/object-model.md`（对象模型单一权威）
+ * 设计权威：`.ooc-world-meta/.../children/object/self.md`（对象模型单一权威）
  * 接口模板：同目录 `example.md`。本文件是该模板在 core 的**可编译落字**。
  *
  * object method **可改 object data、可产生副作用**（区别于 readable 维度的 window method，
