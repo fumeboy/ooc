@@ -96,7 +96,6 @@ export interface ConstructorContext {
  * - name        : 方法名（dispatch 入口；同 class 内 object/window method 不可重名）
  * - description : LLM 面向的方法描述（必填）
  * - schema      : 可选参数 schema（结构化渲染 + fail-soft 校验）
- * - permission  : 三档准入（allow 默认 / ask 触发 HITL / deny 拒绝）
  * - for_ui_access: 是否可经前端 HTTP API（visible UI）请求（见 object-model 核心 6）
  * - public      : 是否对 peer object 可见可调
  * - for_reflectable: 是否仅在 super flow（反思 session）下 surface
@@ -106,15 +105,36 @@ export interface ObjectMethod<Data = any, Args = any> {
   name: string;
   description: string;
   schema?: MethodCallSchema;
-  permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
   for_ui_access?: boolean;
   public?: boolean;
   for_reflectable?: boolean;
+
+  intents?: {name: string, description: string}[]
+  route?: (ctx: ExecutableContext, self: Data, args: Args) => ObjectMethodIntents;
   exec: (
     ctx: ExecutableContext,
     self: Data,
     args: Args,
-  ) => string | undefined | Promise<string | undefined>;
+  ) => Promise<ObjectMethodResult>;
+}
+
+// ObjectMethodIntents
+// 类似于现实中我们填写的电子表单
+// 要提交行动前，发起一个表单
+// 填几个参数，然后给出新的填表项并给出提示，然后继续填，然后继续提示，直到表单填写完毕再提交
+// OOC 系统的 Object Method 也支持这个模式，如果 Object Method 定义了 route，那么方法执行时，会先执行 route 取得意图
+// 同时在 上下文中，会创建一个 ObjectMethodForm window, 用于显示表单，这个 window 具有 refine 方法用于继续填充调整参数，具有 submit 方法用于提交表单
+// route 计算出的 tip 会作为 tool call 结果返回，计算出的 intents 会用于激活关联的知识
+export interface ObjectMethodIntents {
+  tip?: string,
+  intents?: string[] // 从 args 推导的行为意图
+  quickSubmit?: boolean // 无需再主动对表单执行 submit 方法，立刻执行
+}
+
+export interface ObjectMethodResult {
+  message?: string;
+  data?: any;
+  err?: string
 }
 
 /**
