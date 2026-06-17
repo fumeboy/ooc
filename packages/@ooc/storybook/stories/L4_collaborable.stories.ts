@@ -32,21 +32,17 @@ export const L4_STORIES: Story[] = [
       const ctx = JSON.parse(readFileSync(p, "utf8"));
       // Wave4 对象模型：会话窗 stored class = thread 的 stone objectId "_builtin/agent/thread"
       //（"talk" 是 readable computeProjectionClass 按 POV 算的投影 class，不落盘）。
-      // user 线程的 entry 是 _ref 指针，**不再 inline target**——target 落在被引窗自己的
-      // state.json（flows/<sid>/objects/<windowId>/state.json 的 data.target）。
+      // 会话窗是 inline 持久化（thread persistable.mode=inline）：整窗 inline 进 user thread-context
+      // entry，data.target 直接可读（不写独立 state.json）。
       const entries = (ctx.contextWindows ?? []) as any[];
       const sessionEntry = entries.find((w) => normalizeClassId(w.class ?? "") === "agent/thread");
       check(
         !!sessionEntry,
-        `user 线程无会话窗 entry（stored class=_builtin/agent/thread）：${JSON.stringify(entries.map((w: any) => ({ id: w.id, class: w.class, ref: w.refObjectId })))}`,
+        `user 线程无会话窗 entry（stored class=_builtin/agent/thread）：${JSON.stringify(entries.map((w: any) => ({ id: w.id, class: w.class })))}`,
       );
-      const winId: string = sessionEntry.refObjectId ?? sessionEntry.id;
-      const statePath = join(baseDir, "flows", sid, "objects", winId, "state.json");
-      check(existsSync(statePath), `会话窗 state.json 不存在：${statePath}`);
-      const state = JSON.parse(readFileSync(statePath, "utf8"));
       check(
-        state?.data?.target === "obj_talk",
-        `会话窗未指向 obj_talk：state.data=${JSON.stringify(state?.data)}`,
+        sessionEntry.data?.target === "obj_talk",
+        `会话窗未指向 obj_talk：data=${JSON.stringify(sessionEntry.data)}`,
       );
     },
   }),

@@ -40,24 +40,24 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-COLLAB-02: user.root 上挂了指向 target 的会话窗（显式协作通道）。
     // Wave4 对象模型：会话窗 stored class = thread 的 stone objectId "_builtin/agent/thread"
     //（唯一会话载体注册 class；"talk" 是 readable 按 POV 算的投影 class，不落盘）。
-    // thread-context.json 里 user.root 的 entry 是一个 _ref 指针（id/class/refObjectId），
-    // **不再 inline target**——target 落在被引对象窗自己的 state.json
-    //（flows/<sid>/objects/<windowId>/state.json 的 data.target）。
-    // 故按「entry stored class = _builtin/agent/thread + 被引窗 state.data.target === target」断言。
+    // 会话窗是 inline 持久化（thread persistable.mode=inline）：整窗 inline 进 user thread-context
+    // entry，data.target 直接可读（不写独立 state.json）。
+    // 故按「entry stored class = _builtin/agent/thread + 该 inline entry 的 data.target === target」断言。
     {
       const userCtx = readThreadContextJson(baseDir, sid, "user", "root");
       const wins: any[] = userCtx?.contextWindows ?? [];
       const sessionWin = wins.find((w) => normalizeClassId(w?.class ?? "") === "agent/thread");
       let pointsAtTarget = false;
       if (sessionWin) {
-        const winId: string = sessionWin.refObjectId ?? sessionWin.id;
-        const statePath = join(baseDir, "flows", sid, "objects", winId, "state.json");
-        if (existsSync(statePath)) {
-          try {
-            const state = JSON.parse(readFileSync(statePath, "utf8"));
-            pointsAtTarget = state?.data?.target === target;
-          } catch { /* malformed → stays false */ }
+        // inline：data 直接在 entry；_ref 退化形态：读被引窗 state.json（兜底兼容）。
+        let data = sessionWin.data;
+        if (data == null && sessionWin.refObjectId) {
+          const statePath = join(baseDir, "flows", sid, "objects", sessionWin.refObjectId, "state.json");
+          if (existsSync(statePath)) {
+            try { data = JSON.parse(readFileSync(statePath, "utf8"))?.data; } catch { /* malformed */ }
+          }
         }
+        pointsAtTarget = data?.target === target;
       }
       rec.ok("TC-COLLAB-02", "user.root 挂了指向 target 的会话窗（cross-object talk 路由表）",
         !!sessionWin && pointsAtTarget,
