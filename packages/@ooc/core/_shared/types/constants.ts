@@ -33,6 +33,17 @@ export function isKnowledgeClass(cls: string | undefined): boolean {
   return cls === KNOWLEDGE_CLASS_ID;
 }
 
+/** file 对象的注册 class id（filesystem.open_file / search.open_match 实例化）。投影名才是 "file"。 */
+export const FILE_CLASS_ID = "_builtin/filesystem/file";
+
+/** 该 window 是不是 file 实例（inst.class === FILE_CLASS_ID；裸名 "file" 是 readable 投影 class）。 */
+export function isFileClass(cls: string | undefined): boolean {
+  return cls === FILE_CLASS_ID;
+}
+
+/** pr 评审窗的注册 class id（reviewer 收到的待审 PR 窗）。投影名才是 "pr"。 */
+export const PR_CLASS_ID = "_builtin/agent/pr";
+
 /**
  * "会话型" window 谓词 —— 判一条 context window 是不是会话载体（thread）实例。
  *

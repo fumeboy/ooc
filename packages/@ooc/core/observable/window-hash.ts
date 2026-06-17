@@ -6,7 +6,8 @@
  *   - 算法 type-agnostic（统一 JSON hash），不为每个 window type 注册 hashContent
  *   - stripVolatile 与 src/persistable/thread-json.ts:stripVolatileForPersist 单 window 段保持一致：
  *     剥 compressLevel === 0/undefined
- *   - hash 稳定性靠 Object.keys(stripped).sort() 保证；字段插入顺序不影响 hash
+ *   - hash 稳定性靠 stableStringify **递归**排序 key 保证；字段插入顺序不影响 hash
+ *     （Wave 4 后业务字段在 inst.data、投影态在 inst.win，必须递归进嵌套层才保 content-sensitivity）
  *   - fileDiff 字段只对 file_window 计算；previousContent 由 finishLlmLoop 读上一 loop meta 拿到
  *   - fileDiff 不进 thread.json（debug 视角派生数据），只落 loop_NNNN.meta.json
  */
@@ -15,6 +16,7 @@ import { readFile } from "node:fs/promises";
 
 import type { FileData } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
+import { isFileClass } from "@ooc/core/_shared/types/constants.js";
 
 /**
  * file_window 的 diff 数据；用于前端 CodeMirror Merge 双侧渲染。
@@ -61,20 +63,36 @@ export function stripVolatileWindow(window: OocObjectInstance): Record<string, u
 }
 
 /**
+ * 确定性 JSON 序列化：**递归**按 key 排序，使字段插入顺序不影响输出。
+ *
+ * 取代旧的 `JSON.stringify(obj, sortedKeys)`——后者的第 2 参数 key 白名单只列**顶层** key，
+ * 会把所有层级里不在白名单的 key 一并过滤掉。Wave 4 后业务字段下沉 `inst.data`、投影态下沉
+ * `inst.win`，这些嵌套 key 全被过滤 → data/win 序列化成 `{}`、hash 丧失 content-sensitivity。
+ */
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const obj = value as Record<string, unknown>;
+  const body = Object.keys(obj)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
+    .join(",");
+  return `{${body}}`;
+}
+
+/**
  * 计算 ContextWindow 的 content hash。
  *
- * - type-agnostic：不依赖 window type；统一对剥 volatile 后的对象做 JSON.stringify
+ * - type-agnostic：不依赖 window type；统一对剥 volatile 后的对象做确定性序列化
  * - 用 Bun.hash（64-bit）+ toString(36) 编码（短）
- * - JSON.stringify 第 2 参数传 sorted keys 数组，保证字段序稳定
+ * - stableStringify 递归排序 key，保证字段序稳定且嵌套 data/win 全参与 hash
  *
  * 同 content（剥 volatile 后）→ 同 hash；
  * 不同 content → 不同 hash（高概率；hash 冲突非安全需求）。
  */
 export function computeWindowContentHash(window: OocObjectInstance): string {
   const stripped = stripVolatileWindow(window);
-  const sortedKeys = Object.keys(stripped).sort();
-  const json = JSON.stringify(stripped, sortedKeys);
-  return Bun.hash(json).toString(36);
+  return Bun.hash(stableStringify(stripped)).toString(36);
 }
 
 /**
@@ -172,7 +190,9 @@ export async function buildWindowsSnapshot(
     if (compressLevel !== undefined && compressLevel !== 0) {
       entry.compressLevel = compressLevel;
     }
-    if (w.class === "file") {
+    // file 实例的 stored class 是注册 id（FILE_CLASS_ID）；裸名 "file" 只是 readable 投影 class，
+    // 真实管道里的 contextWindows 永远持注册 id，旧的 `w.class === "file"` 判定恒不命中 → fileDiff dead。
+    if (isFileClass(w.class)) {
       entry.fileDiff = await computeFileDiff(w as unknown as OocObjectInstance<FileData>, previousSnapshot);
     }
     out.push(entry);

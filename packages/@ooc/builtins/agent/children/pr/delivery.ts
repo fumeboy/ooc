@@ -24,7 +24,7 @@ import {
 } from "@ooc/core/persistable/index.js";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
-import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
+import { SUPER_SESSION_ID, PR_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
 import type { Data as PrData } from "./types.js";
@@ -112,7 +112,9 @@ export async function deliverPrWindowToReviewers(
     // pr 业务字段（issueId/reviewerObjectId/authorObjectId/authorThreadId）落 inst.data（=PrData）。
     const prInstance: OocObjectInstance<PrData> = {
       id: windowId,
-      class: "pr",
+      // 注册 class id（非投影名 "pr"）——否则 createFlowObject/hydrate 解析不到 class，
+      // pr 窗过不了持久化 round-trip、reload 后被 drop（pr readable 才把它投影成 "pr"）。
+      class: PR_CLASS_ID,
       parentObjectId: ROOT_WINDOW_ID,
       title,
       status: "open",
