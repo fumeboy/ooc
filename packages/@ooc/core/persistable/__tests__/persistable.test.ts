@@ -13,6 +13,8 @@ import {
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { writeThreadContext } from "@ooc/builtins/agent/thread/persistable/flow-thread-context";
 import type { ThreadContext } from "../../thinkable/context";
+// 触发 builtin class 注册（loadThread/hydrate 用 builtinRegistry.has 判定保留/丢弃窗）。
+import "@ooc/core/runtime/register-builtins";
 
 let tempRoot: string | undefined;
 
@@ -64,10 +66,11 @@ describe("persistable single object flow", () => {
     expect(restored?.persistence).toEqual({ ...ref, threadId: "root" });
   });
 
-  test("readThread filters out unregistered-type windows from thread-context.json", async () => {
+  test("readThread filters out unregistered-class windows from thread-context.json", async () => {
     // 退役 thread.json.contextWindows 后，thread-context.json 是唯一完整权威。
-    // 移除 issue 看板后，历史 thread-context.json 可能含 inline type="issue" 等
-    // 已废弃 entries。readThread 应 graceful skip (warn + drop) 而非抛错阻塞所有调用方。
+    // Wave4：hydrate 按 entry.class 判定——`registry.has(class)` 为 false（已废弃 / 悬空 class）
+    // 的窗 graceful drop（warn），已注册 class 的窗保留。这里用真实注册 class `agent/todo`
+    // 当「保留」样本，悬空 type="issue"（无 class 字段）当「丢弃」样本。
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-persistable-"));
     const ref = await createFlowObject({
       baseDir: tempRoot,
@@ -84,12 +87,19 @@ describe("persistable single object flow", () => {
       persistence
     };
     await writeThread(thread);
-    // 直接构造 thread-context.json：inline 一个已废弃 type ("issue") + 一个合法 builtin
-    // feature ("todo")。issue 未注册 → drop；todo 已注册 → 保留。
+    // 直接构造 thread-context.json：inline 一个悬空 type ("issue"，无 class 字段) + 一个
+    // 已注册 class 的窗 (agent/todo)。issue 无 class → drop；todo 已注册 → 保留。
     await writeThreadContext(persistence, [
-      // @ts-expect-error - intentionally write legacy unregistered type inline
+      // @ts-expect-error - intentionally write legacy entry without a class field
       { id: "w_issue_x", type: "issue", title: "old issue ref", status: "open" },
-      { id: "w_todo_x", class: "todo", title: "real todo", status: "open", content: "", createdAt: 1 },
+      {
+        id: "w_todo_x",
+        class: "agent/todo",
+        title: "real todo",
+        status: "open",
+        createdAt: 1,
+        data: { content: "real todo", status: "open" },
+      },
     ]);
 
     const restored = await readThread(ref, "legacy");

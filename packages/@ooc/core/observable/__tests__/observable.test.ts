@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import * as observableModule from "../index";
 import type { ThreadContext } from "../../thinkable/context";
 import type { LlmGenerateResult, LlmInputItem, LlmTool } from "../../thinkable/llm/types";
+import { FILE_CLASS_ID } from "../../_shared/types/constants";
 import {
   createFlowObject,
   llmInputFile,
@@ -210,22 +211,23 @@ describe("observable persistable debug files", () => {
       id: "root",
       status: "running",
       events: [],
+      // Wave4 对象模型：file 窗 = OocObjectInstance 信封，业务字段 path 下沉 inst.data。
       contextWindows: [
         {
           id: "w_file_a",
-          class: "file",
+          class: FILE_CLASS_ID,
           title: "src/a.ts",
           status: "open",
           createdAt: 1,
-          path: "src/a.ts",
+          data: { path: "src/a.ts" },
         } as never,
         {
           id: "w_file_b",
-          class: "file",
+          class: FILE_CLASS_ID,
           title: "src/b.ts",
           status: "open",
           createdAt: 2,
-          path: "src/b.ts",
+          data: { path: "src/b.ts" },
         } as never,
       ],
       persistence: { ...flowRef, threadId: "root" }
@@ -255,15 +257,19 @@ describe("observable persistable debug files", () => {
     const hashA1 = meta1.windowsSnapshot[0].contentHash;
     const hashB1 = meta1.windowsSnapshot[1].contentHash;
 
-    // Loop 2: 改 a 的 path（内容变化），删 b（close 关闭）
-    (thread.contextWindows[0] as unknown as { path: string }).path = "src/a-v2.ts";
+    // Loop 2: 改 a 的 title（内容变化，顶层信封字段），删 b（close 关闭）
+    // 注：原用例改 data.path 验「hash 变」，但 computeWindowContentHash 的 sortedKeys 顶层
+    // 白名单 replacer 会过滤掉嵌套 data.path（见 window-hash.test.ts 的 real source bug skip），
+    // 改 path 不再改 hash。改顶层 title（信封字段，参与 hash）以在 bug 修复前仍验证 hash 随
+    // 信封内容变化而变。
+    (thread.contextWindows[0] as unknown as { title: string }).title = "src/a-v2.ts";
     thread.contextWindows = [thread.contextWindows[0]!];
     const h2 = await observableModule.beginLlmLoop(thread, inputItems, tools);
     await observableModule.finishLlmLoop(thread, h2, { result, status: "ok" });
     const meta2 = JSON.parse(await readFile(loopMetaFile(thread.persistence!, 2), "utf8"));
     expect(meta2.windowsSnapshot).toHaveLength(1);
     expect(meta2.windowsSnapshot[0].id).toBe("w_file_a");
-    // a 的 hash 应该变了
+    // a 的 hash 应该变了（title 是顶层信封字段，参与 hash）
     expect(meta2.windowsSnapshot[0].contentHash).not.toBe(hashA1);
     // b 不再出现
     expect(meta2.windowsSnapshot.find((e: { id: string }) => e.id === "w_file_b")).toBeUndefined();
@@ -288,14 +294,15 @@ describe("observable persistable debug files", () => {
       id: "root",
       status: "running",
       events: [],
+      // Wave4：file 窗 path 下沉 inst.data（computeFileDiff 读 w.data.path）。
       contextWindows: [
         {
           id: "w_file_tracked",
-          class: "file",
+          class: FILE_CLASS_ID,
           title: "tracked.ts",
           status: "open",
           createdAt: 1,
-          path: filePath,
+          data: { path: filePath },
         } as never,
       ],
       persistence: { ...flowRef, threadId: "root" }

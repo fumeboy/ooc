@@ -11,8 +11,11 @@ import {
   resolveStoneIdentityRef,
   stoneDir,
 } from "@ooc/core/persistable";
-import { talkConstructor } from "@ooc/builtins/agent/thread/executable/construct.js";
+import { Class as ThreadClass } from "@ooc/builtins/agent/thread";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
+
+/** talk constructor 现寄居在 thread Class.construct（target=别对象 ⇒ peer 会话校验存在性）。 */
+const talkConstructor = ThreadClass.construct!;
 
 /**
  * Session-aware 读路径回归（真victim 调用点 G1 talk + identity）。
@@ -52,13 +55,18 @@ function mkThread(baseDir: string, sessionId: string, objectId: string): ThreadC
   };
 }
 
-/** 驱动真实 talk constructor exec，返回是否解析成功（!ok 即 target 不存在）。 */
+/**
+ * 驱动真实 talk constructor exec（Wave4：ObjectConstructor.exec(ctx, args) → Data，
+ * peer target 不存在时 throw）。返回是否解析成功（throw ⇒ target 不存在）。
+ */
 async function talkResolves(thread: ThreadContext, target: string): Promise<boolean> {
-  const res = await talkConstructor.exec({
-    thread,
-    args: { target, title: "hi" },
-  } as any);
-  return res == null || (typeof res === "object" && (res as any).ok !== false);
+  const args = { target, title: "hi" };
+  try {
+    await talkConstructor.exec({ thread, args }, args);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 describe("session-aware read chokepoint (victim call sites)", () => {

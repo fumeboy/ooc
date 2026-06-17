@@ -30,6 +30,20 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     });
   }
 
+  // Wave4 会话窗：stored class = _builtin/agent/thread；target / conversationId 落 inst.data
+  // （talk 只是 readable 投影 class，peer 派生按 isTalkLikeClass 认 thread class）。
+  function talkWin(id: string, target: string, createdAt = 100): any {
+    return {
+      id,
+      class: "_builtin/agent/thread",
+      parentObjectId: "root",
+      title: `talk to ${target}`,
+      status: "open",
+      createdAt,
+      data: { target, conversationId: `conv_${id}` },
+    };
+  }
+
   it("returns empty array when no persistence", async () => {
     const thread = makeThread({ persistence: undefined });
     const result = await derivePeerObjectWindows(thread);
@@ -43,18 +57,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
   });
 
   it("derives peer object from talk_window target", async () => {
-    const thread = makePeerThread("agent_self", [
-      {
-        id: "w_talk_1",
-        class: "talk",
-        parentWindowId: "root",
-        title: "talk to peer1",
-        status: "open",
-        createdAt: 100,
-        target: "agent_peer1",
-        conversationId: "conv1",
-      },
-    ]);
+    const thread = makePeerThread("agent_self", [talkWin("w_talk_1", "agent_peer1")]);
     const result = await derivePeerObjectWindows(thread);
     expect(result.length).toBe(1);
     expect(result[0]!.class).toBe("agent_peer1" as any);
@@ -62,35 +65,13 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
   });
 
   it("skips super alias target", async () => {
-    const thread = makePeerThread("agent_self", [
-      {
-        id: "w_talk_1",
-        class: "talk",
-        parentWindowId: "root",
-        title: "talk to super",
-        status: "open",
-        createdAt: 100,
-        target: "super",
-        conversationId: "conv1",
-      },
-    ]);
+    const thread = makePeerThread("agent_self", [talkWin("w_talk_1", "super")]);
     const result = await derivePeerObjectWindows(thread);
     expect(result.length).toBe(0);
   });
 
   it("derives user as peer object from talk_window (user 不再特殊排除，统一作 context window)", async () => {
-    const thread = makePeerThread("agent_self", [
-      {
-        id: "w_talk_user",
-        class: "talk",
-        parentWindowId: "root",
-        title: "talk to user",
-        status: "open",
-        createdAt: 100,
-        target: "user",
-        conversationId: "conv_u",
-      },
-    ]);
+    const thread = makePeerThread("agent_self", [talkWin("w_talk_user", "user")]);
     const result = await derivePeerObjectWindows(thread);
     expect(result.map((w) => w.id)).toContain("user");
     expect(result.find((w) => w.id === "user")?.class).toBe("user" as any);
@@ -116,18 +97,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
   it("derives both talk peers and sibling stones", async () => {
     await createStoneObject({ baseDir, objectId: "agent_sibling" });
 
-    const thread = makePeerThread("agent_self", [
-      {
-        id: "w_talk_1",
-        class: "talk",
-        parentWindowId: "root",
-        title: "talk to peer",
-        status: "open",
-        createdAt: 100,
-        target: "agent_talk_peer",
-        conversationId: "conv1",
-      },
-    ]);
+    const thread = makePeerThread("agent_self", [talkWin("w_talk_1", "agent_talk_peer")]);
     const result = await derivePeerObjectWindows(thread);
     const peerIds = result.map((w) => w.id).sort();
     expect(peerIds).toEqual(["agent_sibling", "agent_talk_peer"]);
@@ -136,18 +106,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
   it("deduplicates same peer from talk and sibling", async () => {
     await createStoneObject({ baseDir, objectId: "agent_peer" });
 
-    const thread = makePeerThread("agent_self", [
-      {
-        id: "w_talk_1",
-        class: "talk",
-        parentWindowId: "root",
-        title: "talk to peer",
-        status: "open",
-        createdAt: 50,
-        target: "agent_peer",
-        conversationId: "conv1",
-      },
-    ]);
+    const thread = makePeerThread("agent_self", [talkWin("w_talk_1", "agent_peer", 50)]);
     const result = await derivePeerObjectWindows(thread);
     const peerWindows = result.filter((w) => w.id === "agent_peer");
     expect(peerWindows.length).toBe(1);

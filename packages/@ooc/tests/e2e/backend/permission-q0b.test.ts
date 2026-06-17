@@ -40,6 +40,7 @@ import { spyOn } from "bun:test";
 // 触发 windows/ 各 type 的 side-effect 注册 (root commands 等)
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import type { ObjectMethod } from "@ooc/core/executable/contract.js";
 
 // ─────────────────────────── helpers ──────────────────────────────────────────
 
@@ -118,34 +119,29 @@ function writePoliciesJson(ref: ThreadPersistenceRef, raw: string): void {
 
 // ─────────────────────────── fixture: fake commands ───────────────────────────
 
-// 注册仅供测试用的 root commands: "_test_q0b_danger" (deny), "_test_q0b_safe" (无声明)。
-// registerExecutable 对 methods 是整表替换——必须 merge 进现有 ROOT_METHODS（否则抹掉
-// talk/do/todo 等，污染全局 builtinRegistry，让后续测试文件的 resolveMethod("talk") 失败），
-// 并在 afterAll 还原，保证测试隔离。
-let originalRootMethods: Record<string, unknown>;
+// 注册仅供测试用的 root-fallback object method: "_test_q0b_danger" (deny), "_test_q0b_safe" (无声明)。
+// Wave 4：permission 经 lookupDeclaredPermission 的 `tryWindow("root")` 兜底解析 method 的
+// ObjectMethod.permission（call 无 windowId 时走 root class）。root 锚点本身无 executable
+// methods（仅 readable），故在此把 fake method 注册到 root.executable 上；register 会**合并**
+// 模块字段、保留 root 的 readable。afterAll 用空 methods 数组还原，清掉测试方法保证隔离。
+const dangerMethod: ObjectMethod = {
+  name: "_test_q0b_danger",
+  description: "test deny method",
+  permission: () => "deny",
+  exec: () => ({ message: "should-never-execute" }),
+};
+const safeMethod: ObjectMethod = {
+  name: "_test_q0b_safe",
+  description: "test allow method",
+  // 缺省 permission → 默认 allow
+  exec: () => ({ message: "executed-safe" }),
+};
 beforeAll(() => {
-  originalRootMethods = builtinRegistry.getObjectDefinition("root").methods;
-  builtinRegistry.registerExecutable("root", {
-    methods: {
-      ...originalRootMethods,
-      _test_q0b_danger: {
-        description: "test deny method",
-        intents: ["_test_q0b_danger"],
-        permission: () => "deny",
-        exec: () => ({ ok: true, result: "should-never-execute" }),
-      },
-      _test_q0b_safe: {
-        description: "test allow method",
-        intents: ["_test_q0b_safe"],
-        // 缺省 permission → 默认 allow
-        exec: () => ({ ok: true, result: "executed-safe" }),
-      },
-    } as never,
-  });
+  builtinRegistry.register("root", { executable: { methods: [dangerMethod, safeMethod] } });
 });
 
 afterAll(() => {
-  builtinRegistry.registerExecutable("root", { methods: originalRootMethods as never });
+  builtinRegistry.register("root", { executable: { methods: [] } });
 });
 
 // ─────────────────────────── housekeeping ─────────────────────────────────────

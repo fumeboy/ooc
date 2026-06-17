@@ -2,19 +2,30 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, test } from "bun:test";
-import { runBashExec, executeTerminalProcessExec } from "@ooc/builtins/terminal/terminal_process";
-import { runInterpreterExec } from "@ooc/builtins/interpreter/interpreter_process";
-import { runExec as executeTerminalRun } from "@ooc/builtins/terminal/executable/index.js";
-import { runExec as executeInterpreterRun } from "@ooc/builtins/interpreter/executable/index.js";
-import type { TerminalProcessWindow } from "@ooc/core/_shared/types/context-window.js";
+import { runBashExec } from "@ooc/builtins/terminal/terminal_process/executable/index.js";
+import { runInterpreterExec } from "@ooc/builtins/interpreter/interpreter_process/executable/index.js";
+import { Class as TerminalProcessClass } from "@ooc/builtins/terminal/terminal_process";
+import { Class as InterpreterProcessClass } from "@ooc/builtins/interpreter/interpreter_process";
+import type { Data as TerminalProcessData } from "@ooc/builtins/terminal/terminal_process";
 import { createStoneObject, ensureStoneRepo, writeSelf } from "../../persistable";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**
- * runBashExec / runInterpreterExec 是 terminal / interpreter 构造器与对应 process window.exec
- * 共用的运行时。terminal.run / interpreter.run 委托到各自 process 的 run constructor 造首 exec。
+ * Wave 4 对象模型：terminal / interpreter 是 tool-object，run 经 ctx.runtime.instantiate 委托
+ * 到 terminal_process / interpreter_process 的 `Class.construct`——构造首条 exec（结果进
+ * history）后返回纯 Data（runtime 据此建窗）。旧 `{ ok, window }` 返回形态 + 单参
+ * `executeTerminalRun({thread,args})` + ContextWindow union `TerminalProcessWindow` 均已退役。
+ *
+ * runBashExec(thread, code) / runInterpreterExec(thread, lang, code) 是 construct 与对应 process
+ * window.exec object method 共用的运行时，签名不变。
  */
+
+/** 最小 ConstructorContext / ExecutableContext stub（construct / exec 只用到 thread + reportDataEdit）。 */
+function ctxOf(thread: ReturnType<typeof makeThread>) {
+  return { thread, runtime: undefined, args: {}, reportDataEdit: async () => {} } as never;
+}
+
 describe("terminal_process runtime — runBashExec", () => {
   it("returns formatted result for a successful bash exec", async () => {
     const thread = makeThread({ id: "t" });
@@ -134,63 +145,38 @@ describe("interpreter_process runtime — runInterpreterExec (ts/js)", () => {
   });
 });
 
-describe("terminal.run constructs a terminal_process with first exec", () => {
-  it("returns {ok:true, window} with history[0]", async () => {
+describe("terminal_process.construct builds first exec into history", () => {
+  it("returns Data with history[0] of the successful bash exec", async () => {
     const thread = makeThread({ id: "t" });
-    const result = await executeTerminalRun({
-      thread,
-      args: { code: "echo hello" },
-    } as any);
-    expect(typeof result).toBe("object");
-    const outcome = result as { ok: true; window: TerminalProcessWindow };
-    expect(outcome.ok).toBe(true);
-    const win = outcome.window;
-    expect(win.class).toBe("terminal_process");
-    expect(win.history).toHaveLength(1);
-    expect(win.history[0]?.output).toContain("hello");
-    expect(win.history[0]?.ok).toBe(true);
+    const data = (await TerminalProcessClass.construct!.exec(ctxOf(thread), { code: "echo hello" })) as TerminalProcessData;
+    expect(data.history).toHaveLength(1);
+    expect(data.history[0]?.output).toContain("hello");
+    expect(data.history[0]?.ok).toBe(true);
   });
 
-  it("returns an error outcome when code is missing", async () => {
+  it("throws when code is missing (runtime catches → no window built)", async () => {
     const thread = makeThread({ id: "t" });
-    const result = await executeTerminalRun({ thread, args: {} } as any);
-    expect(typeof result).toBe("object");
-    expect((result as { ok: false; error: string }).ok).toBe(false);
-    expect((result as { ok: false; error: string }).error).toBeDefined();
+    await expect(TerminalProcessClass.construct!.exec(ctxOf(thread), {})).rejects.toThrow(/缺少 code/);
   });
 });
 
-describe("interpreter.run constructs an interpreter_process with first exec", () => {
-  it("returns {ok:true, window} for ts code", async () => {
+describe("interpreter_process.construct builds first exec into history", () => {
+  it("returns Data with history[0] for ts code", async () => {
     const thread = makeThread({ id: "t" });
-    const result = await executeInterpreterRun({
-      thread,
-      args: { language: "ts", code: "_result_ = 1 + 1;" },
-    } as any);
-    const outcome = result as unknown as { ok: true; window: { class: string; history: unknown[] } };
-    expect(outcome.ok).toBe(true);
-    expect(outcome.window.class).toBe("interpreter_process");
-    expect(outcome.window.history).toHaveLength(1);
+    const data = (await InterpreterProcessClass.construct!.exec(ctxOf(thread), {
+      language: "ts",
+      code: "_result_ = 1 + 1;",
+    })) as { history: unknown[] };
+    expect(data.history).toHaveLength(1);
   });
 });
 
-describe("executeTerminalProcessExec missing-args error path", () => {
-  it("returns reopen-hint error when code is missing", async () => {
+describe("terminal_process.exec object method — missing-args error path", () => {
+  it("returns reopen-hint error string when code is missing", async () => {
     const thread = makeThread({ id: "t_pw_exec_no_args" });
-    const window: TerminalProcessWindow = {
-      id: "terminal_process_test",
-      class: "terminal_process",
-      parentWindowId: "root",
-      title: "test",
-      status: "open",
-      createdAt: Date.now(),
-      history: [],
-    };
-    const result = await executeTerminalProcessExec({
-      thread,
-      args: {},
-      self: window,
-    } as any);
+    const execMethod = TerminalProcessClass.executable!.methods.find((m) => m.name === "exec")!;
+    const self: TerminalProcessData = { history: [] };
+    const result = await execMethod.exec(ctxOf(thread), self, {});
     expect(typeof result).toBe("string");
     expect(result as string).toContain("缺少 code 参数");
     expect(result as string).toContain("exec");

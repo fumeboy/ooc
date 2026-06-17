@@ -16,10 +16,26 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests, readSelf } from "@ooc/core/persistable";
 import { executeCreateObject } from "@ooc/builtins/runtime/executable/index.js";
-import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/reflect_request/method.create-pr-and-invite-reviewers";
-import { executeNewFeatBranch } from "@ooc/builtins/reflect_request/method.new-feat-branch";
-import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
-import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
+import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/agent/thread/executable/method.create-pr-and-invite-reviewers.js";
+import { executeNewFeatBranch } from "@ooc/builtins/agent/thread/executable/method.new-feat-branch.js";
+import { construct as fileConstruct } from "@ooc/builtins/filesystem/file/executable/construct.js";
+import type {
+  ExecutableContext,
+  ConstructorContext,
+} from "@ooc/core/executable/contract.js";
+
+/**
+ * Wave4 后 write_file 是 file class 的 construct 分支（args 带 content → 写 worktree）。
+ * 旧的独立 writeFileExec 已退役，写盘逻辑下沉到 file construct——这里直接驱动 construct.exec
+ * 模拟 super(foo) 在 feat 绑定下用 write_file 落 feat worktree。
+ */
+async function executeWriteFileMethod(ctx: { thread?: unknown; args: Record<string, unknown> }): Promise<{ ok: true; path: string }> {
+  const data = await fileConstruct.exec(
+    { thread: ctx.thread, args: ctx.args } as unknown as ConstructorContext,
+    ctx.args,
+  );
+  return { ok: true, path: (data as { path: string }).path };
+}
 
 let tempRoots: string[] = [];
 
@@ -60,7 +76,7 @@ function bizCtx(baseDir: string, objectId: string, sessionId: string, args: Reco
       events: [],
     },
     args,
-  } as unknown as MethodExecutionContext;
+  } as unknown as ExecutableContext;
 }
 
 /** super(foo) ctx：super flow，objectId=foo。 */
@@ -72,7 +88,12 @@ function superCtx(baseDir: string, objectId: string, args: Record<string, unknow
       events: [],
     },
     args,
-  } as unknown as MethodExecutionContext;
+  } as unknown as ExecutableContext;
+}
+
+/** create_object exec 是三参 (ctx, self, args)；测试直接驱动。 */
+function runCreateObject(ctx: ExecutableContext) {
+  return executeCreateObject(ctx, undefined as never, ctx.args);
 }
 
 function wtObjDir(baseDir: string, sid: string, id: string): string {
@@ -86,7 +107,7 @@ describe("create_object (建新对象原语)", () => {
   test("(a)(b) 业务 session 建对象 → 骨架落 session worktree，内容正确，main 未合入", async () => {
     const baseDir = await newWorld(["alice"]);
 
-    const out = await executeCreateObject(
+    const out = await runCreateObject(
       bizCtx(baseDir, "alice", "s1", {
         objectId: "report-writer",
         selfMd: "# report-writer\n我是 report-writer。\n",
@@ -117,7 +138,7 @@ describe("create_object (建新对象原语)", () => {
   test("(c) ALREADY_EXISTS: 对象已在 main → 拒", async () => {
     const baseDir = await newWorld(["alice"]);
     // alice 已存在于 main（newWorld bootstrap）
-    const out = await executeCreateObject(
+    const out = await runCreateObject(
       bizCtx(baseDir, "alice", "s1", {
         objectId: "alice",
         selfMd: "x\n",
@@ -130,11 +151,11 @@ describe("create_object (建新对象原语)", () => {
 
   test("(c) ALREADY_EXISTS: 同 session 内重复建 → 拒", async () => {
     const baseDir = await newWorld(["alice"]);
-    const first = await executeCreateObject(
+    const first = await runCreateObject(
       bizCtx(baseDir, "alice", "s1", { objectId: "newbie", selfMd: "a\n", readableMd: "b\n" }),
     );
     expect(JSON.parse(first as string).ok).toBe(true);
-    const second = await executeCreateObject(
+    const second = await runCreateObject(
       bizCtx(baseDir, "alice", "s1", { objectId: "newbie", selfMd: "a2\n", readableMd: "b2\n" }),
     );
     expect(second).toContain("[create_object:ALREADY_EXISTS]");
@@ -143,7 +164,7 @@ describe("create_object (建新对象原语)", () => {
 
   test("(c) super flow / 无 session → 拒（仅业务 session 可建）", async () => {
     const baseDir = await newWorld(["alice"]);
-    const superOut = await executeCreateObject(
+    const superOut = await runCreateObject(
       superCtx(baseDir, "alice", { objectId: "x", selfMd: "a\n", readableMd: "b\n" }),
     );
     expect(superOut).toContain("仅业务 session");
@@ -153,13 +174,13 @@ describe("create_object (建新对象原语)", () => {
 
   test("(c) 非空校验：selfMd / readableMd 空 → INVALID_INPUT", async () => {
     const baseDir = await newWorld(["alice"]);
-    const emptySelf = await executeCreateObject(
+    const emptySelf = await runCreateObject(
       bizCtx(baseDir, "alice", "s1", { objectId: "x", selfMd: "   ", readableMd: "b\n" }),
     );
     expect(emptySelf).toContain("[create_object:INVALID_INPUT]");
     expect(emptySelf).toContain("selfMd");
 
-    const emptyReadable = await executeCreateObject(
+    const emptyReadable = await runCreateObject(
       bizCtx(baseDir, "alice", "s1", { objectId: "x", selfMd: "a\n", readableMd: "" }),
     );
     expect(emptyReadable).toContain("[create_object:INVALID_INPUT]");
@@ -168,12 +189,12 @@ describe("create_object (建新对象原语)", () => {
 
   test("(c) 非法 objectId / Builtin 冲突 → 拒", async () => {
     const baseDir = await newWorld(["alice"]);
-    const bad = await executeCreateObject(
+    const bad = await runCreateObject(
       bizCtx(baseDir, "alice", "s1", { objectId: "../escape", selfMd: "a\n", readableMd: "b\n" }),
     );
     expect(bad).toContain("[create_object:INVALID_INPUT]");
 
-    const builtin = await executeCreateObject(
+    const builtin = await runCreateObject(
       bizCtx(baseDir, "alice", "s1", { objectId: "supervisor", selfMd: "a\n", readableMd: "b\n" }),
     );
     expect(builtin).toContain("[create_object:BUILTIN_CONFLICT]");
@@ -183,7 +204,7 @@ describe("create_object (建新对象原语)", () => {
     const baseDir = await newWorld(["alice"]);
 
     // 业务 session s1：alice 建 report-writer（落 session worktree，永不合入）
-    const created = await executeCreateObject(
+    const created = await runCreateObject(
       bizCtx(baseDir, "alice", "s1", {
         objectId: "report-writer",
         selfMd: "# report-writer\n身份\n",
@@ -202,9 +223,9 @@ describe("create_object (建新对象原语)", () => {
       events: [] as unknown[],
     };
     const ctx = (args: Record<string, unknown>) =>
-      ({ thread: superThread, args }) as unknown as MethodExecutionContext;
+      ({ thread: superThread, args }) as unknown as ExecutableContext;
 
-    await executeNewFeatBranch(ctx({ intent: "introduce report-writer" }));
+    await executeNewFeatBranch(ctx({ intent: "introduce report-writer" }), { intent: "introduce report-writer" });
     await executeWriteFileMethod(
       ctx({ path: "stones/report-writer/self.md", content: "# report-writer\n身份\n" }),
     );
@@ -212,7 +233,7 @@ describe("create_object (建新对象原语)", () => {
       ctx({ path: "stones/report-writer/readable.md", content: "# report-writer\n自述\n" }),
     );
     // 新对象 ≠ alice 自治区 → reviewer 集含新对象 owner + supervisor。
-    const out = await executeCreatePrAndInviteReviewers(ctx({}));
+    const out = await executeCreatePrAndInviteReviewers(ctx({}), {});
     const r = JSON.parse(out as string);
     expect(r.ok).toBe(true);
     expect(r.kind).toBe("pr-issue");

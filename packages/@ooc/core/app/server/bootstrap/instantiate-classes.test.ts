@@ -14,16 +14,17 @@ describe("instantiateBuiltinClassObjects", () => {
       const res = await instantiateBuiltinClassObjects({ baseDir });
 
       expect(res.instantiated).toContain("supervisor");
-      // user 不带 instantiate_with_new_world → 不实例化
-      expect(res.instantiated).not.toContain("user");
+      // Wave4：instantiate_with_new_world 字段废弃，改按 ooc.kind==="object" 判定。
+      // supervisor / user / feishu_app（BUILTIN_OBJECT_IDS）皆 kind:"object" → 均实例化。
+      expect(res.instantiated).toContain("user");
 
       const dir = stoneDir({ baseDir, objectId: "supervisor" });
       expect(dir.includes("/objects/supervisor")).toBe(true);
       expect(existsSync(join(dir, "package.json"))).toBe(true);
 
-      // package.json 带 ooc.class 指向框架 class
+      // package.json 带 ooc.class 指向该 builtin 包声明的父类（supervisor 是 agent → _builtin/agent）
       const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
-      expect(pkg.ooc.class).toBe("_builtin/supervisor");
+      expect(pkg.ooc.class).toBe("_builtin/agent");
       expect(pkg.ooc.kind).toBe("object");
 
       // instance self.md = class self.md 拷贝（非空、含身份）

@@ -1,25 +1,52 @@
 /**
  * talk-delivery unit tests — focused on the super alias path
  * (super-flow-channel). The existing same-session happy path
- * is covered by step2-windows.test.ts; this file targets:
+ * is covered elsewhere; this file targets:
  *
  *  - regression: non-"super" target still dispatches to caller's session
  *  - happy: target="super" creates flows/super/.session.json + flows/super/<caller>/
  *  - edge: caller already in super session calling target="super" stays inside super
+ *
+ * Wave 4 对象模型：talk_window 是 thread 实例（inst.class=THREAD_CLASS_ID）；会话业务字段
+ * （target/targetThreadId）落 inst.data（=TalkData）。`deliverTalkMessage` 的 caller.talkWindow
+ * 期望扁平 `TalkWindowView`（id/class + TalkData 扁平），故本测试把实例信封 ↔ 扁平视图互转。
  */
 import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdir } from "node:fs/promises";
-import { createFlowObject, createFlowSession, nestedObjectPath } from "../../../persistable";
+import {
+  createFlowObject,
+  createFlowSession,
+  nestedObjectPath,
+  stoneDir,
+  STONES_MAIN_BRANCH,
+} from "@ooc/core/persistable/index.js";
 import { readThread, writeThread } from "../persistable/thread-json";
-import { stoneDir, STONES_MAIN_BRANCH } from "../../../persistable/common";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID, THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
-import { ROOT_WINDOW_ID, generateWindowId, type TalkWindow } from "@ooc/core/_shared/types/context-window.js";
-import type { ThreadContext } from "../../../thinkable/context";
+import {
+  ROOT_WINDOW_ID,
+  generateWindowId,
+  isCreatorWindowId,
+} from "@ooc/core/_shared/types/context-window.js";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import type { ThreadContext } from "@ooc/core/thinkable/context.js";
+import type { TalkData, TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
+
+/** 把会话窗实例信封还原成 delivery 期望的扁平 TalkWindowView（id/class + TalkData 扁平）。 */
+function asTalkWindowView(inst: OocObjectInstance): TalkWindowView {
+  const data = (inst.data ?? {}) as TalkData;
+  return {
+    id: inst.id,
+    class: inst.class,
+    target: data.target,
+    targetThreadId: data.targetThreadId,
+    isForkWindow: data.isForkWindow,
+  };
+}
 
 async function setupCaller(opts: {
   baseDir: string;
@@ -28,7 +55,7 @@ async function setupCaller(opts: {
   target: string;
   /** caller 是否 canonical（stones/main/objects/<id>/ 存在）；默认 true。super-alias 自指路径靠它。 */
   canonical?: boolean;
-}): Promise<{ thread: ThreadContext; talkWindow: TalkWindow }> {
+}): Promise<{ thread: ThreadContext; talkWindow: TalkWindowView }> {
   await createFlowSession(opts.baseDir, opts.sessionId);
   if (opts.canonical !== false) {
     // canonical = stones/main/objects/<nestedPath>/ 存在（与 ensureAuthorExists / resolveSuperActor 同寻址）。
@@ -50,20 +77,20 @@ async function setupCaller(opts: {
     persistence: { ...flow, threadId: "root" },
   };
   initContextWindows(thread, { initialTaskTitle: "test caller" });
+  // peer talk_window：thread 实例（inst.class=THREAD_CLASS_ID），target 落 inst.data。
   const talkWindowId = generateWindowId("talk");
-  const talkWindow: TalkWindow = {
+  const talkInstance: OocObjectInstance<TalkData> = {
     id: talkWindowId,
-    class: "talk",
-    parentWindowId: ROOT_WINDOW_ID,
+    class: THREAD_CLASS_ID,
+    parentObjectId: ROOT_WINDOW_ID,
     title: `talk-${opts.target}`,
     status: "open",
     createdAt: Date.now(),
-    target: opts.target,
-    conversationId: talkWindowId,
+    data: { target: opts.target },
   };
-  thread.contextWindows = [...thread.contextWindows, talkWindow];
+  thread.contextWindows = [...thread.contextWindows, talkInstance];
   await writeThread(thread);
-  return { thread, talkWindow };
+  return { thread, talkWindow: asTalkWindowView(talkInstance) };
 }
 
 describe("talk-delivery target='super' alias", () => {
@@ -192,10 +219,10 @@ describe("talk-delivery target='super' alias", () => {
 
   // super→origin 回报通道回归：
   // super-alice（super session）通过 creator talk_window 回报创建者 alice（user session）。
-  // 修复前：creator window 被 init 误判为 do_window → do_window.continue/say 路由进自身
+  // 修复前：creator window 被 init 误判为 do_window → continue/say 路由进自身
   // （super）session → 永远找不到 user-session 的创建者 thread → 静默失败。
-  // 修复后：(1) init 给 cross-session creator 落 talk_window；(2) delivery 按 creatorSessionId
-  // 把回报派回 user session 的原始创建者 thread。
+  // 修复后：(1) init 给 cross-session creator 落会话窗（super self-view 投影 reflect_request）；
+  // (2) delivery 按 creatorSessionId 把回报派回 user session 的原始创建者 thread。
   it("super->origin: creator talk_window reply routes back to caller's session", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "ooc-tdsa-"));
     try {
@@ -229,19 +256,22 @@ describe("talk-delivery target='super' alias", () => {
         creatorSessionId: "web-test",
         persistence: { ...superFlow, threadId: "t_super_alice" },
       };
-      // creator window 类型由 init 决定：super 反思 thread（cross-session 同 object）→
-      // reflect_request（会话面 + 沉淀方法，复用 talk 的会话/回报机制；非 talk、非 do）。
+      // creator window 由 init 注入：会话窗实例（inst.class=THREAD_CLASS_ID）。
+      // super 反思 thread（cross-session 同 object）→ self-view → projection 算出 reflect_request；
+      // 会话业务字段 target/targetThreadId 落 inst.data。
       initContextWindows(superAlice, { creatorThreadId: "root", initialTaskTitle: "reflect" });
-      const creator = superAlice.contextWindows.find((w) => (w as TalkWindow).isCreatorWindow);
+      const creator = superAlice.contextWindows.find((w) => isCreatorWindowId(w.id));
       expect(creator).toBeDefined();
-      expect(creator!.class).toBe("reflect_request"); // ← super 反思会话面是 reflect_request
-      expect((creator as TalkWindow).target).toBe("alice");
-      expect((creator as TalkWindow).targetThreadId).toBe("root");
+      // 投影 class 不持久化——存储信封 class 一律 THREAD_CLASS_ID；会话字段在 data。
+      expect(creator!.class).toBe(THREAD_CLASS_ID);
+      const creatorData = (creator!.data ?? {}) as TalkData;
+      expect(creatorData.target).toBe("alice");
+      expect(creatorData.targetThreadId).toBe("root");
       await writeThread(superAlice);
 
-      // 3) super-alice 通过 creator talk_window 回报
+      // 3) super-alice 通过 creator talk_window 回报（扁平视图传给 delivery）。
       const delivered = await deliverTalkMessage({
-        caller: { thread: superAlice, talkWindow: creator as TalkWindow },
+        caller: { thread: superAlice, talkWindow: asTalkWindowView(creator!) },
         content: "已沉淀：见 memory/x.md",
         source: "talk",
       });

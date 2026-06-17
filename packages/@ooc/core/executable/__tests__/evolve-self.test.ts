@@ -24,10 +24,26 @@ import {
   readSelf,
   resolvePrIssue,
 } from "@ooc/core/persistable";
-import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/reflect_request/method.create-pr-and-invite-reviewers";
-import { executeNewFeatBranch } from "@ooc/builtins/reflect_request/method.new-feat-branch";
-import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
-import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
+import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/agent/thread/executable/method.create-pr-and-invite-reviewers.js";
+import { executeNewFeatBranch } from "@ooc/builtins/agent/thread/executable/method.new-feat-branch.js";
+import { construct as fileConstruct } from "@ooc/builtins/filesystem/file/executable/construct.js";
+import type {
+  ExecutableContext,
+  ConstructorContext,
+} from "@ooc/core/executable/contract.js";
+
+/**
+ * Wave4 后 write_file 是 file class 的 construct 分支（args 带 content → 写 worktree）。
+ * 旧的独立 writeFileExec 已退役，写盘逻辑下沉到 file construct——这里直接驱动 construct.exec
+ * 模拟 super(foo) 在 feat 绑定下用 write_file 落 feat worktree。
+ */
+async function executeWriteFileMethod(ctx: { thread?: unknown; args: Record<string, unknown> }): Promise<{ ok: true; path: string }> {
+  const data = await fileConstruct.exec(
+    { thread: ctx.thread, args: ctx.args } as unknown as ConstructorContext,
+    ctx.args,
+  );
+  return { ok: true, path: (data as { path: string }).path };
+}
 
 let tempRoots: string[] = [];
 
@@ -75,8 +91,17 @@ function superThread(baseDir: string, objectId: string) {
   };
 }
 
-function ctxWith(thread: unknown, args: Record<string, unknown>): MethodExecutionContext {
-  return { thread, args } as unknown as MethodExecutionContext;
+function ctxWith(thread: unknown, args: Record<string, unknown>): ExecutableContext {
+  return { thread, args } as unknown as ExecutableContext;
+}
+
+/** new_feat_branch exec 是 (ctx, args)；测试直接驱动。 */
+function runNewFeatBranch(thread: unknown, args: Record<string, unknown>) {
+  return executeNewFeatBranch(ctxWith(thread, args), args);
+}
+/** create_pr_and_invite_reviewers exec 是 (ctx, args)；测试直接驱动。 */
+function runCreatePr(thread: unknown, args: Record<string, unknown>) {
+  return executeCreatePrAndInviteReviewers(ctxWith(thread, args), args);
 }
 
 describe("reflectable 沉淀 finalizer（new_feat_branch + 直接编辑 + create_pr_and_invite_reviewers）", () => {
@@ -86,7 +111,7 @@ describe("reflectable 沉淀 finalizer（new_feat_branch + 直接编辑 + create
 
     // 1) new_feat_branch
     const open = JSON.parse(
-      (await executeNewFeatBranch(ctxWith(thread, { intent: "tighten self identity" }))) as string,
+      (await runNewFeatBranch(thread, { intent: "tighten self identity" })) as string,
     );
     expect(open.ok).toBe(true);
     expect(open.branch).toBe("feat/tighten-self-identity");
@@ -104,7 +129,7 @@ describe("reflectable 沉淀 finalizer（new_feat_branch + 直接编辑 + create
     expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v1\n");
 
     // 3) create_pr_and_invite_reviewers finalize
-    const r = JSON.parse((await executeCreatePrAndInviteReviewers(ctxWith(thread, {}))) as string);
+    const r = JSON.parse((await runCreatePr(thread, {})) as string);
     expect(r.ok).toBe(true);
     expect(r.kind).toBe("pr-issue");
     expect(typeof r.issueId).toBe("number");
@@ -124,14 +149,14 @@ describe("reflectable 沉淀 finalizer（new_feat_branch + 直接编辑 + create
   test("cross-scope：write_file 触及 bob → reviewers 含 bob + supervisor", async () => {
     const baseDir = await newWorld(["alice", "bob"]);
     const thread = superThread(baseDir, "alice");
-    await executeNewFeatBranch(ctxWith(thread, { intent: "share into bob" }));
+    await runNewFeatBranch(thread, { intent: "share into bob" });
     await executeWriteFileMethod(
       ctxWith(thread, { path: "stones/alice/self.md", content: "alice v2\n" }),
     );
     await executeWriteFileMethod(
       ctxWith(thread, { path: "stones/bob/readable.md", content: "bob touched by alice\n" }),
     );
-    const r = JSON.parse((await executeCreatePrAndInviteReviewers(ctxWith(thread, {}))) as string);
+    const r = JSON.parse((await runCreatePr(thread, {})) as string);
     expect(r.ok).toBe(true);
     expect(r.reviewers.sort()).toEqual(["bob", "supervisor"]);
     expect(await readFile(mainSelf(baseDir, "alice"), "utf8")).toBe("alice v1\n");
@@ -141,11 +166,11 @@ describe("reflectable 沉淀 finalizer（new_feat_branch + 直接编辑 + create
   test("interim 端到端：create_pr_and_invite_reviewers 开 PR → resolvePrIssue(merge) 合入 main", async () => {
     const baseDir = await newWorld(["alice"]);
     const thread = superThread(baseDir, "alice");
-    await executeNewFeatBranch(ctxWith(thread, { intent: "land alice v2" }));
+    await runNewFeatBranch(thread, { intent: "land alice v2" });
     await executeWriteFileMethod(
       ctxWith(thread, { path: "stones/alice/self.md", content: "alice v2 merged\n" }),
     );
-    const r = JSON.parse((await executeCreatePrAndInviteReviewers(ctxWith(thread, {}))) as string);
+    const r = JSON.parse((await runCreatePr(thread, {})) as string);
     expect(r.ok).toBe(true);
 
     const resolved = await resolvePrIssue({ baseDir, issueId: r.issueId, decision: "merge" });
@@ -163,14 +188,14 @@ describe("reflectable 沉淀 finalizer（new_feat_branch + 直接编辑 + create
       contextWindows: [],
       events: [],
     };
-    const out = await executeNewFeatBranch(ctxWith(bizThread, { intent: "x" }));
+    const out = await runNewFeatBranch(bizThread, { intent: "x" });
     expect(out).toContain("仅 super flow");
   });
 
   test("fail-loud: create_pr_and_invite_reviewers 无 feat 绑定 → 提示先 new_feat_branch，main 不变", async () => {
     const baseDir = await newWorld(["alice"]);
     const thread = superThread(baseDir, "alice");
-    const out = await executeCreatePrAndInviteReviewers(ctxWith(thread, {}));
+    const out = await runCreatePr(thread, {});
     const r = JSON.parse(out as string);
     expect(r.ok).toBe(false);
     expect(JSON.stringify(r.missing)).toContain("new_feat_branch");
@@ -180,8 +205,8 @@ describe("reflectable 沉淀 finalizer（new_feat_branch + 直接编辑 + create
   test("fail-loud: create_pr_and_invite_reviewers 绑定后未编辑就 finalize → NO_CHANGES，绑定保留", async () => {
     const baseDir = await newWorld(["alice"]);
     const thread = superThread(baseDir, "alice");
-    await executeNewFeatBranch(ctxWith(thread, { intent: "noop" }));
-    const out = await executeCreatePrAndInviteReviewers(ctxWith(thread, {}));
+    await runNewFeatBranch(thread, { intent: "noop" });
+    const out = await runCreatePr(thread, {});
     expect(out).toContain("NO_CHANGES");
     // 绑定保留供继续编辑后重试
     expect((thread.persistence as Record<string, unknown>).stonesBranch).toBe("feat/noop");

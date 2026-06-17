@@ -45,6 +45,7 @@ import { AppServerError } from "@ooc/core/app/server/bootstrap/errors";
 // 触发 windows 各 type 副作用注册
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import type { ObjectMethod } from "@ooc/core/executable/contract.js";
 
 // ─────────────────────────── helpers ──────────────────────────────────────────
 
@@ -123,25 +124,19 @@ function ts(): string {
 
 // ─────────────────────────── fixture: fake commands ───────────────────────────
 
-// registerExecutable 对 methods 整表替换——merge 进现有 ROOT_METHODS 并 afterAll 还原，
-// 避免抹掉 talk/do/todo 污染全局 builtinRegistry（详见 q0b 注释）。
-let originalRootMethods: Record<string, unknown>;
+// Wave 4：把 fake object method 注册到 root.executable（permission 经 tryWindow("root") 兜底
+// 解析；root 锚点仅 readable、register 合并保留它）。afterAll 用空 methods 数组还原（详见 q0b 注释）。
+const safeMethod: ObjectMethod = {
+  name: "_test_q0c_safe",
+  description: "test q0c safe method",
+  exec: () => ({ message: "executed-q0c-safe" }),
+};
 beforeAll(() => {
-  originalRootMethods = builtinRegistry.getObjectDefinition("root").methods;
-  builtinRegistry.registerExecutable("root", {
-    methods: {
-      ...originalRootMethods,
-      _test_q0c_safe: {
-        description: "test q0c safe method",
-        intents: ["_test_q0c_safe"],
-        exec: () => ({ ok: true, result: "executed-q0c-safe" }),
-      },
-    } as never,
-  });
+  builtinRegistry.register("root", { executable: { methods: [safeMethod] } });
 });
 
 afterAll(() => {
-  builtinRegistry.registerExecutable("root", { methods: originalRootMethods as never });
+  builtinRegistry.register("root", { executable: { methods: [] } });
 });
 
 afterEach(() => {

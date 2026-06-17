@@ -2,32 +2,49 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
+// 注册窗类型（thread/plan/todo/knowledge/file…）进 builtinRegistry —— 否则 render 期
+// resolveReadable 取不到投影，全部落 placeholder（Wave4：窗类型经 side-effect import 自声明）。
+import "@ooc/core/runtime/register-builtins.js";
 import { buildContext, buildInputItems, type ThreadContext } from "../context";
 import { clearKnowledgeLoaderCache } from "../knowledge";
 import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf, ensureStoneRepo, ensureSessionWorktree } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
-  type MethodExecWindow,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
 import { makeThread } from "../../__tests__/make-thread";
 
-/** 构造一个 method_exec window，便于 context render 测试 */
-function execForm(overrides: Partial<MethodExecWindow>): MethodExecWindow {
+/**
+ * 构造一个 method_exec window（Wave4 对象模型：业务字段进 inst.data）。
+ * activator 的 `method::<type>::<m>` trigger 读 inst.data.method，故 method 必落 data。
+ */
+function execForm(overrides: {
+  id?: string;
+  method?: string;
+  status?: ContextWindow["status"];
+  createdAt?: number;
+  title?: string;
+  accumulatedArgs?: Record<string, unknown>;
+  intentPaths?: string[];
+  result?: string;
+}): ContextWindow {
+  const method = overrides.method ?? "program";
   return {
     id: overrides.id ?? "f_x",
     class: "method_exec",
-    parentWindowId: ROOT_WINDOW_ID,
+    parentObjectId: ROOT_WINDOW_ID,
     title: overrides.title ?? "form",
     status: overrides.status ?? "open",
     createdAt: overrides.createdAt ?? 1,
-    method: overrides.method ?? "program",
-    description: overrides.description ?? "form description",
-    accumulatedArgs: overrides.accumulatedArgs ?? {},
-    intentPaths: overrides.intentPaths ?? [overrides.method ?? "program"],
-    loadedKnowledgePaths: overrides.loadedKnowledgePaths ?? [],
-    methodKnowledgePaths: overrides.methodKnowledgePaths,
-    result: overrides.result,
+    data: {
+      method,
+      description: "form description",
+      accumulatedArgs: overrides.accumulatedArgs ?? {},
+      intentPaths: overrides.intentPaths ?? [method],
+      loadedKnowledgePaths: [],
+      status: overrides.status ?? "open",
+      result: overrides.result,
+    },
   };
 }
 
@@ -147,39 +164,41 @@ describe("buildContext (ContextWindow model)", () => {
         },
       ],
       extraWindows: [
-        // 普通 fork 子窗(非 creator)同样指向 t_creator
+        // 普通 fork 子窗(非 creator)同样指向 t_creator。Wave4：stored class=_builtin/agent/thread；
+        // resolveInboxWindowId 的 fork 判据读窗实例顶层 isForkWindow/targetThreadId。
         {
           id: "w_fork_other",
-          class: "talk",
-          parentWindowId: ROOT_WINDOW_ID,
+          class: "_builtin/agent/thread",
+          parentObjectId: ROOT_WINDOW_ID,
           title: "non-creator",
           status: "open",
           createdAt: 1,
-          target: "alice",
           targetThreadId: "t_creator",
           isForkWindow: true,
+          data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true },
         },
-        // creator fork 窗应被优先选中
+        // creator fork 窗应被优先选中（creator 身份编码在 id=w_creator_<本thread.id>）。
         {
-          id: "w_fork_creator",
-          class: "talk",
-          parentWindowId: ROOT_WINDOW_ID,
+          id: "w_creator_t_child",
+          class: "_builtin/agent/thread",
+          parentObjectId: ROOT_WINDOW_ID,
           title: "creator",
           status: "open",
           createdAt: 1,
-          target: "alice",
           targetThreadId: "t_creator",
           isForkWindow: true,
-          isCreatorWindow: true,
+          data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true },
         },
-      ] as ContextWindow[],
+        // 顶层 isForkWindow/targetThreadId 是 resolveInboxWindowId 的判据（index.ts:64-65 经
+        // `as {…}` 读信封顶层），但 OocObjectInstance 不声明这两字段 → unknown 转换。
+      ] as unknown as ContextWindow[],
     });
     const out = await buildInputItems(thread);
     const item = out.input.find(
       (i) => i.type === "message" && i.role === "system" && i.content.includes("[context_change:inbox_message_arrived]"),
     ) as { content: string } | undefined;
     const header = item!.content.split("\n", 2)[0]!;
-    expect(header).toContain("window_id=w_fork_creator");
+    expect(header).toContain("window_id=w_creator_t_child");
     expect(header).not.toContain("window_id=w_fork_other");
   });
 
@@ -265,16 +284,15 @@ describe("buildContext (ContextWindow model)", () => {
       id: "t_parent",
       creatorThreadId: "t_root",
     });
-    // thread.plan 字段已废弃；用 plan_window 验证 plan 已渲染。
+    // thread.plan 字段已废弃；用 plan_window 验证 plan 已渲染。Wave4：业务字段进 inst.data。
     const planId = `${thread.id}_plan`;
     thread.contextWindows.push({
       id: planId,
-      class: "plan",
+      class: "_builtin/agent/plan", // 注册 class id；readable 投影成 class="plan"
       title: "Plan",
       status: "active",
       createdAt: 0,
-      description: "先处理 inbox",
-      steps: [],
+      data: { title: "Plan", description: "先处理 inbox", steps: [] },
     } as ContextWindow);
     const messages = await buildContext(thread);
     expect(messages).toHaveLength(1);
@@ -284,16 +302,17 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain("<creator_thread_id>t_root</creator_thread_id>");
     expect(xml).toContain("<description>先处理 inbox</description>");
     expect(xml).toContain("<context_windows>");
-    expect(xml).toContain('class="talk"');
+    // Wave4：creator 自视窗投影 class=thread（self-view 非 super）；plan 实例投影 class=plan。
+    expect(xml).toContain('class="thread"');
     expect(xml).toContain('class="plan"');
     expect(xml).toContain("<is_creator_window>true</is_creator_window>");
     // 方法契约在 class 声明层（<window_classes>）声明一次，实例 window 不再带 <methods>。
     expect(xml).toContain("<window_classes");
-    // talk class 的方法（say/share/close…）在 <class name="talk"> 内声明
+    // thread/plan class 的方法在各自 <class name=...> 内声明
     const wcStart = xml.indexOf("<window_classes");
     const wcEnd = xml.indexOf("</window_classes>");
     const wcBlock = xml.slice(wcStart, wcEnd);
-    expect(wcBlock).toContain('<class name="talk">');
+    expect(wcBlock).toContain('<class name="thread">');
     expect(wcBlock).toContain('<class name="plan">');
     // 负断言：实例 window 不含 <methods> 节点（菜单已搬走，不逐实例重复）
     const cwStart = xml.indexOf("<context_windows>");
@@ -323,48 +342,23 @@ describe("buildContext (ContextWindow model)", () => {
     expect(xml).toContain('class="expert"'); // 未注册 peer 仍以占位/可用形式渲染
   });
 
-  it("renders method_exec form result only when status=failed (四态机)", async () => {
-    const thread = makeThread({
-      id: "t_status",
-      extraWindows: [
-        execForm({ id: "f_open", status: "open" }),
-        execForm({ id: "f_executing", status: "executing" }),
-        execForm({
-          id: "f_failed",
-          status: "failed",
-          result: "$ ls\n[stdout]\nfoo\n[exit 0]",
-        }),
-      ],
-    });
-    const messages = await buildContext(thread);
-    const xml = messages[0]!.content;
-    expect(xml).toContain('id="f_open" class="method_exec" status="open"');
-    expect(xml).toContain('id="f_executing" class="method_exec" status="executing"');
-    expect(xml).toContain('id="f_failed" class="method_exec" status="failed"');
-
-    function sliceWindow(id: string): string {
-      const start = xml.indexOf(`id="${id}"`);
-      const end = xml.indexOf("</window>", start) + "</window>".length;
-      return xml.slice(start, end);
-    }
-    expect(sliceWindow("f_failed")).toContain("<result>$ ls");
-    expect(sliceWindow("f_open")).not.toContain("<result>");
-    expect(sliceWindow("f_executing")).not.toContain("<result>");
-  });
+  // 删除（退役机制）：「method_exec form 四态机 + status=failed 时渲 <result>」是已废的 form
+  // 机制本身。Wave4 form 机制整体退役（method_exec_form Class 为空占位、无 readable、不再渲 <result>），
+  // method_exec 窗只剩信封 status，由 placeholder 投影。该 TC 测的 result-rendering 状态机已不存在。
 
   it("renders todo_window content + activates_on", async () => {
     const thread = makeThread({
       id: "t_todo",
       extraWindows: [
         {
+          // Wave4：实例 inst.class = 注册 class id（_builtin/agent/todo）；readable 投影成 class="todo"。
           id: "w_todo_1",
-          class: "todo",
-          parentWindowId: ROOT_WINDOW_ID,
+          class: "_builtin/agent/todo",
+          parentObjectId: ROOT_WINDOW_ID,
           title: "记一笔",
           status: "open",
           createdAt: 1,
-          content: "记得加单测",
-          activatesOn: ["program.shell"],
+          data: { content: "记得加单测", activatesOn: ["program.shell"] },
         },
       ] as ContextWindow[],
     });
@@ -382,9 +376,10 @@ describe("buildContext (ContextWindow model)", () => {
     const thread = makeThread({
       id: "t_dup",
       extraWindows: [
-        { id: "k1", class: "knowledge", parentWindowId: ROOT_WINDOW_ID, title: "k1", status: "open", createdAt: 1, path: "a", source: "explicit", body: "A" },
-        { id: "k2", class: "knowledge", parentWindowId: ROOT_WINDOW_ID, title: "k2", status: "open", createdAt: 1, path: "b", source: "explicit", body: "B" },
-        { id: "k3", class: "knowledge", parentWindowId: ROOT_WINDOW_ID, title: "k3", status: "open", createdAt: 1, path: "c", source: "explicit", body: "C" },
+        // 实例 inst.class = 注册 class id（_builtin/knowledge_base/knowledge）；readable 投影成 class="knowledge"。
+        { id: "k1", class: "_builtin/knowledge_base/knowledge", parentObjectId: ROOT_WINDOW_ID, title: "k1", status: "open", createdAt: 1, data: { path: "a", source: "explicit", body: "A" } },
+        { id: "k2", class: "_builtin/knowledge_base/knowledge", parentObjectId: ROOT_WINDOW_ID, title: "k2", status: "open", createdAt: 1, data: { path: "b", source: "explicit", body: "B" } },
+        { id: "k3", class: "_builtin/knowledge_base/knowledge", parentObjectId: ROOT_WINDOW_ID, title: "k3", status: "open", createdAt: 1, data: { path: "c", source: "explicit", body: "C" } },
       ] as ContextWindow[],
     });
     const messages = await buildContext(thread);
@@ -401,6 +396,8 @@ describe("buildContext (ContextWindow model)", () => {
     expect(cw).not.toContain("<methods");
   });
 
+  // 顶层 inbox 对被窗 transcript 收纳的消息去重（ReadableProjection.consumedMessageIds，
+  // commit 69daf4c0 修复 #4）：msg_in_child 进 fork 窗后从顶层 <inbox> 剔除，msg_in_other 保留。
   it("filters fork talk_window transcript by targetThreadId; top-level inbox excludes consumed messages", async () => {
     const thread = makeThread({
       id: "t_p",
@@ -425,14 +422,12 @@ describe("buildContext (ContextWindow model)", () => {
       extraWindows: [
         {
           id: "w_fork_child",
-          class: "talk",
-          parentWindowId: ROOT_WINDOW_ID,
+          class: "_builtin/agent/thread",
+          parentObjectId: ROOT_WINDOW_ID,
           title: "对子线程",
           status: "open",
           createdAt: 1,
-          target: "alice",
-          targetThreadId: "t_child",
-          isForkWindow: true,
+          data: { target: "alice", targetThreadId: "t_child", isForkWindow: true },
         },
       ] as ContextWindow[],
     });
@@ -440,7 +435,7 @@ describe("buildContext (ContextWindow model)", () => {
     const xml = messages[0]!.content;
     // creator window 也是一种 fork talk_window，targetThreadId="__session__"，会过滤；t_other 没归入任何 fork 窗
     expect(xml).toContain('<message id="msg_in_child"');
-    // top level inbox 应该不再含 msg_in_child（已被 w_do_child 收纳）
+    // top level inbox 应该不再含 msg_in_child（已被 w_fork_child 收纳）
     const inboxStart = xml.indexOf("<inbox>");
     if (inboxStart !== -1) {
       const inboxEnd = xml.indexOf("</inbox>", inboxStart);
@@ -490,6 +485,8 @@ describe("buildContext (ContextWindow model)", () => {
     ]);
   });
 
+  // 合成 knowledge window 现用注册 class id KNOWLEDGE_CLASS_ID（commit 69daf4c0 修复 #3），
+  // resolveReadable 命中 knowledge readable，body 正常渲染（不再落 placeholder）。
   it("always injects executable basic knowledge into system context", async () => {
     const messages = await buildContext(makeThread({ id: "t1" }));
     const xml = messages[0]?.content ?? "";
@@ -539,6 +536,8 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     clearKnowledgeLoaderCache();
   });
 
+  // activator 合成 knowledge window 用 KNOWLEDGE_CLASS_ID（修复 #3）→ readable 命中，
+  // summary/full presentation 正常渲染。
   it("renders summary entry when only show_description_when hits", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-kn-"));
     await createStoneObject({ baseDir: tempRoot, objectId: "agent" });

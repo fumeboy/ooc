@@ -23,6 +23,9 @@
  *   bun --env-file=.env test tests/integration/super-flow-channel.integration.test.ts
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+// side-effect：装载全部 builtin class（thread / agent / file …）进 builtinRegistry，
+// 否则 createFlowObject 会话窗 class `_builtin/agent/thread` 解析不到 → delivery 落不下去。
+import "@ooc/core/runtime/register-builtins.js";
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { runScheduler } from "@ooc/core/thinkable/scheduler";
@@ -38,8 +41,13 @@ import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
-  type TalkWindow,
+  type OocObjectInstance,
 } from "@ooc/core/_shared/types/context-window.js";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import type {
+  TalkData,
+  TalkWindowView,
+} from "@ooc/builtins/agent/thread/types.js";
 import {
   hasLlmEnv,
   llm,
@@ -87,28 +95,34 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
     };
     initContextWindows(aliceRoot, { initialTaskTitle: "alice main task" });
 
-    // 3) alice 挂一个 target="super" 的 talk_window，模拟 LLM 已经 open 过
+    // 3) alice 挂一个 target="super" 的会话窗（Wave4：stored class = THREAD_CLASS_ID，
+    //    target 落 inst.data；talk 只是 readable 投影 class，按 isTalkLikeClass 认 thread class）。
     const talkWindowId = generateWindowId("talk");
-    const superTalkWindow: TalkWindow = {
+    const superTalkWindow: OocObjectInstance<TalkData> = {
       id: talkWindowId,
-      class: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
+      class: THREAD_CLASS_ID,
+      parentObjectId: ROOT_WINDOW_ID,
       title: "ask self for reflection",
       status: "open",
       createdAt: Date.now(),
-      target: "super",
-      conversationId: talkWindowId,
+      data: { target: "super" },
     };
     aliceRoot.contextWindows = [...aliceRoot.contextWindows, superTalkWindow];
     await writeThread(aliceRoot);
 
     // 4) 直接调 deliverTalkMessage 模拟 alice say()——避免依赖 LLM 真的 open
-    //    talk method（那是 U1 的 happy path 验证；此处验证 delivery 落点正确）
+    //    talk method（那是 U1 的 happy path 验证；此处验证 delivery 落点正确）。
+    //    deliverTalkMessage 收 TalkWindowView（扁平 DTO：信封 id/class + TalkData）。
     //
     //    注意：prompt 故意 *不* 提 "reflectable" / "super" 等可能让 marker 检查
     //    误判的字串——hasReflectable 必须只在 U3 的注入路径生效时才通过。
+    const superTalkView: TalkWindowView = {
+      id: superTalkWindow.id,
+      class: superTalkWindow.class,
+      ...superTalkWindow.data,
+    };
     const delivered = await deliverTalkMessage({
-      caller: { thread: aliceRoot, talkWindow: superTalkWindow },
+      caller: { thread: aliceRoot, talkWindow: superTalkView },
       content: "请简要确认你看到了 Phase 1 测试提示，然后 end。",
       source: "talk",
     });

@@ -1,22 +1,27 @@
 /**
- * worktree 重定向——file builtin 路径（write_file / open_file / edit）的端到端验证。
+ * worktree 重定向——file class 路径（write_file / open_file / edit）的端到端验证。
  *
- * 验证 worktree 统一模型：
+ * 验证 worktree 统一模型（Wave 4 对象模型：file 是非单例 class）：
  * - 业务 session 对自己 stone identity 文件的 write_file → 落该 session 的 worktree（main 不变）。
  * - open_file 自己 stone 文件时：已建 worktree（改过）读 worktree，未建读 main canonical。
- * - file_window.edit 对自己 stone 文件 → 改动落 worktree（worktree 是 main 完整副本，读写同一路径）。
- * - 别 session / super flow 不受影响（读写 canonical main）。
+ * - file.edit object method 对自己 stone 文件 → 改动落 worktree（worktree 是 main 完整副本，读写同一路径）。
+ * - super flow 不受影响（读写 canonical main）。
+ *
+ * write_file / open_file 逻辑现在在 `Class.construct.exec(ctx,args)=>Data{path}`（两分支由 args
+ * 是否带 content 区分）；edit 是 file class 的 object method `editMethod.exec(ctx,self,args)`。
+ * 旧 `writeFileExec / openFileExec / executeFileWindowEdit` 命名导出 + `{ ok, window }` 返回形态 +
+ * `MethodExecutionContext` 均已退役。
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
-import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
-import { openFileExec as executeOpenFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
-import { executeFileWindowEdit } from "@ooc/builtins/filesystem/file/executable/index";
-import type { MethodExecutionContext } from "@ooc/core/extendable/_shared/method-types";
-import type { FileWindow } from "@ooc/builtins/filesystem/file/types";
+import { construct as fileConstruct } from "@ooc/builtins/filesystem/file/executable/construct.js";
+import { Class as FileClass } from "@ooc/builtins/filesystem/file";
+import type { Data as FileData } from "@ooc/builtins/filesystem/file/types";
+
+const editMethod = FileClass.executable!.methods.find((m) => m.name === "edit")!;
 
 let tempRoots: string[] = [];
 
@@ -50,19 +55,20 @@ async function newWorld(agents: string[]): Promise<string> {
   return baseDir;
 }
 
+/** 最小 ConstructorContext / ExecutableContext stub（construct / edit 只用到 thread + args + self）。 */
 function ctxFor(
   baseDir: string,
   objectId: string,
   sessionId: string,
   args: Record<string, unknown>,
-  self?: unknown,
-): MethodExecutionContext {
+  self?: FileData,
+) {
   const thread = {
     persistence: { baseDir, objectId, sessionId, threadId: "t" },
     contextWindows: [] as unknown[],
     events: [] as unknown[],
   };
-  return { thread, args, self } as unknown as MethodExecutionContext;
+  return { thread, args, self, runtime: undefined, reportDataEdit: async () => {} } as never;
 }
 
 function mainObjectsDir(baseDir: string): string {
@@ -74,24 +80,14 @@ function worktreeObjDir(baseDir: string, sessionId: string, objectId: string): s
   return join(baseDir, "flows", sessionId, "objects", objectId);
 }
 
-function asFileWindow(out: unknown): FileWindow {
-  if (typeof out === "object" && out && (out as { ok?: boolean }).ok === true && "window" in (out as object)) {
-    return (out as { window: FileWindow }).window;
-  }
-  throw new Error(`expected success constructor outcome, got ${JSON.stringify(out)}`);
-}
-
 describe("file worktree redirect", () => {
   test("write_file own stone → worktree; main unchanged", async () => {
     const baseDir = await newWorld(["alice"]);
-    const out = await executeWriteFileMethod(
-      ctxFor(baseDir, "alice", "s1", {
-        path: "stones/alice/self.md",
-        content: "alice v2 (worktree)\n",
-      }),
-    );
-    const win = asFileWindow(out);
-    expect(win.path).toBe(join(worktreeObjDir(baseDir, "s1", "alice"), "self.md"));
+    const data = (await fileConstruct.exec(
+      ctxFor(baseDir, "alice", "s1", {}),
+      { path: "stones/alice/self.md", content: "alice v2 (worktree)\n" },
+    )) as FileData;
+    expect(data.path).toBe(join(worktreeObjDir(baseDir, "s1", "alice"), "self.md"));
 
     expect(await readFile(join(worktreeObjDir(baseDir, "s1", "alice"), "self.md"), "utf8")).toBe(
       "alice v2 (worktree)\n",
@@ -104,40 +100,35 @@ describe("file worktree redirect", () => {
   test("open_file own stone with prior worktree write → window points at worktree", async () => {
     const baseDir = await newWorld(["alice"]);
     // 先在 s1 写 → lazy 建 worktree
-    await executeWriteFileMethod(
-      ctxFor(baseDir, "alice", "s1", { path: "stones/alice/self.md", content: "WORKTREE\n" }),
-    );
-    // open_file 同 session → 命中 worktree
-    const opened = asFileWindow(
-      await executeOpenFileMethod(ctxFor(baseDir, "alice", "s1", { path: "stones/alice/self.md" })),
-    );
+    await fileConstruct.exec(ctxFor(baseDir, "alice", "s1", {}), {
+      path: "stones/alice/self.md",
+      content: "WORKTREE\n",
+    });
+    // open_file 同 session → 命中 worktree（无 content → open 分支）
+    const opened = (await fileConstruct.exec(ctxFor(baseDir, "alice", "s1", {}), {
+      path: "stones/alice/self.md",
+    })) as FileData;
     expect(opened.path).toBe(join(worktreeObjDir(baseDir, "s1", "alice"), "self.md"));
     expect(await readFile(opened.path, "utf8")).toBe("WORKTREE\n");
   });
 
   test("open_file own stone WITHOUT prior write → canonical main（read 不主动建 worktree）", async () => {
     const baseDir = await newWorld(["alice"]);
-    const opened = asFileWindow(
-      await executeOpenFileMethod(ctxFor(baseDir, "alice", "s2", { path: "stones/alice/self.md" })),
-    );
+    const opened = (await fileConstruct.exec(ctxFor(baseDir, "alice", "s2", {}), {
+      path: "stones/alice/self.md",
+    })) as FileData;
     expect(opened.path).toBe(join(mainObjectsDir(baseDir), "alice", "self.md"));
     expect(await readFile(opened.path, "utf8")).toBe("alice v1\n");
   });
 
   test("edit own stone from a canonical-pointing window → write lands in worktree, main unchanged", async () => {
     const baseDir = await newWorld(["alice"]);
-    // window 指向 canonical main（模拟 open_file 在无 worktree 时拿到的 window）
-    const window: FileWindow = {
-      id: "w_file_x",
-      class: "file",
-      parentWindowId: "root",
-      title: "self.md",
-      status: "open",
-      createdAt: Date.now(),
-      path: join(mainObjectsDir(baseDir), "alice", "self.md"),
-    };
-    const err = await executeFileWindowEdit(
-      ctxFor(baseDir, "alice", "s1", { old: "alice v1", new: "alice v2-edited" }, window),
+    // self（file Data）指向 canonical main（模拟 open_file 在无 worktree 时拿到的窗）
+    const self: FileData = { path: join(mainObjectsDir(baseDir), "alice", "self.md") };
+    const err = await editMethod.exec(
+      ctxFor(baseDir, "alice", "s1", { old: "alice v1", new: "alice v2-edited" }, self),
+      self,
+      { old: "alice v1", new: "alice v2-edited" },
     );
     expect(err).toBeUndefined();
 
@@ -153,21 +144,17 @@ describe("file worktree redirect", () => {
 
   test("second edit uses worktree as base (not stale canonical)", async () => {
     const baseDir = await newWorld(["alice"]);
-    const window: FileWindow = {
-      id: "w_file_x",
-      class: "file",
-      parentWindowId: "root",
-      title: "self.md",
-      status: "open",
-      createdAt: Date.now(),
-      path: join(mainObjectsDir(baseDir), "alice", "self.md"),
-    };
-    await executeFileWindowEdit(
-      ctxFor(baseDir, "alice", "s1", { old: "alice v1", new: "line-A" }, window),
+    const self: FileData = { path: join(mainObjectsDir(baseDir), "alice", "self.md") };
+    await editMethod.exec(
+      ctxFor(baseDir, "alice", "s1", { old: "alice v1", new: "line-A" }, self),
+      self,
+      { old: "alice v1", new: "line-A" },
     );
     // 第二次 edit：old 应在 worktree 当前内容里（line-A），不是 main（alice v1）
-    const err = await executeFileWindowEdit(
-      ctxFor(baseDir, "alice", "s1", { old: "line-A", new: "line-B" }, window),
+    const err = await editMethod.exec(
+      ctxFor(baseDir, "alice", "s1", { old: "line-A", new: "line-B" }, self),
+      self,
+      { old: "line-A", new: "line-B" },
     );
     expect(err).toBeUndefined();
     expect(await readFile(join(worktreeObjDir(baseDir, "s1", "alice"), "self.md"), "utf8")).toBe(
@@ -177,17 +164,11 @@ describe("file worktree redirect", () => {
 
   test("super flow edit own stone → writes canonical directly (no worktree)", async () => {
     const baseDir = await newWorld(["alice"]);
-    const window: FileWindow = {
-      id: "w_file_x",
-      class: "file",
-      parentWindowId: "root",
-      title: "self.md",
-      status: "open",
-      createdAt: Date.now(),
-      path: join(mainObjectsDir(baseDir), "alice", "self.md"),
-    };
-    await executeFileWindowEdit(
-      ctxFor(baseDir, "alice", "super", { old: "alice v1", new: "alice super-edit" }, window),
+    const self: FileData = { path: join(mainObjectsDir(baseDir), "alice", "self.md") };
+    await editMethod.exec(
+      ctxFor(baseDir, "alice", "super", { old: "alice v1", new: "alice super-edit" }, self),
+      self,
+      { old: "alice v1", new: "alice super-edit" },
     );
     expect(await readFile(join(mainObjectsDir(baseDir), "alice", "self.md"), "utf8")).toBe(
       "alice super-edit\n",

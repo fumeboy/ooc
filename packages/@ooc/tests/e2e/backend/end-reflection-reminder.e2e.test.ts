@@ -1,9 +1,13 @@
 /**
  * end-reflection-reminder thread-level 集成测试。
  *
- * end-reflection 知识（builtins/root/knowledge/end-reflection.md，activates_on
- * `method::root::end`）应在业务 thread 开 end form 时经完整 buildInputItems 路径渲染进
- * system content；非 end form 时不出现。
+ * end-reflection 知识（builtins/agent/knowledge/end-reflection.md，activates_on
+ * `method::_builtin/agent::end`）应在业务 thread 开 end method form 时经完整 buildInputItems
+ * 路径渲染进 system content；非 end form 时不出现。
+ *
+ * Wave 4 对象模型：method form 是一条 `OocObjectInstance` 信封——class="method_exec"、
+ * 业务字段（method/intentPaths…）落 inst.data。activator 的 `method::` trigger 据
+ * inst.data.method + 其 parentObjectId 指向的 self 窗 class（须解析到 `_builtin/agent`）命中。
  *
  * 不真起 backend / 不调 LLM；buildInputItems 是纯函数。
  */
@@ -15,30 +19,49 @@ import { join } from "node:path";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { buildInputItems } from "@ooc/core/thinkable/context";
 import { buildProtocolKnowledgeWindows } from "@ooc/core/thinkable/context/protocol";
-import type { MethodExecWindow } from "@ooc/core/_shared/types/context-window.js";
+import { isKnowledgeClass } from "@ooc/core/_shared/types/constants.js";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
-// 触发 windows/ 各 type 注册（root commands "end" / "talk" 等）
+// 触发 builtin class 注册（含 _builtin/agent + method_exec_form）。
 import "@ooc/core/runtime/register-builtins.js";
 
-/** end-reflection.md body 的特征短语（仅出现在该篇中）。 */
-const END_REFLECTION_MARKER = "memory/<slug>.md";
+/** end-reflection.md body 的特征短语（仅出现在该篇正文中）。 */
+const END_REFLECTION_MARKER = "endSummary 不进入下一轮";
 
-function makeMethodExecWindow(
-  overrides: Partial<MethodExecWindow> & { method: string },
-): MethodExecWindow {
+/** 业务 thread 的 self 窗：class=_builtin/agent，使 method::_builtin/agent::end 能命中 parent。 */
+const SELF_WINDOW_ID = "w_self_agent";
+function makeSelfAgentWindow(): OocObjectInstance {
   return {
-    id: "f_test",
-    class: "method_exec",
-    parentWindowId: "root",
-    title: overrides.method,
+    id: SELF_WINDOW_ID,
+    class: "_builtin/agent",
+    parentObjectId: "root",
+    title: "alice (self)",
     status: "open",
     createdAt: 1,
-    description: "",
-    accumulatedArgs: {},
-    intentPaths: [overrides.method],
-    loadedKnowledgePaths: [],
-    ...overrides,
+    data: {},
+  };
+}
+
+/** method form 信封：class=method_exec，method 落 inst.data，parent 指向 self 窗。 */
+function makeMethodExecWindow(
+  opts: { method: string; id: string },
+): OocObjectInstance {
+  return {
+    id: opts.id,
+    class: "method_exec",
+    parentObjectId: SELF_WINDOW_ID,
+    title: opts.method,
+    status: "open",
+    createdAt: 2,
+    data: {
+      method: opts.method,
+      description: "",
+      accumulatedArgs: {},
+      intentPaths: [opts.method],
+      loadedKnowledgePaths: [],
+      status: "open",
+    },
   };
 }
 
@@ -66,8 +89,18 @@ function systemContent(input: Awaited<ReturnType<typeof buildInputItems>>): stri
     .join("\n\n");
 }
 
-function paths(windows: { class: string; path?: string }[]): string[] {
-  return windows.filter((w) => w.class === "knowledge").map((w) => w.path ?? "");
+/**
+ * 从投影 knowledge 窗收集**正文已激活**（presentation="full" → show_content）的 path。
+ *
+ * class 是注册 id KNOWLEDGE_CLASS_ID，path / presentation 落 inst.data。只看 full：
+ * end-reflection 的 `object::root` 触发器恒以 show_description 激活（body 空），唯有
+ * `method::_builtin/agent::end` 命中时才升到 show_content（body 进 context）——这正是被门控的语义。
+ */
+function paths(windows: OocObjectInstance[]): string[] {
+  return windows
+    .filter((w) => isKnowledgeClass(w.class))
+    .filter((w) => (w.data as { presentation?: string } | undefined)?.presentation === "full")
+    .map((w) => (w.data as { path?: string } | undefined)?.path ?? "");
 }
 
 describe("end-reflection-reminder thread-level integration", () => {
@@ -77,7 +110,7 @@ describe("end-reflection-reminder thread-level integration", () => {
       const thread = makeThread({
         id: ref.threadId,
         persistence: ref,
-        extraWindows: [makeMethodExecWindow({ method: "end", id: "f_end_biz" })],
+        extraWindows: [makeSelfAgentWindow(), makeMethodExecWindow({ method: "end", id: "f_end_biz" })],
       });
 
       // 防御性 gate：协议层已激活 end-reflection 篇
@@ -98,7 +131,7 @@ describe("end-reflection-reminder thread-level integration", () => {
       const thread = makeThread({
         id: ref.threadId,
         persistence: ref,
-        extraWindows: [makeMethodExecWindow({ method: "talk", id: "f_talk_biz" })],
+        extraWindows: [makeSelfAgentWindow(), makeMethodExecWindow({ method: "talk", id: "f_talk_biz" })],
       });
 
       expect(paths(await buildProtocolKnowledgeWindows(thread))).not.toContain("end-reflection");

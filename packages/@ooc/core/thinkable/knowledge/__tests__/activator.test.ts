@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { computeActivations } from "../activator";
 import type { ActivatesOn, KnowledgeDoc, KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import type { ThreadContext } from "../../context";
-import type { MethodExecWindow, ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import { KNOWLEDGE_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 
 function doc(
   path: string,
@@ -23,21 +24,23 @@ function indexOf(...docs: KnowledgeDoc[]): KnowledgeIndex {
   return { byPath: new Map(docs.map((d) => [d.path, d])) };
 }
 
-/** 构造 method_exec window 的辅助；activator 内部走 evaluateTrigger，需 parentWindowId + method 字段。 */
-function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
+/**
+ * 构造 method_exec object 实例的辅助（Wave4 对象信封形态）；activator 内部走 evaluateTrigger，
+ * 读 `w.class === "method_exec"` + `w.data.method` + `w.parentObjectId`。
+ * `method` / `parentObjectId` 经命名参数传入，落进 `.data` / 信封。
+ */
+function form(
+  overrides: { id?: string; method?: string; parentObjectId?: string; status?: ContextWindow["status"] } = {},
+): ContextWindow {
+  const { id = "f", method = "x", parentObjectId = "root", status = "open" } = overrides;
   return {
-    id: "f",
+    id,
     class: "method_exec",
-    parentWindowId: "root",
+    parentObjectId,
     title: "x",
-    status: "open",
+    status,
     createdAt: 0,
-    method: "x",
-    description: "",
-    accumulatedArgs: {},
-    intentPaths: [],
-    loadedKnowledgePaths: [],
-    ...overrides,
+    data: { method },
   };
 }
 
@@ -104,12 +107,12 @@ describe("computeActivations (trigger map)", () => {
     const talkWindow: ContextWindow = {
       id: "w_talk",
       class: "talk",
-      parentWindowId: "root",
+      parentObjectId: "root",
       title: "talk",
       status: "open",
       createdAt: 0,
-      target: "alice",
-    } as ContextWindow;
+      data: { target: "alice" },
+    };
     const out = computeActivations(
       thread({ contextWindows: [talkWindow] }),
       index,
@@ -145,13 +148,13 @@ describe("computeActivations (trigger map)", () => {
     const talkWindow: ContextWindow = {
       id: "w_talk",
       class: "talk",
-      parentWindowId: "root",
+      parentObjectId: "root",
       title: "talk",
       status: "open",
       createdAt: 0,
-      target: "alice",
-    } as ContextWindow;
-    const sayForm = form({ id: "f_say", method: "say", parentWindowId: "w_talk" });
+      data: { target: "alice" },
+    };
+    const sayForm = form({ id: "f_say", method: "say", parentObjectId: "w_talk" });
 
     const out = computeActivations(
       thread({ contextWindows: [talkWindow, sayForm] }),
@@ -160,7 +163,7 @@ describe("computeActivations (trigger map)", () => {
     expect(out).toHaveLength(1);
 
     // Same say form but parent is root → no match
-    const sayOnRoot = form({ id: "f_say_root", method: "say", parentWindowId: "root" });
+    const sayOnRoot = form({ id: "f_say_root", method: "say", parentObjectId: "root" });
     const out2 = computeActivations(
       thread({ contextWindows: [sayOnRoot] }),
       index,
@@ -228,15 +231,13 @@ describe("computeActivations (trigger map)", () => {
     const index = indexOf(doc("a", "A", undefined));
     const knWindow: ContextWindow = {
       id: "kn_w_1",
-      class: "knowledge",
-      parentWindowId: "root",
+      class: KNOWLEDGE_CLASS_ID,
+      parentObjectId: "root",
       title: "a",
       status: "open",
       createdAt: 0,
-      path: "a",
-      source: "explicit",
-      body: "doc body",
-    } as ContextWindow;
+      data: { path: "a", source: "explicit", body: "doc body" },
+    };
     const out = computeActivations(
       thread({ contextWindows: [knWindow] }),
       index,

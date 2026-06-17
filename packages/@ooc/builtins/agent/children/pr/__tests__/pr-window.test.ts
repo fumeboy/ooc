@@ -1,14 +1,20 @@
 /**
- * pr_window —— reviewer 评审窗口 + 渲染/method + 回修 + resume 集成测试。
+ * pr —— reviewer 评审窗口 + 渲染/method + 回修 + resume 集成测试。
  *
  * reflectable 沉淀（窗口 + 回修）。覆盖：
- * - PR window 渲染：intent / diff / paths / reviewers / approvals / verdict
- * - window method：approve（聚合 ready-to-merge + prAutoMerge 合入）/ reject（一票否决 + 回投）
- * - deliverPrWindowToReviewers：每个 reviewer 的 super-session thread 出现 pr_window
+ * - pr 渲染：intent / diff / paths / reviewers / approvals / verdict
+ * - object method：approve（聚合 ready-to-merge + prAutoMerge 合入）/ reject（一票否决 + 回投）
+ * - deliverPrWindowToReviewers：每个 reviewer 的 super-session thread 出现 pr 实例
  * - reject → 回修 message 落 super(foo) inbox + status 翻 running
- * - resume：reject 后 new_feat_branch(同 intent) 幂等重绑 feat 分支再 submit
+ * - resume：reject 后 new_feat_branch(同 intent) 幂等重绑 feat 分支再 create_pr_and_invite_reviewers
+ *
+ * Wave 4 对象模型：pr 是注册 class `_builtin/agent/pr`（归一 id `agent/pr`）；
+ * 窗实例是 `OocObjectInstance<PrData>`（信封 + 业务字段落 inst.data）。readable 经
+ * `Class.readable.readable(ctx, self=Data, win)` 返回 `{class, content}`；object method 经
+ * `Class.executable.methods` 的三参 `exec(ctx, self=Data, args)`。沉淀两 method
+ * （new_feat_branch / create_pr_and_invite_reviewers）归位到 thread class（reflect_request 投影窗 surface）。
  */
-import { mkdir, mkdtemp, rm, writeFile, readFile, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -18,11 +24,13 @@ import {
   readPrIssue,
   createFeatBranchWorktree,
   commitAndOpenPr,
-  approvePrIssue,
 } from "@ooc/core/persistable";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import type { ReadableContext } from "@ooc/core/readable/contract.js";
+import type { ExecutableContext } from "@ooc/core/executable/contract.js";
 import {
   deliverPrWindowToReviewers,
   routePrRepairMessage,
@@ -30,10 +38,13 @@ import {
   prReviewThreadId,
 } from "../delivery";
 import { applyPrApproval } from "../approval-flow";
-import type { PrWindow } from "../types";
-// 触发 pr window 注册（readable + methods）。
-import "../index";
+import type { Data as PrData } from "../types";
+// 注册 builtin class（含 pr：readable + executable + thread 沉淀 method）。
+import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+
+/** pr 注册 class id（stored class；registry 查询时内部归一，故 getClass/resolveObjectMethod 也接受它）。 */
+const PR_CLASS_ID = "_builtin/agent/pr";
 
 let tempRoots: string[] = [];
 
@@ -56,7 +67,7 @@ async function newWorld(agents: string[], opts?: { prAutoMerge?: boolean }): Pro
         version: "0.1.0",
         private: true,
         type: "module",
-        ooc: { objectId: id, kind: "object", type: "agent" },
+        ooc: { objectId: id, kind: "object" },
       }),
       "utf8",
     );
@@ -101,31 +112,56 @@ function reviewerThread(baseDir: string, reviewerObjectId: string, threadId: str
   };
 }
 
-describe("pr_window 渲染", () => {
+/** 构造一个 pr 窗实例信封（OocObjectInstance<PrData>）。 */
+function prInstance(issueId: number, data: PrData, title: string): OocObjectInstance<PrData> {
+  return {
+    id: prWindowId(issueId),
+    class: "pr",
+    parentObjectId: "root",
+    title,
+    status: "open",
+    createdAt: Date.now(),
+    data,
+  };
+}
+
+/** 取 pr 注册 class（readable + executable）。 */
+function prClass() {
+  const cls = builtinRegistry.getClass(PR_CLASS_ID);
+  if (!cls) throw new Error(`pr class "${PR_CLASS_ID}" not registered`);
+  return cls;
+}
+
+/** 渲染 pr 实例为 xml（经 readable 投影 + 包 pr_window 根元素）。 */
+async function renderPr(baseDir: string, thread: ThreadContext, data: PrData): Promise<string> {
+  const cls = prClass();
+  const ctx: ReadableContext = {
+    thread,
+    object: { id: prWindowId(data.issueId), class: "pr" },
+    persistence: { baseDir },
+  };
+  const proj = await cls.readable!.readable(ctx, data, undefined);
+  return serializeXml(xmlElement("pr_window", {}, proj.content as never));
+}
+
+/** 取 pr 的某个 object method（approve/reject/request_changes）。 */
+function prMethod(name: string) {
+  const m = builtinRegistry.resolveObjectMethod(PR_CLASS_ID, name);
+  if (!m) throw new Error(`pr object method "${name}" not registered`);
+  return m;
+}
+
+describe("pr 渲染", () => {
   test("readable 渲染 intent / paths / reviewers / verdict / diff", async () => {
     const baseDir = await newWorld(["foo"]);
     const { issueId } = await openPr(baseDir, "foo", "Tighten foo self", [
       { rel: "objects/foo/self.md", content: "foo v2 sedimented\n" },
     ]);
 
-    const def = builtinRegistry.getObjectDefinition("pr" as never);
-    expect(def.readable).toBeDefined();
-
-    const window: PrWindow = {
-      id: prWindowId(issueId),
-      class: "pr",
-      parentWindowId: "root",
-      title: "Tighten foo self",
-      status: "open",
-      createdAt: Date.now(),
-      issueId,
-      reviewerObjectId: "supervisor",
-      authorObjectId: "foo",
-    };
+    const data: PrData = { issueId, reviewerObjectId: "supervisor", authorObjectId: "foo" };
     const thread = reviewerThread(baseDir, "supervisor", "t1");
-    thread.contextWindows = [window];
-    const nodes = await def.readable!({ window, thread } as never);
-    const xml = serializeXml(xmlElement("pr_window", {}, nodes));
+    thread.contextWindows = [prInstance(issueId, data, "Tighten foo self")];
+    const xml = await renderPr(baseDir, thread, data);
 
     expect(xml).toContain("Tighten foo self"); // intent
     expect(xml).toContain("objects/foo/self.md"); // paths
@@ -136,42 +172,29 @@ describe("pr_window 渲染", () => {
 
   test("readable：record 缺失 → error 占位不崩", async () => {
     const baseDir = await newWorld(["foo"]);
-    const def = builtinRegistry.getObjectDefinition("pr" as never);
-    const window: PrWindow = {
-      id: prWindowId(999),
-      class: "pr",
-      parentWindowId: "root",
-      title: "ghost",
-      status: "open",
-      createdAt: Date.now(),
-      issueId: 999,
-      reviewerObjectId: "supervisor",
-      authorObjectId: "foo",
-    };
+    const data: PrData = { issueId: 999, reviewerObjectId: "supervisor", authorObjectId: "foo" };
     const thread = reviewerThread(baseDir, "supervisor", "t1");
-    const nodes = await def.readable!({ window, thread } as never);
-    const xml = serializeXml(xmlElement("pr_window", {}, nodes));
+    const xml = await renderPr(baseDir, thread, data);
     expect(xml).toContain("不存在");
   });
 });
 
-describe("pr_window method", () => {
+describe("pr object method", () => {
   test("approve：唯一 reviewer approve → ready-to-merge + prAutoMerge 合入 main", async () => {
     const baseDir = await newWorld(["foo"], { prAutoMerge: true });
     const { issueId } = await openPr(baseDir, "foo", "land foo v2", [
       { rel: "objects/foo/self.md", content: "foo v2 merged\n" },
     ]);
 
-    const def = builtinRegistry.getObjectDefinition("pr" as never);
-    const approve = def.methods.approve;
-    expect(approve).toBeDefined();
-
-    const window: PrWindow = {
-      id: prWindowId(issueId), class: "pr", parentWindowId: "root", title: "land foo v2",
-      status: "open", createdAt: Date.now(), issueId, reviewerObjectId: "supervisor", authorObjectId: "foo",
-    };
+    const approve = prMethod("approve");
+    const data: PrData = { issueId, reviewerObjectId: "supervisor", authorObjectId: "foo" };
     const thread = reviewerThread(baseDir, "supervisor", "t1");
-    const out = await approve.exec({ thread, self: window, args: {} } as never);
+    const ctx: ExecutableContext = {
+      thread,
+      object: { id: prWindowId(issueId), class: "pr" },
+      args: {},
+    };
+    const out = await approve.exec(ctx, data, {});
     const parsed = JSON.parse(out as string);
     expect(parsed.ok).toBe(true);
     expect(parsed.verdict).toBe("ready-to-merge");
@@ -195,14 +218,17 @@ describe("pr_window method", () => {
       superFooThreadId,
     );
 
-    const def = builtinRegistry.getObjectDefinition("pr" as never);
-    const window: PrWindow = {
-      id: prWindowId(issueId), class: "pr", parentWindowId: "root", title: "x",
-      status: "open", createdAt: Date.now(), issueId, reviewerObjectId: "supervisor",
-      authorObjectId: "foo", authorThreadId: superFooThreadId,
+    const reject = prMethod("reject");
+    const data: PrData = {
+      issueId, reviewerObjectId: "supervisor", authorObjectId: "foo", authorThreadId: superFooThreadId,
     };
     const thread = reviewerThread(baseDir, "supervisor", "t1");
-    const out = await def.methods.reject.exec({ thread, self: window, args: {} } as never);
+    const ctx: ExecutableContext = {
+      thread,
+      object: { id: prWindowId(issueId), class: "pr" },
+      args: {},
+    };
+    const out = await reject.exec(ctx, data, {});
     const parsed = JSON.parse(out as string);
     expect(parsed.ok).toBe(true);
     expect(parsed.verdict).toBe("rejected");
@@ -218,14 +244,17 @@ describe("pr_window method", () => {
     // 回修 message 必须给 LLM 可照抄的 method 动作序列
     // （带真实 intent），并明确禁止 curl/program 自查空转。
     expect(repairMsg!.content).toContain("new_feat_branch");
-    expect(repairMsg!.content).toContain('share into supervisor land'); // 真实 intent，照抄即可
+    expect(repairMsg!.content).toContain("share into supervisor land"); // 真实 intent，照抄即可
     expect(repairMsg!.content).toContain("create_pr_and_invite_reviewers");
     expect(repairMsg!.content).toMatch(/curl|program/); // 明示「不要 curl/program 自查」
   });
 });
 
 describe("deliverPrWindowToReviewers（投递）", () => {
-  test("每个 reviewer 的 super-session thread 出现 pr_window + inbox 事件", async () => {
+  // SKIP（真源码 bug，待修复后解封）：delivery.ts:115 把投递的 pr 窗实例存为 inst.class="pr"，
+  // 投递的 pr 窗 stored class = 注册 id PR_CLASS_ID（=_builtin/agent/pr）；裸名 "pr" 是 readable
+  // 投影名。pr 走系统默认 inline 持久化（inline 进所属 thread-context），round-trip 后窗 + data 还在。
+  test("每个 reviewer 的 super-session thread 出现 pr 实例 + inbox 事件", async () => {
     const baseDir = await newWorld(["foo", "bob"]);
     const { issueId, reviewers } = await openPr(baseDir, "foo", "share into bob", [
       { rel: "objects/foo/self.md", content: "foo v2\n" },
@@ -243,9 +272,10 @@ describe("deliverPrWindowToReviewers（投递）", () => {
       const t = await readThread({ baseDir, sessionId: "super", objectId: reviewer }, tid);
       expect(t).toBeDefined();
       const win = t!.contextWindows?.find((w) => w.id === prWindowId(issueId));
-      expect(win?.class).toBe("pr");
-      expect((win as PrWindow).issueId).toBe(issueId);
-      expect((win as PrWindow).reviewerObjectId).toBe(reviewer);
+      expect(win?.class).toBe(PR_CLASS_ID);
+      const winData = (win!.data ?? {}) as PrData;
+      expect(winData.issueId).toBe(issueId);
+      expect(winData.reviewerObjectId).toBe(reviewer);
       expect(t!.events.some((e) => e.kind === "inbox_message_arrived")).toBe(true);
     }
   });
@@ -259,7 +289,7 @@ describe("deliverPrWindowToReviewers（投递）", () => {
     await deliverPrWindowToReviewers({ baseDir, issueId, reviewers, authorObjectId: "foo", title: "x" });
     const tid = prReviewThreadId("supervisor", issueId);
     const t = await readThread({ baseDir, sessionId: "super", objectId: "supervisor" }, tid);
-    const prWins = (t!.contextWindows ?? []).filter((w) => w.class === "pr");
+    const prWins = (t!.contextWindows ?? []).filter((w) => w.class === PR_CLASS_ID);
     expect(prWins.length).toBe(1);
   });
 });
@@ -275,16 +305,17 @@ describe("routePrRepairMessage", () => {
 
 describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
   test("request_changes → 同 intent 幂等重绑 feat 分支（旧编辑仍在）→ 再 create_pr_and_invite_reviewers 重开 PR", async () => {
-    const { executeNewFeatBranch } = await import("@ooc/builtins/reflect_request/method.new-feat-branch");
-    const { executeCreatePrAndInviteReviewers } = await import("@ooc/builtins/reflect_request/method.create-pr-and-invite-reviewers");
+    // 沉淀两 method 已归位到 thread class（reflect_request 投影窗 surface）。
+    const { executeNewFeatBranch } = await import("@ooc/builtins/agent/thread/executable/method.new-feat-branch");
+    const { executeCreatePrAndInviteReviewers } = await import("@ooc/builtins/agent/thread/executable/method.create-pr-and-invite-reviewers");
     const baseDir = await newWorld(["foo", "bob"]);
 
     // super(foo) thread（沉淀发起者）
     const superFoo = reviewerThread(baseDir, "foo", "t_superfoo");
     await writeThread(superFoo);
 
-    // ① new_feat_branch(intent) 绑定
-    const open1 = await executeNewFeatBranch({ thread: superFoo, args: { intent: "share into bob" } } as never);
+    // ① new_feat_branch(intent) 绑定（method 签名 (ctx, args)）
+    const open1 = await executeNewFeatBranch({ thread: superFoo, args: {} } as never, { intent: "share into bob" });
     expect(JSON.parse(open1 as string).ok).toBe(true);
     const branch = superFoo.persistence!.stonesBranch!;
     expect(branch).toBe("feat/share-into-bob");
@@ -294,7 +325,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
     await editInFeatWorktree(baseDir, branch, "objects/bob/readable.md", "bob touched by foo\n");
 
     // ③ create_pr_and_invite_reviewers → 开 PR（reviewers 含 bob + supervisor），清绑定
-    const fin1 = JSON.parse((await executeCreatePrAndInviteReviewers({ thread: superFoo, args: {} } as never)) as string);
+    const fin1 = JSON.parse((await executeCreatePrAndInviteReviewers({ thread: superFoo, args: {} } as never, {})) as string);
     expect(fin1.ok).toBe(true);
     const issueId = fin1.issueId as number;
     expect((fin1.reviewers as string[]).sort()).toEqual(["bob", "supervisor"]);
@@ -312,7 +343,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
 
     // resume：同 intent 重绑（request_changes 时旧 worktree + 编辑都在）
     superFoo.persistence!.stonesBranch = undefined; // 模拟 disk 恢复后无绑定
-    const open2 = await executeNewFeatBranch({ thread: superFoo, args: { intent: "share into bob" } } as never);
+    const open2 = await executeNewFeatBranch({ thread: superFoo, args: {} } as never, { intent: "share into bob" });
     expect(JSON.parse(open2 as string).ok).toBe(true);
     const reboundBranch = String(superFoo.persistence!.stonesBranch);
     expect(reboundBranch).toBe(String(branch)); // 幂等重绑同分支
@@ -321,7 +352,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
 
     // re-edit + re-submit
     await editInFeatWorktree(baseDir, branch, "objects/foo/self.md", "foo v3 revised\n");
-    const fin2 = JSON.parse((await executeCreatePrAndInviteReviewers({ thread: superFoo, args: {} } as never)) as string);
+    const fin2 = JSON.parse((await executeCreatePrAndInviteReviewers({ thread: superFoo, args: {} } as never, {})) as string);
     expect(fin2.ok).toBe(true);
     expect(fin2.issueId).toBeGreaterThan(issueId); // 重开新 PR
   });

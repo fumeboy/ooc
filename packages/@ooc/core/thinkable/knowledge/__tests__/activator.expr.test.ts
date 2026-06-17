@@ -6,10 +6,8 @@ import {
   parseTrigger,
 } from "../activator.expr";
 import type { ThreadContext } from "../../context";
-import {
-  MethodExecWindow,
-  ContextWindow,
-} from "@ooc/core/_shared/types/context-window.js";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 
 function thread(overrides: Partial<ThreadContext> = {}): ThreadContext {
   return {
@@ -21,20 +19,23 @@ function thread(overrides: Partial<ThreadContext> = {}): ThreadContext {
   };
 }
 
-function form(overrides: Partial<MethodExecWindow>): MethodExecWindow {
+/**
+ * 构造 method_exec object 实例的辅助（Wave4 对象信封形态）；evaluateTrigger 读
+ * `w.class === "method_exec"` + `w.data.method` + `w.parentObjectId`。
+ * `method` / `parentObjectId` 经命名参数传入，落进 `.data` / 信封。
+ */
+function form(
+  overrides: { id?: string; method?: string; parentObjectId?: string; status?: ContextWindow["status"] } = {},
+): ContextWindow {
+  const { id = "f", method = "x", parentObjectId = "root", status = "open" } = overrides;
   return {
-    id: "f",
+    id,
     class: "method_exec",
-    parentWindowId: "root",
+    parentObjectId,
     title: "x",
-    status: "open",
+    status,
     createdAt: 0,
-    method: "x",
-    description: "",
-    accumulatedArgs: {},
-    intentPaths: [],
-    loadedKnowledgePaths: [],
-    ...overrides,
+    data: { method },
   };
 }
 
@@ -249,16 +250,16 @@ describe("evaluateTrigger", () => {
     const talkW: ContextWindow = {
       id: "w1",
       class: "talk",
-      parentWindowId: "root",
+      parentObjectId: "root",
       title: "t",
       status: "open",
       createdAt: 0,
-      target: "alice",
-    } as ContextWindow;
+      data: { target: "alice" },
+    };
     expect(evaluateTrigger(t, thread({ contextWindows: [talkW] }))).toBe(true);
 
     // closed talk window does NOT count
-    const closed: ContextWindow = { ...talkW, status: "closed" } as ContextWindow;
+    const closed: ContextWindow = { ...talkW, status: "closed" };
     expect(evaluateTrigger(t, thread({ contextWindows: [closed] }))).toBe(false);
   });
 
@@ -269,12 +270,12 @@ describe("evaluateTrigger", () => {
     const talkW: ContextWindow = {
       id: "w1",
       class: "talk",
-      parentWindowId: "root",
+      parentObjectId: "root",
       title: "t",
       status: "open",
       createdAt: 0,
-      target: "alice",
-    } as ContextWindow;
+      data: { target: "alice" },
+    };
     expect(evaluateTrigger(t, thread({ contextWindows: [talkW] }))).toBe(true);
   });
 
@@ -286,7 +287,7 @@ describe("evaluateTrigger", () => {
     expect(evaluateTrigger(t, thread())).toBe(true);
     expect(evaluateTrigger(t, thread({ contextWindows: [] }))).toBe(true);
     // 有其它 window 时同样命中
-    const todoW = { id: "w_t", class: "todo", parentWindowId: "root", title: "x", status: "open", createdAt: 0 } as ContextWindow;
+    const todoW = { id: "w_t", class: "todo", parentObjectId: "root", title: "x", status: "open", createdAt: 0, data: {} } as ContextWindow;
     expect(evaluateTrigger(t, thread({ contextWindows: [todoW] }))).toBe(true);
   });
 
@@ -295,38 +296,39 @@ describe("evaluateTrigger", () => {
     const t = parseTrigger("object_id::agent_alice");
     const objW: ContextWindow = {
       id: "agent_alice",
-      class: "agent_alice" as any,
-      parentWindowId: "root",
+      class: "agent_alice",
+      parentObjectId: "root",
       title: "Agent Alice",
       status: "open",
       createdAt: 0,
-    } as ContextWindow;
+      data: {},
+    };
     expect(evaluateTrigger(t, thread({ contextWindows: [objW] }))).toBe(true);
 
     // 其他 objectId 不命中
     const otherW: ContextWindow = {
       ...objW,
       id: "agent_bob",
-    } as ContextWindow;
+    };
     expect(evaluateTrigger(t, thread({ contextWindows: [otherW] }))).toBe(false);
 
     // closed 不算
-    const closed: ContextWindow = { ...objW, status: "closed" } as ContextWindow;
+    const closed: ContextWindow = { ...objW, status: "closed" };
     expect(evaluateTrigger(t, thread({ contextWindows: [closed] }))).toBe(false);
   });
 
   // ── method:: 新格式 ─────────────────────────────────────────────
   test("method::root::program hits when form on root with command=program is open", () => {
     const t = parseTrigger("method::root::program");
-    const f = form({ method: "program", parentWindowId: "root" });
+    const f = form({ method: "program", parentObjectId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [f] }))).toBe(true);
 
     // wrong command
-    const otherForm = form({ method: "talk", parentWindowId: "root" });
+    const otherForm = form({ method: "talk", parentObjectId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [otherForm] }))).toBe(false);
 
     // failed form does not count as active
-    const failedForm = form({ method: "program", parentWindowId: "root", status: "failed" });
+    const failedForm = form({ method: "program", parentObjectId: "root", status: "failed" });
     expect(evaluateTrigger(t, thread({ contextWindows: [failedForm] }))).toBe(false);
   });
 
@@ -335,16 +337,16 @@ describe("evaluateTrigger", () => {
     const talkW: ContextWindow = {
       id: "wt",
       class: "talk",
-      parentWindowId: "root",
+      parentObjectId: "root",
       title: "t",
       status: "open",
       createdAt: 0,
-      target: "alice",
-    } as ContextWindow;
-    const sayOnTalk = form({ id: "fs1", method: "say", parentWindowId: "wt" });
+      data: { target: "alice" },
+    };
+    const sayOnTalk = form({ id: "fs1", method: "say", parentObjectId: "wt" });
     expect(evaluateTrigger(t, thread({ contextWindows: [talkW, sayOnTalk] }))).toBe(true);
 
-    const sayOnRoot = form({ id: "fs2", method: "say", parentWindowId: "root" });
+    const sayOnRoot = form({ id: "fs2", method: "say", parentObjectId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [sayOnRoot] }))).toBe(false);
   });
 
@@ -352,33 +354,33 @@ describe("evaluateTrigger", () => {
   test("method::root::program hits when form on root with method=program is open", () => {
     const t = parseTrigger("method::root::program");
     expect(t.kind).toBe("method");
-    const f = form({ method: "program", parentWindowId: "root" });
+    const f = form({ method: "program", parentObjectId: "root" });
     expect(evaluateTrigger(t, thread({ contextWindows: [f] }))).toBe(true);
   });
 
-  // ── method:: 沿 parentClass 类链匹配（agency 在 agent self 窗的激活）──
-  test("method:: 沿类链匹配：form 跑在 agent 子类自窗上，祖先 _builtin/agent / root 的 trigger 命中", async () => {
-    const { builtinRegistry } = await import("@ooc/core/runtime/object-registry.js");
-    const childType = `__test_agent_child_${Date.now()}`;
-    // 链：childType → _builtin/agent → root（_builtin/agent 默认 parentClass=root）
-    builtinRegistry.registerNewObjectType(childType as never, { methods: {}, parentClass: "_builtin/agent", readable: () => [] });
-    // agent 的 self 窗：class=objectId（这里用 childType 模拟具体 agent 类型）
-    const selfWin = { id: "self", class: childType, parentWindowId: "root", title: "self", status: "open", createdAt: 0 } as unknown as ContextWindow;
-    const talkForm = form({ id: "ftalk", method: "talk", parentWindowId: "self" });
-    const ctx = thread({ contextWindows: [selfWin, talkForm] });
+  // ── method:: 单跳 parentClass 匹配 ──
+  // evaluateTrigger 对 form 的 parentType 做一次单跳 parentClass 检查（resolveParentClassChain 单跳）。
+  // 注册一个 parentClass=runtime 的子类，验证：子类自身精确命中 + 其单一父类 runtime 命中，
+  // 且非祖先类型不误伤。
+  test("method:: 单跳父类匹配：form 跑在子类自窗上，自身与单一父类的 trigger 命中、旁系不命中", () => {
+    const childType = `__test_child_${Date.now()}`;
+    // 单跳链：childType → runtime（runtime 是其唯一 parentClass）
+    builtinRegistry.register(childType, { executable: { methods: [] } }, { parentClass: "runtime" });
+    const selfWin: ContextWindow = { id: "self", class: childType, parentObjectId: "root", title: "self", status: "open", createdAt: 0, data: {} };
+    const callForm = form({ id: "fcall", method: "talk", parentObjectId: "self" });
+    const ctx = thread({ contextWindows: [selfWin, callForm] });
 
-    // 祖先 trigger 命中（_builtin/agent 与 root 都在链上）
-    expect(evaluateTrigger(parseTrigger("method::_builtin/agent::talk"), ctx)).toBe(true);
-    expect(evaluateTrigger(parseTrigger("method::root::talk"), ctx)).toBe(true);
     // 自身类型精确命中
     expect(evaluateTrigger(parseTrigger(`method::${childType}::talk`), ctx)).toBe(true);
-    // 非祖先类型（filesystem 是 parentClass=null 的旁系）不命中
+    // 单一父类 runtime 命中（单跳）
+    expect(evaluateTrigger(parseTrigger("method::runtime::talk"), ctx)).toBe(true);
+    // 旁系类型（filesystem 非其父类）不命中
     expect(evaluateTrigger(parseTrigger("method::filesystem::talk"), ctx)).toBe(false);
   });
 
-  test("method:: 类链不误伤：create_object 跑在 runtime 成员窗（parentClass=null），仅 runtime 精确命中", () => {
-    const runtimeWin = { id: "runtime", class: "runtime", parentWindowId: "root", title: "runtime", status: "open", createdAt: 0 } as unknown as ContextWindow;
-    const createForm = form({ id: "fco", method: "create_object", parentWindowId: "runtime" });
+  test("method:: 单跳不误伤：create_object 跑在 runtime 成员窗（parentClass=null），仅 runtime 精确命中", () => {
+    const runtimeWin: ContextWindow = { id: "runtime", class: "runtime", parentObjectId: "root", title: "runtime", status: "open", createdAt: 0, data: {} };
+    const createForm = form({ id: "fco", method: "create_object", parentObjectId: "runtime" });
     const ctx = thread({ contextWindows: [runtimeWin, createForm] });
     expect(evaluateTrigger(parseTrigger("method::runtime::create_object"), ctx)).toBe(true);
     // runtime parentClass=null → root 非其祖先 → 旧 `method::root::create_object` 不再命中

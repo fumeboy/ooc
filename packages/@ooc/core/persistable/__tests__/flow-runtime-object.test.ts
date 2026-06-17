@@ -17,11 +17,11 @@ describe("flow-runtime-object — ooc-6 P5'.1 flat runtime layout", () => {
   let ref: FlowObjectRef;
   const sampleWindow: ContextWindow = {
     id: "todo_run_xyz",
-    class: "todo",
+    class: "_builtin/agent/todo",
     title: "demo todo",
     status: "open",
-    content: "demo todo body",
     createdAt: 1717000000000,
+    data: { content: "demo todo body" },
   };
 
   beforeEach(async () => {

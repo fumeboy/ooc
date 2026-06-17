@@ -25,8 +25,8 @@ import {
 } from "@ooc/core/persistable";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { scanRunningThreads } from "@ooc/core/app/server/runtime/thread-query";
-import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
-import type { MethodExecutionContext } from "@ooc/core/_shared/types/method.js";
+import { construct as fileConstruct } from "@ooc/builtins/filesystem/children/file/executable/construct.js";
+import type { ConstructorContext } from "@ooc/core/executable/contract.js";
 
 let tempRoot: string | undefined;
 
@@ -63,13 +63,19 @@ async function bootstrapWorld(agents: string[]): Promise<string> {
   return baseDir;
 }
 
-/** 业务 session 的 write_file ctx（落 session worktree）。 */
+/**
+ * 业务 session 的 write_file 构造上下文（落 session worktree）。
+ *
+ * Wave4 后 write_file 的写盘/worktree 重定向逻辑下沉到 file 对象的 constructor
+ * （`_builtin/filesystem/file`，construct.exec(ctx, args) => Data，失败 throw）。
+ * 这里直调 construct 验证 worktree 落点路由——和旧 writeFileExec 等价行为。
+ */
 function bizCtx(
   baseDir: string,
   objectId: string,
   sessionId: string,
   args: Record<string, unknown>,
-): MethodExecutionContext {
+): ConstructorContext {
   return {
     thread: {
       persistence: { baseDir, objectId, sessionId, threadId: "t" },
@@ -77,7 +83,7 @@ function bizCtx(
       events: [],
     },
     args,
-  } as unknown as MethodExecutionContext;
+  } as unknown as ConstructorContext;
 }
 
 function gitStatusPorcelain(repoDir: string): string {
@@ -132,13 +138,16 @@ describe("flows-worktree-migration（方案 A 真实-world 实测）", () => {
     expect(statusBefore.trim()).toBe("");
 
     // ---- (c) 在该 session write_file 改自己 self.md → 落 flows/<sid>/objects/<id>/self.md，main 不变 ----
-    const out = await executeWriteFileMethod(
+    // construct.exec(ctx, args) 返回 Data{path}=实际写入落点（worktree 重定向后）；失败 throw。
+    const out = (await fileConstruct.exec(
       bizCtx(baseDir, objectId, sid, {
         path: `stones/${objectId}/self.md`,
         content: `${objectId} v2 (session edit)\n`,
       }),
-    );
-    expect(typeof out === "object" && out !== null && (out as { ok?: boolean }).ok === true).toBe(true);
+      { path: `stones/${objectId}/self.md`, content: `${objectId} v2 (session edit)\n` },
+    )) as { path: string };
+    // 写盘落点重定向到 worktree（不是裸 main 路径）
+    expect(out.path).toContain(join("flows", sid));
 
     // worktree 内 self.md 是 v2
     const wtSelf = await readFile(join(wtRoot, "objects", objectId, "self.md"), "utf8");

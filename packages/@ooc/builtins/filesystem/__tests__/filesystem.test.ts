@@ -1,38 +1,94 @@
 import { test, expect } from "bun:test";
-import "@ooc/builtins/filesystem"; // side-effect: registerExecutable + registerReadable
+import "@ooc/core/runtime/register-builtins.js"; // 全量 boot：注册 filesystem class + 委托目标 search/file
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
 
-test("filesystem executable 维度：grep/glob/open_file/write_file 经 registerExecutable 注册（复用 root 方法）", () => {
-  const def = builtinRegistry.getObjectDefinition("filesystem");
-  expect(def.methods?.grep).toBeDefined();
-  expect(def.methods?.glob).toBeDefined();
-  expect(def.methods?.open_file).toBeDefined();
-  expect(def.methods?.write_file).toBeDefined();
+function objMethod(classId: string, name: string) {
+  const cls = builtinRegistry.getClass(classId);
+  return cls?.executable?.methods.find((m) => m.name === name);
+}
+
+test("filesystem executable 维度：grep/glob/open_file/write_file 经 register 注册（委托类方法）", () => {
+  const cls = builtinRegistry.getClass("filesystem");
+  expect(objMethod("filesystem", "grep")).toBeDefined();
+  expect(objMethod("filesystem", "glob")).toBeDefined();
+  expect(objMethod("filesystem", "open_file")).toBeDefined();
+  expect(objMethod("filesystem", "write_file")).toBeDefined();
+  expect(cls?.executable?.methods.length).toBe(4);
 });
 
-test("filesystem.grep 经委托链造 search 对象（与 root.grep 同一 constructorKind=search）", async () => {
-  const def = builtinRegistry.getObjectDefinition("filesystem");
-  const grep = def.methods?.grep;
-  expect(grep?.intents).toEqual(["grep"]);
-  // 委托：lookupConstructor("search") 命中 → exec 返回 search constructor 的 {ok,window}。
-  const out = (await grep!.exec({
-    args: { pattern: "x", path: process.cwd() },
-    manager: { registry: builtinRegistry },
-  } as any)) as { ok?: boolean; error?: string };
-  // 委托已到达 search constructor（其 fail-loud 是 "[search] 缺少 thread context"，
-  // 而非 delegator 的 "constructor 未注册"）。完整 thread→search 窗见 storybook TC-COMP-04。
-  expect(String(out?.error)).toContain("[search]");
-  expect(String(out?.error)).not.toContain("未注册");
+test("filesystem.grep 委托 ctx.runtime.instantiate 造 search 子对象（mode=grep + pattern 入参）", async () => {
+  const grep = objMethod("filesystem", "grep")!;
+  const instantiated: Array<{ classId: string; args?: Record<string, unknown> }> = [];
+  const runtime: RuntimeHandle = {
+    instantiate: async (classId, args) => {
+      instantiated.push({ classId, args });
+      return "w_search_x";
+    },
+  };
+  const out = await grep.exec(
+    { runtime, object: { id: "filesystem", class: "filesystem" }, args: {} } as never,
+    {},
+    { pattern: "x", path: process.cwd() },
+  );
+  expect(String(out)).toContain("opened search (grep)");
+  expect(instantiated).toHaveLength(1);
+  expect(instantiated[0]!.classId).toBe("_builtin/filesystem/search");
+  expect(instantiated[0]!.args?.mode).toBe("grep");
+  expect(instantiated[0]!.args?.pattern).toBe("x");
 });
 
-test("filesystem readable 维度：readable 经 registerReadable 注册（boot 校验要求）", () => {
-  const def = builtinRegistry.getObjectDefinition("filesystem");
-  expect(def.readable).toBeDefined();
+test("filesystem.glob 委托 search：glob 通配符走 pattern 入参 + 显式 mode=glob", async () => {
+  const glob = objMethod("filesystem", "glob")!;
+  const instantiated: Array<{ classId: string; args?: Record<string, unknown> }> = [];
+  const runtime: RuntimeHandle = {
+    instantiate: async (classId, args) => {
+      instantiated.push({ classId, args });
+      return "w_search_g";
+    },
+  };
+  await glob.exec(
+    { runtime, object: { id: "filesystem", class: "filesystem" }, args: {} } as never,
+    {},
+    { pattern: "**/*.ts" },
+  );
+  expect(instantiated).toHaveLength(1);
+  expect(instantiated[0]!.classId).toBe("_builtin/filesystem/search");
+  expect(instantiated[0]!.args?.mode).toBe("glob");
+  expect(instantiated[0]!.args?.pattern).toBe("**/*.ts");
 });
 
-test("filesystem readable 渲染身份说明", async () => {
-  const { readable } = await import("@ooc/builtins/filesystem/readable.js");
-  const nodes = readable({ window: { class: "filesystem" }, thread: {} } as any);
-  const about = nodes.find((n: any) => n.tag === "about") as any;
-  expect(about?.children?.[0]?.value).toContain("文件系统");
+test("filesystem.grep 缺 runtime 句柄时 fail-loud（本方法名串，非 delegator 未注册）", async () => {
+  const grep = objMethod("filesystem", "grep")!;
+  let err = "";
+  try {
+    await grep.exec({ object: { id: "filesystem", class: "filesystem" }, args: {} } as never, {}, {
+      pattern: "x",
+    });
+  } catch (e) {
+    err = (e as Error).message;
+  }
+  expect(err).toContain("[filesystem.grep]");
+  expect(err).not.toContain("未注册");
+});
+
+test("filesystem readable 维度：readable 经 register 注册（投影 class=filesystem）", () => {
+  const cls = builtinRegistry.getClass("filesystem");
+  expect(cls?.readable).toBeDefined();
+  const proj = cls!.readable!.readable(
+    { object: { id: "filesystem", class: "filesystem" } } as never,
+    {},
+    {},
+  );
+  expect((proj as { class: string }).class).toBe("filesystem");
+});
+
+test("filesystem readable 渲染身份说明", () => {
+  const cls = builtinRegistry.getClass("filesystem");
+  const proj = cls!.readable!.readable(
+    { object: { id: "filesystem", class: "filesystem" } } as never,
+    {},
+    {},
+  ) as { class: string; content: unknown };
+  expect(String(proj.content)).toContain("文件系统");
 });

@@ -12,10 +12,14 @@
 import { describe, expect, it } from "bun:test";
 import { BudgetManager } from "../budget";
 import type {
-  ContextWindow,
+  BaseContextWindow,
   ContextWindowProvenance,
   ContextWindowRelevance,
 } from "@ooc/core/_shared/types/context-window.js";
+
+// BudgetManager.score/allocate 形参是 BaseContextWindow（读 provenance/relevance/id/title）。
+// canonical ContextWindow = OocObjectInstance 不带 base 展示字段，故 budget 测试用 BaseContextWindow。
+type ContextWindow = BaseContextWindow;
 
 const bm = new BudgetManager();
 
@@ -48,8 +52,9 @@ function mkRel(
 }
 
 /**
- * Build a minimal test window using type "knowledge" (simplest builtin type
- * for budget tests — BudgetManager does not read knowledge-specific fields).
+ * Build a minimal test window using class "knowledge" (simplest builtin class
+ * for budget tests — BudgetManager only reads id/title/provenance/relevance,
+ * not class-specific business data).
  */
 function mkWindow(
   overrides: Partial<ContextWindow> & {
@@ -63,7 +68,6 @@ function mkWindow(
     parentWindowId: "root",
     status: "open",
     createdAt: now,
-    path: `stones/test/knowledge/${overrides.id}.md`,
     ...overrides,
   } as ContextWindow;
 }
@@ -195,37 +199,8 @@ describe("BudgetManager.allocate", () => {
     expect(result.overflow[0].reason).toBe("window_too_large_for_budget");
   });
 
-  it("form-bound window (boundFormId) inherits the form's relevance score", () => {
-    const form = mkWindow({
-      id: "form_1",
-      class: "method_exec",
-      title: "my form",
-      parentWindowId: "root",
-      status: "open",
-      method: "say",
-      description: "",
-      accumulatedArgs: {},
-      intentPaths: ["say"],
-      loadedKnowledgePaths: [],
-      provenance: mkProv({ kind: "explicit" }),
-      relevance: mkRel({ score: 1.0, priorityHint: "critical" }),
-    });
-    // form-bound knowledge window：自身分低但 boundFormId 指向 form（如 intent 触发的知识窗）
-    const bound = mkWindow({
-      id: "kn_1",
-      class: "knowledge",
-      title: "form-bound knowledge",
-      parentWindowId: "form_1",
-      status: "open",
-      boundFormId: "form_1",
-      provenance: mkProv({
-        kind: "related",
-        reason: { mechanism: "form_bound" },
-      }) as ContextWindowProvenance & { reason: { mechanism: "form_bound" } },
-      relevance: mkRel({ score: 0.1, signalCount: 0 }),
-    });
-    const result = bm.allocate([bound, form], 2, () => 1);
-    // Both should rank near the top because the bound window inherits the form score
-    expect(result.visible.map(w => w.id)).toEqual(expect.arrayContaining(["form_1", "kn_1"]));
-  });
+  // 删除（退役机制）：「form-bound window（boundFormId）inherits the form's relevance score」
+  // 测的是 form 机制（boundFormId + method_exec form 字段 accumulatedArgs/intentPaths/
+  // loadedKnowledgePaths）的分数继承——form 机制 Wave4 整体退役，boundFormId 在非测试源码已 0 命中，
+  // BudgetManager 也从未实现该继承（score 只读 provenance/relevance）。
 });

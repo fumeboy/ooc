@@ -1,25 +1,46 @@
 /**
  * wait tool 5 条 reject 分支 + happy path 的单元测试。
  *
- * talk 统一后，creator 窗一律是 talk_window（fork 子窗或 peer 会话窗），wait 候选都是 talk_window。
+ * talk 统一后会话窗（creator/peer/fork）的 inst.class 一律 = THREAD_CLASS_ID（唯一会话载体注册
+ * class）；wait 候选都是会话窗。Wave 4 信封：业务字段（target/targetThreadId/isForkWindow）落
+ * inst.data；creator 窗身份由 id（creatorWindowIdOf）派生，不存 isCreatorWindow flag。
  */
 
 import { describe, expect, it } from "bun:test";
 import { handleWaitTool } from "../tools/wait";
 import { makeThread } from "../../__tests__/make-thread";
 import type { ThreadContext } from "../../thinkable/context";
+import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import {
   generateWindowId,
+  creatorWindowIdOf,
+  isCreatorWindowId,
   ROOT_WINDOW_ID,
-  type FileWindow,
-  type TalkWindow,
 } from "@ooc/core/_shared/types/context-window.js";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 
-function findCreatorTalkWindow(thread: ThreadContext): TalkWindow {
+/** 造一个会话窗实例信封（inst.class=THREAD_CLASS_ID，业务字段落 inst.data）。 */
+function makeTalkInstance(
+  id: string,
+  data: Record<string, unknown>,
+  status: OocObjectInstance["status"] = "open",
+): OocObjectInstance {
+  return {
+    id,
+    class: THREAD_CLASS_ID,
+    parentObjectId: ROOT_WINDOW_ID,
+    title: typeof data.target === "string" ? (data.target as string) : "talk",
+    status,
+    createdAt: Date.now(),
+    data,
+  };
+}
+
+function findCreatorTalkWindow(thread: ThreadContext): OocObjectInstance {
   const found = thread.contextWindows.find(
-    (w): w is TalkWindow => w.class === "talk" && (w as TalkWindow).isCreatorWindow === true,
+    (w) => w.class === THREAD_CLASS_ID && isCreatorWindowId(w.id),
   );
-  if (!found) throw new Error("test setup: expected creator talk_window");
+  if (!found) throw new Error("test setup: expected creator 会话窗");
   return found;
 }
 
@@ -37,7 +58,7 @@ describe("wait tool — explicit IO dependency", () => {
     const out = await callWaitAsync(thread, { reason: "等一下" });
     expect(out.ok).toBe(false);
     expect(out.error).toContain("on");
-    // makeThread 默认注入 creator talk_window（fork 子窗）作为候选
+    // makeThread 默认注入 creator 会话窗（fork 子窗）作为候选
     expect(out.error).toMatch(/fork|talk/);
   });
 
@@ -49,16 +70,16 @@ describe("wait tool — explicit IO dependency", () => {
     expect(out.error).toMatch(/找不到|未在|候选/);
   });
 
-  it("R3: on 指向 file_window（非 talk） → reject 解释类型限制", async () => {
+  it("R3: on 指向 file 窗（非会话窗） → reject 解释类型限制", async () => {
     const thread = makeThread();
-    const fw: FileWindow = {
+    const fw: OocObjectInstance = {
       id: generateWindowId("file"),
       class: "file",
-      parentWindowId: ROOT_WINDOW_ID,
+      parentObjectId: ROOT_WINDOW_ID,
       title: "README.md",
       status: "open",
       createdAt: Date.now(),
-      path: "/tmp/README.md",
+      data: { path: "/tmp/README.md" },
     };
     thread.contextWindows = [...thread.contextWindows, fw];
     const out = await callWaitAsync(thread, { on: fw.id });
@@ -67,19 +88,10 @@ describe("wait tool — explicit IO dependency", () => {
     expect(out.error).toMatch(/talk_window/);
   });
 
-  it("R4: 自建 peer talk_window 未 say 过 → reject 并指引先 say", async () => {
+  it("R4: 自建 peer 会话窗未 say 过 → reject 并指引先 say", async () => {
     const thread = makeThread();
-    const talk: TalkWindow = {
-      id: generateWindowId("talk"),
-      class: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "assistant",
-      status: "open",
-      createdAt: Date.now(),
-      target: "assistant",
-      conversationId: "c1",
-      // 注：未设 isCreatorWindow / isForkWindow → 自建 peer 会话窗
-    };
+    // 非 creator id + 非 fork → 自建 peer 会话窗
+    const talk = makeTalkInstance(generateWindowId("talk"), { target: "assistant" });
     thread.contextWindows = [...thread.contextWindows, talk];
     // outbox 上没有 windowId=talk.id 的消息
     const out = await callWaitAsync(thread, { on: talk.id });
@@ -89,7 +101,7 @@ describe("wait tool — explicit IO dependency", () => {
   });
 
   it("R5: 无任何合法候选 → reject 并强 nudge end", async () => {
-    // skipCreatorWindow 让 thread 没有 creator talk_window；contextWindows 留空
+    // skipCreatorWindow 让 thread 没有 creator 会话窗；contextWindows 留空
     const thread = makeThread({ skipCreatorWindow: true });
     const out = await callWaitAsync(thread, { on: "anything" });
     expect(out.ok).toBe(false);
@@ -107,19 +119,10 @@ describe("wait tool — explicit IO dependency", () => {
     expect(thread.inboxSnapshotAtWait).toBe(0);
   });
 
-  it("happy: on=<creator peer talk_window> → 合法（creator 一律允许）", async () => {
+  it("happy: on=<creator peer 会话窗> → 合法（creator 一律允许）", async () => {
     const thread = makeThread({ skipCreatorWindow: true });
-    const talk: TalkWindow = {
-      id: generateWindowId("talk"),
-      class: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "creator",
-      status: "open",
-      createdAt: Date.now(),
-      target: "user",
-      conversationId: "c1",
-      isCreatorWindow: true,
-    };
+    // creator 身份编码在 id（creatorWindowIdOf(thread.id)）里。
+    const talk = makeTalkInstance(creatorWindowIdOf(thread.id), { target: "user" });
     thread.contextWindows = [talk];
     const out = await callWaitAsync(thread, { on: talk.id });
     expect(out.ok).toBe(true);
@@ -127,18 +130,9 @@ describe("wait tool — explicit IO dependency", () => {
     expect(thread.status).toBe("waiting");
   });
 
-  it("happy: on=<自建 peer talk_window 但已 say 过> → 合法", async () => {
+  it("happy: on=<自建 peer 会话窗但已 say 过> → 合法", async () => {
     const thread = makeThread();
-    const talk: TalkWindow = {
-      id: generateWindowId("talk"),
-      class: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "assistant",
-      status: "open",
-      createdAt: Date.now(),
-      target: "assistant",
-      conversationId: "c2",
-    };
+    const talk = makeTalkInstance(generateWindowId("talk"), { target: "assistant" });
     thread.contextWindows = [...thread.contextWindows, talk];
     thread.outbox = [
       {
@@ -159,18 +153,11 @@ describe("wait tool — explicit IO dependency", () => {
   it("on=closed fork 子窗 → reject（会话窗 alive 状态是 open）", async () => {
     // 必须有另一个合法候选，否则会先撞 R5 "无任何候选" 兜底
     const thread = makeThread();
-    const closedFork: TalkWindow = {
-      id: generateWindowId("talk"),
-      class: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
-      title: "child task",
-      status: "closed",
-      createdAt: Date.now(),
-      target: "alice",
-      targetThreadId: "t_child",
-      isForkWindow: true,
-      conversationId: "c3",
-    };
+    const closedFork = makeTalkInstance(
+      generateWindowId("talk"),
+      { target: "alice", targetThreadId: "t_child", isForkWindow: true },
+      "closed",
+    );
     thread.contextWindows = [...thread.contextWindows, closedFork];
     const out = await callWaitAsync(thread, { on: closedFork.id });
     expect(out.ok).toBe(false);

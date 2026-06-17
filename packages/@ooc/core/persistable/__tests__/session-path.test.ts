@@ -3,7 +3,7 @@ import { resolve, join } from "node:path";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { __testing, resolveSessionPath } from "@ooc/core/persistable/session-path.js";
-import type { ThreadContext } from "../../../thinkable/context";
+import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 const { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath } = __testing;
 

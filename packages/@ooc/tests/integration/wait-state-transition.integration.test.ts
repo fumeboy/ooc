@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+// side-effect：装载全部 builtin class 进 builtinRegistry，否则会话窗 class
+// `_builtin/agent/thread` 解析不到（createFlowObject 报 unregistered class）。
+import "@ooc/core/runtime/register-builtins.js";
 import { runScheduler } from "@ooc/core/thinkable/scheduler";
 import { createFlowObject } from "@ooc/core/persistable";
 import {
@@ -8,10 +11,12 @@ import {
   setupTempFlow,
 } from "./_fixture";
 import {
-  generateWindowId,
+  creatorWindowIdOf,
   ROOT_WINDOW_ID,
-  type TalkWindow,
+  type OocObjectInstance,
 } from "@ooc/core/_shared/types/context-window.js";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
@@ -31,17 +36,17 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
     // 给 thread 挂一个 creator talk_window（模拟 callee thread）作为合法 on 目标，
     // 让 LLM 可以 wait(on=<该 talk>) 而不被 reject。
     const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
-    const creatorTalkId = generateWindowId("talk");
-    const creatorTalk: TalkWindow = {
+    // Wave4 会话窗：stored class = THREAD_CLASS_ID，target 落 inst.data；creator 窗身份编码在
+    // id（creatorWindowIdOf）里——不再存 isCreatorWindow flag，wait 按 isCreatorWindowId(id) 识别。
+    const creatorTalkId = creatorWindowIdOf("root");
+    const creatorTalk: OocObjectInstance<TalkData> = {
       id: creatorTalkId,
-      class: "talk",
-      parentWindowId: ROOT_WINDOW_ID,
+      class: THREAD_CLASS_ID,
+      parentObjectId: ROOT_WINDOW_ID,
       title: "creator",
       status: "open",
       createdAt: Date.now(),
-      target: "user",
-      conversationId: creatorTalkId,
-      isCreatorWindow: true,
+      data: { target: "user" },
     };
     const { inbox, events } = bootstrapInboxFromPrompt(
       [

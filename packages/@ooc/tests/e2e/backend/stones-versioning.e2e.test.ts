@@ -25,11 +25,14 @@ import {
   rollback,
   SUPERVISOR_OBJECT_ID,
 } from "@ooc/core/persistable";
-import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/reflect_request/method.create-pr-and-invite-reviewers";
-import { executeNewFeatBranch } from "@ooc/builtins/reflect_request/method.new-feat-branch";
-import { writeFileExec as executeWriteFileMethod } from "@ooc/builtins/filesystem/executable/index.js";
+// Wave 4：reflectable 沉淀方法搬进 thread class（会话载体）的 executable 维度。
+import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/agent/children/thread/executable/method.create-pr-and-invite-reviewers";
+import { executeNewFeatBranch } from "@ooc/builtins/agent/children/thread/executable/method.new-feat-branch";
+// write_file 的实写落点解析现寄居 file class 的 construct（worktree 重定向 + 写盘都在这里）；
+// 不再有裸 writeFileExec。construct.exec(ctx, args) 直接把内容写进 feat worktree。
+import { construct as fileConstruct } from "@ooc/builtins/filesystem/children/file/executable/construct.js";
 import { runRecoveryCheck } from "@ooc/core/app/server/bootstrap/recovery-check";
-import type { MethodExecutionContext } from "@ooc/core/_shared/types/method.js";
+import type { ExecutableContext, ConstructorContext } from "@ooc/core/executable/contract.js";
 
 let tempRoot: string | undefined;
 
@@ -82,19 +85,22 @@ async function sediment(opts: {
     contextWindows: [] as unknown[],
     events: [] as unknown[],
   };
+  // 新契约：方法/构造均三参 (ctx, args)，ctx 携 thread + args 副本。
   const ctx = (args: Record<string, unknown>) =>
-    ({ thread, args }) as unknown as MethodExecutionContext;
+    ({ thread, args }) as unknown as ExecutableContext & ConstructorContext;
 
-  await executeNewFeatBranch(ctx({ intent: opts.intent }));
+  await executeNewFeatBranch(ctx({ intent: opts.intent }), { intent: opts.intent });
   for (const e of opts.edits) {
     // edits 的 path 形如 objects/<id>/<file>；write_file 吃概念路径 stones/<id>/<file>。
+    // 实写落点解析在 file class 的 construct（feat 绑定下重定向到 feat worktree）。
     const rel = e.path.replace(/^objects\//, "");
-    const w = await executeWriteFileMethod(ctx({ path: `stones/${rel}`, content: e.content }));
-    if (typeof w === "object" && w !== null && (w as { ok?: boolean }).ok === false) {
-      throw new Error(`write_file failed: ${(w as { error?: string }).error}`);
-    }
+    const args = { path: `stones/${rel}`, content: e.content };
+    // construct.exec 失败会 throw（runtime 捕获、不建窗），这里直接冒泡。
+    await fileConstruct.exec(ctx(args), args);
   }
-  return JSON.parse((await executeCreatePrAndInviteReviewers(ctx({}))) as string);
+  return JSON.parse(
+    (await executeCreatePrAndInviteReviewers(ctx({}), {})) as string,
+  );
 }
 
 describe("e2e: self-scope 沉淀（create_pr_and_invite_reviewers → feat-branch PR → resolve merge）", () => {
@@ -246,11 +252,12 @@ describe("e2e: flows/ 不入 git", () => {
 });
 
 describe("e2e: recovery-check 端到端", () => {
-  test("broken stone 的 executable/index.ts → 启动期产 [recovery-needed] PR-Issue", async () => {
+  test("broken stone 的 index.ts → 启动期产 [recovery-needed] PR-Issue", async () => {
     const baseDir = await newWorld(["agent_of_x", "supervisor"]);
-    await mkdir(join(baseDir, "stones", "main", "objects", "agent_of_x", "executable"), { recursive: true });
+    // Wave 4：recovery-check 走 loadStoneClass，加载 stone 目录的 `index.ts`（export const Class
+    // 装配入口），不再读 executable/index.ts。坏 stone 须种坏 index.ts 才触发 broken。
     await writeFile(
-      join(baseDir, "stones", "main", "objects", "agent_of_x", "executable", "index.ts"),
+      join(baseDir, "stones", "main", "objects", "agent_of_x", "index.ts"),
       "this is &^&^ not valid &@!!\n",
     );
 

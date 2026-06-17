@@ -10,7 +10,7 @@
  *  (b) 有 executable/index.ts 但 load 失败 → 不静默：注入显著 readable error，agent 在 context 看得见。
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureSelfObjectTypeRegistered } from "../object-windows.js";
@@ -20,7 +20,14 @@ import { clearServerLoaderCache } from "../../../runtime/server-loader.js";
 import {
   createStoneObject,
   writeExecutableSource,
+  stoneDir,
 } from "../../../persistable";
+
+// Wave4：class 装配入口 = stone 根 index.ts（`export const Class`），loader 真实 import 它。
+// 「broken executable」复刻 = 写一段 import 不存在模块的根 index.ts → load 抛错。
+async function writeBrokenStoneClass(baseDir: string, objectId: string, code: string): Promise<void> {
+  await writeFile(join(stoneDir({ baseDir, objectId }), "index.ts"), code, "utf8");
+}
 
 describe("ensureSelfObjectTypeRegistered fail-loud on broken executable", () => {
   let baseDir: string;
@@ -44,6 +51,21 @@ describe("ensureSelfObjectTypeRegistered fail-loud on broken executable", () => 
     });
   }
 
+  // Wave4：RegisteredClass.readable 是 ReadableModule（readable(ctx,self,win) → ReadableProjection）。
+  // 渲染期投影 self 窗的 context = { object:{id,class}, thread }。
+  async function projectReadable(
+    def: NonNullable<ReturnType<ReturnType<typeof createObjectRegistry>["getClass"]>>,
+    objectId: string,
+    thread: ReturnType<typeof makeSelfThread>,
+  ): Promise<string> {
+    const projection = await def.readable!.readable(
+      { object: { id: objectId, class: objectId }, thread },
+      {},
+      undefined,
+    );
+    return JSON.stringify(projection.content);
+  }
+
   it("(a) object with NO executable → empty methods, no error readable", async () => {
     // 纯 self.md/readable.md 对象，无 executable/index.ts。
     await createStoneObject({ baseDir, objectId: "agent_plain" });
@@ -54,20 +76,23 @@ describe("ensureSelfObjectTypeRegistered fail-loud on broken executable", () => 
     await ensureSelfObjectTypeRegistered(thread, registry);
 
     expect(registry.has("agent_plain")).toBe(true);
-    const def = registry.getObjectDefinition("agent_plain");
-    expect(Object.keys(def.methods ?? {})).toEqual([]);
+    const def = registry.getClass("agent_plain")!;
+    expect(def.executable?.methods ?? []).toEqual([]);
     // 关键：没有把 load error 当成「无方法」—— 不应注入 error readable。
     expect(def.readable).toBeUndefined();
   });
 
   it("(b) object with BROKEN executable → loud/visible error, NOT silently-empty", async () => {
     await createStoneObject({ baseDir, objectId: "sentry_factor" });
-    // 复刻事故：import 不存在的模块 → load 抛 "Cannot find module ..."。
-    await writeExecutableSource(
-      { baseDir, objectId: "sentry_factor" },
+    // 复刻事故：根 index.ts（class 装配入口）import 不存在的模块 → load 抛 "Cannot find module ..."。
+    await writeBrokenStoneClass(
+      baseDir,
+      "sentry_factor",
       `import { nope } from "@ooc/core/this-module-does-not-exist";\n` +
-        `export const window = { methods: { groupSearch: nope } };\n`,
+        `export const Class = { executable: { methods: [nope] } };\n`,
     );
+    // executable/index.ts 存在 = fail-loud 探测信号「磁盘上确有 executable 源」（区分「根本无 executable」）。
+    await writeExecutableSource({ baseDir, objectId: "sentry_factor" }, `export const x = 1;\n`);
 
     const registry = createObjectRegistry();
     const thread = makeSelfThread("sentry_factor");
@@ -75,14 +100,13 @@ describe("ensureSelfObjectTypeRegistered fail-loud on broken executable", () => 
     await ensureSelfObjectTypeRegistered(thread, registry);
 
     expect(registry.has("sentry_factor")).toBe(true);
-    const def = registry.getObjectDefinition("sentry_factor");
+    const def = registry.getClass("sentry_factor")!;
     // 仍是空 methods（load 失败拿不到方法），但区别在于：
-    expect(Object.keys(def.methods ?? {})).toEqual([]);
+    expect(def.executable?.methods ?? []).toEqual([]);
     // fail-loud：必须注入可见的 error readable，让 agent 在 context 里看到方法库没装上。
     expect(def.readable).toBeDefined();
 
-    const nodes = await def.readable!({ thread, window: { id: "sentry_factor", class: "sentry_factor" } as any });
-    const serialized = JSON.stringify(nodes);
+    const serialized = await projectReadable(def, "sentry_factor", thread);
     expect(serialized).toContain("executable_load_error");
     // 错误原文要可见（agent 才知道该修什么）。
     expect(serialized).toContain("加载失败");
@@ -92,20 +116,21 @@ describe("ensureSelfObjectTypeRegistered fail-loud on broken executable", () => 
 
   it("(b') broken executable error readable carries the underlying load message", async () => {
     await createStoneObject({ baseDir, objectId: "sentry_factor2" });
-    await writeExecutableSource(
-      { baseDir, objectId: "sentry_factor2" },
-      `import "@ooc/core/definitely-missing-xyz";\nexport const window = { methods: {} };\n`,
+    await writeBrokenStoneClass(
+      baseDir,
+      "sentry_factor2",
+      `import "@ooc/core/definitely-missing-xyz";\nexport const Class = { executable: { methods: [] } };\n`,
     );
+    await writeExecutableSource({ baseDir, objectId: "sentry_factor2" }, `export const x = 1;\n`);
 
     const registry = createObjectRegistry();
     const thread = makeSelfThread("sentry_factor2");
 
     await ensureSelfObjectTypeRegistered(thread, registry);
 
-    const def = registry.getObjectDefinition("sentry_factor2");
+    const def = registry.getClass("sentry_factor2")!;
     expect(def.readable).toBeDefined();
-    const nodes = await def.readable!({ thread, window: { id: "sentry_factor2", class: "sentry_factor2" } as any });
-    const serialized = JSON.stringify(nodes);
+    const serialized = await projectReadable(def, "sentry_factor2", thread);
     // 底层 import 失败原文（module 名）必须透出到 context。
     expect(serialized).toMatch(/Cannot find module|definitely-missing-xyz/);
   });
