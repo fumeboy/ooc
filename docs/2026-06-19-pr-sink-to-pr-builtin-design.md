@@ -1,6 +1,12 @@
 # PR 机制下沉 `_builtin/agent/pr` —— 拆分边界 / dispatch / recovery 设计
 
-> 状态：设计草案（design-first，未执行）。分支 `feat/context-window-axiom`。
+> **状态：已落地 P1-P4（2026-06-19）。** 分支 `feat/context-window-axiom`。
+> P1 抽纯 git 原语 `15180ea6` · P2a resolve 编排→builtin `a27e5266` · P2b create 编排→builtin
+> `9decaf11` · P3 pr-issue.ts 整体迁 builtin `8b294194` · P4 退潮（本提交）。
+> 净结果：PR-Issue 账本 + 审批/开PR/resolve 编排全部归 `_builtin/agent/pr`；core 只留纯 git 机制
+> （`mergeFeatBranch`/`archiveFeatBranch`/`commitFeatAndDiff`/`gitQueueKey`/`rollback`）。core 维度
+> 包零 import builtin（仅 app 层 service/recovery + 测试）。recovery 沿用 app-bootstrap import builtin
+> 存储原语（无需重设计）。下方为原设计推演，保留作记录。
 > 起因：persistable 退潮时质疑 `pr-issue.ts` 是否该留 core。`think hard` 后结论：**审批逻辑已在
 > builtin，剩余 core 残留可进一步沉，唯一硬解耦是 `stone-versioning` 对 pr-issue 的读依赖**。
 

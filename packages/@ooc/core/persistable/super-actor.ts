@@ -2,7 +2,7 @@
  * super-flow actor 冒泡（reflectable 新对象自沉淀 bootstrap，用户拍板）。
  *
  * 背景：新对象只在 flow session worktree 存在、未进 `stones/main`（不 canonical）。
- * 它自己不能当 super(self) 的 super-flow actor / PR author——会撞 `pr-issue.ts`
+ * 它自己不能当 super(self) 的 super-flow actor / PR author——会撞 `_builtin/agent/pr 的 pr-issue.ts`
  * 的 `ensureAuthorExists`（author 必须在 `stones/main/objects/<id>/`）。
  *
  * 解法（沿用冒泡机制）：`talk(target="super")` 时，把 super-alias 的 callee 从「caller 自身」
@@ -23,7 +23,7 @@ export const SUPER_ACTOR_FALLBACK = "supervisor";
 
 /**
  * objectId 是否 canonical = `stones/main/objects/<nestedObjectPath(id)>/` 目录存在。
- * 与 `pr-issue.ts:ensureAuthorExists` 用同一寻址（stoneDir + isDirectory），保证
+ * 与 `_builtin/agent/pr 的 pr-issue.ts:ensureAuthorExists` 用同一寻址（stoneDir + isDirectory），保证
  * 选出的 actor 一定能通过 author 校验。
  */
 export async function isCanonicalObject(baseDir: string, objectId: string): Promise<boolean> {

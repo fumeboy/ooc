@@ -10,12 +10,12 @@
  *   1. `createFeatBranchWorktree`：从 main 派生 feat 分支 worktree（落 `stones/<branch>/`），
  *      只建空白副本、返回分支名——**不写任何文件**。super(foo) 随后用普通 write_file /
  *      file_window.edit 直接编辑该 worktree 下文件（经 resolveStoneIdentityRef 绑定覆盖优先路由）。
- *   2. `commitAndOpenPr`：finalizer——commit feat worktree（署名 author）、`computeReviewerSet`
- *      冒泡算 reviewer、`createPrIssue` 落 `flows/super/issues/`（prPayload.branch=feat 分支、
- *      record.reviewers=冒泡结果）。
+ *   2. `commitFeatAndDiff`：commit feat worktree（署名 author）+ diff vs main + `computeReviewerSet`
+ *      冒泡算 reviewer + 组 PR 草稿载荷。**createPrIssue 落账已下沉 pr builtin 的 `commitAndOpenPr`**
+ *      （PR 下沉 P2b/P3）——本模块只留纯 git 部分。
  *
  * `computeReviewerSet` 纯函数（决策 A：逐路径拥有者）算出的 reviewer 集**强制执行**：
- * 落 `record.reviewers`，合入闸 `aggregatePrApproval`（pr-issue.ts）要求全员 approve 才
+ * 落 `record.reviewers`，合入闸 `aggregatePrApproval`（_builtin/agent/pr 的 pr-issue.ts）要求全员 approve 才
  * `ready-to-merge`（reject 一票否决），再由 `.world.json prAutoMerge` 决定自动/人工合入
  * （编排见 `@ooc/builtins/agent/pr/approval-flow.ts`）。
  *
@@ -194,7 +194,7 @@ export async function createFeatBranchWorktree(
 }
 
 /* ================================================================ *
- * commitAndOpenPr（finalizer：commit feat worktree + 建 PR）
+ * commitFeatAndDiff（commit feat worktree + diff + reviewer，组 PR 草稿载荷；createPrIssue 归 pr builtin）
  * ================================================================ */
 
 export interface CommitAndOpenPrInput {
