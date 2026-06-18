@@ -77,14 +77,25 @@ pr-issue` 即可，**无需重设计启动语义**。先前担心的"启动无 r
 
 ## 6. 迁移分阶段（每阶段 tsc + 测试绿）
 
-- **P1 解耦 versioning**：`resolvePrIssue` 拆出纯 git 原语 `mergeFeatBranch`/`archiveFeatBranch`（留
-  stone-versioning），读+close 编排暂留 core 一个薄壳（仍读 pr-issue）。验证 git 合入行为逐字节不变。
-- **P2 下沉 pr-issue**：`core/persistable/pr-issue.ts` → `builtins/agent/children/pr/persistable/`；
-  builtin approval-flow 就近 import；app 层（service/recovery）改 import builtin；persistable/index 去
-  pr-issue re-export。P1 已断 persistable→pr-issue，故此步无分层违规。
-- **P3 收编 resolve 编排**：把 P1 暂留 core 的"读+close 编排"移进 builtin approval-flow（它调 P1 的 git
-  原语 + 账本 close），core 不再有 PR 编排残留。
-- **P4 退潮**：清 persistable/index 注释、stone-versioning doc、对象树 persistable/pr 维度 knowledge 回流。
+> **persistable→pr-issue 真实耦合（已核实，2 处 import + 1 barrel）**：
+> `stone-versioning.ts:39`（readPrIssue/closePrIssue，resolve 编排）、`stone-feat-branch.ts:37`
+> （createPrIssue，author 建 PR）、`persistable/index.ts:115`（barrel re-export）。
+> super-actor / stone-bootstrap / world-config 仅**注释引用**，无真实 import。
+
+- **P1 解耦 versioning（已完成 `15180ea6`）**：`resolvePrIssue` 拆出纯 git 原语
+  `mergeFeatBranch`/`archiveFeatBranch`（留 stone-versioning，无 pr-issue 依赖）。resolve 编排仍读
+  pr-issue（P3 处理）。git 合入行为逐字节不变。**注：P1 只断了 git 机制↔pr-issue，stone-versioning 仍
+  import readPrIssue/closePrIssue。**
+- **P2 收编两侧 PR-lifecycle 编排进 builtin**（前置，断 persistable→pr-issue 的 2 处 import）：
+  - **resolve 侧**：`resolvePrIssue` 的「读 issue + 调 git 原语 + close」编排移进 builtin approval-flow
+    （它本就调 resolvePrIssue）；stone-versioning 只留纯 git 原语，不再 import pr-issue。
+  - **create 侧**：`stone-feat-branch.commitAndOpenPr` 的 `createPrIssue` 调用经 dispatch / 回调注入，
+    或该 createPrIssue 调用点上移到 builtin；stone-feat-branch 不再 import pr-issue。
+- **P3 下沉 pr-issue**：`core/persistable/pr-issue.ts` → `builtins/agent/children/pr/persistable/`；
+  builtin 就近 import；app 层（service/recovery）改 import builtin（app→builtin 合法）；persistable/index
+  去 re-export。P2 已断 persistable→pr-issue，此步无分层违规。
+- **P4 退潮**：清 persistable/index + super-actor/stone-bootstrap/world-config 的 pr-issue 注释引用、
+  stone-versioning doc、对象树 persistable/pr 维度 knowledge 回流。
 
 ## 7. 风险 / 开放问题
 
