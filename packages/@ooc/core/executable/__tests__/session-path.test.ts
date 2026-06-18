@@ -2,7 +2,7 @@ import { describe, expect, test, beforeEach, afterEach } from "bun:test";
 import { resolve, join } from "node:path";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { __testing, resolveSessionPath } from "@ooc/core/persistable/session-path.js";
+import { __testing, resolveSessionPath } from "@ooc/core/executable/session-path.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 
 const { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath } = __testing;

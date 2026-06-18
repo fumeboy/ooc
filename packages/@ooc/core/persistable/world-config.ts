@@ -84,7 +84,7 @@ export interface WorldConfig {
   prAutoMerge: boolean;
   /**
    * 豁免 data 原语（grep / glob / write_file / open_file / file_window.edit）的 world 根
-   * 边界拦截（resolveSessionPath，persistable/session-path.ts）。
+   * 边界拦截（resolveSessionPath，executable/session-path.ts）。
    *   - false（默认）→ `../` 相对逃逸 + world 外绝对路径一律拒绝（安全默认）。
    *   - true → 允许解析到 world 目录之外。仅用于把整个宿主仓库当 world 操作的自举场景
    *            （如 .ooc-world-meta submodule 需要读写父仓库源码）。
