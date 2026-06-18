@@ -183,7 +183,7 @@ export {
   // 由 super(foo) thread 的 feat 分支绑定串起来；编辑走普通 write_file / file_window.edit。
   computeReviewerSet,
   createFeatBranchWorktree,
-  commitAndOpenPr,
+  commitFeatAndDiff,
   unregisterFeatWorktree,
   slugFromIntent,
   featBranchName,
@@ -191,7 +191,8 @@ export {
   type CreateFeatBranchWorktreeInput,
   type CreateFeatBranchWorktreeResult,
   type CommitAndOpenPrInput,
-  type CommitAndOpenPrResult,
+  type CommitFeatAndDiffResult,
+  type PrPayloadDraft,
 } from "./stone-feat-branch.js";
 
 export { parseMentions } from "@ooc/core/_shared/utils/mention.js";

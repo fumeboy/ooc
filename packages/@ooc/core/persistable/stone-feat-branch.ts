@@ -34,7 +34,6 @@ import {
   gitWorktreeAdd,
   gitWorktreeUnregister,
 } from "./stone-git.js";
-import { createPrIssue } from "./pr-issue.js";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import {
   nestedObjectPath,
@@ -217,29 +216,42 @@ export interface CommitAndOpenPrInput {
   authorThreadId?: string;
 }
 
-export type CommitAndOpenPrResult =
+/**
+ * commitFeatAndDiff 产出的 PR-Issue 草稿载荷。
+ * 结构兼容 `pr-issue.PrIssuePayload`，但**不 import 它**——以断 stone-feat-branch→pr-issue 耦合（PR 下沉 P2b）。
+ */
+export interface PrPayloadDraft {
+  intent: string;
+  branch: string;
+  diff: string;
+  paths: string[];
+  baseSha: string;
+  authorThreadId?: string;
+}
+
+export type CommitFeatAndDiffResult =
   | {
       ok: true;
-      issueId: number;
       branch: string;
       reviewers: string[];
       paths: string[];
+      title: string;
+      prPayload: PrPayloadDraft;
     }
   | { ok: false; code: "INVALID_INPUT"; message: string }
   | { ok: false; code: "GIT"; message: string }
-  | { ok: false; code: "NO_CHANGES"; message: string }
-  | { ok: false; code: "ISSUE_SERVICE"; message: string };
+  | { ok: false; code: "NO_CHANGES"; message: string };
 
 /**
- * finalizer：commit feat worktree（署名 author）→ diff vs main → computeReviewerSet →
- * createPrIssue（branch=feat 分支、reviewers=冒泡结果）。
+ * git 部分：commit feat worktree（署名 author）→ diff vs main → computeReviewerSet → 组 PR 草稿载荷。
  *
- * 编辑由 super(foo) 提前经 write_file / file_window.edit 直接落进 feat worktree——本函数
- * 只把工作树现状 commit 出来。失败一律 fail-loud。git 操作经 `git:<baseDir>` 串行化。
+ * 编辑由 super(foo) 提前经 write_file / file_window.edit 直接落进 feat worktree——本函数只把工作树现状
+ * commit 出来并产出 PR 载荷；**createPrIssue 落账由 pr builtin 的 `commitAndOpenPr` 接手**（PR 下沉 P2b）。
+ * 失败一律 fail-loud。git 操作经 `git:<baseDir>` 串行化。
  */
-export async function commitAndOpenPr(
+export async function commitFeatAndDiff(
   input: CommitAndOpenPrInput,
-): Promise<CommitAndOpenPrResult> {
+): Promise<CommitFeatAndDiffResult> {
   const { baseDir, branch, authorObjectId, intent } = input;
   if (!authorObjectId || !authorObjectId.trim()) {
     return { ok: false, code: "INVALID_INPUT", message: "authorObjectId required" };
@@ -302,41 +314,18 @@ export async function commitAndOpenPr(
       return { ok: false, code: "GIT", message: `diff patch failed: ${patch.stderr}` } as const;
     }
 
-    // 4. reviewer 集（冒泡）+ createPrIssue（branch=feat 分支、reviewers=冒泡结果）
+    // 4. reviewer 集（冒泡）+ 组 PR 草稿载荷。createPrIssue 落账由 pr builtin 的 commitAndOpenPr 接手。
     const reviewers = computeReviewerSet(names.value, authorObjectId);
     const title = (input.title ?? intent).slice(0, 80);
-    try {
-      const issue = await createPrIssue({
-        baseDir,
-        title,
-        description: input.description,
-        createdByObjectId: authorObjectId,
-        reviewers,
-        prPayload: {
-          intent,
-          branch,
-          diff: patch.value,
-          paths: names.value,
-          baseSha: head.value,
-          ...(input.authorThreadId ? { authorThreadId: input.authorThreadId } : {}),
-        },
-      });
-      return {
-        ok: true,
-        issueId: issue.id,
-        branch,
-        reviewers,
-        paths: names.value,
-      } as const;
-    } catch (e) {
-      // PR 创建失败：feat 分支已 commit，但无 PR record 追踪 → 解除 worktree（分支保留供排查）。
-      gitWorktreeUnregister(mainRepoDir(baseDir), wtPath);
-      return {
-        ok: false,
-        code: "ISSUE_SERVICE",
-        message: e instanceof Error ? e.message : String(e),
-      } as const;
-    }
+    const prPayload: PrPayloadDraft = {
+      intent,
+      branch,
+      diff: patch.value,
+      paths: names.value,
+      baseSha: head.value,
+      ...(input.authorThreadId ? { authorThreadId: input.authorThreadId } : {}),
+    };
+    return { ok: true, branch, reviewers, paths: names.value, title, prPayload } as const;
   });
 }
 

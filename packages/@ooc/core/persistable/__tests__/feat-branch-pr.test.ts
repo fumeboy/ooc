@@ -14,10 +14,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests, readPrIssue } from "@ooc/core/persistable";
-import {
-  createFeatBranchWorktree,
-  commitAndOpenPr,
-} from "../stone-feat-branch";
+import { createFeatBranchWorktree } from "../stone-feat-branch";
+import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";
 
 let tempRoots: string[] = [];

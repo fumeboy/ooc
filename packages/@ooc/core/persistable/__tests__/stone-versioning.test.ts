@@ -15,11 +15,8 @@ import {
   __testing,
 } from "@ooc/core/persistable/stone-versioning";
 import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";
-import {
-  createFeatBranchWorktree,
-  commitAndOpenPr,
-  type CommitAndOpenPrResult,
-} from "@ooc/core/persistable/stone-feat-branch";
+import { createFeatBranchWorktree } from "@ooc/core/persistable/stone-feat-branch";
+import { commitAndOpenPr, type CommitAndOpenPrResult } from "@ooc/builtins/agent/pr/open";
 import { ensureStoneRepo } from "@ooc/core/persistable";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
 import { gitRevParse } from "@ooc/core/persistable/stone-git";

@@ -23,8 +23,8 @@ import {
   __resetSerialQueueForTests,
   readPrIssue,
   createFeatBranchWorktree,
-  commitAndOpenPr,
 } from "@ooc/core/persistable";
+import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
 import type { ThreadContext } from "@ooc/core/thinkable/context";

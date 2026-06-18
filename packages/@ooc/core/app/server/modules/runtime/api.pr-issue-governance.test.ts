@@ -19,10 +19,8 @@ import {
   clearWorldConfigCache,
   WORLD_CONFIG_FILENAME,
 } from "@ooc/core/persistable";
-import {
-  createFeatBranchWorktree,
-  commitAndOpenPr,
-} from "@ooc/core/persistable/stone-feat-branch";
+import { createFeatBranchWorktree } from "@ooc/core/persistable/stone-feat-branch";
+import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { readServerConfig } from "@ooc/core/app/server/bootstrap/config";
 import { buildServer } from "@ooc/core/app/server/index";
 

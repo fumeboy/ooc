@@ -24,7 +24,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
-import { commitAndOpenPr } from "@ooc/core/persistable/index.js";
+import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { deliverPrWindowToReviewers } from "@ooc/builtins/agent/pr/delivery.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 import type { Data } from "../types.js";
