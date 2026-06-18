@@ -7,8 +7,8 @@ import {
   createStoneObject,
   createPoolObject,
   poolKnowledgeDir,
-  llmInputFile,
 } from "@ooc/core/persistable";
+import { llmInputFile } from "@ooc/core/observable/debug-file";
 import {
   bootstrapInboxFromPrompt,
   countFormExecutions,
@@ -98,7 +98,7 @@ describe.skipIf(!hasLlmEnv)("integration: knowledge-activation", () => {
     // 关键断言：读 llm.input.json 解析后看 system message 的 XML 内容。
     // 这比让 LLM 自己复述 marker-7xq9 可靠——不依赖模型是否乖乖按指令重复内容。
     //
-    // llm.input.json schema（参见 src/persistable/debug-file.ts LlmInputDebugRecord）：
+    // llm.input.json schema（参见 src/observable/debug-file.ts LlmInputDebugRecord）：
     //   { threadId, inputItems: LlmInputItem[], contextSnapshot }
     // inputItems[0] 是 type=message role=system 的 XML 上下文；旧 schema 用 `messages`，
     // responses-first item model 上线后已统一到 inputItems，这里跟着改。

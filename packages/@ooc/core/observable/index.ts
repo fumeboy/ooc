@@ -23,7 +23,7 @@ import {
   writeLoopDebugInput,
   writeLoopDebugMeta,
   writeLoopDebugOutput,
-} from "../persistable/index.js";
+} from "./debug-file.js";
 import { buildWindowsSnapshot } from "./window-hash.js";
 import { defaultObservableStore } from "../runtime/observable-store.js";
 import type {

@@ -10,7 +10,7 @@ import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/
 import { loadStoneClass } from "@ooc/core/runtime/server-loader";
 import { resolveStoneIdentityRef } from "@ooc/core/persistable";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
-import { normalizeMethodOutcome } from "@ooc/core/_shared/types/method.js";
+import { normalizeMethodOutcome } from "@ooc/core/executable/outcome.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";

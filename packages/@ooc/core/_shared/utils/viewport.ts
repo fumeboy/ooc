@@ -5,9 +5,8 @@
  * - file / knowledge window：行+列二维裁剪（`Viewport` / `applyViewport` / …）
  * - talk / do window：transcript 末 N 条或固定区间（`TranscriptViewport` / …）
  *
- * 不含 runtime 执行入口：`executeWindowSetViewport` /
- * `executeWindowSetTranscriptViewport` 依赖 `MethodExecutionContext` 且对
- * `ctx.self` 写副作用，留在 `readable/{viewport,transcript-viewport}.ts`。
+ * 纯类型 + 纯函数，无 runtime 执行副作用；各 class 的 readable（`WindowMethod`，
+ * 签名 `(ctx, self, before_win, args) => Win`）自行装配 set_viewport / set_transcript_window。
  */
 
 // ─────────────────────────── file / knowledge viewport ───────────────────────

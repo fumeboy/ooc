@@ -65,7 +65,7 @@ export const L5_STORIES: Story[] = [
     id: "L5-DEBUG-SNAPSHOT",
     layer: "observable",
     expectation: "跑一轮 thread 后 debug/llm.input.json + llm.output.json 落盘",
-    design: "observable：每次 LLM 调用前后抽 context/输出快照。persistable/debug-file.ts。需 worker（Tier B）",
+    design: "observable：每次 LLM 调用前后抽 context/输出快照。observable/debug-file.ts。需 worker（Tier B）",
     run: async () => skip("LLM 调用快照需 worker 真跑 thinkloop，控制面无 LLM（Tier B）"),
   }),
 

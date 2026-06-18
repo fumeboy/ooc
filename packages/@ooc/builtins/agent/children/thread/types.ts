@@ -27,7 +27,7 @@ export interface Data {
 
 /** thread 的**投影态**（与 Data 分离）：transcript 渲染窗口。window method `set_transcript_window` 读写。 */
 export interface ThreadWin {
-  transcriptViewport?: import("@ooc/core/_shared/types/viewport.js").TranscriptViewport;
+  transcriptViewport?: import("@ooc/core/_shared/utils/viewport.js").TranscriptViewport;
 }
 
 /**

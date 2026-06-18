@@ -5,11 +5,13 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   createFlowObject,
   flowMetadataFile,
+} from "../index";
+import {
   llmInputFile,
   llmOutputFile,
   writeDebugInput,
   writeDebugOutput,
-} from "../index";
+} from "@ooc/core/observable/debug-file";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { writeThreadContext } from "@ooc/builtins/agent/thread/persistable/flow-thread-context";
 import type { ThreadContext } from "../../thinkable/context";

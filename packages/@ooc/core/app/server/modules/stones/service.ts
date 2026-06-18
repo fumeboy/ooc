@@ -14,7 +14,7 @@ import {
 import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
 import type { ExecutableContext } from "@ooc/core/executable/contract";
-import { normalizeMethodOutcome } from "@ooc/core/_shared/types/method.js";
+import { normalizeMethodOutcome } from "@ooc/core/executable/outcome.js";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { parseKnowledgeFile, parseActivatesOn } from "@ooc/core/thinkable/knowledge";
 import { mkdir, stat, writeFile } from "node:fs/promises";

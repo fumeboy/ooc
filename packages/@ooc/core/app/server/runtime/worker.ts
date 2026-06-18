@@ -1,5 +1,6 @@
 import { createLlmClient } from "@ooc/core/thinkable/llm/client";
-import { llmInputFile, resolveSuperActor } from "@ooc/core/persistable";
+import { resolveSuperActor } from "@ooc/core/persistable";
+import { llmInputFile } from "@ooc/core/observable/debug-file";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { runScheduler } from "@ooc/core/thinkable/scheduler";
 import { detectInterruptedThread, markInterrupted } from "@ooc/core/thinkable/recovery";

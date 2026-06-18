@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
-import { llmOutputFile, type ThreadPersistenceRef } from "@ooc/core/persistable";
+import { type ThreadPersistenceRef } from "@ooc/core/persistable";
+import { llmOutputFile } from "@ooc/core/observable/debug-file";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { applyResumeTransition, canResumeThread } from "./thread-transition";
 

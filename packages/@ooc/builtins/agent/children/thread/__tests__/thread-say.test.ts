@@ -8,7 +8,7 @@ import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { sayMethod } from "@ooc/builtins/agent/thread/executable/session-methods.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import { WindowManager } from "@ooc/core/executable/manager.js";
+import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 

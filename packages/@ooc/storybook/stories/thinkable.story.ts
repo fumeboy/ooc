@@ -54,7 +54,7 @@ export async function runControlPlane(): Promise<StoryResult> {
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
       const { computeVisibleMethodSet } = await import("@ooc/core/thinkable/context/renderers/xml");
       const { extractBasicDescription } = await import(
-        "@ooc/core/executable/method-description.js"
+        "@ooc/core/thinkable/context/method-description.js"
       );
       const ownerClass = "filesystem/file";
       const projectionClass = "file";

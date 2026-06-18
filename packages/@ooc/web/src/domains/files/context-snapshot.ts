@@ -1,7 +1,7 @@
 /**
  * Context snapshot 解析 / 摘要 / 树形化工具。
  *
- * llm.input.json 中的 contextSnapshot 字段（与后端 src/persistable/debug-file.ts
+ * llm.input.json 中的 contextSnapshot 字段（与后端 src/observable/debug-file.ts
  * 的 ContextSnapshot 同 shape）描述了某次 LLM 调用时刻的完整 thread 上下文：
  *
  *   { id, status, plan?, contextWindows[], inbox?, outbox?, events?, ... }

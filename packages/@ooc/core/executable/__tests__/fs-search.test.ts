@@ -21,7 +21,7 @@ import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 
 import "@ooc/core/runtime/register-builtins.js";
-import { WindowManager } from "@ooc/core/executable/manager.js";
+import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { generateWindowId } from "@ooc/core/_shared/types/context-window.js";
 import { serializeXml, xmlElement, type XmlNode } from "@ooc/core/_shared/types/xml.js";

@@ -5,12 +5,12 @@ import { afterEach, describe, expect, test } from "bun:test";
 // 注册 builtin 窗类型（_builtin/agent + agent/plan…）—— scheduler 经 runtime.instantiate
 // 造 plan 子对象、createFlowObject 解析 class 都需要它们在 registry 里。
 import "@ooc/core/runtime/register-builtins.js";
+import { createFlowObject } from "../../persistable";
 import {
-  createFlowObject,
   llmInputFile,
   llmOutputFile,
   loopMetaFile,
-} from "../../persistable";
+} from "../../observable/debug-file";
 import { readThread, threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import type { ThreadContext } from "../context";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";

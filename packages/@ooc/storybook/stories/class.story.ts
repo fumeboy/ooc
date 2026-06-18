@@ -13,7 +13,7 @@ import { stoneDir as realStoneDir, resolveBuiltinReadDir } from "@ooc/core/persi
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry";
 import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
-import { WindowManager } from "@ooc/core/executable/manager.js";
+import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { mkServer, postJson, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult, type TcResult } from "../_harness/types";
 

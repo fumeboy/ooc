@@ -5,7 +5,7 @@ import {
   applyTranscriptViewport,
   hasAnyTranscriptViewportField,
   mergeTranscriptViewport,
-} from "../transcript-viewport";
+} from "../viewport";
 
 describe("transcript-viewport: defaults", () => {
   it("DEFAULT_TRANSCRIPT_VIEWPORT is { tail: 20 }", () => {

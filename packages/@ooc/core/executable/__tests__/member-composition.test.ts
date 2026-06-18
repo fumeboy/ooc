@@ -23,7 +23,7 @@ import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
-import { WindowManager } from "@ooc/core/executable/manager.js";
+import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 

@@ -12,7 +12,7 @@ import {
   applyTranscriptViewport,
   DEFAULT_TRANSCRIPT_VIEWPORT,
   type TranscriptViewport,
-} from "@ooc/core/readable/transcript-viewport.js";
+} from "@ooc/core/_shared/utils/viewport.js";
 
 /** 会话窗渲染所需的最小窗形态（talk / do 都满足）。 */
 interface ConversationWindowLike {

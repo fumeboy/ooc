@@ -12,7 +12,7 @@ import {
   applyTranscriptViewport,
   mergeTranscriptViewport,
   type TranscriptViewport,
-} from "@ooc/core/readable/transcript-viewport.js";
+} from "@ooc/core/_shared/utils/viewport.js";
 import type { WindowMethod, ReadableContext } from "@ooc/core/readable/contract.js";
 import type { ProcessExecRecord } from "./process-record.js";
 

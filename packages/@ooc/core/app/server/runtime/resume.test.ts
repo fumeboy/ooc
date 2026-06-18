@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createFlowObject, llmOutputFile } from "@ooc/core/persistable";
+import { createFlowObject } from "@ooc/core/persistable";
+import { llmOutputFile } from "@ooc/core/observable/debug-file";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { resumePausedThread } from "./resume";
 

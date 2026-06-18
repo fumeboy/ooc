@@ -6,14 +6,14 @@ import * as observableModule from "../index";
 import type { ThreadContext } from "../../thinkable/context";
 import type { LlmGenerateResult, LlmInputItem, LlmTool } from "../../thinkable/llm/types";
 import { FILE_CLASS_ID } from "../../_shared/types/constants";
+import { createFlowObject } from "../../persistable";
 import {
-  createFlowObject,
   llmInputFile,
   llmOutputFile,
   loopMetaFile,
   loopInputFile,
   loopOutputFile
-} from "../../persistable";
+} from "../debug-file";
 
 type ObservableStore = typeof observableModule & {
   clearLatestLlmObservation: () => void;

@@ -21,7 +21,7 @@ import {
   writeLoopDebugInput,
   writeLoopDebugMeta,
   writeLoopDebugOutput,
-} from "../persistable/index.js";
+} from "../observable/debug-file.js";
 import { buildWindowsSnapshot } from "../observable/window-hash.js";
 
 /** 一轮 LLM 观测的运行时句柄。 */

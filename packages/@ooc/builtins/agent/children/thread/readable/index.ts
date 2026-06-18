@@ -26,7 +26,7 @@ import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
   hasAnyTranscriptViewportField,
-} from "@ooc/core/readable/transcript-viewport.js";
+} from "@ooc/core/_shared/utils/viewport.js";
 import { renderTranscriptOrHandle } from "./conversation-render.js";
 import {
   filterTalkMessages,

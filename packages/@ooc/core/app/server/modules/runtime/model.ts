@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import type { LlmLoopDebugMetaRecord } from "@ooc/core/persistable";
+import type { LlmLoopDebugMetaRecord } from "@ooc/core/observable/debug-file";
 
 export const threadDebugParams = t.Object({
   sessionId: t.String(),

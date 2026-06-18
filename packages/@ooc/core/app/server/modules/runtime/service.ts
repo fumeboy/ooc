@@ -9,11 +9,6 @@ import {
 import { logPatternSnapshot, type LogPattern } from "@ooc/core/observable/log-aggregator";
 import {
   aggregatePrApproval,
-  llmInputFile,
-  llmOutputFile,
-  loopInputFile,
-  loopMetaFile,
-  loopOutputFile,
   readPrIssue,
   readPrIssueIndex,
   resolvePrIssue,
@@ -26,6 +21,13 @@ import {
   type PrIssueRecord,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
+import {
+  llmInputFile,
+  llmOutputFile,
+  loopInputFile,
+  loopMetaFile,
+  loopOutputFile,
+} from "@ooc/core/observable/debug-file";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { applyPrApproval } from "@ooc/builtins/agent/pr/approval-flow";
 import type { ListLoopsResponse, LoopListEntry, LoopMeta } from "./model";

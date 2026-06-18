@@ -21,7 +21,7 @@ import {
   SESSION_CREATOR_THREAD_ID,
   creatorWindowIdOf,
 } from "../../_shared/types/context-window.js";
-import { DEFAULT_TRANSCRIPT_VIEWPORT } from "../../readable/transcript-viewport.js";
+import { DEFAULT_TRANSCRIPT_VIEWPORT } from "../../_shared/utils/viewport.js";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { ThreadContext } from "../context.js";

@@ -16,13 +16,12 @@
  */
 
 export * from "./types/constants.js";
-export * from "./types/viewport.js";
 export * from "./types/xml.js";
 export * from "./types/intent.js";
 export * from "./types/knowledge.js";
 export * from "./types/context-window.js";
 export * from "./types/thread.js";
-export * from "./types/method.js";
 export * from "./types/registry.js";
 export * from "./utils/mention.js";
 export * from "./utils/csv.js";
+export * from "./utils/viewport.js";

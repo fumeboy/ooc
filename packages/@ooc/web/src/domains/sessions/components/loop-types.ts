@@ -1,5 +1,5 @@
 /**
- * Loop 类型镜像 — 与 src/persistable/debug-file.ts:LlmLoopDebugMetaRecord 对齐。
+ * Loop 类型镜像 — 与 src/observable/debug-file.ts:LlmLoopDebugMetaRecord 对齐。
  *
  * 之前这两个 type 住在 LoopEntry.tsx；LoopEntry 已废弃，类型独立成
  * 文件让 LoopTimeline / LoopNavigator / LoopDiffView / 测试都能干净 import。

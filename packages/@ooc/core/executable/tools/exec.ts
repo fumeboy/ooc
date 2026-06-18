@@ -21,7 +21,7 @@ import type { ThreadContext, ProcessEvent } from "../../thinkable/context.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { ROOT_WINDOW_ID } from "../../_shared/types/context-window.js";
 import { builtinRegistry, type ObjectRegistry } from "../../runtime/object-registry.js";
-import { WindowManager } from "../manager.js";
+import { WindowManager } from "../../runtime/window-manager.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 import { handleCompressTool } from "./compress.js";
 
