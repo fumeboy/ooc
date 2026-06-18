@@ -84,7 +84,7 @@ export {
   readableFile,
   writeReadable,
 } from "./stone-readable";
-// stone-data 已删除：data.json 语义改为 session-scoped 落 flow（详见 ./flow-data）。
+// stone-data 已删除：data.json 语义改为 session-scoped 落 flow（IO 实现已下沉 interpreter builtin，见上）。
 export {
   readExecutableSource,
   executableIndexFile,
