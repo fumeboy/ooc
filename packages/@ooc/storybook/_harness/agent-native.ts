@@ -82,8 +82,20 @@ export async function threadExecs(sessionId: string, objectId: string, threadId:
   const out: Array<{ cmd: string; args: any; msg?: string }> = [];
   for (const e of (r.json?.events ?? [])) {
     if (e.kind === "function_call" && e.toolName === "exec") {
-      const a = e.arguments?.args ?? {};
-      out.push({ cmd: e.arguments?.method ?? "", args: a, msg: typeof a.msg === "string" ? a.msg : undefined });
+      // exec args 在事件里可能以**对象**或 **JSON 字符串**形态落盘（provider 不同序列化）；
+      // 统一规整为对象，避免 `a.msg` 在字符串上读到 undefined（曾致 say 内容观测不到 → 假 Bad）。
+      let a = e.arguments?.args ?? {};
+      if (typeof a === "string") {
+        try { a = JSON.parse(a); }
+        catch {
+          // 截断/非法 JSON（substitute model 偶发把长 say 的 tool-call args 截断）：
+          // 正则兜底抽 "msg"/"summary" 文本，尽量复原 agent 的发话内容。
+          const m = /"(?:msg|summary)"\s*:\s*"((?:[^"\\]|\\.)*)/.exec(a);
+          a = m ? { msg: m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\t/g, "\t") } : {};
+        }
+      }
+      const args = a && typeof a === "object" ? a : {};
+      out.push({ cmd: e.arguments?.method ?? "", args, msg: typeof args.msg === "string" ? args.msg : undefined });
     }
   }
   return out;
@@ -223,7 +235,13 @@ export async function demoViaSupervisor(
     return { capability, tier: "agent-native", tcs, storyTier: rollupTier(tcs), trace: [] };
   }
   const execs = await threadExecs(sid, "supervisor", seed.threadId);
-  const lastSay = [...execs].reverse().find((e) => e.msg)?.msg ?? "";
+  // agent 对用户的"发话"可经 say（creator 窗）或 end 的 summary 报告——两者都是 agent 的对外答复。
+  // lastSay 取最近一条 say.msg；缺失时回退到 end.summary（避免 agent 用 end 总结答复时假 Bad）。
+  const sayMsg = [...execs].reverse().find((e) => e.msg)?.msg;
+  const endSummary = [...execs].reverse().find(
+    (e) => e.cmd === "end" && typeof e.args?.summary === "string",
+  )?.args?.summary as string | undefined;
+  const lastSay = sayMsg || endSummary || "";
   const v = await verify({ sid, threadId: seed.threadId, execs, lastSay });
   const tcs: TcResult[] = [{ id: `AN-${capability}-01`, name: capability, status: v.ok ? "PASS" : "FAIL", detail: v.detail }];
   return { capability, tier: "agent-native", tcs, storyTier: rollupTier(tcs), trace: renderTrace(execs) };

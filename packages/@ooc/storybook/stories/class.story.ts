@@ -196,7 +196,8 @@ export async function runAgentNative(): Promise<StoryResult> {
   const composition = await demoViaSupervisor("class", `sb-an-comp-${tag}`,
     "你的 context 里有一个 filesystem 成员对象（一个 tool-object）。请用它的 grep 方法搜索包含 'OOC' 的内容，然后用一句话告诉我你用了哪个对象、命中了什么。",
     async ({ sid, threadId, lastSay }) => {
-      const onFilesystem = await calledMethodOnWindowOk(sid, "supervisor", threadId, "filesystem", "grep");
+      // 成员窗 id 是 class-qualified `_builtin/filesystem`（非裸 `filesystem`）。
+      const onFilesystem = await calledMethodOnWindowOk(sid, "supervisor", threadId, "_builtin/filesystem", "grep");
       const grepOk = onFilesystem || (await calledMethodOk(sid, "supervisor", threadId, "grep"));
       const ok = onFilesystem; // 严格判据：必须在 filesystem 成员窗上调 grep
       return { ok, detail: `onFilesystem=${onFilesystem} grepOk=${grepOk} say=${lastSay.slice(0, 80)}` };
@@ -206,15 +207,15 @@ export async function runAgentNative(): Promise<StoryResult> {
   const knowledge = await demoViaSupervisor("class", `sb-an-kb-${tag}`,
     "你的 context 里有一个 knowledge_base 成员对象（一个 tool-object）。请用它的 open_knowledge 方法打开你知识索引里的任意一篇文档，然后用一句话告诉我你用了哪个对象、打开了哪篇。",
     async ({ sid, threadId, lastSay }) => {
-      const onKb = await calledMethodOnWindowOk(sid, "supervisor", threadId, "knowledge_base", "open_knowledge");
+      const onKb = await calledMethodOnWindowOk(sid, "supervisor", threadId, "_builtin/knowledge_base", "open_knowledge");
       return { ok: onKb, detail: `onKnowledgeBase=${onKb} say=${lastSay.slice(0, 80)}` };
     });
 
-  // world 成员：agent 经 world 成员窗调 create_object（create_object 已迁出 root，业务 session 可调）。
+  // world/runtime 成员：agent 经 runtime 成员窗调 create_object（create_object 已迁出 root，业务 session 可调）。
   const world = await demoViaSupervisor("class", `sb-an-world-${tag}`,
-    "你的 context 里有一个 world 成员对象（一个 tool-object，承载系统机制级操作）。请用它的 create_object 方法新建一个 objectId 为 'demo_note' 的极简对象（self.md/readable.md 各写一句话即可），然后用一句话告诉我你用了哪个对象的什么方法。",
+    "你的 context 里有一个 runtime 成员对象（一个 tool-object，承载系统机制级操作）。请用它的 create_object 方法新建一个 objectId 为 'demo_note' 的极简对象（self.md/readable.md 各写一句话即可），然后用一句话告诉我你用了哪个对象的什么方法。",
     async ({ sid, threadId, lastSay }) => {
-      const onWorld = await calledMethodOnWindowOk(sid, "supervisor", threadId, "world", "create_object");
+      const onWorld = await calledMethodOnWindowOk(sid, "supervisor", threadId, "_builtin/runtime", "create_object");
       return { ok: onWorld, detail: `onWorld=${onWorld} say=${lastSay.slice(0, 80)}` };
     });
 
