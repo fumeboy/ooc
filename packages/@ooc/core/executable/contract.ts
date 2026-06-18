@@ -140,6 +140,23 @@ export interface ObjectMethodResult {
 }
 
 /**
+ * 把 method exec 的返回形态规范化为 `ObjectMethodResult`（method 的统一结果形状）。
+ *
+ * exec 三态返回（`ObjectMethodResult | string | void`）由 runtime（WindowManager）/ HTTP `call_method`
+ * 经此收口为**单一 result 形状**——method outcome 即 method result，不再有独立的 outcome 信封类型：
+ * - void / undefined → `{}`
+ * - 裸 string（sugar）→ `{ message }`
+ * - 已是 `ObjectMethodResult` → 原样
+ */
+export function normalizeMethodResult(
+  raw: ObjectMethodResult | string | void,
+): ObjectMethodResult {
+  if (typeof raw === "string") return { message: raw };
+  if (raw && typeof raw === "object") return raw;
+  return {};
+}
+
+/**
  * 非单例 class 的 **constructor**（object-model 核心 3）。
  *
  * `exec(ctx, args)` 产出**新实例的初始 Data**（不是窗；runtime 据此把 Data 包成对象信封）。

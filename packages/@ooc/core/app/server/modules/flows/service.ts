@@ -10,7 +10,7 @@ import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/
 import { loadStoneClass } from "@ooc/core/runtime/server-loader";
 import { resolveStoneIdentityRef } from "@ooc/core/persistable";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
-import { normalizeMethodOutcome } from "@ooc/core/executable/outcome.js";
+import { normalizeMethodResult } from "@ooc/core/executable/contract.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
@@ -920,7 +920,7 @@ export function createFlowsService(deps: {
           object: { id: objectId, class: objectId },
           args,
         };
-        return normalizeMethodOutcome(await entry.exec(ctx as never, {} as never, args));
+        return normalizeMethodResult(await entry.exec(ctx as never, {} as never, args));
       } catch (error) {
         throw new AppServerError(
           "INTERNAL_ERROR",

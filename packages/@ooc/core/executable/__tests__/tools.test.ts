@@ -157,35 +157,6 @@ describe("executable tools (object model)", () => {
     expect(parsed.on).toBe(creator!.id);
   });
 
-  // compress 经 exec(method="compress") 调用（不再是顶层 tool）；exec.ts 拦截后转 handleCompressTool，
-  // 故输出 JSON 仍带 tool:"compress"。以下验证 exec→compress 路由 + scope=windows/events/auto 行为。
-  const execCompress = (thread: ReturnType<typeof makeThread>, compressArgs: Record<string, unknown>) =>
-    dispatchToolCall(thread, {
-      id: "call_exec_compress",
-      name: "exec",
-      arguments: { method: "compress", title: "compress", args: compressArgs },
-    });
-
-  it("exec(compress, scope=windows) 缺 target_ids 时返回结构化错误", async () => {
-    const output = await execCompress(makeThread(), { scope: "windows" });
-    expect(JSON.parse(output)).toEqual({
-      ok: false,
-      tool: "compress",
-      error: "compress(scope=windows) 缺少 target_ids 参数(string[])。",
-    });
-  });
-
-  it("exec(compress, scope=auto) 抛 not-implemented（留给 emergency_guard）", async () => {
-    const parsed = JSON.parse(await execCompress(makeThread(), { scope: "auto" }));
-    expect(parsed.ok).toBe(false);
-    expect(parsed.tool).toBe("compress");
-    expect(parsed.error).toContain("not implemented yet");
-  });
-
-  it("exec(compress, scope=events) 缺 summary → 结构化错误", async () => {
-    const parsed = JSON.parse(await execCompress(makeThread(), { scope: "events" }));
-    expect(parsed.ok).toBe(false);
-    expect(parsed.tool).toBe("compress");
-    expect(parsed.error).toContain("summary");
-  });
+  // compress / expand 已从 exec 移除（裁决：折叠/展开应由各 window 自实现，不走中心 tool 拦截）。
+  // 原 exec→compress 路由测试随机制一并退役；compress 不在顶层 tool 列表的断言见上方"export 3 OOC 原语"。
 });

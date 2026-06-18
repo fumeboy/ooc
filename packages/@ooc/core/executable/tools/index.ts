@@ -15,9 +15,8 @@ import { WAIT_TOOL } from "./wait.js";
 /**
  * 所有 OOC tools —— **3 个稳定原语**：exec / close / wait。
  *
- * compress 不再是顶层 tool：它是"调整信息展示"的**方法**（与 file_window 的 set_viewport 同类），
- * 经 `exec(method="compress", args={scope,...})` 调用（exec.ts 拦截 method="compress"），与 expand 对称。
  * 新能力一律走 method / object type、不增顶层 tool（stable_tool_surface）。
+ * compress / expand 已退役（裁决：折叠/展开应由各 window 自实现，不走中心 tool）。
  */
 export const OOC_TOOLS: LlmTool[] = [EXEC_TOOL, CLOSE_TOOL, WAIT_TOOL];
 

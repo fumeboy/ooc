@@ -18,7 +18,7 @@ function errorToolOutput(tool: string, error: string) {
   return JSON.stringify({ ok: false, tool, error });
 }
 
-/** tool 名到 handler 的路由表 —— 3 个稳定原语。compress 不在此：它是经 exec 调用的方法（exec.ts 拦截 method="compress"）。 */
+/** tool 名到 handler 的路由表 —— 3 个稳定原语（exec / close / wait）。 */
 const TOOL_HANDLERS: Partial<Record<LlmToolCall["name"], ToolHandler>> = {
   exec: handleExecTool,
   close: handleCloseTool,

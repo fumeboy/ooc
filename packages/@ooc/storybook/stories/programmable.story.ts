@@ -3,7 +3,7 @@
  *
  * 能力（Wave4 对象模型）：Object 通过 stone 根 `index.ts` 的 `export const Class`
  * （`executable.methods` 数组，方法签名 `(ctx, self, args)`）定义自定义 object method。
- * 标 `for_ui_access` 的方法经 HTTP `call_method` 被外部调用，响应即标准 MethodOutcome
+ * 标 `for_ui_access` 的方法经 HTTP `call_method` 被外部调用，响应即标准 method result（ObjectMethodResult）
  * （结构化数据走 `data`）；改源码后热更新（按 index.ts mtime）立即生效。
  * 规格见 programmable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
@@ -25,7 +25,7 @@ export async function runControlPlane(): Promise<StoryResult> {
   const srv = await mkServer();
   const { app, baseDir } = srv;
   try {
-    // TC-PROG-01: for_ui_access 方法经 HTTP 调用，从 MethodOutcome.data 取结果
+    // TC-PROG-01: for_ui_access 方法经 HTTP 调用，从 method result.data 取结果
     {
       const id = "echo_agent";
       await postJson(app, "/api/stones", { objectId: id });

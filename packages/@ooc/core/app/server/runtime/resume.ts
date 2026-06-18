@@ -6,7 +6,7 @@ import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/
 import { applyResumeTransition, canResumeThread } from "./thread-transition";
 
 type SavedToolCall = {
-  name: "exec" | "close" | "wait" | "compress";
+  name: "exec" | "close" | "wait";
   arguments: Record<string, unknown>;
 };
 

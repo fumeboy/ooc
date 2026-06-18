@@ -14,7 +14,7 @@ import {
 import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
 import type { ExecutableContext } from "@ooc/core/executable/contract";
-import { normalizeMethodOutcome } from "@ooc/core/executable/outcome.js";
+import { normalizeMethodResult } from "@ooc/core/executable/contract.js";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { parseKnowledgeFile, parseActivatesOn } from "@ooc/core/thinkable/knowledge";
 import { mkdir, stat, writeFile } from "node:fs/promises";
@@ -340,11 +340,11 @@ export function createStonesService({
       }
       try {
         // HTTP 入口无 thread/runtime；注入 self.dir（stone 身份目录）让 for_ui_access 方法
-        // 能读写自己 stone 文件（reflectable）。响应即规范化 MethodOutcome——前端从 data
+        // 能读写自己 stone 文件（reflectable）。响应即规范化 method result（ObjectMethodResult）——前端从 data
         // 取结构化数据、result 取消息文本。
         const ctx: ExecutableContext = { object: { id: objectId, class: objectId }, args };
         const self = { dir: dir(objectId) } as never;
-        return normalizeMethodOutcome(await entry.exec(ctx, self, args));
+        return normalizeMethodResult(await entry.exec(ctx, self, args));
       } catch (error) {
         throw new AppServerError(
           "INTERNAL_ERROR",

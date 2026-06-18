@@ -2,7 +2,7 @@
 export type LlmProvider = "openai" | "claude";
 
 /** ThinkLoop 当前文档定义的 tool 原语名称；不提前开放任意字符串。 */
-export type LlmToolName = "exec" | "close" | "wait" | "compress";
+export type LlmToolName = "exec" | "close" | "wait";
 
 /** provider 无关的最小文本消息结构。 */
 export type LlmMessage = {

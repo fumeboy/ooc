@@ -29,7 +29,7 @@ import "@ooc/core/runtime/register-builtins.js";
 const SESSION_PREFIX = "_test_thinkable_p0f_events";
 const ts = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
-// compress 不再是顶层 tool —— 经 exec(method="compress") 调用（exec.ts 拦截后转 handleCompressTool）。
+// 注：compress/expand 已从中心 exec 退役（见下方 describe.skip 说明）。
 // 包装成与旧 compress tool 调用等价的 toolCall，输出 JSON 仍带 tool:"compress"。
 function compressCall(id: string, compressArgs: Record<string, unknown>) {
   return { id, name: "exec" as const, arguments: { method: "compress", title: "compress", args: compressArgs } };
@@ -45,7 +45,9 @@ function mkTextEvent(idx: number): ProcessEvent {
   };
 }
 
-describe("[p0f] context compression — compress(scope=events) + 渲染层 fold", () => {
+// SKIP：compress/expand 已从中心 exec 移除（裁决：折叠/展开应由各 window 自实现）。
+// 本 e2e 验的是旧的中心 compress(scope=events) 路径；待 per-window 折叠机制落地后按新协议重写。
+describe.skip("[p0f] context compression — compress(scope=events) + 渲染层 fold", () => {
   it("默认 fold 中段: 60 条 events → head(10) + summary + tail(40), 51 渲染单元", async () => {
     const thread = makeThread();
     // 注入 60 条 events

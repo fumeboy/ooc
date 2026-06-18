@@ -181,7 +181,7 @@ export type ProcessEvent = ProcessEventCommon & (
       /** 工具调用记录，先进入事件流，再由 executable 分派执行。 */
       kind: "tool_use";
       /** 当前文档定义的 tool 原语名称；compress 暂只保留类型位置。 */
-      toolName: "exec" | "close" | "wait" | "compress";
+      toolName: "exec" | "close" | "wait";
       /** 传给 tool handler 的原始参数对象。 */
       arguments: Record<string, unknown>;
     }
@@ -193,7 +193,7 @@ export type ProcessEvent = ProcessEventCommon & (
       /** 当前调用的稳定 ID。 */
       callId: string;
       /** 被调用的 OOC tool 名称。 */
-      toolName: "exec" | "close" | "wait" | "compress";
+      toolName: "exec" | "close" | "wait";
       /** 传给 tool handler 的原始参数对象。 */
       arguments: Record<string, unknown>;
     }
@@ -252,7 +252,7 @@ export type ProcessEvent = ProcessEventCommon & (
       /** 与 function_call 对应的调用 ID。 */
       callId: string;
       /** 对应的 tool 名称。 */
-      toolName: "exec" | "close" | "wait" | "compress";
+      toolName: "exec" | "close" | "wait";
       /** 序列化后的输出字符串。 */
       output: string;
       /** 是否成功。 */
@@ -358,7 +358,7 @@ export type ProcessEvent = ProcessEventCommon & (
        * 避免 resume 路径再次推断。
        */
       pendingCall?: {
-        toolName: "exec" | "close" | "wait" | "compress";
+        toolName: "exec" | "close" | "wait";
         method: string;
         args: Record<string, unknown>;
         windowId?: string;

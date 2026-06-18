@@ -60,7 +60,7 @@ export type RuntimePermissionDecision =
   | { decision: "deny"; reason: string };
 
 export type RuntimePendingToolCall = {
-  toolName: "exec" | "close" | "wait" | "compress";
+  toolName: "exec" | "close" | "wait";
   method?: string;
   args?: unknown;
   windowId?: string;

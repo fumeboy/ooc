@@ -88,14 +88,14 @@ function callMethodFor(target: ClientTarget) {
         ? endpoints.stoneCallMethod(target.objectId)
         : endpoints.flowCallMethod(target.sessionId, target.objectId);
     const body = JSON.stringify({ method, args });
-    // 废 ui_methods 维度后，call_method 响应即标准 MethodOutcome：
-    // 结构化数据走 data、消息文本走 result，!ok 抛 error。
-    const response = await requestJson<{ ok: boolean; data?: unknown; result?: string; error?: string }>(url, {
+    // 废 ui_methods 维度后，call_method 响应即标准 method result（ObjectMethodResult）：
+    // 结构化数据走 data、消息文本走 message，err 非空即失败。
+    const response = await requestJson<{ message?: string; data?: unknown; err?: string }>(url, {
       method: "POST",
       body,
     });
-    if (!response.ok) throw new Error(response.error ?? `method '${method}' failed`);
-    return response.data ?? response.result;
+    if (response.err) throw new Error(response.err ?? `method '${method}' failed`);
+    return response.data ?? response.message;
   };
 }
 
