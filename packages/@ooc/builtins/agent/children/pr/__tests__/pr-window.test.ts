@@ -21,10 +21,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   ensureStoneRepo,
   __resetSerialQueueForTests,
-  readPrIssue,
   createFeatBranchWorktree,
 } from "@ooc/core/persistable";
 import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
+import { readPrIssue } from "../persistable/pr-issue.js";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
 import type { ThreadContext } from "@ooc/core/thinkable/context";

@@ -91,28 +91,9 @@ export {
   writeExecutableSource,
 } from "./stone-server";
 
-export {
-  // PR-Issue（stone-versioning 决策协议；issue 看板已移除）
-  PR_ISSUE_SESSION_ID,
-  createPrIssue,
-  createRecoveryIssue,
-  closePrIssue,
-  approvePrIssue,
-  aggregatePrApproval,
-  readPrIssue,
-  readPrIssueIndex,
-  type PrIssuePayload,
-  type PrIssueRecord,
-  type PrIssueIndex,
-  type PrIssueIndexEntry,
-  type PrApprovalDecision,
-  type PrApprovalVerdict,
-  type PrApproveAction,
-  type ApprovePrIssueInput,
-  type ApprovePrIssueResult,
-  type CreatePrIssueInput,
-  type CreateRecoveryIssueInput,
-} from "./pr-issue";
+// PR-Issue 账本已下沉 pr builtin（PR 下沉 P3）：
+// @ooc/builtins/agent/children/pr/persistable/pr-issue.ts —— 消费方直接 import 该路径，
+// 不再经 persistable barrel（core 维度包不可 re-export builtin 物）。
 
 export { enqueueSessionWrite, __resetSerialQueueForTests } from "../runtime/serial-queue.js";
 

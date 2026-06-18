@@ -8,17 +8,19 @@ import {
 } from "@ooc/core/observable";
 import { logPatternSnapshot, type LogPattern } from "@ooc/core/observable/log-aggregator";
 import {
-  aggregatePrApproval,
-  readPrIssue,
-  readPrIssueIndex,
   rollback,
   SUPERVISOR_OBJECT_ID,
   threadDir,
+  type ThreadPersistenceRef,
+} from "@ooc/core/persistable";
+import {
+  aggregatePrApproval,
+  readPrIssue,
+  readPrIssueIndex,
   type PrApproveAction,
   type PrApprovalVerdict,
   type PrIssueRecord,
-  type ThreadPersistenceRef,
-} from "@ooc/core/persistable";
+} from "@ooc/builtins/agent/pr/persistable/pr-issue";
 import { resolvePrIssue, type PrIssueDecision } from "@ooc/builtins/agent/pr/resolve";
 import {
   llmInputFile,

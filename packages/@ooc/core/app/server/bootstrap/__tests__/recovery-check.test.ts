@@ -5,10 +5,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   ensureStoneRepo,
   __resetSerialQueueForTests,
-  readPrIssueIndex,
-  createRecoveryIssue,
   nestedObjectPath,
 } from "@ooc/core/persistable";
+import { readPrIssueIndex, createRecoveryIssue } from "@ooc/builtins/agent/pr/persistable/pr-issue";
 import { runRecoveryCheck } from "../recovery-check";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 

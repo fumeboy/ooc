@@ -20,9 +20,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   ensureStoneRepo,
   __resetSerialQueueForTests,
-  readPrIssue,
   readSelf,
 } from "@ooc/core/persistable";
+import { readPrIssue } from "@ooc/builtins/agent/pr/persistable/pr-issue";
 import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";
 import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/agent/thread/executable/method.create-pr-and-invite-reviewers.js";
 import { executeNewFeatBranch } from "@ooc/builtins/agent/thread/executable/method.new-feat-branch.js";

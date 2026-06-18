@@ -13,7 +13,7 @@ import {
   unregisterFeatWorktree,
   type CommitAndOpenPrInput,
 } from "@ooc/core/persistable/index.js";
-import { createPrIssue } from "@ooc/core/persistable/pr-issue.js";
+import { createPrIssue } from "./persistable/pr-issue.js";
 
 export type { CommitAndOpenPrInput } from "@ooc/core/persistable/index.js";
 

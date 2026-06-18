@@ -9,7 +9,7 @@ import {
   readPrIssue,
   readPrIssueIndex,
   PR_ISSUE_SESSION_ID,
-} from "../pr-issue";
+} from "../persistable/pr-issue";
 
 let tempRoot: string | undefined;
 

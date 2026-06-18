@@ -21,7 +21,7 @@ import {
   createRecoveryIssue,
   readPrIssueIndex,
   type PrIssueRecord,
-} from "@ooc/core/persistable";
+} from "@ooc/builtins/agent/pr/persistable/pr-issue";
 import { loadStoneClass } from "@ooc/core/runtime/server-loader";
 import { createStoneRegistry } from "@ooc/core/runtime/stone-registry";
 

@@ -18,7 +18,7 @@ import {
   mergeFeatBranch,
   archiveFeatBranch,
 } from "@ooc/core/persistable/stone-versioning.js";
-import { readPrIssue, closePrIssue, type PrIssueRecord } from "@ooc/core/persistable/pr-issue.js";
+import { readPrIssue, closePrIssue, type PrIssueRecord } from "./persistable/pr-issue.js";
 import type { GitErrorCode } from "@ooc/core/persistable/index.js";
 
 export type PrIssueDecision = "merge" | "reject" | "request-changes";

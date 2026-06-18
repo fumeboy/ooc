@@ -18,9 +18,9 @@
 
 import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { stoneDir, STONES_MAIN_BRANCH } from "./common";
-import { enqueueSessionWrite } from "../runtime/serial-queue.js";
-import { toJson } from "./common";
+import { stoneDir, STONES_MAIN_BRANCH } from "@ooc/core/persistable/common.js";
+import { enqueueSessionWrite } from "@ooc/core/runtime/serial-queue.js";
+import { toJson } from "@ooc/core/persistable/common.js";
 
 /** super session id（PR-Issue 落盘约定，不可改）。 */
 export const PR_ISSUE_SESSION_ID = "super";

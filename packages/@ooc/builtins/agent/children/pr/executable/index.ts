@@ -15,7 +15,7 @@ import type {
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
-import type { PrApproveAction } from "@ooc/core/persistable/index.js";
+import type { PrApproveAction } from "../persistable/pr-issue.js";
 import { applyPrApproval } from "../approval-flow.js";
 import type { Data } from "../types.js";
 

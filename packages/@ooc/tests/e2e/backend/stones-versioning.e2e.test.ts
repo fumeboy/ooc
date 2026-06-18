@@ -18,12 +18,11 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   __resetSerialQueueForTests,
-  readPrIssueIndex,
-  readPrIssue,
   ensureStoneRepo,
   rollback,
   SUPERVISOR_OBJECT_ID,
 } from "@ooc/core/persistable";
+import { readPrIssueIndex, readPrIssue } from "@ooc/builtins/agent/pr/persistable/pr-issue";
 import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";
 // Wave 4：reflectable 沉淀方法搬进 thread class（会话载体）的 executable 维度。
 import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/agent/children/thread/executable/method.create-pr-and-invite-reviewers";

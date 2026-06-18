@@ -18,7 +18,7 @@ import {
   closePrIssue,
   createPrIssue,
   readPrIssue,
-} from "../pr-issue";
+} from "../persistable/pr-issue";
 
 let tempRoot: string | undefined;
 

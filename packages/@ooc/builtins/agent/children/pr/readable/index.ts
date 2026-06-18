@@ -19,7 +19,7 @@ import type {
   WindowClassDecl,
 } from "@ooc/core/readable/contract.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { readPrIssue, aggregatePrApproval } from "@ooc/core/persistable/index.js";
+import { readPrIssue, aggregatePrApproval } from "../persistable/pr-issue.js";
 import type { Data } from "../types.js";
 
 const MAX_DIFF_RENDER_BYTES = 8192;

@@ -20,7 +20,7 @@ import { commitAndOpenPr, type CommitAndOpenPrResult } from "@ooc/builtins/agent
 import { ensureStoneRepo } from "@ooc/core/persistable";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
 import { gitRevParse } from "@ooc/core/persistable/stone-git";
-import { readPrIssue } from "../pr-issue";
+import { readPrIssue } from "@ooc/builtins/agent/pr/persistable/pr-issue";
 
 /**
  * 测试 helper：开 feat 分支 → 直接编辑 worktree 下文件 → finalize（commit + 开 PR）。

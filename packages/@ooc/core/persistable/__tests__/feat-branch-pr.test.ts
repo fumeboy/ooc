@@ -13,7 +13,8 @@ import { mkdir, readFile, mkdtemp, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ensureStoneRepo, __resetSerialQueueForTests, readPrIssue } from "@ooc/core/persistable";
+import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
+import { readPrIssue } from "@ooc/builtins/agent/pr/persistable/pr-issue";
 import { createFeatBranchWorktree } from "../stone-feat-branch";
 import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";

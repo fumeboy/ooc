@@ -15,13 +15,13 @@
  * 失败一律 fail-loud（返回结构化 code，不静默吞）。
  */
 
+import { readWorldConfig } from "@ooc/core/persistable/index.js";
 import {
   approvePrIssue,
   readPrIssue,
-  readWorldConfig,
   type PrApproveAction,
   type PrApprovalVerdict,
-} from "@ooc/core/persistable/index.js";
+} from "./persistable/pr-issue.js";
 import { resolvePrIssue } from "./resolve.js";
 import { routePrRepairMessage } from "./delivery.js";
 
