@@ -319,7 +319,6 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
       } as const;
     }
 
-    const repo = repoDir(input.baseDir);
     const branch = issue.prPayload.branch;
 
     if (input.decision === "request-changes") {
@@ -328,34 +327,11 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
     }
 
     if (input.decision === "merge") {
-      const checkoutMain = gitCheckout(repo, STONES_MAIN_BRANCH);
-      if (!checkoutMain.ok) {
-        return { ok: false, code: "GIT", gitCode: checkoutMain.code, stderr: checkoutMain.stderr } as const;
-      }
-      const ff = gitMergeFastForward(repo, branch);
-      if (!ff.ok) return { ok: false, code: "GIT", gitCode: ff.code, stderr: ff.stderr } as const;
-
-      const objectIds = extractObjectIdsFromPaths(issue.prPayload.paths);
-      for (const oid of objectIds) {
-        await syncMergedObjectToPackages(input.baseDir, oid);
-      }
-
-      const head = gitHead(repo);
-      if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr } as const;
-
-      await cleanupWorktreeAfterMerge(
-        repo,
-        worktreePath(input.baseDir, branch),
-        input.baseDir,
-        branch,
-        "resolvePrIssue(merge)",
-      );
-
+      // git 合入机制经纯原语 mergeFeatBranch（无 pr-issue 依赖）；本编排只负责读 issue + 合后 close。
+      const m = await mergeFeatBranch(input.baseDir, branch, issue.prPayload.paths, "resolvePrIssue(merge)");
+      if (!m.ok) return m;
       try {
-        await closePrIssue({
-          baseDir: input.baseDir,
-          issueId: input.issueId,
-        });
+        await closePrIssue({ baseDir: input.baseDir, issueId: input.issueId });
       } catch (e) {
         return {
           ok: false,
@@ -363,26 +339,14 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
           message: e instanceof Error ? e.message : String(e),
         } as const;
       }
-      return { ok: true, kind: "merged", commitSha: head.value } as const;
+      return { ok: true, kind: "merged", commitSha: m.commitSha } as const;
     }
 
-    // reject
-    await cleanupWorktreeAfterMerge(
-      repo,
-      worktreePath(input.baseDir, branch),
-      input.baseDir,
-      branch,
-      "resolvePrIssue(reject)",
-    );
-    const archive = gitArchiveBranch(repo, branch);
-    if (!archive.ok) {
-      return { ok: false, code: "GIT", gitCode: archive.code, stderr: archive.stderr } as const;
-    }
+    // reject —— archive 机制经纯原语 archiveFeatBranch（无 pr-issue 依赖）。
+    const a = await archiveFeatBranch(input.baseDir, branch, "resolvePrIssue(reject)");
+    if (!a.ok) return a;
     try {
-      await closePrIssue({
-        baseDir: input.baseDir,
-        issueId: input.issueId,
-      });
+      await closePrIssue({ baseDir: input.baseDir, issueId: input.issueId });
     } catch (e) {
       return {
         ok: false,
@@ -390,8 +354,70 @@ export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<Resolv
         message: e instanceof Error ? e.message : String(e),
       } as const;
     }
-    return { ok: true, kind: "rejected", archivedRef: `refs/ooc/rejected/${branch}` } as const;
+    return { ok: true, kind: "rejected", archivedRef: a.archivedRef } as const;
   });
+}
+
+/* ---------------------------------------------------------------- *
+ * git 合入原语（纯 git 机制，无 pr-issue 依赖）
+ *
+ * resolvePrIssue 与（PR 下沉 P3 后）pr builtin approval-flow 共用。
+ * **queue-naive**：假定调用方已持 `gitQueueKey` 串行化（resolvePrIssue 在其 enqueue 内调用）。
+ * ---------------------------------------------------------------- */
+
+export type MergeFeatBranchResult =
+  | { ok: true; commitSha: string }
+  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
+
+export type ArchiveFeatBranchResult =
+  | { ok: true; archivedRef: string }
+  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
+
+/**
+ * ff-merge feat branch → main：checkout main → ff-merge → 同步 packages → 取 head → 回收 worktree。
+ * 不读写 pr-issue；分支/路径由调用方传入。commitSha 取合后 main head。
+ */
+export async function mergeFeatBranch(
+  baseDir: string,
+  branch: string,
+  paths: string[],
+  reason = "mergeFeatBranch",
+): Promise<MergeFeatBranchResult> {
+  const repo = repoDir(baseDir);
+  const checkoutMain = gitCheckout(repo, STONES_MAIN_BRANCH);
+  if (!checkoutMain.ok) {
+    return { ok: false, code: "GIT", gitCode: checkoutMain.code, stderr: checkoutMain.stderr };
+  }
+  const ff = gitMergeFastForward(repo, branch);
+  if (!ff.ok) return { ok: false, code: "GIT", gitCode: ff.code, stderr: ff.stderr };
+
+  const objectIds = extractObjectIdsFromPaths(paths);
+  for (const oid of objectIds) {
+    await syncMergedObjectToPackages(baseDir, oid);
+  }
+
+  const head = gitHead(repo);
+  if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr };
+
+  await cleanupWorktreeAfterMerge(repo, worktreePath(baseDir, branch), baseDir, branch, reason);
+  return { ok: true, commitSha: head.value };
+}
+
+/**
+ * archive feat branch → `refs/ooc/rejected/<branch>` + 回收 worktree。不读写 pr-issue。
+ */
+export async function archiveFeatBranch(
+  baseDir: string,
+  branch: string,
+  reason = "archiveFeatBranch",
+): Promise<ArchiveFeatBranchResult> {
+  const repo = repoDir(baseDir);
+  await cleanupWorktreeAfterMerge(repo, worktreePath(baseDir, branch), baseDir, branch, reason);
+  const archive = gitArchiveBranch(repo, branch);
+  if (!archive.ok) {
+    return { ok: false, code: "GIT", gitCode: archive.code, stderr: archive.stderr };
+  }
+  return { ok: true, archivedRef: `refs/ooc/rejected/${branch}` };
 }
 
 /* ---------------------------------------------------------------- *
