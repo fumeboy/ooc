@@ -1,5 +1,5 @@
 import { stoneDir, type StoneObjectRef } from "@ooc/core/persistable/index.js";
-import { mergeFlowData, readFlowData } from "@ooc/core/persistable/index.js";
+import { readData as readFlowData, mergeData as mergeFlowData } from "../persistable/flow-data.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
 

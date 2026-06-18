@@ -3,8 +3,8 @@ import { runScheduler } from "@ooc/core/thinkable/scheduler";
 import {
   createFlowObject,
   createStoneObject,
-  readFlowData,
 } from "@ooc/core/persistable";
+import { readData as readFlowData } from "@ooc/builtins/interpreter/children/interpreter_process/persistable/flow-data.js";
 import {
   bootstrapInboxFromPrompt,
   countFormExecutions,

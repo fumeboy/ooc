@@ -2,12 +2,8 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  readFlowData,
-  mergeFlowData,
-  __resetSerialQueueForTests,
-} from "..";
-import type { FlowObjectRef } from "..";
+import { readData as readFlowData, mergeData as mergeFlowData } from "../persistable/flow-data.js";
+import { __resetSerialQueueForTests, type FlowObjectRef } from "@ooc/core/persistable";
 
 let tempRoot: string | undefined;
 

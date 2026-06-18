@@ -31,10 +31,8 @@ export {
 
 export { readCsv, writeCsv, appendRow } from "./csv-pool";
 
-export {
-  readData as readFlowData,
-  mergeData as mergeFlowData,
-} from "./flow-data";
+// flow-data（data.json IO）已下沉 interpreter builtin（InterpreterSelf.getData/setData 独占）：
+// @ooc/builtins/interpreter/children/interpreter_process/persistable/flow-data.ts
 
 export {
   createFlowSession,
