@@ -168,16 +168,13 @@ export {
   // 高层 versioning 编排（治理 rollback + 控制面直写 main + PR-Issue interim 合入）。
   // session→main 合入语义（tryMergeSelf/classifyWorktreeBranch/requestPrIssueReview）已退役
   // （地基不变量）；沉淀走 stone-feat-branch（createFeatBranchWorktree + commitAndOpenPr）。
-  resolvePrIssue,
   rollback,
   httpDirectMainWrite,
   SUPERVISOR_OBJECT_ID,
-  type PrIssueDecision,
   type RollbackInput,
   type RollbackResult,
   type HttpDirectMainWriteInput,
   type HttpDirectMainWriteResult,
-  type ResolvePrIssueResult,
 } from "./stone-versioning.js";
 
 export {

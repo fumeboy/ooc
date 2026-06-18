@@ -22,8 +22,8 @@ import {
   __resetSerialQueueForTests,
   readPrIssue,
   readSelf,
-  resolvePrIssue,
 } from "@ooc/core/persistable";
+import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";
 import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/agent/thread/executable/method.create-pr-and-invite-reviewers.js";
 import { executeNewFeatBranch } from "@ooc/builtins/agent/thread/executable/method.new-feat-branch.js";
 import { construct as fileConstruct } from "@ooc/builtins/filesystem/file/executable/construct.js";

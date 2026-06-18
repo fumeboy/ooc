@@ -19,10 +19,10 @@ import {
   approvePrIssue,
   readPrIssue,
   readWorldConfig,
-  resolvePrIssue,
   type PrApproveAction,
   type PrApprovalVerdict,
 } from "@ooc/core/persistable/index.js";
+import { resolvePrIssue } from "./resolve.js";
 import { routePrRepairMessage } from "./delivery.js";
 
 export interface ApplyPrApprovalInput {

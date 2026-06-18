@@ -21,10 +21,10 @@ import {
   readPrIssueIndex,
   readPrIssue,
   ensureStoneRepo,
-  resolvePrIssue,
   rollback,
   SUPERVISOR_OBJECT_ID,
 } from "@ooc/core/persistable";
+import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";
 // Wave 4：reflectable 沉淀方法搬进 thread class（会话载体）的 executable 维度。
 import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/agent/children/thread/executable/method.create-pr-and-invite-reviewers";
 import { executeNewFeatBranch } from "@ooc/builtins/agent/children/thread/executable/method.new-feat-branch";

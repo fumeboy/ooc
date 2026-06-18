@@ -18,7 +18,7 @@ import {
   createFeatBranchWorktree,
   commitAndOpenPr,
 } from "../stone-feat-branch";
-import { resolvePrIssue } from "../stone-versioning";
+import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";
 
 let tempRoots: string[] = [];
 

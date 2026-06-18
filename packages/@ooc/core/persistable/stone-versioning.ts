@@ -36,7 +36,6 @@ import {
   gitWorktreeUnregister,
   type GitErrorCode,
 } from "./stone-git.js";
-import { closePrIssue, readPrIssue, type PrIssueRecord } from "./pr-issue.js";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 import {
   nestedObjectPath,
@@ -151,8 +150,11 @@ function worktreePath(baseDir: string, branch: string): string {
   return join(baseDir, "stones", branch);
 }
 
-/** caller-supplied scope-key 用于串行化所有同一 baseDir 上的 git 操作。 */
-function gitQueueKey(baseDir: string): string {
+/**
+ * caller-supplied scope-key 用于串行化所有同一 baseDir 上的 git 操作。
+ * **exported**：pr builtin 的 resolve 编排（PR 下沉 P2）须用同一 key 与本模块 git 写串行化。
+ */
+export function gitQueueKey(baseDir: string): string {
   return `git:${baseDir}`;
 }
 
@@ -262,107 +264,11 @@ export async function commitWorktree(input: CommitWorktreeInput): Promise<Commit
 
 
 /* ---------------------------------------------------------------- *
- * resolvePrIssue
- * ---------------------------------------------------------------- */
-
-export type PrIssueDecision = "merge" | "reject" | "request-changes";
-
-export interface ResolvePrIssueInput {
-  baseDir: string;
-  issueId: number;
-  decision: PrIssueDecision;
-}
-
-export type ResolvePrIssueResult =
-  | { ok: true; kind: "merged"; commitSha: string }
-  | { ok: true; kind: "rejected"; archivedRef: string }
-  | { ok: true; kind: "changes-requested" }
-  | { ok: false; code: "NOT_FOUND"; message: string }
-  | { ok: false; code: "INVALID_STATE"; message: string }
-  | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string }
-  | { ok: false; code: "ISSUE_SERVICE"; message: string };
-
-/**
- * Supervisor 决议生效：
- * - merge → 在 main 上 ff-merge worktree branch；成功后关闭 Issue
- * - reject → archive branch 到 `refs/ooc/rejected/<branch>`，删原 branch + worktree；关闭 Issue
- * - request-changes → 不动 worktree，不关闭 Issue（caller 在 issue 上加 comment 通知 Object 重做）
- */
-export async function resolvePrIssue(input: ResolvePrIssueInput): Promise<ResolvePrIssueResult> {
-  return enqueueSessionWrite(gitQueueKey(input.baseDir), async () => {
-    // 取出 PR-Issue
-    let issue: PrIssueRecord | undefined;
-    try {
-      issue = await readPrIssue(input.baseDir, input.issueId);
-    } catch (e) {
-      return {
-        ok: false,
-        code: "ISSUE_SERVICE",
-        message: e instanceof Error ? e.message : String(e),
-      } as const;
-    }
-    if (!issue) {
-      return { ok: false, code: "NOT_FOUND", message: `PR-Issue #${input.issueId} not found` } as const;
-    }
-    if (!issue.prPayload) {
-      return {
-        ok: false,
-        code: "INVALID_STATE",
-        message: `Issue #${input.issueId} is not a PR-Issue (missing prPayload)`,
-      } as const;
-    }
-    if (issue.status !== "open") {
-      return {
-        ok: false,
-        code: "INVALID_STATE",
-        message: `PR-Issue #${input.issueId} already ${issue.status}`,
-      } as const;
-    }
-
-    const branch = issue.prPayload.branch;
-
-    if (input.decision === "request-changes") {
-      // 仅记录决议；caller 应另行 appendComment 通知发起 Object
-      return { ok: true, kind: "changes-requested" } as const;
-    }
-
-    if (input.decision === "merge") {
-      // git 合入机制经纯原语 mergeFeatBranch（无 pr-issue 依赖）；本编排只负责读 issue + 合后 close。
-      const m = await mergeFeatBranch(input.baseDir, branch, issue.prPayload.paths, "resolvePrIssue(merge)");
-      if (!m.ok) return m;
-      try {
-        await closePrIssue({ baseDir: input.baseDir, issueId: input.issueId });
-      } catch (e) {
-        return {
-          ok: false,
-          code: "ISSUE_SERVICE",
-          message: e instanceof Error ? e.message : String(e),
-        } as const;
-      }
-      return { ok: true, kind: "merged", commitSha: m.commitSha } as const;
-    }
-
-    // reject —— archive 机制经纯原语 archiveFeatBranch（无 pr-issue 依赖）。
-    const a = await archiveFeatBranch(input.baseDir, branch, "resolvePrIssue(reject)");
-    if (!a.ok) return a;
-    try {
-      await closePrIssue({ baseDir: input.baseDir, issueId: input.issueId });
-    } catch (e) {
-      return {
-        ok: false,
-        code: "ISSUE_SERVICE",
-        message: e instanceof Error ? e.message : String(e),
-      } as const;
-    }
-    return { ok: true, kind: "rejected", archivedRef: a.archivedRef } as const;
-  });
-}
-
-/* ---------------------------------------------------------------- *
  * git 合入原语（纯 git 机制，无 pr-issue 依赖）
  *
- * resolvePrIssue 与（PR 下沉 P3 后）pr builtin approval-flow 共用。
- * **queue-naive**：假定调用方已持 `gitQueueKey` 串行化（resolvePrIssue 在其 enqueue 内调用）。
+ * resolve 编排（读 issue + 调本原语 + close 账本）已下沉 pr builtin
+ * （`builtins/agent/children/pr/resolve.ts`，PR 下沉 P2）；本模块只留纯 git 机制。
+ * **queue-naive**：假定调用方已持 `gitQueueKey` 串行化（pr builtin resolve 在其 enqueue 内调用）。
  * ---------------------------------------------------------------- */
 
 export type MergeFeatBranchResult =

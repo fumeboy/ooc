@@ -11,16 +11,15 @@ import {
   aggregatePrApproval,
   readPrIssue,
   readPrIssueIndex,
-  resolvePrIssue,
   rollback,
   SUPERVISOR_OBJECT_ID,
   threadDir,
   type PrApproveAction,
   type PrApprovalVerdict,
-  type PrIssueDecision,
   type PrIssueRecord,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
+import { resolvePrIssue, type PrIssueDecision } from "@ooc/builtins/agent/pr/resolve";
 import {
   llmInputFile,
   llmOutputFile,

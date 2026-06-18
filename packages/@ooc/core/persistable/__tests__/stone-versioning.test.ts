@@ -11,10 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
-  resolvePrIssue,
   rollback,
   __testing,
 } from "@ooc/core/persistable/stone-versioning";
+import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";
 import {
   createFeatBranchWorktree,
   commitAndOpenPr,
