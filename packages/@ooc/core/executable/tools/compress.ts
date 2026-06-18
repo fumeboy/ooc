@@ -17,63 +17,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext, ProcessEvent } from "../../thinkable/context.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { deriveStoneFromThread, stoneDir } from "../../persistable/common.js";
-import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
-
-export const COMPRESS_TOOL: LlmTool = {
-  name: "compress",
-  description:
-    "主动压缩 thread 上的 context 单元,降低 LLM 视野中的 token 占用。" +
-    "scope=\"windows\": 给定 target_ids(window id 列表)将这些 window 切到 " +
-    "compressLevel=1(folded) 或 2(snapshot),压缩态 window 自动获得 expand 命令可恢复。" +
-    "scope=\"events\": 把 events 中段折叠为一条 events_summary;summary 由 LLM 提供;" +
-    "未指定 target_event_ids 时默认保留 head_ring (J=10) + tail_ring (K=40),其余 fold。" +
-    "scope=\"auto\" 暂未实现(留给 emergency_guard)。" +
-    "每次压缩都会写一条 context_compressed 事件进 thread.events,LLM 后续轮次可见。",
-  inputSchema: {
-    type: "object",
-    properties: {
-      title: TITLE_PARAM,
-      scope: {
-        type: "string",
-        enum: ["windows", "events", "auto"],
-        description:
-          "压缩目标:windows(指定 window 折叠) / events(事件流摘要) / auto(系统按 budget 自动决策,暂未实现)",
-      },
-      target_ids: {
-        type: "array",
-        items: { type: "string" },
-        description: "scope=windows 时要压缩的 window id 列表",
-      },
-      level: {
-        type: "number",
-        enum: [1, 2],
-        description: "压缩档位:1=folded(保留 title + 摘要),2=snapshot(仅元信息);默认 1",
-      },
-      summary: {
-        type: "string",
-        description: "scope=events 时由 LLM 提供的摘要文本(必填)",
-      },
-      target_event_ids: {
-        type: "array",
-        items: { type: "string" },
-        description:
-          "scope=events 时可选;若指定则按该 id 列表 fold,必须为连续区段(在 thread.events 中位置相邻);" +
-          "不指定则按 head/tail ring 默认折叠中段。",
-      },
-      quality_hint: {
-        type: "string",
-        enum: ["rough", "curated"],
-        description: "scope=events 时可选;LLM 自评 summary 质量。",
-      },
-      mark: MARK_PARAM,
-    },
-    required: ["scope"],
-  },
-};
 
 const successOutput = (message: string, extra?: Record<string, unknown>) =>
   JSON.stringify({ ok: true, tool: "compress", message, ...(extra ?? {}) });

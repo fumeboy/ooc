@@ -67,10 +67,6 @@ function makeLlmClient(result: LlmGenerateResult): LlmClient {
     async generate() {
       return result;
     },
-    async *stream() {
-      yield { type: "start", provider: result.provider, model: result.model };
-      yield { type: "done", text: result.text, toolCalls: result.toolCalls };
-    },
   };
 }
 

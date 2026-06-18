@@ -4,30 +4,14 @@
  * Matches active thread intents against knowledge index frontmatter triggers and produces
  * KnowledgeWindow entries with source="activator".
  */
-import { ROOT_WINDOW_ID } from "../../_shared/types/context-window.js";
-import { KNOWLEDGE_CLASS_ID, isKnowledgeClass } from "../../_shared/types/constants.js";
+import { isKnowledgeClass } from "../../_shared/types/constants.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ThreadContext } from "./index.js";
 import { computeActivations } from "../knowledge/activator.js";
 import { loadKnowledgeIndex } from "../knowledge/loader.js";
 import { deriveStoneFromThread, derivePoolFromThread } from "../../persistable/index.js";
-
-const KNOWLEDGE_BODY_BYTES = 8192;
-
-/** 8KB truncation shared with the renderer. */
-function truncateKnowledgeBody(body: string): string {
-  const bytes = new TextEncoder().encode(body);
-  if (bytes.length <= KNOWLEDGE_BODY_BYTES) return body;
-  const head = new TextDecoder().decode(bytes.slice(0, KNOWLEDGE_BODY_BYTES));
-  return `${head}...[truncated, original ${bytes.length} bytes]`;
-}
-
-let syntheticIdCounter = 0;
-function nextSyntheticId(): string {
-  syntheticIdCounter += 1;
-  return `kn_${Date.now().toString(36)}_${syntheticIdCounter.toString(36)}`;
-}
+import { makeKnowledgeWindow } from "./knowledge-window.js";
 
 /**
  * Produce activator-matched knowledge windows.
@@ -54,23 +38,13 @@ export async function buildActivatorKnowledgeWindows(
     const out: OocObjectInstance<KnowledgeData>[] = [];
     for (const act of activations) {
       if (explicitPaths.has(act.path)) continue;
-      const body = act.presentation === "full" ? truncateKnowledgeBody(act.doc.body) : "";
-      out.push({
-        id: nextSyntheticId(),
-        // 注册 class id（非投影名 "knowledge"）——使 resolveReadable 命中 knowledge readable。
-        class: KNOWLEDGE_CLASS_ID,
-        parentObjectId: ROOT_WINDOW_ID,
-        title: act.path,
-        status: "open",
-        createdAt: Date.now(),
-        data: {
-          path: act.path,
-          source: "activator",
-          body,
+      const body = act.presentation === "full" ? act.doc.body : "";
+      out.push(
+        makeKnowledgeWindow(act.path, body, "activator", {
           presentation: act.presentation,
           description: act.doc.frontmatter.description,
-        },
-      });
+        }),
+      );
     }
     return out;
   } catch {

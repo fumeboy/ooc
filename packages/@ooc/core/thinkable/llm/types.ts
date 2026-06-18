@@ -100,20 +100,6 @@ export type LlmGenerateResult = {
   raw?: unknown;
 };
 
-/** 流式生成事件，供调用方按统一协议消费 provider 增量。 */
-export type LlmStreamEvent =
-  | { type: "start"; provider: LlmProvider; model: string }
-  | { type: "thinking-delta"; text: string }
-  | { type: "text-delta"; text: string }
-  | { type: "tool-call"; toolCall: LlmToolCall }
-  | {
-      type: "done";
-      text: string;
-      toolCalls: LlmToolCall[];
-      thinking?: string;
-      raw?: unknown;
-    };
-
 /** 从运行时环境变量解析出的标准 LLM 配置。 */
 export type LlmEnvConfig = {
   /** 默认 provider。 */
@@ -130,6 +116,4 @@ export type LlmEnvConfig = {
 export interface LlmClient {
   /** 执行一次非流式请求。 */
   generate(params: LlmGenerateParams): Promise<LlmGenerateResult>;
-  /** 执行一次流式请求。 */
-  stream(params: LlmGenerateParams): AsyncIterable<LlmStreamEvent>;
 }

@@ -21,9 +21,7 @@ function talkView(inst: OocObjectInstance): { target?: string; targetThreadId?: 
   return { target: data.target, targetThreadId: data.targetThreadId };
 }
 import { resumePausedThread } from "./resume";
-import { scanRunningThreads } from "./thread-query";
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { listSessionIds, scanRunningThreads } from "./thread-query";
 
 /**
  * runner 返回的 thread 终态对账结果（observability）。
@@ -209,15 +207,6 @@ export async function enqueueRunningThreadsAtBootstrap(
     );
   }
   return { enqueued };
-}
-
-async function listSessionIds(baseDir: string): Promise<string[]> {
-  try {
-    const entries = await readdir(join(baseDir, "flows"), { withFileTypes: true });
-    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
-  } catch {
-    return [];
-  }
 }
 
 /**

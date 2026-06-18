@@ -60,8 +60,7 @@ async function dispatchApprovedToolCall(
   toolCall: LlmToolCall,
 ): Promise<void> {
   try {
-    const output = (await dispatchToolCall(thread, toolCall))
-      ?? JSON.stringify({ ok: true, tool: toolCall.name });
+    const output = await dispatchToolCall(thread, toolCall);
     let ok = true;
     try {
       const parsed = JSON.parse(output);
@@ -303,8 +302,7 @@ async function runToolDispatchLoop(
 
     // allow → 继续走 dispatchToolCall
     try {
-      const output = (await dispatchToolCall(thread, toolCall))
-        ?? JSON.stringify({ ok: true, tool: toolCall.name });
+      const output = await dispatchToolCall(thread, toolCall);
       // 解析 handler 返回的 JSON output 中的 ok 字段;handler 用 {ok:false,...} 报业务错时,
       // event.ok 也要跟着 false,以便 UI 和后续逻辑能正确识别失败。
       // 旧实现硬写 ok:true 导致 LLM 端拿到错误消息但 event 显示 ok。

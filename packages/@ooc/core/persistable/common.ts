@@ -7,7 +7,7 @@ import { readdir } from "node:fs/promises";
  * 此处 re-export 保持旧 import 路径 (`persistable/common`) 可用。
  *
  * **留在本文件**的是带 IO / 路径路由的实现：objectDir / threadDir / stoneDir /
- * _deprecatedPackageDir / resolveStoneDir（依赖 node:path / node:fs，不可下沉 `_shared`）
+ * resolveStoneDir（依赖 node:path / node:fs，不可下沉 `_shared`）
  * 以及它们专用的 STONE_OBJECTS_SUBDIR 常量。
  */
 export type {
@@ -79,8 +79,7 @@ export function threadDir(ref: ThreadPersistenceRef): string {
  * Routing priority:
  * 1. `_stonesBranch` set → versioning worktree: `stones/{_stonesBranch}/objects/{nestedPath}`
  * 2. Builtin ids (_builtin/*, supervisor, user) → `packages/@ooc/builtins/<id>` in the repo or World node_modules
- * 3. Flat stone path (default): `stones/{nestedPath}`
- * 4. Fallback (deprecated): `packages/{nestedPath}` — warns on use, kept for one release
+ * 3. Canonical (default): `stones/main/objects/{nestedPath}`
  *
  * `nestedPath` translates "/" in objectId into `children/` segments.
  */

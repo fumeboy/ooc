@@ -51,34 +51,41 @@ describe.skipIf(!shouldRunRealTest)("real thinkloop integration", () => {
 
     spyOn(toolsModule, "getAvailableTools").mockReturnValue([EXEC_TOOL]);
 
-    spyOn(contextModule, "buildContext").mockImplementation(async (currentThread) => {
+    spyOn(contextModule, "buildInputItems").mockImplementation(async (currentThread) => {
       const activeForm = currentThread.contextWindows.find((w) => w.class === "method_exec");
 
       if (!activeForm || activeForm.class !== "method_exec") {
-        return [
-          {
-            role: "system",
-            content: [
-              "你是一个严格遵守工具调用要求的测试助手。",
-              "本轮只允许调用一次 open 工具。",
-              "请调用一次 open 工具，并且只调用这一次。",
-              "参数必须等价于：method=\"end\", title=\"结束线程\", args={ reason: \"done\", summary: \"结束线程\" }。",
-              "不要输出任何多余解释。"
-            ].join("\n")
-          },
-          {
-            role: "user",
-            content: "请先打开 end method form。"
-          }
-        ];
+        return {
+          input: [
+            {
+              type: "message",
+              role: "system",
+              content: [
+                "你是一个严格遵守工具调用要求的测试助手。",
+                "本轮只允许调用一次 open 工具。",
+                "请调用一次 open 工具，并且只调用这一次。",
+                "参数必须等价于：method=\"end\", title=\"结束线程\", args={ reason: \"done\", summary: \"结束线程\" }。",
+                "不要输出任何多余解释。"
+              ].join("\n")
+            },
+            {
+              type: "message",
+              role: "user",
+              content: "请先打开 end method form。"
+            }
+          ]
+        };
       }
 
-      return [
-        {
-          role: "system",
-          content: `当前已经存在 form_id=${activeForm.id} 的 end form。`
-        }
-      ];
+      return {
+        input: [
+          {
+            type: "message",
+            role: "system",
+            content: `当前已经存在 form_id=${activeForm.id} 的 end form。`
+          }
+        ]
+      };
     });
 
     await think(thread, client);

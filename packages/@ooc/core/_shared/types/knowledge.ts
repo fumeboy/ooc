@@ -31,7 +31,7 @@ export interface KnowledgeFrontmatter {
   /** 激活规则：trigger 表达式 → 激活级别。详见 ActivatesOn。 */
   activates_on?: ActivatesOn;
   /**
-   * 是否允许被子 Agent 继承（B-tree 协议）。
+   * 是否允许被子 Agent 继承（领域层级轴：opt-in 的目录祖先继承）。
    *
    * - `true`：父 Agent 的这篇 knowledge 会被子 Agent 的 loadKnowledgeIndex 自动纳入索引；
    *   子 Agent 自己 knowledge 目录下同 idPath 的 knowledge 仍然胜出（override）。
@@ -40,7 +40,7 @@ export interface KnowledgeFrontmatter {
    * 注意：sediment（pool 侧 memory / relations）默认不下传——它们没有这个字段，
    * loader 也不会扫描祖先 pool。本字段只对 stone seed knowledge 生效。
    *
-   * 详见 meta/object.doc.ts:thinkable.children.knowledge.patches.domain_axis。
+   * 详见 thinkable 维度 self.md（inheritable 领域层级轴）。
    */
   inheritable?: boolean;
 }

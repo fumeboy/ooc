@@ -12,13 +12,6 @@ import { CLOSE_TOOL } from "./close.js";
 import { EXEC_TOOL } from "./exec.js";
 import { WAIT_TOOL } from "./wait.js";
 
-export { CLOSE_TOOL } from "./close.js";
-export { EXEC_TOOL } from "./exec.js";
-export { MARK_PARAM, TITLE_PARAM } from "./schema.js";
-export { WAIT_TOOL } from "./wait.js";
-// compress 不再是顶层 tool（见下）；handleCompressTool 仍导出供 exec.ts 拦截 method="compress" 调用。
-export { handleCompressTool } from "./compress.js";
-
 /**
  * 所有 OOC tools —— **3 个稳定原语**：exec / close / wait。
  *

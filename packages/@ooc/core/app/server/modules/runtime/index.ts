@@ -1,7 +1,5 @@
 import { Elysia } from "elysia";
 import type { ServerConfig } from "../../bootstrap/config";
-import { createJobManager } from "../../runtime/job-manager";
-import { createPauseStore } from "../../runtime/pause-store";
 import { disableGlobalPauseApi } from "./api.disable-global-pause";
 import { disableDebugApi } from "./api.disable-debug";
 import { enableGlobalPauseApi } from "./api.enable-global-pause";
@@ -23,19 +21,11 @@ import { getPrIssueApi } from "./api.get-pr-issue";
 import { rollbackStoneApi } from "./api.rollback-stone";
 import { createRuntimeService } from "./service";
 
-const defaultPauseStore = createPauseStore();
-const defaultJobManager = createJobManager();
-
-type RuntimeModuleConfig = ServerConfig & {
-  pauseStore?: ReturnType<typeof createPauseStore>;
-  jobManager?: ReturnType<typeof createJobManager>;
-};
-
-export function runtimeModule(config: RuntimeModuleConfig) {
+export function runtimeModule(config: ServerConfig) {
   const service = createRuntimeService({
     baseDir: config.baseDir,
-    pauseStore: config.pauseStore ?? defaultPauseStore,
-    jobManager: config.jobManager ?? defaultJobManager,
+    pauseStore: config.pauseStore,
+    jobManager: config.jobManager,
   });
 
   return new Elysia({ prefix: "/api", name: "ooc.runtime" })

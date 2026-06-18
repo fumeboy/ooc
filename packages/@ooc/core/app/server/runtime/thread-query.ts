@@ -38,6 +38,19 @@ export async function scanRunningThreads(
 }
 
 /**
+ * 列出 flows/ 下所有 session 目录名。flows/ 不存在或读失败时返回空集，不抛——
+ * 与 worker bootstrap / global pause 解除的退化路径一致。
+ */
+export async function listSessionIds(baseDir: string): Promise<string[]> {
+  try {
+    const entries = await readdir(join(baseDir, "flows"), { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * 递归扫 flows/{sessionId}/objects/ 下任意深度的 flow object 目录，按 thread.json
  * 的 status 过滤。
  *

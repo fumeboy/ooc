@@ -12,10 +12,8 @@
  *   - 简单 objectId: `packages/supervisor/readable.md`
  *   - 嵌套 objectId: `packages/sentry/children/sentry_factor_dev/readable.md`
  *
- * pools routing：当路径形如 `pools/<id>/...` 时，自动重写为
- * `pools/objects/<id>/...`：
- *   - pools 不挂 branch（事实是单向积累的）。
- *   - 已经形如 `pools/objects/...` 的路径不重写。
+ * pools routing：当路径形如 `pools/<id>/...` 时，保持原样（bun workspace 迁移后
+ * 不再注入 `objects/` 中间层）。pools 不挂 branch（事实是单向积累的）。
  *
  * 注意：terminal.run（bash）不走这里——bash 显式承诺"cwd 等于 OOC 进程的
  * 工作目录"，是 raw escape hatch（terminal 委托 terminal_process 构造器；
@@ -33,7 +31,7 @@ import { readWorldConfigSync } from "./index.js";
  * - 绝对路径：原样返回
  * - 相对路径 + thread.persistence.baseDir 已知：相对 baseDir 解析；
  *   形如 `packages/<id>/...` 的路径直接使用（bun workspace 结构）；
- *   形如 `pools/<id>/...` 的路径自动注入 `objects/`
+ *   形如 `pools/<id>/...` 的路径保持原样（不注入 `objects/`）
  * - 相对路径 + baseDir 未知：回退 process.cwd()（仅纯内存测试场景）
  */
 export function resolveSessionPath(thread: ThreadContext | undefined, p: string): string {

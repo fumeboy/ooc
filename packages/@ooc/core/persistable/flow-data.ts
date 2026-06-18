@@ -14,7 +14,7 @@ import { objectDir, toJson, type FlowObjectRef } from "./common";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
 
 /** flow object 的数据文件 `data.json` 的绝对路径。 */
-export function flowDataFile(ref: FlowObjectRef): string {
+function flowDataFile(ref: FlowObjectRef): string {
   return join(objectDir(ref), "data.json");
 }
 
@@ -45,24 +45,6 @@ export async function readData(ref: FlowObjectRef): Promise<Record<string, unkno
       { cause: error },
     );
   }
-}
-
-/**
- * 写入 flow object 的 data.json：
- * - 自动 mkdir -p 父目录（首次 setData 时 flow object 目录可能尚未创建）。
- * - 整体覆盖语义。
- * - 通过 enqueueSessionWrite('flow-data:'+...) 串行化写，避免并发踩坏。
- */
-export async function writeData(
-  ref: FlowObjectRef,
-  data: Record<string, unknown>,
-): Promise<void> {
-  const file = flowDataFile(ref);
-  const key = `flow-data:${ref.baseDir}:${ref.sessionId}:${ref.objectId}`;
-  await enqueueSessionWrite(key, async () => {
-    await mkdir(dirname(file), { recursive: true });
-    await writeFile(file, toJson(data), "utf8");
-  });
 }
 
 /**

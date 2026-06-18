@@ -52,8 +52,6 @@ export interface WindowMethod<Data = any, Win = any, Args = any> {
   name: string;
   description: string;
   schema?: MethodCallSchema;
-  for_ui_access?: boolean;
-  public?: boolean;
   exec: (
     ctx: ReadableContext,
     self: Data,

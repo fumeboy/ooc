@@ -7,8 +7,7 @@
  * `.class` 后把 `.data` 断言成对应 class 的 `Data`（本文件 re-export 各 class 的 `Data`/`Win`
  * 供断言）。各 builtin types.ts 的 `@deprecated XxxWindow` 平铺别名已随之删除。
  *
- * base 部分（BaseContextWindow / WindowStatus / provenance / relevance /
- * 常量 / id 工具函数）也在本零依赖层定义。
+ * base 部分（WindowStatus / 常量 / id 工具函数）也在本零依赖层定义。
  */
 
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
@@ -33,65 +32,6 @@ export type WindowStatus =
   | "closed";
 
 /**
- * Why a ContextWindow is present in context. Set by the mechanism that created the window.
- * unset = legacy / unknown (treated as "explicit" for safety — won't be auto-unloaded).
- */
-export interface ContextWindowProvenance {
-  kind: "explicit" | "derived" | "system" | "related";
-  reason: {
-    mechanism:
-      | "user_open"
-      | "llm_exec"
-      | "intent_match"
-      | "peer_discovery"
-      | "form_bound"
-      | "session_constant";
-    sourceId?: string;
-    detail?: Record<string, unknown>;
-  };
-  createdAt: number;
-  lastTouchedAt: number;
-}
-
-/**
- * Semantic importance of a ContextWindow, used by BudgetManager for overflow decisions.
- * unset = computed at render time from defaults.
- */
-export interface ContextWindowRelevance {
-  score: number; // 0.0–1.0
-  priorityHint?: "critical" | "high" | "normal" | "low";
-  signalCount: number; // decaying counter of recent references
-}
-
-/**
- * 所有 ContextWindow 共享的字段。
- *
- * - id：全局唯一稳定 ID（root 固定为 "root"，其它类型用 generateWindowId）
- * - parentWindowId：method_exec 必有 parent；其它类型不显式挂 parent 时默认在 root 下
- * - title：所有 window 强制必填
- * - windowKnowledgePaths：本 window 自身关联的 knowledge path（用于 close 时释放引用计数）
- */
-export interface BaseContextWindow {
-  id: string;
-  class: string;
-  parentWindowId?: string;
-  title: string;
-  status: WindowStatus;
-  createdAt: number;
-  windowKnowledgePaths?: string[];
-  /**
-   * 上下文压缩档位。
-   *
-   * - undefined / 0 → live 全量渲染（默认）
-   * - 1              → folded 折叠态
-   * - 2              → snapshot 仅元信息
-   */
-  compressLevel?: 0 | 1 | 2;
-  provenance?: ContextWindowProvenance;
-  relevance?: ContextWindowRelevance;
-}
-
-/**
  * ContextWindow — canonical 形态（thread 维度，persist 到 thread-context.json）。
  *
  * = `OocObjectInstance`：信封（id/class/title/status/createdAt/parentObjectId）+ 业务 `.data`
@@ -105,8 +45,6 @@ export type { OocObjectInstance } from "../../runtime/ooc-class.js";
 // ─────────────────────────── per-class Data / Win re-exports ──────────────────
 // 需要按 class narrow 的调用方：读 inst.class 后把 inst.data 断言成对应 Data。
 // 这些是 class 的纯业务数据（不含信封/不含旧平铺别名）。
-// root 窗（每条 thread 的虚拟根容器）无业务数据；`_builtin/root` 类已退役，类型就地定义。
-export type RootData = Record<string, never>;
 export type { Data as TodoData } from "@ooc/builtins/agent/todo/types.js";
 export type { TalkData, TalkWin, TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
 export type { Data as PrData } from "@ooc/builtins/agent/pr/types.js";
@@ -134,10 +72,8 @@ export const SESSION_CREATOR_THREAD_ID = "__session__";
 export function generateWindowId(type: string): string {
   const prefixMap: Record<string, string> = {
     method_exec: "f",
-    do: "w_do",
     todo: "w_todo",
     talk: "w_talk",
-    program: "w_prog",
     file: "w_file",
     knowledge: "w_kn",
     search: "w_search",

@@ -61,10 +61,6 @@ describe("scheduler", () => {
       async generate() {
         return makeResult("openai", "gpt-test", "");
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      },
     };
 
     await runScheduler(parent, llmClient, { maxTicks: 2 });
@@ -98,10 +94,6 @@ describe("scheduler", () => {
           toolCalls: [],
         };
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      },
     };
 
     await runScheduler(root, llmClient, { maxTicks: 1 });
@@ -133,10 +125,6 @@ describe("scheduler persistence", () => {
     const llmClient: LlmClient = {
       async generate() {
         return makeResult("openai", "gpt-test", "persisted");
-      },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "persisted", toolCalls: [] };
       },
     };
 

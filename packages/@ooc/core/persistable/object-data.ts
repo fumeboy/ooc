@@ -17,10 +17,7 @@ import type { OocObjectInstance } from "../runtime/ooc-class.js";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import { objectDir, type FlowObjectRef, type ThreadPersistenceRef } from "./common.js";
 import type { PersistableContext } from "./contract.js";
-import {
-  writeRuntimeObjectState,
-  readRuntimeObjectState,
-} from "./flow-runtime-object.js";
+import { writeRuntimeObjectState } from "./flow-runtime-object.js";
 import { createFlowObject } from "./flow-object.js";
 import { observeWarn } from "../observable/log-aggregator.js";
 
@@ -105,32 +102,5 @@ export async function saveObjectData(
       "object-data.saveObjectData",
       `[object-data] saveObjectData failed for ${instance.id}: ${(e as Error).message}`,
     );
-  }
-}
-
-/**
- * 读回某独立 object 的 `inst.data`（state.json）。
- * 优先 class 自定义 `resolvePersistable(class).load`，否则系统默认。
- * 读不到（从未落盘）返回 undefined。
- */
-export async function loadObjectData(
-  registry: ObjectRegistry,
-  ref: FlowObjectRef,
-  classId: string,
-): Promise<unknown | undefined> {
-  const custom = registry.resolvePersistable(classId);
-  try {
-    if (custom?.load) {
-      return await custom.load(persistableCtx(ref));
-    }
-    const raw = await readRuntimeObjectState(ref);
-    if (!raw) return undefined;
-    return (raw as { data?: unknown }).data ?? raw;
-  } catch (e) {
-    observeWarn(
-      "object-data.loadObjectData",
-      `[object-data] loadObjectData failed for ${ref.objectId}: ${(e as Error).message}`,
-    );
-    return undefined;
   }
 }

@@ -2,9 +2,9 @@
  * Context budget — BudgetManager。
  *
  * 预算是 context 唯一的自动裁剪闸门：
- *   - score(window): 由 provenance / priority / recency / signalCount 算出 0.0–1.0 相关性
- *   - allocate(windows, totalBudget, estimateTokenFn?): 按相关性排序, 在 token 预算内
- *     返回 { visible, overflow }; overflow 不丢, 由 renderer 的 <context_overflow> 呈现
+ *   - allocate(windows, totalBudget, estimateTokenFn?): 按 in-order token 预算裁剪,
+ *     在 token 预算内返回 { visible, overflow }; overflow 不丢, 由 renderer 的
+ *     <context_overflow> 呈现
  *
  * compressLevel 仅由 LLM 的 compress/expand 命令与 renderer 显式控制——预算不自动推进档位。
  *
@@ -16,10 +16,8 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-// budget 只读 base 字段（id/title/provenance/relevance/compressLevel）；用 BaseContextWindow
-// 而非 OocObjectInstance（=canonical ContextWindow，无 base 展示字段），以读到 provenance/relevance。
-// pipeline 流通的 OocObjectInstance 信封 + base 字段结构上满足 BaseContextWindow。
-import type { BaseContextWindow as ContextWindow } from "../../_shared/types/context-window.js";
+// budget 只读 id/title；用 canonical ContextWindow（= OocObjectInstance）。
+import type { ContextWindow } from "../../_shared/types/context-window.js";
 import { deriveStoneFromThread, stoneDir } from "../../persistable/common";
 import type { ThreadContext } from "./index";
 
@@ -93,69 +91,15 @@ function readBudgetConfigFile(thread: ThreadContext): BudgetConfigFile | null {
 // ─────────────────────────── BudgetManager ───────────────────────────────────
 
 /**
- * BudgetManager — 基于语义相关性打分 + token 预算分配的 context 裁剪器。
+ * BudgetManager — token 预算分配的 context 裁剪器。
  */
-
-const PROVENANCE_WEIGHTS: Record<string, number> = {
-  explicit: 1.0,
-  derived: 0.7,
-  related: 0.5,
-  system: 0.8,
-};
-
-const PRIORITY_WEIGHTS: Record<string, number> = {
-  critical: 1.0,
-  high: 0.9,
-  normal: 0.6,
-  low: 0.3,
-};
-
 export class BudgetManager {
-  /**
-   * Compute a 0.0–1.0 relevance score for a context window.
-   *
-   * Uses: provenance.kind weight, priorityHint weight, recency (time since lastTouchedAt),
-   * signalCount (decaying counter of recent references).
-   *
-   * If the window already has relevance.score set, it's used as the baseline and
-   * the other factors are blended in.
-   */
-  score(window: ContextWindow, now: number = Date.now()): number {
-    const p = window.provenance;
-    const r = window.relevance;
-
-    // Base from existing relevance or provenance default
-    let score = r?.score ?? PROVENANCE_WEIGHTS[p?.kind ?? "explicit"];
-
-    // Priority hint boost
-    if (r?.priorityHint) {
-      score = score * 0.6 + PRIORITY_WEIGHTS[r.priorityHint] * 0.4;
-    }
-
-    // Recency: windows touched in last 5 minutes get a boost; very old windows decay
-    if (p?.lastTouchedAt) {
-      const ageMs = now - p.lastTouchedAt;
-      const ageHours = ageMs / (1000 * 60 * 60);
-      if (ageMs < 5 * 60 * 1000) {
-        score = Math.min(1.0, score * 1.1); // Recent boost
-      } else if (ageHours > 1) {
-        score *= Math.max(0.3, 1.0 - (ageHours - 1) * 0.1); // Decay 10% per hour after first hour, floor at 0.3
-      }
-    }
-
-    // Signal count: higher recent signal count = higher relevance
-    if (r?.signalCount) {
-      const signalBoost = Math.min(0.2, r.signalCount * 0.02);
-      score = Math.min(1.0, score + signalBoost);
-    }
-
-    return Math.max(0.0, Math.min(1.0, score));
-  }
-
   /**
    * Allocate windows to a token budget.
    *
-   * @param windows All candidate windows (already enriched with scored relevance)
+   * 按入参顺序累加 token，命中预算上限即把剩余窗归入 overflow（不丢，由 renderer 呈现）。
+   *
+   * @param windows All candidate windows
    * @param totalBudget Max tokens for context windows (not instructions or transcript)
    * @param estimateTokenFn Optional tokenizer function; defaults to JSON.length / 4 (heuristic)
    * @returns { visible: windows in-budget, overflow: windows pushed out with reasons }
@@ -170,30 +114,20 @@ export class BudgetManager {
   } {
     const estimate = estimateTokenFn ?? estimateWindowTokens;
 
-    // Score all windows
-    const now = Date.now();
-    const scored = windows.map(w => ({
-      window: w,
-      score: this.score(w, now),
-      tokens: estimate(w),
-    }));
-
-    // Sort descending by relevance score
-    scored.sort((a, b) => b.score - a.score);
-
-    const visible: typeof windows = [];
+    const visible: ContextWindow[] = [];
     const overflow: Array<{ id: string; title: string; relevance: number; reason: string }> = [];
     let used = 0;
 
-    for (const s of scored) {
-      if (used + s.tokens <= totalBudget) {
-        visible.push(s.window);
-        used += s.tokens;
+    for (const w of windows) {
+      const tokens = estimate(w);
+      if (used + tokens <= totalBudget) {
+        visible.push(w);
+        used += tokens;
       } else {
         overflow.push({
-          id: s.window.id,
-          title: s.window.title,
-          relevance: s.score,
+          id: w.id,
+          title: w.title,
+          relevance: 1.0,
           reason: used > 0 ? "budget_overflow" : "window_too_large_for_budget",
         });
       }

@@ -32,9 +32,7 @@ export {
 export { readCsv, writeCsv, appendRow } from "./csv-pool";
 
 export {
-  flowDataFile,
   readData as readFlowData,
-  writeData as writeFlowData,
   mergeData as mergeFlowData,
 } from "./flow-data";
 
@@ -81,30 +79,9 @@ export {
 } from "./stone-object";
 
 export {
-  runtimeObjectStateFile,
   writeRuntimeObjectState,
   readRuntimeObjectState,
-  deleteRuntimeObject,
 } from "./flow-runtime-object";
-export {
-  contextRegistryFile,
-  readContextRegistry,
-  writeContextRegistry,
-  EMPTY_REGISTRY,
-  type ContextRegistry,
-  type ContextMember,
-  type ContextParams,
-} from "./flow-context-registry";
-
-// 单对象 data 持久化（系统默认 / class 自定义 persistable 的通用编织点，object-model 核心 7）。
-export {
-  saveObjectData,
-  loadObjectData,
-  isTransientInstance,
-  threadPersistRef,
-  runtimeObjectRef,
-  persistableCtx,
-} from "./object-data";
 
 export {
   // stone-worktree: session identity 的 worktree 统一访问层（取代 plain overlay）
@@ -214,13 +191,10 @@ export {
   // 高层 versioning 编排（治理 rollback + 控制面直写 main + PR-Issue interim 合入）。
   // session→main 合入语义（tryMergeSelf/classifyWorktreeBranch/requestPrIssueReview）已退役
   // （地基不变量）；沉淀走 stone-feat-branch（createFeatBranchWorktree + commitAndOpenPr）。
-  commitWorktree,
   resolvePrIssue,
   rollback,
   httpDirectMainWrite,
-  pruneStaleWorktrees,
   SUPERVISOR_OBJECT_ID,
-  type SessionWorktreeRef,
   type PrIssueDecision,
   type RollbackInput,
   type RollbackResult,
@@ -253,9 +227,6 @@ export {
   flowClientPagesDir,
   readFlowClientPage,
   writeFlowClientPage,
-  visibleIndexFile,
-  readVisibleSource,
-  writeVisibleSource,
 } from "./stone-client";
 export type { WorldConfig } from "./world-config";
 export {

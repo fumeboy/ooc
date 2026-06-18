@@ -11,14 +11,11 @@
 import { XmlRenderer } from "../thinkable/context/renderers/xml.js";
 import type { ContextSnapshot } from "../thinkable/context/snapshot.js";
 import type { ThreadContext } from "../thinkable/context/index.js";
-import type {
-  BaseContextWindow,
-  ContextWindow,
-} from "@ooc/core/_shared/types/context-window.js";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 export async function renderContextXml(input: {
   thread: ThreadContext;
-  contextWindows: BaseContextWindow[];
+  contextWindows: ContextWindow[];
 }): Promise<string> {
   const { thread, contextWindows } = input;
   const snapshot: ContextSnapshot = {

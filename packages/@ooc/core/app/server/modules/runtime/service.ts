@@ -132,15 +132,8 @@ export interface RuntimeService {
   /**
    * 解除全局 pause：翻 flag + **扫所有 session 的 paused thread 入队 resume-thread job**
    * （修 pause 单向陷阱）。此前只翻内存 flag，已 paused 的 thread 永久搁浅。
-   *
-   * 返回 resumedThreadIds（`${objectId}/${threadId}`）/ jobIds 供控制面观测——但 HTTP 层
-   * 仍只暴露 { enabled: false }（保持 RuntimeModel.globalPauseResponse 契约 + 前端不破）。
    */
-  disableGlobalPause(): Promise<{
-    enabled: false;
-    resumedThreadIds: string[];
-    jobIds: string[];
-  }>;
+  disableGlobalPause(): Promise<{ enabled: false }>;
   getGlobalPauseStatus(): { enabled: boolean };
   enableDebug(): { enabled: true };
   disableDebug(): { enabled: false };
@@ -339,15 +332,11 @@ export function createRuntimeService(deps: {
       // 对称于 enable：global pause 跨 session 停 thread，解除也跨 session 恢复。
       // 复用 flows.resumeSession 同款编排（scan paused → applyResumeTransition →
       // createResumeThreadJob），worker 消费 resume-thread job 续跑。
-      const resumed = await resumeAllPausedThreads({
+      await resumeAllPausedThreads({
         baseDir: deps.baseDir,
         jobManager: deps.jobManager,
       });
-      return {
-        enabled: false as const,
-        resumedThreadIds: resumed.map((r) => r.resumedThreadId),
-        jobIds: resumed.map((r) => r.jobId),
-      };
+      return { enabled: false as const };
     },
     getGlobalPauseStatus() {
       return { enabled: deps.pauseStore.isGlobalPauseEnabled() };
@@ -454,21 +443,24 @@ export function createRuntimeService(deps: {
           );
         }
       }
-      // 标 decided + 翻 status + writeThread
-      target.decided = {
-        action,
-        at: Date.now(),
-        ...(reason !== undefined ? { reason } : {}),
-      };
+      // 标 decided + 翻 status + writeThread（不可变：新建 decided event 替换 target，不原地改）
       // 为 event 分配稳定 id (用于本次返回值; 若没有 id 字段则赋一个)。
       // 缺省策略: 用 toolCallId + "-ask" 作 fallback (toolCallId 在 thread.events 中
       // 仅出现一次, 在 permission_ask + function_call_output 间复用 — 给本 event 一个
       // 派生 id 即可)。
-      if (!target.id) {
-        target.id = `${target.toolCallId}_ask`;
-      }
+      const decidedId = target.id ?? `${target.toolCallId}_ask`;
+      const decidedEvent = {
+        ...target,
+        id: decidedId,
+        decided: {
+          action,
+          at: Date.now(),
+          ...(reason !== undefined ? { reason } : {}),
+        },
+      };
       const updated = {
         ...thread,
+        events: thread.events.map((ev) => (ev === target ? decidedEvent : ev)),
         status: "running" as const,
       };
       await writeThread(updated);
@@ -481,7 +473,7 @@ export function createRuntimeService(deps: {
       return {
         ok: true as const,
         threadId: ref.threadId,
-        eventId: target.id,
+        eventId: decidedId,
         newStatus: "running" as const,
       };
     },

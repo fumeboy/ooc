@@ -1,5 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
-import { generateWithClaude, streamWithClaude } from "../providers/claude.ts";
+import { generateWithClaude } from "../providers/claude.ts";
 
 describe("claude provider", () => {
   it("解析非流式 tool call 结果", async () => {
@@ -234,104 +234,6 @@ describe("claude provider", () => {
         type: "message",
         role: "assistant",
         content: "hello from claude"
-      }
-    ]);
-  });
-
-  it("把 Claude 流事件归一化为统一事件", async () => {
-    const body = [
-      "event: content_block_delta\n",
-      'data: {"delta":{"type":"text_delta","text":"hel"}}\n\n',
-      "event: content_block_delta\n",
-      'data: {"delta":{"type":"text_delta","text":"lo"}}\n\n'
-    ].join("");
-
-    globalThis.fetch = mock(async () =>
-      new Response(body, {
-        status: 200,
-        headers: { "content-type": "text/event-stream" }
-      })
-    ) as unknown as typeof fetch;
-
-    const events = [];
-
-    for await (const event of streamWithClaude(
-      {
-        provider: "claude",
-        apiKey: "test-key",
-        baseUrl: "https://example.com",
-        model: "claude-test"
-      },
-      { input: [{ type: "message", role: "user", content: "hi" }] }
-    )) {
-      events.push(event);
-    }
-
-    expect(events).toEqual([
-      { type: "start", provider: "claude", model: "claude-test" },
-      { type: "text-delta", text: "hel" },
-      { type: "text-delta", text: "lo" },
-      { type: "done", text: "hello", toolCalls: [], raw: undefined }
-    ]);
-  });
-
-  it("把 Claude 流式 tool call 归一化为统一事件", async () => {
-    const body = [
-      "event: content_block_start\n",
-      'data: {"content_block":{"type":"tool_use","id":"toolu_1","name":"close","input":{"reason":"done"}}}\n\n'
-    ].join("");
-
-    globalThis.fetch = mock(async () =>
-      new Response(body, {
-        status: 200,
-        headers: { "content-type": "text/event-stream" }
-      })
-    ) as unknown as typeof fetch;
-
-    const events = [];
-
-    for await (const event of streamWithClaude(
-      {
-        provider: "claude",
-        apiKey: "test-key",
-        baseUrl: "https://example.com",
-        model: "claude-test"
-      },
-      {
-        input: [{ type: "message", role: "user", content: "hi" }],
-        tools: [
-          {
-            name: "close",
-            description: "关闭当前任务",
-            inputSchema: { type: "object" }
-          }
-        ]
-      }
-    )) {
-      events.push(event);
-    }
-
-    expect(events).toEqual([
-      { type: "start", provider: "claude", model: "claude-test" },
-      {
-        type: "tool-call",
-        toolCall: {
-          id: "toolu_1",
-          name: "close",
-          arguments: { reason: "done" }
-        }
-      },
-      {
-        type: "done",
-        text: "",
-        toolCalls: [
-          {
-            id: "toolu_1",
-            name: "close",
-            arguments: { reason: "done" }
-          }
-        ],
-        raw: undefined
       }
     ]);
   });

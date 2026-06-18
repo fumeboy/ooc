@@ -6,8 +6,6 @@ import { setPauseChecker, setThreadActivationNotifier } from "@ooc/core/observab
 import { createWorldRuntime, type WorldRuntime } from "@ooc/core/runtime/world-runtime";
 import { readServerConfig, type ServerConfig } from "./bootstrap/config";
 import { runRecoveryCheck } from "./bootstrap/recovery-check";
-import { checkFlowChildrenMigration } from "./bootstrap/check-flow-children-migration";
-import { checkStateContextSplit } from "./bootstrap/check-state-context-split";
 import { instantiateBuiltinClassObjects } from "./bootstrap/instantiate-classes";
 import { ensureStoneRepo, createPoolObject, BUILTIN_OBJECT_IDS } from "@ooc/core/persistable";
 import { AppServerError } from "./bootstrap/errors";
@@ -291,7 +289,7 @@ if (import.meta.main) {
     }
   }
 
-  // 把带 ooc.instantiate_with_new_world 的框架 builtin class（supervisor）
+  // 把 ooc.kind==="object" 的框架 builtin class（supervisor）
   // 幂等实例化为 objects/<id> 可交互 object（拷贝 self.md + ooc.class=_builtin/<id>）。
   // 让全新 world 自动拥有 supervisor object——不再靠 listStones 特殊逻辑合入。
   try {
@@ -325,18 +323,9 @@ if (import.meta.main) {
     console.warn(`[ooc-app-server] recovery-check failed (non-fatal): ${e instanceof Error ? e.message : e}`);
   }
 
-  // 移除两项一次性迁移 advisory（checkStoneToPoolMigration / checkStaleDatabaseDir）——
-  // 它们扫描 deprecated `<world>/packages/<id>/` 布局，该布局已随 packages/ 兼容层一并删除，永远空返回。
-
-  // flow 子 object 物理布局迁移到 children/ marker（与 stone 对称）。
-  // 幂等：已是 children/ 形态的不动。必须在 worker bootstrap 入队前跑（worker.scanRunningThreads
-  // 期望 children/ 布局）。
-  await checkFlowChildrenMigration(config.baseDir);
-
-  // split state (object dim) vs context (thread dim).
-  // 把遗留的 talk/do/method_exec 独立目录与 state.json 中错置的 contextWindows 字段
-  // 一次性归位。幂等。
-  await checkStateContextSplit(config.baseDir);
+  // 移除四项一次性迁移 advisory（checkStoneToPoolMigration / checkStaleDatabaseDir /
+  // checkFlowChildrenMigration / checkStateContextSplit）——它们扫描各自的 deprecated 布局，
+  // 该布局已随对应重构一并删除/迁移完成，在 steady-state world 上永远空返回。
 
   // hostname: "0.0.0.0" 显式 IPv4 监听（兼 IPv6 dual-stack on macOS）。
   // 之前默认 listen 在 macOS bun 上只绑 IPv6（lsof: `*:3000` 但 IPv6 only），

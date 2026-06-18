@@ -1,16 +1,31 @@
-import type { LlmStreamEvent, LlmToolCall } from "../types";
+import type { LlmProvider, LlmToolCall } from "../types";
 
 /**
- * 共享 SSE 解析器。
+ * SSE 解析事件 —— 仅 claude SSE-fallback 路径内部使用（generateWithClaude 在代理只回
+ * text/event-stream 时聚合 parseClaudeSSE 的产出）。无对外流式 API，故类型私有于本模块。
+ */
+type ClaudeSseEvent =
+  | { type: "start"; provider: LlmProvider; model: string }
+  | { type: "text-delta"; text: string }
+  | { type: "tool-call"; toolCall: LlmToolCall }
+  | {
+      type: "done";
+      text: string;
+      toolCalls: LlmToolCall[];
+      raw?: unknown;
+    };
+
+/**
+ * SSE 解析器。
  *
- * 同时被 streamWithClaude 与 generateWithClaude 在"代理只返回 SSE"路径下复用。
+ * generateWithClaude 在"代理只返回 SSE"路径下经 collectClaudeSseResult 复用本解析器。
  * 关键点：tool 参数通过 `input_json_delta` 增量到达，必须在 content_block_stop
  * 时才能 JSON.parse 出完整对象，所以 tool-call 事件在 stop 时才 yield。
  */
 export async function* parseClaudeSSE(
   body: ReadableStream<Uint8Array>,
   model: string
-): AsyncGenerator<LlmStreamEvent> {
+): AsyncGenerator<ClaudeSseEvent> {
   const decoder = new TextDecoder();
   const reader = body.getReader();
   let pending = "";

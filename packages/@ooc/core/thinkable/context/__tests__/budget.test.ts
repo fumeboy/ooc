@@ -1,206 +1,72 @@
 /**
  * budget.test.ts — BudgetManager unit tests.
  *
- * Legacy applyNaturalDecay / applyEmergencyGuard / estimateThreadTokens
- * have been removed. BudgetManager is the canonical budget API.
- *
- * Tests here cover:
- * - score(): provenance/priority/recency/signal weighting
- * - allocate(): ranking by relevance, budget overflow, guidance inherits form score
+ * 预算是 context 唯一的自动裁剪闸门。BudgetManager.allocate **按入参顺序**在 token 预算内
+ * 裁剪——不做相关性排序（provenance/relevance 评分已退役：它们从无真实写入、评分恒取默认值）。
+ * 超预算的窗归入 overflow（不丢，由 renderer 的 <context_overflow> 呈现）。
  */
 
 import { describe, expect, it } from "bun:test";
-import { BudgetManager } from "../budget";
-import type {
-  BaseContextWindow,
-  ContextWindowProvenance,
-  ContextWindowRelevance,
-} from "@ooc/core/_shared/types/context-window.js";
-
-// BudgetManager.score/allocate 形参是 BaseContextWindow（读 provenance/relevance/id/title）。
-// canonical ContextWindow = OocObjectInstance 不带 base 展示字段，故 budget 测试用 BaseContextWindow。
-type ContextWindow = BaseContextWindow;
+import {
+  BudgetManager,
+  estimateWindowTokens,
+  estimateWindowsTokens,
+} from "../budget";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 const bm = new BudgetManager();
 
-// ─────────────────────────── helpers ─────────────────────────────────────────
-
-/** Build a structurally complete ContextWindowProvenance with sensible defaults. */
-function mkProv(
-  overrides: Partial<ContextWindowProvenance> & {
-    kind: ContextWindowProvenance["kind"];
-  },
-): ContextWindowProvenance {
-  const now = Date.now();
+/** 最小测试窗（OocObjectInstance 信封；allocate 只读 id/title，estimate 读整窗）。 */
+function mkWindow(over: { id: string; title: string }): ContextWindow {
   return {
-    reason: { mechanism: "user_open" },
-    createdAt: now,
-    lastTouchedAt: now,
-    ...overrides,
-  };
-}
-
-/** Build a structurally complete ContextWindowRelevance with sensible defaults. */
-function mkRel(
-  overrides: Partial<ContextWindowRelevance> = {},
-): ContextWindowRelevance {
-  return {
-    score: 0.5,
-    signalCount: 0,
-    ...overrides,
-  };
-}
-
-/**
- * Build a minimal test window using class "knowledge" (simplest builtin class
- * for budget tests — BudgetManager only reads id/title/provenance/relevance,
- * not class-specific business data).
- */
-function mkWindow(
-  overrides: Partial<ContextWindow> & {
-    id: string;
-    title: string;
-  },
-): ContextWindow {
-  const now = Date.now();
-  return {
-    class: "knowledge",
-    parentWindowId: "root",
+    id: over.id,
+    class: "_builtin/knowledge_base/knowledge",
+    parentObjectId: "root",
+    title: over.title,
     status: "open",
-    createdAt: now,
-    ...overrides,
-  } as ContextWindow;
+    createdAt: Date.now(),
+    data: {},
+  };
 }
-
-// ─────────────────────────── score tests ─────────────────────────────────────
-
-describe("BudgetManager.score", () => {
-  it("uses provenance weight as base when no relevance.score is set", () => {
-    const w1 = mkWindow({ id: "w1", title: "explicit", provenance: mkProv({ kind: "explicit" }) });
-    const w2 = mkWindow({ id: "w2", title: "related", provenance: mkProv({ kind: "related" }) });
-    expect(bm.score(w1)).toBeGreaterThan(bm.score(w2));
-  });
-
-  it("uses existing relevance.score as baseline", () => {
-    const w = mkWindow({
-      id: "w1",
-      title: "t",
-      provenance: mkProv({ kind: "related" }),
-      relevance: mkRel({ score: 0.9 }),
-    });
-    // related default is 0.5; with score=0.9 baseline it should be much higher
-    expect(bm.score(w)).toBeGreaterThan(0.7);
-  });
-
-  it("priorityHint boosts score", () => {
-    // Use derived provenance (weight 0.7) as baseline so there is headroom for boosts.
-    const wNormal = mkWindow({ id: "w1", title: "n", provenance: mkProv({ kind: "derived" }) });
-    const wHigh = mkWindow({
-      id: "w2",
-      title: "h",
-      provenance: mkProv({ kind: "derived" }),
-      relevance: mkRel({ score: 0.7, priorityHint: "high" }),
-    });
-    const wCritical = mkWindow({
-      id: "w3",
-      title: "c",
-      provenance: mkProv({ kind: "derived" }),
-      relevance: mkRel({ score: 0.7, priorityHint: "critical" }),
-    });
-    expect(bm.score(wCritical)).toBeGreaterThan(bm.score(wHigh));
-    expect(bm.score(wHigh)).toBeGreaterThan(bm.score(wNormal));
-  });
-
-  it("recently touched windows get a small boost", () => {
-    const now = Date.now();
-    const wRecent = mkWindow({
-      id: "w1",
-      title: "r",
-      provenance: mkProv({ kind: "explicit", lastTouchedAt: now - 60_000 }),
-    });
-    const wOld = mkWindow({
-      id: "w2",
-      title: "o",
-      provenance: mkProv({ kind: "explicit", lastTouchedAt: now - 2 * 60 * 60 * 1000 }),
-    });
-    expect(bm.score(wRecent, now)).toBeGreaterThan(bm.score(wOld, now));
-  });
-
-  it("signalCount increases relevance", () => {
-    // Use derived provenance (0.7) as baseline so there is headroom for signal boost.
-    const w0 = mkWindow({
-      id: "w0",
-      title: "a",
-      provenance: mkProv({ kind: "derived" }),
-      relevance: mkRel({ score: 0.7, signalCount: 0 }),
-    });
-    const w5 = mkWindow({
-      id: "w5",
-      title: "b",
-      provenance: mkProv({ kind: "derived" }),
-      relevance: mkRel({ score: 0.7, signalCount: 5 }),
-    });
-    expect(bm.score(w5)).toBeGreaterThan(bm.score(w0));
-  });
-
-  it("score is clamped to [0, 1]", () => {
-    const w = mkWindow({
-      id: "w",
-      title: "t",
-      provenance: mkProv({ kind: "explicit", lastTouchedAt: Date.now() }),
-      relevance: mkRel({ score: 1.0, priorityHint: "critical", signalCount: 100 }),
-    });
-    expect(bm.score(w)).toBeLessThanOrEqual(1.0);
-    expect(bm.score(w)).toBeGreaterThanOrEqual(0.0);
-  });
-});
-
-// ─────────────────────────── allocate tests ──────────────────────────────────
 
 describe("BudgetManager.allocate", () => {
-  it("keeps all windows within budget", () => {
-    const windows = [
-      mkWindow({ id: "w1", title: "one", provenance: mkProv({ kind: "explicit" }) }),
-      mkWindow({ id: "w2", title: "two", provenance: mkProv({ kind: "explicit" }) }),
-    ];
-    const result = bm.allocate(windows, 1_000_000); // huge budget
+  it("keeps all windows within a huge budget", () => {
+    const windows = [mkWindow({ id: "w1", title: "one" }), mkWindow({ id: "w2", title: "two" })];
+    const result = bm.allocate(windows, 1_000_000);
     expect(result.visible.length).toBe(2);
     expect(result.overflow.length).toBe(0);
   });
 
-  it("ranks windows by relevance and excludes overflow", () => {
-    // Use a tiny estimate function (1 token each) so budget controls everything
+  it("keeps windows in input order until budget is hit; the rest overflow", () => {
     const windows = [
-      mkWindow({ id: "low", title: "low", provenance: mkProv({ kind: "related" }) }),
-      mkWindow({
-        id: "high",
-        title: "high",
-        provenance: mkProv({ kind: "explicit" }),
-        relevance: mkRel({ score: 1.0, priorityHint: "critical" }),
-      }),
-      mkWindow({ id: "med", title: "med", provenance: mkProv({ kind: "explicit" }) }),
+      mkWindow({ id: "a", title: "a" }),
+      mkWindow({ id: "b", title: "b" }),
+      mkWindow({ id: "c", title: "c" }),
     ];
-    // budget = 2 tokens → keep top 2
+    // budget = 2 tokens, each window costs 1 → first two kept, third overflows
     const result = bm.allocate(windows, 2, () => 1);
-    expect(result.visible.length).toBe(2);
+    expect(result.visible.map((w) => w.id)).toEqual(["a", "b"]);
     expect(result.overflow.length).toBe(1);
-    const visibleIds = result.visible.map(w => w.id);
-    expect(visibleIds).toContain("high");
-    expect(visibleIds).toContain("med");
-    expect(result.overflow[0].id).toBe("low");
+    expect(result.overflow[0].id).toBe("c");
+    expect(result.overflow[0].reason).toBe("budget_overflow");
   });
 
-  it("marks single oversized window with window_too_large_for_budget", () => {
-    const windows = [
-      mkWindow({ id: "big", title: "big window", provenance: mkProv({ kind: "explicit" }) }),
-    ];
-    const result = bm.allocate(windows, 5, () => 100); // window costs 100, budget is 5
+  it("marks a single oversized window with window_too_large_for_budget", () => {
+    const windows = [mkWindow({ id: "big", title: "big window" })];
+    const result = bm.allocate(windows, 5, () => 100); // window costs 100, budget 5
     expect(result.overflow.length).toBe(1);
     expect(result.overflow[0].reason).toBe("window_too_large_for_budget");
   });
+});
 
-  // 删除（退役机制）：「form-bound window（boundFormId）inherits the form's relevance score」
-  // 测的是 form 机制（boundFormId + method_exec form 字段 accumulatedArgs/intentPaths/
-  // loadedKnowledgePaths）的分数继承——form 机制 Wave4 整体退役，boundFormId 在非测试源码已 0 命中，
-  // BudgetManager 也从未实现该继承（score 只读 provenance/relevance）。
+describe("estimateWindowTokens", () => {
+  it("estimates by JSON length / 4 (heuristic)", () => {
+    const w = mkWindow({ id: "w", title: "t" });
+    expect(estimateWindowTokens(w)).toBe(Math.ceil(JSON.stringify(w).length / 4));
+  });
+
+  it("sums a list of windows", () => {
+    const ws = [mkWindow({ id: "a", title: "a" }), mkWindow({ id: "b", title: "b" })];
+    expect(estimateWindowsTokens(ws)).toBe(estimateWindowTokens(ws[0]!) + estimateWindowTokens(ws[1]!));
+  });
 });

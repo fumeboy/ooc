@@ -53,10 +53,6 @@ import {
 
 // ─────────────────────────── helpers (inbox/outbox) ──────────────────────────
 
-function messageBody(message: ThreadMessage): string {
-  return (message as any).content ?? (message as any).text ?? "";
-}
-
 function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] | undefined): XmlNode | null {
   if (!messages || messages.length === 0) return null;
 
@@ -67,7 +63,7 @@ function renderMessagesNode(tag: "inbox" | "outbox", messages: ThreadMessage[] |
       xmlElement("message", { id: message.id }, [
         xmlElement("from_thread_id", {}, [xmlText(message.fromThreadId)]),
         xmlElement("to_thread_id", {}, [xmlText(message.toThreadId)]),
-        xmlElement("content", {}, [xmlText(messageBody(message))]),
+        xmlElement("content", {}, [xmlText(message.content)]),
         xmlElement("source", {}, [xmlText(message.source)]),
         xmlElement("created_at", {}, [xmlText(String(message.createdAt))]),
       ]),

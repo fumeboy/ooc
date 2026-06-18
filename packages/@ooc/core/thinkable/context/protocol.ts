@@ -7,8 +7,7 @@
  *   activates_on 对当前 thread 逐篇匹配，命中才注入——Object 只在相关交互面看到对应切片。
  * - **creator-reply 协议**：动态按 creator talk window 的 id 生成，不属于静态 builtin 知识。
  */
-import { ROOT_WINDOW_ID, isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
-import { KNOWLEDGE_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
@@ -18,6 +17,7 @@ import type { KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import { dirname, join } from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 import type { ThreadContext } from "./index.js";
+import { makeKnowledgeWindow } from "./knowledge-window.js";
 
 /**
  * 全部 builtin 包的 knowledge 目录（随框架包发布，与 world 无关）。
@@ -39,29 +39,6 @@ function resolveBuiltinKnowledgeDirs(): string[] {
   } catch {
     return [];
   }
-}
-
-let syntheticIdCounter = 0;
-function nextSyntheticId(): string {
-  syntheticIdCounter += 1;
-  return `kn_${Date.now().toString(36)}_${syntheticIdCounter.toString(36)}`;
-}
-
-function makeKnowledgeWindow(
-  path: string,
-  body: string,
-  source: NonNullable<KnowledgeData["source"]>,
-): OocObjectInstance<KnowledgeData> {
-  return {
-    id: nextSyntheticId(),
-    // 注册 class id（非投影名 "knowledge"）——使 resolveReadable 命中 knowledge readable。
-    class: KNOWLEDGE_CLASS_ID,
-    parentObjectId: ROOT_WINDOW_ID,
-    title: path,
-    status: "open",
-    createdAt: Date.now(),
-    data: { path, source, body },
-  };
 }
 
 /**
@@ -92,13 +69,12 @@ async function buildRootKnowledgeWindows(
   const out: OocObjectInstance<KnowledgeData>[] = [];
   for (const act of computeActivations(thread, index)) {
     const body = act.presentation === "full" ? act.doc.body : "";
-    const inst = makeKnowledgeWindow(act.path, body, "protocol");
-    inst.data = {
-      ...inst.data,
-      presentation: act.presentation,
-      description: act.doc.frontmatter.description,
-    };
-    out.push(inst);
+    out.push(
+      makeKnowledgeWindow(act.path, body, "protocol", {
+        presentation: act.presentation,
+        description: act.doc.frontmatter.description,
+      }),
+    );
   }
   return out;
 }
@@ -108,7 +84,7 @@ async function buildRootKnowledgeWindows(
  * Tells sub-thread LLM the only valid reply channel is creator talk_window.say.
  */
 function buildCreatorReplyKnowledge(window: OocObjectInstance): string {
-  const isFork = (window as { isForkWindow?: boolean }).isForkWindow === true;
+  const isFork = (window.data as { isForkWindow?: boolean } | undefined)?.isForkWindow === true;
   const upstream = isFork ? "父线程" : "caller object 的对端 thread";
   const delivery = isFork
     ? "这条消息走内存树寻址 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。"

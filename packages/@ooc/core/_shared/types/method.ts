@@ -1,27 +1,12 @@
 /**
  * Object Method 残留 canonical 类型 —— **method 定义/执行契约已迁到 `executable/contract.ts`**
- * （三参 `ObjectMethod` / `ExecutableContext`）。本文件只保留尚未迁走的 outcome / form 形状：
+ * （三参 `ObjectMethod` / `ExecutableContext`）。本文件只保留尚未迁走的 outcome 形状：
  *
  * - MethodOutcome：method.exec 的显式返回结果
  * - normalizeMethodOutcome：把 exec 的三种返回形态规范化为 MethodOutcome
- * - MethodExecuteForm：onFormChange 返回的结构化 form 状态（tip + intents + quick_exec_submit）
  */
 
 import type { ContextWindow } from "./context-window.js";
-import type { Intent } from "./intent.js";
-
-/**
- * Structured return value of onFormChange.
- *
- * - tip: plain string shown directly on the form (replaces the retired form-bound guidance windows)
- * - intents: dynamic intent list for the current args (replaces the old intent(args) function)
- * - quick_exec_submit: when true, the runtime auto-submits the form after this refine (args sufficient)
- */
-export interface MethodExecuteForm {
-  tip?: string;
-  intents: Intent[];
-  quick_exec_submit?: boolean;
-}
 
 /**
  * Method exec 的显式返回结果（平铺单形状，取代旧三态 union）。

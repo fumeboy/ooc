@@ -3,7 +3,7 @@
  * requestPrIssueReview，地基不变量）后，保留的治理 + interim 合入原语测试。
  *
  * 覆盖：resolvePrIssue（feat-branch PR 的 interim 合入/驳回，来源 createFeatBranchWorktree +
- * 直接编辑 + commitAndOpenPr）、rollback（supervisor 署名回滚）、pruneStaleWorktrees、
+ * 直接编辑 + commitAndOpenPr）、rollback（supervisor 署名回滚）、
  * isValidObjectId 防御。scope 冒泡（reviewer 集）+ feat-branch 流程见 feat-branch-pr.test。
  */
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -13,7 +13,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   resolvePrIssue,
   rollback,
-  pruneStaleWorktrees,
   __testing,
 } from "@ooc/core/persistable/stone-versioning";
 import {
@@ -166,14 +165,6 @@ describe("rollback", () => {
     // 最新 commit author = supervisor
     const author = Bun.spawnSync(["git", "log", "-1", "--pretty=format:%an"], { cwd: repo, stdout: "pipe" });
     expect(new TextDecoder().decode(author.stdout)).toBe("supervisor");
-  });
-});
-
-describe("pruneStaleWorktrees", () => {
-  test("runs without error on a fresh world", async () => {
-    const baseDir = await newWorld();
-    const r = await pruneStaleWorktrees(baseDir);
-    expect(r.ok).toBe(true);
   });
 });
 

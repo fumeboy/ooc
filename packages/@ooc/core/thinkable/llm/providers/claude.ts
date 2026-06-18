@@ -3,10 +3,9 @@ import type {
   LlmGenerateParams,
   LlmGenerateResult,
   LlmInputItem,
-  LlmStreamEvent,
   LlmToolCall
 } from "../types";
-import { collectClaudeSseResult, parseClaudeSSE } from "./claude-sse";
+import { collectClaudeSseResult } from "./claude-sse";
 import { fetchClaude, retryClaudeGenerate } from "./claude-transport";
 
 // Claude 的非流式 content 中会同时出现 text 与 tool_use block。
@@ -121,19 +120,4 @@ async function generateOnce(
     toolCalls,
     raw
   };
-}
-
-// Claude 流式事件以 SSE 形式返回，需要同时提取文本和 tool_use。
-export async function* streamWithClaude(
-  config: LlmEnvConfig,
-  params: LlmGenerateParams
-): AsyncIterable<LlmStreamEvent> {
-  const model = params.model ?? config.model;
-  const response = await fetchClaude(config, params, true);
-
-  if (!response.ok || !response.body) {
-    throw new Error(`Claude 流式请求失败: ${response.status}`);
-  }
-
-  yield* parseClaudeSSE(response.body, model);
 }

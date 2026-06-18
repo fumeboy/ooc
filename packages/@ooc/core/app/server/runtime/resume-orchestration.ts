@@ -1,8 +1,6 @@
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
 import { readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import type { createJobManager } from "./job-manager";
-import { scanPausedThreads } from "./thread-query";
+import { listSessionIds, scanPausedThreads } from "./thread-query";
 import { canResumeThread } from "./thread-transition";
 
 /**
@@ -84,13 +82,4 @@ export async function resumeAllPausedThreads(
     all.push(...resumed);
   }
   return all;
-}
-
-async function listSessionIds(baseDir: string): Promise<string[]> {
-  try {
-    const entries = await readdir(join(baseDir, "flows"), { withFileTypes: true });
-    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
-  } catch {
-    return [];
-  }
 }

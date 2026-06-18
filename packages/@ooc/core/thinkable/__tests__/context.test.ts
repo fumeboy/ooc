@@ -5,8 +5,21 @@ import { afterEach, describe, expect, it } from "bun:test";
 // 注册窗类型（thread/plan/todo/knowledge/file…）进 builtinRegistry —— 否则 render 期
 // resolveReadable 取不到投影，全部落 placeholder（Wave4：窗类型经 side-effect import 自声明）。
 import "@ooc/core/runtime/register-builtins.js";
-import { buildContext, buildInputItems, type ThreadContext } from "../context";
+import { buildInputItems, type ThreadContext } from "../context";
 import { clearKnowledgeLoaderCache } from "../knowledge";
+
+/**
+ * 测试 helper：把 buildInputItems 的输入投影回旧的 `{ role, content }[]` 形态，
+ * 供只断言 system XML message 的用例使用（生产端只有 buildInputItems）。
+ */
+async function buildContext(
+  thread: ThreadContext,
+): Promise<{ role: "system" | "user" | "assistant"; content: string }[]> {
+  const out = await buildInputItems(thread);
+  return out.input
+    .filter((item): item is Extract<typeof item, { type: "message" }> => item.type === "message")
+    .map((item) => ({ role: item.role, content: item.content }));
+}
 import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf, ensureStoneRepo, ensureSessionWorktree } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
@@ -165,7 +178,7 @@ describe("buildContext (ContextWindow model)", () => {
       ],
       extraWindows: [
         // 普通 fork 子窗(非 creator)同样指向 t_creator。Wave4：stored class=_builtin/agent/thread；
-        // resolveInboxWindowId 的 fork 判据读窗实例顶层 isForkWindow/targetThreadId。
+        // resolveInboxWindowId 的 fork 判据读窗实例 data.isForkWindow / data.targetThreadId。
         {
           id: "w_fork_other",
           class: "_builtin/agent/thread",
@@ -173,8 +186,6 @@ describe("buildContext (ContextWindow model)", () => {
           title: "non-creator",
           status: "open",
           createdAt: 1,
-          targetThreadId: "t_creator",
-          isForkWindow: true,
           data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true },
         },
         // creator fork 窗应被优先选中（creator 身份编码在 id=w_creator_<本thread.id>）。
@@ -185,13 +196,9 @@ describe("buildContext (ContextWindow model)", () => {
           title: "creator",
           status: "open",
           createdAt: 1,
-          targetThreadId: "t_creator",
-          isForkWindow: true,
           data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true },
         },
-        // 顶层 isForkWindow/targetThreadId 是 resolveInboxWindowId 的判据（index.ts:64-65 经
-        // `as {…}` 读信封顶层），但 OocObjectInstance 不声明这两字段 → unknown 转换。
-      ] as unknown as ContextWindow[],
+      ] as ContextWindow[],
     });
     const out = await buildInputItems(thread);
     const item = out.input.find(

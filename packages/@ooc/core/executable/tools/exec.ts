@@ -81,7 +81,7 @@ export async function handleExecTool(
   thread: ThreadContext,
   args: Record<string, unknown>,
   registry: ObjectRegistry = builtinRegistry,
-): Promise<string | void> {
+): Promise<string> {
   const method = args.method as string | undefined;
   if (!method) {
     return errorOutput("exec 缺少 method 参数。");

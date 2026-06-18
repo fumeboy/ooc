@@ -1,6 +1,6 @@
 import { readLlmEnv } from "./env";
-import { generateWithClaude, streamWithClaude } from "./providers/claude";
-import { generateWithOpenAi, streamWithOpenAi } from "./providers/openai";
+import { generateWithClaude } from "./providers/claude";
+import { generateWithOpenAi } from "./providers/openai";
 import { resolveLlmTimeoutMs, withLlmTimeout } from "./timeout";
 import type { LlmClient, LlmGenerateParams } from "./types";
 
@@ -22,19 +22,6 @@ export function createLlmClient(): LlmClient {
         : generateWithClaude({ ...config, provider }, merged);
 
       return withLlmTimeout(inner, timeoutMs);
-    },
-
-    // stream 同样由统一门面分发到底层适配器。
-    stream(params) {
-      const config = readLlmEnv();
-      const provider = params.provider ?? config.provider;
-      const merged = { ...params, provider } satisfies LlmGenerateParams;
-
-      if (provider === "openai") {
-        return streamWithOpenAi({ ...config, provider }, merged);
-      }
-
-      return streamWithClaude({ ...config, provider }, merged);
     }
   };
 }

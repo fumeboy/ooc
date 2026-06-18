@@ -172,29 +172,6 @@ export function createUiService({ baseDir }: { baseDir: string }) {
      * - path: 绝对路径 或 工作目录相对路径(与 file_window.path 一致)
      * - maxBytes: 软上限,超过则只返回前 maxBytes 并标记 truncated
      */
-    /**
-     * 列出 `<baseDir>/flows/` 下的 session 目录名 —— ui 视角的轻量列表，
-     * 与 flows module 的 listFlows()（带 pause/status 等运行时元数据）不同：
-     * 这里只回目录条目，服务 ui 侧的"快速浏览 flows 树根"需求。
-     *
-     * 返回 shape: `{ flows: string[] }`，按目录名 localeCompare 排序，
-     * 不含隐藏目录（以 `.` 开头）。flows/ 目录不存在时返回空数组。
-     */
-    async listFlows(): Promise<{ flows: string[] }> {
-      const flowsDir = join(baseDir, "flows");
-      let entries: Dirent[] = [];
-      try {
-        entries = (await readdir(flowsDir, { withFileTypes: true })) as Dirent[];
-      } catch {
-        return { flows: [] };
-      }
-      const flows = entries
-        .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-        .map((entry) => entry.name)
-        .sort((a, b) => a.localeCompare(b));
-      return { flows };
-    },
-
     async readAnyFile(path: string, maxBytes = 256 * 1024) {
       if (!path || path.includes("\0")) {
         throw new AppServerError("INVALID_INPUT", `unsafe path '${path}'`, { path });

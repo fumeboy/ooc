@@ -95,10 +95,6 @@ describe("single object runtime", () => {
 
         return makeResult("All done.", []);
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     clearObservableDebugState();

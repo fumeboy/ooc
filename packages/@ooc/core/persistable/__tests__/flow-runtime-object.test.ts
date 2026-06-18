@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   runtimeObjectStateFile,
   writeRuntimeObjectState,
   readRuntimeObjectState,
-  deleteRuntimeObject,
 } from "../flow-runtime-object";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
@@ -49,21 +48,6 @@ describe("flow-runtime-object — ooc-6 P5'.1 flat runtime layout", () => {
   it("read returns undefined when file missing (ENOENT graceful)", async () => {
     const back = await readRuntimeObjectState(ref);
     expect(back).toBeUndefined();
-  });
-
-  it("deleteRuntimeObject removes the object directory; second call is idempotent", async () => {
-    await writeRuntimeObjectState(ref, sampleWindow);
-    await deleteRuntimeObject(ref);
-    const file = runtimeObjectStateFile(ref);
-    let exists = true;
-    try {
-      await stat(file);
-    } catch {
-      exists = false;
-    }
-    expect(exists).toBe(false);
-    // 第二次调用应当幂等（ENOENT 不抛）
-    await deleteRuntimeObject(ref);
   });
 
   it("update overwrites previous state.json contents", async () => {

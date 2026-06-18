@@ -10,12 +10,9 @@
  * context-lifecycle 字段（status / parentWindowId / createdAt 等）属于 thread-context.json，
  * 不进 state.json（由 writeRuntimeObjectState 的 stripContextWindowsField + manager 的
  * inline 持久化分流保证，inline 经 class persistable.mode 声明、registry.isInlinePersisted 解析）。
- *
- * 双写期：与 flow-context.ts 的嵌套 context/<id>/window.json 并存。
- * 切读路径后即可逐步移除嵌套写。
  */
 
-import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { objectDir, toJson, type FlowObjectRef } from "./common";
 import { enqueueSessionWrite } from "../runtime/serial-queue.js";
@@ -85,20 +82,4 @@ export async function readRuntimeObjectState(
     throw error;
   }
   return JSON.parse(raw) as ContextWindow;
-}
-
-/**
- * 删除 runtime object 整个目录（含 state.json + threads/ + 任何子产物）。
- * close 时调用；幂等（ENOENT 静默吞掉）。
- *
- * **注意**：reference counting 由 caller 负责（先扫 registry 确认无其他 thread
- * 引用），本函数无条件删除。
- */
-export async function deleteRuntimeObject(ref: FlowObjectRef): Promise<void> {
-  const dir = objectDir(ref);
-  try {
-    await rm(dir, { recursive: true, force: true });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
 }

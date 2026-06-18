@@ -1,12 +1,10 @@
 /**
- * @deprecated 直接使用的位置请逐步迁移到
- *   `import { createObservableStore, ObservableStore } from "@ooc/core/runtime/observable-store"`
- *   或通过 `WorldRuntime.observable` 访问 per-world 实例。
+ * observable 维度入口：对 defaultObservableStore 的薄 module-level facade。
  *
- * 本文件保留所有 module-level 导出，保证零调用点修改。
- * 关键约束：模块级复合函数（beginLlmLoop / finishLlmLoop）在此处用其他模块级导出函数
- * 复合实现，而不是委托给 class 方法——因为 bun:test 的 spyOn(module, "fn") 需要调用
- * 真正经过模块导出才能被拦截。
+ * 简单 state accessor 薄委托；复合 loop 函数（beginLlmLoop / finishLlmLoop /
+ * writeLatestLlm*）刻意在此模块级实现而非挂 class，以便 bun:test 的
+ * spyOn(module, "fn") 拦截（见 thinkable/__tests__/thinkloop.test.ts）——
+ * spyOn 只能拦截真正经过模块导出的调用，故复合实现必须调模块级导出函数。
  */
 import type { ThreadContext } from "../thinkable/context.js";
 import type {
@@ -27,11 +25,7 @@ import {
   writeLoopDebugOutput,
 } from "../persistable/index.js";
 import { buildWindowsSnapshot } from "./window-hash.js";
-import {
-  createObservableStore,
-  defaultObservableStore,
-  ObservableStore,
-} from "../runtime/observable-store.js";
+import { defaultObservableStore } from "../runtime/observable-store.js";
 import type {
   LlmLoopHandle,
   LlmObservation,
@@ -44,20 +38,7 @@ import type {
   ThreadActivationNotifier,
 } from "../runtime/observable-store.js";
 
-export type {
-  LlmObservation,
-  LlmLoopHandle,
-  ObservableDebugStatus,
-  PauseChecker,
-  RuntimePermissionDecision,
-  RuntimePendingToolCall,
-  RuntimePermissionDecider,
-  ThreadActivationRef,
-  ThreadActivationNotifier,
-  ObservableStore,
-} from "../runtime/observable-store.js";
-
-export { createObservableStore };
+export type { ThreadActivationRef } from "../runtime/observable-store.js";
 
 // ——— Simple state accessors: thin delegation (tests rarely spy on these) ———
 

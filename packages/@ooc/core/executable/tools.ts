@@ -12,11 +12,7 @@ type ToolHandler = (
   thread: ThreadContext,
   args: Record<string, unknown>,
   registry?: ObjectRegistry,
-) => Promise<string | void>;
-
-function successToolOutput(tool: string, message?: string) {
-  return JSON.stringify(message ? { ok: true, tool, message } : { ok: true, tool });
-}
+) => Promise<string>;
 
 function errorToolOutput(tool: string, error: string) {
   return JSON.stringify({ ok: false, tool, error });
@@ -45,9 +41,5 @@ export async function dispatchToolCall(
     const message = `[${toolCall.name}] tool 暂未实现。`;
     return errorToolOutput(toolCall.name, message);
   }
-  const output = await handler(thread, toolCall.arguments, registry);
-  if (typeof output === "string") {
-    return output;
-  }
-  return successToolOutput(toolCall.name);
+  return await handler(thread, toolCall.arguments, registry);
 }

@@ -26,12 +26,12 @@ import {
   SUPER_SESSION_ID,
   isSuperSessionId,
   THREAD_CLASS_ID,
+  isTalkLikeClass,
   isKnowledgeClass,
 } from "@ooc/core/_shared/types/constants.js";
 import type {
   ListThreadsItem,
   ListThreadsResponse,
-  ThreadShareInfo,
 } from "./model";
 import type { createJobManager } from "../../runtime/job-manager";
 import type { PauseStore } from "../../runtime/pause-store";
@@ -121,21 +121,6 @@ function appendInboxMessage(thread: ThreadContext, text: string, replyToWindowId
 }
 
 /**
- * 把已 paused / waiting 的 thread 翻回 running。
- *
- * 取消 waitingType / awaitingChildren；wait 状态本身就是
- * "等 inbox 新消息"，写入新消息后把 status 翻回 running 即可。
- */
-function reviveThreadForInboxMessage(thread: ThreadContext): ThreadContext {
-  return {
-    ...thread,
-    status: "running",
-    inboxSnapshotAtWait: undefined,
-    waitingOn: undefined,
-  };
-}
-
-/**
  * 用于 getThread 响应的 hash 输入：剔除 collectExecutableKnowledgeEntries 在每次响应里
  * 重新合成的 ephemeral 字段（id / createdAt），它们由 nextSyntheticId / Date.now 生成，
  * 对前端语义无影响，但会让 hash 永远变化、polling 永远命中"内容变了"。
@@ -171,22 +156,6 @@ function stripVolatileForHash(payload: { contextWindows?: OocObjectInstance[] })
 }
 
 /**
- * 从一个 ThreadContext 抽取 shares 摘要（holding + lentOut）。
- *
- * 输入是已 readThread 出来的 ThreadContext.contextWindows；遍历每个 window 的
- * sharing 字段：
- * - sharing.kind === "readonly-ref" → 进 holding（我持有别人借给我的只读引用；ownerThreadId 来自 sharing）
- * - sharing.kind === "mutable-ref" → 进 lentOut（我 move 出去、自己降只读 shadow；borrowerThreadId 来自 sharing）
- *
- * Wave 4：window 引用的 share（每窗 sharing 字段 = SharingState）随对象模型重构删除；
- * share 的借/还机制在 OocObjectInstance 模型下待重新设计（见 talk/executable share method
- * 的 WAVE4 待续）。故本摘要恒为空——保留入口形状供前端兼容，待 share 重设计后接回。
- */
-function extractShareInfo(_windows: OocObjectInstance[] | undefined): ThreadShareInfo {
-  return { holding: [], lentOut: [] };
-}
-
-/**
  * 从 ThreadContext 抽取 talkPeers 摘要。
  *
  * 来源：contextWindows[type==="talk"]；每个 TalkWindowView 对应一个 talkPeer。
@@ -199,7 +168,7 @@ function extractTalkPeers(
 ): ListThreadsItem["talkPeers"] {
   const peers: ListThreadsItem["talkPeers"] = [];
   for (const window of windows ?? []) {
-    if (window.class !== "talk") continue;
+    if (!isTalkLikeClass(window.class)) continue;
     // Wave 4：会话业务字段（target / targetThreadId）落 inst.data（=TalkData）。
     const data = (window.data ?? {}) as { target?: string; targetThreadId?: string };
     peers.push({
@@ -231,7 +200,6 @@ async function buildListThreadsItem(args: {
     status: "failed",
     childThreadIds: [],
     talkPeers: [],
-    shares: { holding: [], lentOut: [] },
     ...(isSuperFlow ? { isSuperFlow: true } : {}),
   };
   // 读 thread.json：损坏 / ENOENT → 退化（保持 base 的 status="failed"）
@@ -263,7 +231,6 @@ async function buildListThreadsItem(args: {
     creatorObjectId: thread.creatorObjectId,
     childThreadIds: thread.childThreadIds ?? [],
     talkPeers: extractTalkPeers(thread.contextWindows),
-    shares: extractShareInfo(thread.contextWindows),
     ...(isSuperFlow ? { isSuperFlow: true } : {}),
   };
 }
@@ -536,7 +503,7 @@ export function createFlowsService(deps: {
 
       // 幂等：已经有指向同 target 的非 creator talk_window 时复用它（Wave 4：读 inst.data）。
       const existing = (userThread.contextWindows ?? []).find((inst) => {
-        if (inst.class !== "talk") return false;
+        if (!isTalkLikeClass(inst.class)) return false;
         const d = (inst.data ?? {}) as TalkData;
         return !isCreatorWindowId(inst.id) && d.target === target;
       });
@@ -686,7 +653,7 @@ export function createFlowsService(deps: {
      * 列出 session 下所有 (objectId, threadId) + thread metadata + 4 种关系字段。
      *
      * 在原 `{ objectId, threadId }` 基础上增加 status / createdAt / parent / creator /
-     * childThreadIds / talkPeers / shares / isSuperFlow，让前端 SessionThreadsIndex
+     * childThreadIds / talkPeers / isSuperFlow，让前端 SessionThreadsIndex
      * 能据此画分栏 + 关系，不再需要拉每个 thread 详情。
      *
      * 实现：
@@ -694,8 +661,7 @@ export function createFlowsService(deps: {
      * 2. 对每个 (objectId, threadId) 调 readThread 拿 ThreadContext，提取字段
      * 3. 退化：readThread 失败 / 损坏 → status="failed"，其它字段 undefined，**不抛错**
      * 4. talkPeers 来源：contextWindows[type==="talk"]
-     * 5. shares 来源：contextWindows[*].sharing（kind=ref 进 holding，kind=lent_out 进 lentOut）
-     * 6. isSuperFlow：sessionId === SUPER_SESSION_ID
+     * 5. isSuperFlow：sessionId === SUPER_SESSION_ID
      *
      * 性能：一个 session 内 threads 数预估 < 50；50 次 fs.read 串行 OK。
      */
@@ -847,7 +813,7 @@ export function createFlowsService(deps: {
       }
       // Wave 4：会话窗是 OocObjectInstance，业务字段在 inst.data（=TalkData）。
       const talkWindows = (userThread.contextWindows ?? []).filter((inst) => {
-        if (inst.class !== "talk") return false;
+        if (!isTalkLikeClass(inst.class)) return false;
         return !isCreatorWindowId(inst.id);
       });
       const targetInstance = targetWindowId

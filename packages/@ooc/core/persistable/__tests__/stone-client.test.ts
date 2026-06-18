@@ -1,18 +1,14 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
-import { createStoneObject, stoneDir } from "../stone-object";
 import { createFlowObject } from "../flow-object";
 import { objectDir } from "../common";
 import {
   flowClientPageFile,
   flowClientPagesDir,
   readFlowClientPage,
-  readVisibleSource,
   writeFlowClientPage,
-  writeVisibleSource,
-  visibleIndexFile,
 } from "../stone-client";
 
 let tempRoot: string | undefined;
@@ -22,31 +18,6 @@ afterEach(async () => {
     await rm(tempRoot, { recursive: true, force: true });
     tempRoot = undefined;
   }
-});
-
-describe("stone visible persistable", () => {
-  test("stone visible/index.tsx round trip (canonical)", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-client-"));
-    const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alan" });
-
-    expect(await readVisibleSource(ref)).toBeUndefined();
-    expect(visibleIndexFile(ref)).toBe(join(stoneDir(ref), "visible", "index.tsx"));
-
-    const tsx = `export default function View() { return <div>hi</div>; }`;
-    await writeVisibleSource(ref, tsx);
-    expect(await readVisibleSource(ref)).toBe(tsx);
-    // 迁移完成：writeVisibleSource 不再双写 client/
-    await expect(stat(join(stoneDir(ref), "client", "index.tsx"))).rejects.toMatchObject({ code: "ENOENT" });
-  });
-
-  test("stone writeVisibleSource creates visible/ if missing", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-client-"));
-    // 不调 createStoneObject —— 直接写盘也得过
-    const ref = { baseDir: tempRoot, objectId: "no-skeleton" };
-    await writeVisibleSource(ref, "x");
-    const stats = await stat(join(stoneDir(ref), "visible", "index.tsx"));
-    expect(stats.isFile()).toBe(true);
-  });
 });
 
 describe("flow client pages persistable", () => {

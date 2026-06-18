@@ -1,7 +1,5 @@
 import { Elysia } from "elysia";
 import type { ServerConfig } from "../../bootstrap/config";
-import { createJobManager } from "../../runtime/job-manager";
-import { createPauseStore } from "../../runtime/pause-store";
 import { addUserTalkWindowApi } from "./api.add-user-talk-window";
 import { callMethodApi } from "./api.call-method";
 import { createFlowObjectApi } from "./api.create-flow-object";
@@ -15,19 +13,11 @@ import { resumeSessionApi } from "./api.resume-session";
 import { seedSessionApi } from "./api.seed-session";
 import { createFlowsService } from "./service";
 
-const defaultPauseStore = createPauseStore();
-const defaultJobManager = createJobManager();
-
-export function flowsModule(
-  config: Pick<ServerConfig, "baseDir"> & {
-    pauseStore?: import("../../runtime/pause-store").PauseStore;
-    jobManager?: ReturnType<typeof createJobManager>;
-  }
-) {
+export function flowsModule(config: ServerConfig) {
   const service = createFlowsService({
     baseDir: config.baseDir,
-    pauseStore: config.pauseStore ?? defaultPauseStore,
-    jobManager: config.jobManager ?? defaultJobManager,
+    pauseStore: config.pauseStore,
+    jobManager: config.jobManager,
   });
 
   return new Elysia({ prefix: "/api", name: "ooc.flows" })

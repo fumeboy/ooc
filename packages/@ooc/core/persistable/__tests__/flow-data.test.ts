@@ -3,15 +3,18 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
-  flowDataFile,
   readFlowData,
-  writeFlowData,
   mergeFlowData,
   __resetSerialQueueForTests,
 } from "..";
 import type { FlowObjectRef } from "..";
 
 let tempRoot: string | undefined;
+
+/** flow object 的 data.json 物理落点（flowDataFile 已降级私有；测试直接拼路径核验落点）。 */
+function dataFile(ref: FlowObjectRef): string {
+  return join(ref.baseDir, "flows", ref.sessionId, "objects", ref.objectId, "data.json");
+}
 
 beforeEach(() => {
   __resetSerialQueueForTests();
@@ -25,22 +28,19 @@ afterEach(async () => {
 });
 
 describe("flow-data: ProgramSelf.getData/setData 的载体", () => {
-  test("flowDataFile 计算 flows/<sid>/objects/<id>/data.json", () => {
-    const ref: FlowObjectRef = { baseDir: "/abs", sessionId: "s1", objectId: "agent" };
-    expect(flowDataFile(ref)).toBe(join("/abs", "flows", "s1", "objects", "agent", "data.json"));
-  });
-
   test("readFlowData 文件不存在返回空对象 {}", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-flow-data-"));
     const ref: FlowObjectRef = { baseDir: tempRoot, sessionId: "s", objectId: "agent" };
     expect(await readFlowData(ref)).toEqual({});
   });
 
-  test("writeFlowData / readFlowData round trip + 自动 mkdir", async () => {
+  test("mergeFlowData 落 flows/<sid>/objects/<id>/data.json + 自动 mkdir", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-flow-data-"));
     const ref: FlowObjectRef = { baseDir: tempRoot, sessionId: "s", objectId: "agent" };
-    await writeFlowData(ref, { a: 1, b: "two" });
+    await mergeFlowData(ref, { a: 1, b: "two" });
     expect(await readFlowData(ref)).toEqual({ a: 1, b: "two" });
+    // 落点核验：文件确实写到约定路径
+    expect(JSON.parse(await readFile(dataFile(ref), "utf8"))).toEqual({ a: 1, b: "two" });
   });
 
   test("mergeFlowData 顶层 spread merge", async () => {
@@ -54,9 +54,9 @@ describe("flow-data: ProgramSelf.getData/setData 的载体", () => {
   test("readFlowData 抛清晰错误于损坏 JSON", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-flow-data-"));
     const ref: FlowObjectRef = { baseDir: tempRoot, sessionId: "s", objectId: "agent" };
-    // 先写一个合法 JSON 让目录存在
-    await writeFlowData(ref, { ok: true });
-    await Bun.write(flowDataFile(ref), "not json {");
+    // 先 merge 一个合法 JSON 让目录存在
+    await mergeFlowData(ref, { ok: true });
+    await Bun.write(dataFile(ref), "not json {");
     await expect(readFlowData(ref)).rejects.toThrow(/解析 flow data\.json 失败/);
   });
 
@@ -68,7 +68,7 @@ describe("flow-data: ProgramSelf.getData/setData 的载体", () => {
       mergeFlowData(ref, { b: 2 }),
       mergeFlowData(ref, { c: 3 }),
     ]);
-    const final = JSON.parse(await readFile(flowDataFile(ref), "utf8"));
+    const final = JSON.parse(await readFile(dataFile(ref), "utf8"));
     expect(final).toEqual({ a: 1, b: 2, c: 3 });
   });
 });

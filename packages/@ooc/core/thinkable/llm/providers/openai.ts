@@ -5,7 +5,6 @@ import type {
   LlmGenerateParams,
   LlmGenerateResult,
   LlmInputItem,
-  LlmStreamEvent,
   LlmTool,
   LlmToolCall
 } from "../types";
@@ -234,104 +233,4 @@ export async function generateWithOpenAi(
     toolCalls,
     raw
   };
-}
-
-// OpenAI 流式路径把 SSE 增量归一化成统一事件。
-export async function* streamWithOpenAi(
-  config: LlmEnvConfig,
-  params: LlmGenerateParams
-): AsyncIterable<LlmStreamEvent> {
-  const model = params.model ?? config.model;
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${config.apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      input: params.input.map(toOpenAiInputItem),
-      instructions: params.instructions,
-      tools: toOpenAiTools(params.tools),
-      temperature: params.temperature,
-      max_output_tokens: params.maxTokens,
-      stream: true
-    })
-  });
-
-  // 流式请求需要同时确保状态码成功且存在响应体。
-  if (!response.ok || !response.body) {
-    throw new Error(`OpenAI 流式请求失败: ${response.status}`);
-  }
-
-  const decoder = new TextDecoder();
-  const reader = response.body.getReader();
-  let pending = "";
-  let fullText = "";
-  const toolCallBuffer = new Map<number, { id: string; name: string; arguments: string }>();
-  const emittedToolCalls: LlmToolCall[] = [];
-
-  // 统一事件流总是先告诉上层本次请求已经开始。
-  yield { type: "start", provider: "openai", model };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-
-    // SSE 可能分片到多个 chunk，需要先拼接再按帧切分。
-    pending += decoder.decode(value, { stream: true });
-    const frames = pending.split("\n\n");
-    pending = frames.pop() ?? "";
-
-    for (const frame of frames) {
-      if (!frame.startsWith("data: ")) {
-        continue;
-      }
-
-      const payload = frame.slice(6);
-      if (payload === "[DONE]") {
-        continue;
-      }
-
-      // OpenAI 兼容流里，文本增量位于 choices[0].delta.content。
-      const json = JSON.parse(payload);
-      const delta = json.choices?.[0]?.delta ?? {};
-      const textDelta = delta.content ?? "";
-
-      if (textDelta) {
-        fullText += textDelta;
-        yield { type: "text-delta", text: textDelta };
-      }
-
-      if (Array.isArray(delta.tool_calls)) {
-        for (const rawToolCall of delta.tool_calls) {
-          const index = rawToolCall.index ?? 0;
-          const previous = toolCallBuffer.get(index) ?? { id: "", name: "", arguments: "" };
-          const next = {
-            id: rawToolCall.id ?? previous.id,
-            name: rawToolCall.function?.name ?? previous.name,
-            arguments: previous.arguments + (rawToolCall.function?.arguments ?? "")
-          };
-
-          toolCallBuffer.set(index, next);
-        }
-      }
-    }
-  }
-
-  for (const toolCall of [...toolCallBuffer.values()]) {
-    const normalized = {
-      id: toolCall.id,
-      name: toolCall.name as LlmToolCall["name"],
-      arguments: safeParseArguments(toolCall.arguments || "{}")
-    };
-
-    emittedToolCalls.push(normalized);
-    yield { type: "tool-call", toolCall: normalized };
-  }
-
-  // done 事件把完整文本和 tool call 交给上层，避免上层自行再聚合一遍。
-  yield { type: "done", text: fullText, toolCalls: emittedToolCalls, raw: undefined };
 }

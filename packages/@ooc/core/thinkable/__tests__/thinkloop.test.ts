@@ -74,10 +74,6 @@ describe("think", () => {
           }
         ]);
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -133,10 +129,6 @@ describe("think", () => {
       async generate() {
         return makeResult("openai", "gpt-test", "暂停前输出");
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -160,10 +152,6 @@ describe("think", () => {
       async generate() {
         throw new Error("llm exploded");
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -201,10 +189,6 @@ describe("think", () => {
           { id: "call_2", name: "close", arguments: {} }
         ]);
       },
-      async *stream() {
-        yield { type: "start", provider: "claude", model: "claude-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -244,10 +228,6 @@ describe("think", () => {
       async generate() {
         return makeResult("openai", "gpt-test", "你好！我是一个 AI 助手。");
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -306,10 +286,6 @@ describe("think", () => {
         }
         return makeResult("openai", "gpt-test", "已完成", []);
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -378,10 +354,6 @@ describe("think", () => {
       async generate() {
         return makeResult("openai", "gpt-test", "");
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -460,10 +432,6 @@ describe("think", () => {
         expect(observation?.output).toBeUndefined();
         return llmResult;
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -553,10 +521,6 @@ describe("think 失败终态结构化 (observability)", () => {
       async generate() {
         throw new LlmTimeoutError(120_000);
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -588,10 +552,6 @@ describe("think 失败终态结构化 (observability)", () => {
       async generate() {
         throw new Error("boom: provider 500");
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);
@@ -621,10 +581,6 @@ describe("think 失败终态结构化 (observability)", () => {
         observedTimeout = params.timeoutMs;
         return makeResult("openai", "gpt-test", "ok", []);
       },
-      async *stream() {
-        yield { type: "start", provider: "openai", model: "gpt-test" };
-        yield { type: "done", text: "", toolCalls: [] };
-      }
     };
 
     await think(thread, llmClient);

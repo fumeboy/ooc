@@ -30,7 +30,6 @@ import { normalizeMethodOutcome } from "../_shared/types/method.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
-  type WindowStatus,
 } from "../_shared/types/context-window.js";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import type {
@@ -200,11 +199,6 @@ export class WindowManager implements RuntimeHandle {
     await this.hooks.reportContextEdit?.();
   }
 
-  // ── 直接挂载一个已构造好的实例（loader 注入 self/member 实例等用）。 ──
-  upsert(instance: OocObjectInstance): void {
-    this.instances.set(instance.id, instance);
-  }
-
   // ── object method dispatch（三参）──
 
   /**
@@ -275,13 +269,6 @@ export class WindowManager implements RuntimeHandle {
     this.instances.set(objectId, { ...instance, win: nextWin });
     await this.hooks.reportContextEdit?.();
     return nextWin;
-  }
-
-  /** 设置某实例的信封 status（不可变 upsert）。 */
-  setStatus(objectId: string, status: WindowStatus): void {
-    const instance = this.instances.get(objectId);
-    if (!instance) return;
-    this.instances.set(objectId, { ...instance, status });
   }
 
   // ── 内部 helper ──

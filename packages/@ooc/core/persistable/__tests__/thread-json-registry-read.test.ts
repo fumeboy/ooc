@@ -15,7 +15,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeThread, readThread, threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
-import { writeContextRegistry, __resetSerialQueueForTests } from "../index";
+import { __resetSerialQueueForTests } from "../index";
 import type { ThreadPersistenceRef, FlowObjectRef } from "../common";
 import { makeThread } from "../../__tests__/make-thread";
 // 触发 builtin class 注册（hydrate 用 builtinRegistry.has 判定保留/丢弃窗）。
@@ -38,14 +38,8 @@ describe("readThread — thread-context.json 单一权威读路径", () => {
   });
 
   it("孤立 context registry 引用不进 thread-context.json → reload 不出现该对象（graceful）", async () => {
-    // 旧 ooc-6 context.json registry 已不被 readThread 消费；即便写了一条指向不存在
-    // 对象的 registry entry，readThread（读 thread-context.json）也不会把它投影出来。
-    await writeContextRegistry(persistence, {
-      version: 1,
-      members: [
-        { objectId: "todo_ghost", params: { order: 0 } }, // 旧 registry，readThread 不读
-      ],
-    });
+    // 旧 ooc-6 context.json registry 读路径已退役（readThread 只读 thread-context.json）。
+    // 不写任何 registry，验证 readThread 不会凭空投影出未被 thread-context.json 引用的对象。
     const thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
     thread.contextWindows = [];
     await writeThread(thread);

@@ -17,7 +17,7 @@
  * 纯函数：不改 window / thread，仅返回投影 class。
  */
 
-import type { BaseContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import { isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
@@ -26,7 +26,7 @@ import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 export type ProjectionClass = "talk" | "reflect_request" | "thread";
 
 export function computeProjectionClass(
-  window: Pick<BaseContextWindow, "id">,
+  window: Pick<ContextWindow, "id">,
   thread: ThreadContext,
 ): ProjectionClass {
   // self-view（creator 窗）：thread 与其 creator 的对话面。creator 窗身份由 id 派生

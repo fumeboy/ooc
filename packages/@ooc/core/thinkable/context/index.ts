@@ -1,4 +1,4 @@
-import type { LlmInputItem, LlmMessage } from "../llm/types";
+import type { LlmInputItem } from "../llm/types";
 import { isBuiltinObjectId, objectDir, readSelf, resolveStoneIdentityRef, stoneDir, threadDir } from "../../persistable";
 import { createDefaultPipeline } from "./pipeline.js";
 import { estimateWindowsTokens, loadBudgetThresholds, type BudgetThresholds } from "./budget.js";
@@ -48,8 +48,8 @@ function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage |
  * 推导链:
  * 1. inboxMessage.replyToWindowId — talk-delivery / worker.syncCrossObjectCalleeEnds
  *    在跨 object 投递时已经写入,优先使用
- * 2. fallback: 在 thread.contextWindows 中找一个 fork 子线程窗（会话窗 + isForkWindow）且
- *    targetThreadId === inboxMessage.fromThreadId 的 window;若多个,优先 creator 窗
+ * 2. fallback: 在 thread.contextWindows 中找一个 fork 子线程窗（会话窗 + data.isForkWindow）且
+ *    data.targetThreadId === inboxMessage.fromThreadId 的 window;若多个,优先 creator 窗
  *    （isCreatorWindowId(id)——child 视角下的 creator fork 窗是规范配对窗口；它的 self-view class
  *    是 thread/reflect_request，故按 isTalkLikeClass 认会话窗而非死写 "talk"）
  * 3. 都没有 → undefined,header 中静默不输出 window_id KV
@@ -58,12 +58,11 @@ function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage
   if (inboxMessage.replyToWindowId) return inboxMessage.replyToWindowId;
   const fromThreadId = inboxMessage.fromThreadId;
   if (!fromThreadId) return undefined;
-  const candidates = thread.contextWindows.filter(
-    (w) =>
-      isTalkLikeClass(w.class) &&
-      (w as { isForkWindow?: boolean }).isForkWindow === true &&
-      (w as { targetThreadId?: string }).targetThreadId === fromThreadId,
-  );
+  const candidates = thread.contextWindows.filter((w) => {
+    if (!isTalkLikeClass(w.class)) return false;
+    const d = (w.data ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
+    return d.isForkWindow === true && d.targetThreadId === fromThreadId;
+  });
   if (candidates.length === 0) return undefined;
   const creator = candidates.find((w) => isCreatorWindowId(w.id));
   return (creator ?? candidates[0])!.id;
@@ -127,11 +126,6 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
     let body: string;
     if (inboxMessage) {
       body = inboxMessage.content;
-      // event.text 是 ProcessEvent 上的 optional 兼容字段; 当前没有写入点会真的填它,
-      // 但保留追加路径(在 content 之后, 用 \n 分隔), 以保持类型契约的向后兼容。
-      if (event.text) {
-        body = `${body}\n${event.text}`;
-      }
     } else {
       body = `(inbox message ${event.msgId} not found)`;
     }
@@ -303,27 +297,12 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
 // ── Peer window reconcile (per-round) ───────────────────────────────────────
 
 /**
- * Built-in window type literals (from ContextObject discriminated union).
- * Any window whose `type` equals `id` AND whose type is NOT in this set
- * is treated as a peer Object window (type = peerId, id = peerId).
- *
- * Stone objectIds like "sentry" or "sentry/factor" do not collide with
- * these literals, so the check is safe even for top-level peers.
- */
-const BUILTIN_WINDOW_TYPES: ReadonlySet<string> = new Set([
-  "root", "method_exec", "todo", "talk", "program", "file",
-  "knowledge", "search", "skill_index",
-  "feishu_chat", "feishu_doc", "plan",
-]);
-
-/**
  * Returns true if the window looks like a peer Object window:
  * id === type (by ooc-6 Object window convention) and the type
- * is neither a builtin window type nor a builtin Object id.
+ * is not a builtin Object id.
  */
 function isPeerWindow(w: OocObjectInstance): boolean {
   if (w.id !== w.class) return false;
-  if (BUILTIN_WINDOW_TYPES.has(w.class)) return false;
   if (isBuiltinObjectId(w.class)) return false;
   return true;
 }
@@ -353,19 +332,6 @@ function reconcilePeerWindowsIntoContext(
   if (appended > 0) {
     thread.contextWindows = list;
   }
-}
-
-/**
- * 构造单轮 LLM 输入。
- *
- * 第一条 message 是 XML system context，承载稳定状态窗口；历史过程事件作为后续
- * 普通 messages 追加，避免把 transcript 混入 system prompt。
- */
-export async function buildContext(thread: ThreadContext): Promise<LlmMessage[]> {
-  const input = await buildInputItems(thread);
-  return input.input
-    .filter((item): item is Extract<LlmInputItem, { type: "message" }> => item.type === "message")
-    .map((item) => ({ role: item.role, content: item.content }));
 }
 
 /**
