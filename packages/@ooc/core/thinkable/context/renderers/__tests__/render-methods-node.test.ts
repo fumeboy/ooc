@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 // 全量 boot builtin registry（避免模块求值期 assert 顺序坑）
 import "@ooc/core/runtime/register-builtins.js";
-import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import { builtinRegistry, createObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { computeVisibleMethodSet } from "../xml.js";
 
 /**
@@ -83,4 +83,26 @@ test("reflect_request: for_reflectable methods gated to super flow; talk methods
   expect(sup!.methodNames).toContain("say");
   expect(sup!.methodNames).toContain("new_feat_branch");
   expect(sup!.methodNames).toContain("create_pr_and_invite_reviewers");
+});
+
+/**
+ * self 窗自有方法可发现性：self 窗是对象自己的命令面，应 surface 其全部自有 object method，
+ * 无需在 readable 里冗余声明 WindowClassDecl。非 self 窗（member/peer）仍按 decl 门控。
+ */
+test("self 窗 surface 自有 object method（无 readable decl 也上屏）；非 self 仍门控", () => {
+  const reg = createObjectRegistry();
+  reg.register("test_self_obj", {
+    executable: {
+      methods: [{ name: "DoThing", description: "do a thing", exec: () => "ok" }],
+    },
+  });
+
+  // 非 self：无 readable WindowClassDecl → 门控不变，返回 null
+  const notSelf = computeVisibleMethodSet("test_self_obj", "test_self_obj", bizThread, reg, false);
+  expect(notSelf).toBeNull();
+
+  // self：surface 自有方法，即便没有 readable decl
+  const asSelf = computeVisibleMethodSet("test_self_obj", "test_self_obj", bizThread, reg, true);
+  expect(asSelf).not.toBeNull();
+  expect(asSelf!.methodNames).toContain("DoThing");
 });

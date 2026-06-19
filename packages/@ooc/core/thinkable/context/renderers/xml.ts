@@ -118,9 +118,13 @@ export function computeVisibleMethodSet(
   projectionClass: string,
   thread: ThreadContext,
   registry: ObjectRegistry,
+  isSelf = false,
 ): { methodNodes: XmlNode[]; methodNames: string[] } | null {
   const decl = registry.resolveWindowClass(ownerClass, projectionClass);
-  if (!decl) return null;
+  // self 窗 = 对象自己的命令面：surface 其**全部自有 object method**（沿继承链合并），无需在
+  // readable 里冗余声明 WindowClassDecl——否则对象自定义的 object method（含 route 填表方法）对自己
+  // 的 LLM 不可发现。非 self 窗（member/peer）仍按 decl.object_methods 门控（窗可只露子集）。
+  if (!decl && !isSelf) return null;
 
   // for_reflectable 门控：reflectable 沉淀 method 仅在 super flow（反思 session）下 surface。
   const inSuperFlow = isSuperSessionId(thread.persistence?.sessionId ?? "");
@@ -130,22 +134,24 @@ export function computeVisibleMethodSet(
     | import("../../../readable/contract.js").WindowMethod;
   const merged = new Map<string, AnyMethod>();
 
-  // object method：沿继承链合并后，按 decl.object_methods 引用名挑选。
+  // object method：沿继承链合并。self 窗取全部自有方法名；非 self 按 decl.object_methods 引用名挑选。
   const objectMethods = new Map(
     registry.resolveObjectMethods(ownerClass).map((m) => [m.name, m]),
   );
-  for (const name of decl.object_methods) {
+  const objectMethodNames = isSelf ? [...objectMethods.keys()] : decl!.object_methods;
+  for (const name of objectMethodNames) {
     const m = objectMethods.get(name);
     if (!m) continue; // 引用了不存在的 method：fail-soft 跳过
     if (!inSuperFlow && (m as any).for_reflectable) continue;
     merged.set(name, m);
   }
-  // window method：直接取自该投影窗声明。
-  for (const wm of decl.window_methods) {
+  // window method：取自该投影窗声明（self 窗若也有 decl 则一并合入，如 viewport 类展示方法）。
+  for (const wm of decl?.window_methods ?? []) {
     if (merged.has(wm.name)) continue;
     merged.set(wm.name, wm);
   }
 
+  if (merged.size === 0) return null;
   const names = [...merged.keys()].sort();
 
   const methodNodes: XmlNode[] = names.map((name) => {
@@ -174,7 +180,7 @@ export function computeVisibleMethodSet(
  * fail-soft：无声明的投影窗不进声明层。无任何可声明 class → 返回 null。
  */
 function renderWindowClassesNode(
-  projected: Array<{ ownerClass: string; projectionClass: string }>,
+  projected: Array<{ ownerClass: string; projectionClass: string; isSelf?: boolean }>,
   thread: ThreadContext,
   registry: ObjectRegistry,
 ): XmlNode | null {
@@ -186,8 +192,8 @@ function renderWindowClassesNode(
   const byClass = new Map<string, ClassVariant[]>();
   const ordered: ClassVariant[] = [];
 
-  for (const { ownerClass, projectionClass } of projected) {
-    const set = computeVisibleMethodSet(ownerClass, projectionClass, thread, registry);
+  for (const { ownerClass, projectionClass, isSelf } of projected) {
+    const set = computeVisibleMethodSet(ownerClass, projectionClass, thread, registry, isSelf);
     if (!set) continue; // 无方法契约可声明
     if (set.methodNames.length === 0) continue; // 无可见方法：不进声明层
 
@@ -377,7 +383,12 @@ export class XmlRenderer {
     appendNode(
       threadChildren,
       renderWindowClassesNode(
-        projected.map((p) => ({ ownerClass: p.inst.class, projectionClass: p.projection.class })),
+        projected.map((p) => ({
+          ownerClass: p.inst.class,
+          projectionClass: p.projection.class,
+          // self 窗（实例 id = 本 thread 的 self objectId）：surface 对象全部自有 object method。
+          isSelf: !!threadForRender.persistence?.objectId && p.inst.id === threadForRender.persistence.objectId,
+        })),
         threadForRender,
         this.registry,
       ),
