@@ -1,5 +1,5 @@
 import type { LlmInputItem } from "../llm/types";
-import { isBuiltinObjectId, objectDir, readSelf, resolveStoneIdentityRef, stoneDir, threadDir } from "../../persistable";
+import { isBuiltinObjectId, objectDir, resolveStoneIdentityRef, stoneDir, threadDir } from "../../persistable";
 import { createDefaultPipeline } from "./pipeline.js";
 import { estimateWindowsTokens, loadBudgetThresholds, type BudgetThresholds } from "./budget.js";
 import { XmlRenderer } from "./renderers/xml.js";
@@ -382,8 +382,8 @@ export async function buildInputItems(
     event._foldedBy ? [] : processEventToItems(thread, event),
   );
 
-  // self.md instructions (Object identity.innerSelf)
-  const instructions = await loadSelfInstructions(thread);
+  // self.md 身份不再单独灌进 system instructions——它作为 self 窗的 self 视角内容渲进 context
+  // （resolveProjection：self 视角渲 self.md、peer 视角渲 readable.md）。身份只活在 self 窗这一处。
 
   // [ooc:paths] meta node for metaprogramming / path anchors
   const pathsItem = await buildPathsItem(thread);
@@ -397,7 +397,6 @@ export async function buildInputItems(
     currentTokens > thresholds.soft ? [buildBudgetWarningItem(currentTokens, thresholds)] : [];
 
   return {
-    ...(instructions ? { instructions } : {}),
     input: [
       {
         type: "message",
@@ -451,21 +450,3 @@ async function buildPathsItem(thread: ThreadContext): Promise<LlmInputItem | und
   };
 }
 
-/**
- * 读取 thread 所属 Object 的 self.md 作为 instructions。
- *
- * - 内存模式（无 persistence）→ undefined，保持现有测试契约
- * - self.md 不存在或为空 → undefined
- * - 否则返回原文（trim 后非空校验）
- */
-async function loadSelfInstructions(thread: ThreadContext): Promise<string | undefined> {
-  if (!thread.persistence) return undefined;
-  const { baseDir, sessionId, objectId } = thread.persistence;
-  // worktree 模型：business session 读自己 worktree 的 self.md（完整副本，含本 session
-  // 试验改动）；super flow / 控制面读 canonical main。worktree 未建（没改过 identity）则
-  // "read" 透传 main——无 shadow、单目录读。
-  const stoneRef = await resolveStoneIdentityRef({ baseDir, sessionId, objectId }, "read");
-  const selfText = await readSelf(stoneRef);
-  if (!selfText || !selfText.trim()) return undefined;
-  return selfText;
-}

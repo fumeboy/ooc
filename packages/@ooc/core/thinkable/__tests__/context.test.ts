@@ -610,7 +610,7 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
 // 防 import 不使用 lint 报错
 void [makeThread, ROOT_WINDOW_ID, execForm];
 
-describe("buildInputItems self.md injection", () => {
+describe("buildInputItems self.md → self 窗 self 视角（不再灌 instructions）", () => {
   let tempRoot: string | undefined;
 
   afterEach(async () => {
@@ -620,7 +620,7 @@ describe("buildInputItems self.md injection", () => {
     }
   });
 
-  it("returns self.md body as instructions and renders <self object_id> in XML", async () => {
+  it("self.md 作为 self 窗 self 视角内容渲进 context XML；不再单独灌 instructions", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
     const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
     await writeSelf(stoneRef, "I am Alice, a careful reviewer.");
@@ -630,13 +630,16 @@ describe("buildInputItems self.md injection", () => {
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "alice", threadId: "t_alice" },
     });
     const out = await buildInputItems(thread);
-    expect(out.instructions).toBe("I am Alice, a careful reviewer.");
+    // 身份不再灌 system instructions——只活在 self 窗。
+    expect(out.instructions).toBeUndefined();
 
     const xml = (out.input[0] as { content: string }).content;
+    // self.md 正文经 self 窗（self 视角）渲进 context；<self> 标记仍在。
+    expect(xml).toContain("I am Alice, a careful reviewer.");
     expect(xml).toContain('<self object_id="alice">');
   });
 
-  it("omits instructions and <self> when thread has no persistence", async () => {
+  it("no persistence → 无 instructions、无 <self>", async () => {
     const thread = makeThread({ id: "t_in_memory" });
     const out = await buildInputItems(thread);
     expect(out.instructions).toBeUndefined();
@@ -645,7 +648,7 @@ describe("buildInputItems self.md injection", () => {
     expect(xml).not.toContain("<self ");
   });
 
-  it("worktree: business session reads worktree self.md; other session + super read main", async () => {
+  it("worktree：业务 session 的 self 窗渲 worktree self.md；其它 session + super 渲 main", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
     await ensureStoneRepo({ baseDir: tempRoot });
     await createStoneObject({ baseDir: tempRoot, objectId: "alice", _stonesBranch: "main" });
@@ -663,30 +666,32 @@ describe("buildInputItems self.md injection", () => {
       { baseDir: tempRoot, objectId: "alice", _stonesBranch: "session-s1" },
       "worktree Alice (experiment)",
     );
+    const xmlOf = async (t: Parameters<typeof buildInputItems>[0]) =>
+      ((await buildInputItems(t)).input[0] as { content: string }).content;
 
-    // s1 读 worktree
+    // s1 的 self 窗读 worktree
     const t1 = makeThread({
       id: "t1",
       persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "alice", threadId: "t1" },
     });
-    expect((await buildInputItems(t1)).instructions).toBe("worktree Alice (experiment)");
+    expect(await xmlOf(t1)).toContain("worktree Alice (experiment)");
 
     // s2 没有 worktree → 读 canonical main
     const t2 = makeThread({
       id: "t2",
       persistence: { baseDir: tempRoot, sessionId: "s2", objectId: "alice", threadId: "t2" },
     });
-    expect((await buildInputItems(t2)).instructions).toBe("canonical Alice");
+    expect(await xmlOf(t2)).toContain("canonical Alice");
 
     // super flow 读 canonical（不走 worktree）
     const tSuper = makeThread({
       id: "tS",
       persistence: { baseDir: tempRoot, sessionId: "super", objectId: "alice", threadId: "tS" },
     });
-    expect((await buildInputItems(tSuper)).instructions).toBe("canonical Alice");
+    expect(await xmlOf(tSuper)).toContain("canonical Alice");
   });
 
-  it("omits instructions when self.md is missing or empty", async () => {
+  it("self.md 缺失/空 → self 窗空、无 instructions；<self> 标记仍在", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
     await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
     // 不写 self.md
@@ -696,7 +701,7 @@ describe("buildInputItems self.md injection", () => {
     });
     const out = await buildInputItems(thread);
     expect(out.instructions).toBeUndefined();
-    // 仍然渲染 <self>：objectId 是稳定标记，与 self.md 是否存在解耦
+    // <self> 标记与 self.md 是否存在解耦，仍渲染。
     const xml = (out.input[0] as { content: string }).content;
     expect(xml).toContain('<self object_id="bob">');
   });

@@ -40,7 +40,7 @@ import type { ReadableContext, ReadableProjection } from "../../../readable/cont
 import { extractBasicDescription, conciseDescription } from "@ooc/core/thinkable/context/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
-import { readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "../../../persistable/index.js";
+import { readSelf, readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "../../../persistable/index.js";
 import {
   appendNode,
   optionalElement,
@@ -238,7 +238,7 @@ function projectionContentNodes(content: XmlNode[] | string): XmlNode[] {
  *
  * fail-soft：任何一步抛错都不崩 think loop，落 placeholder。
  */
-async function resolveProjection(
+export async function resolveProjection(
   inst: OocObjectInstance,
   thread: ThreadContext,
   registry: ObjectRegistry,
@@ -267,31 +267,29 @@ async function resolveProjection(
     }
   }
 
-  // Step 2: readable.md 静态内容（无 Class.readable 时的回退）
+  // Step 2: 默认投影——按视角渲对象的身份文件（无自定义 readable module 时）。
+  // self.md / readable.md 是所有 ooc object 的通用身份文件：
+  //   - self 视角（看自己，thread.self objectId === inst.id）→ 渲 self.md（自我身份）
+  //   - peer 视角（别人看它）→ 渲 readable.md（面向他人的描述）
+  // self.md 不再单独灌进 system instructions——身份只活在 self 窗这一处（见 buildInputItems）。
   if (persistence) {
     try {
       const stoneRef: StoneObjectRef = await resolveStoneIdentityRef(
-        { baseDir: persistence.baseDir, sessionId: persistence.sessionId, objectId: inst.class },
+        { baseDir: persistence.baseDir, sessionId: persistence.sessionId, objectId: inst.id },
         "read",
       );
-      const readableText = await readReadable(stoneRef);
-      if (readableText && readableText.trim().length > 0) {
-        return { class: inst.class, content: readableText };
+      const isSelfView = !!thread.persistence?.objectId && thread.persistence.objectId === inst.id;
+      const text = isSelfView ? await readSelf(stoneRef) : await readReadable(stoneRef);
+      if (text && text.trim().length > 0) {
+        return { class: inst.class, content: text };
       }
     } catch {
-      // continue to placeholder
+      // continue to empty window
     }
   }
 
-  // Step 3: placeholder
-  return {
-    class: inst.class,
-    content: [
-      xmlElement("readable", { source: "placeholder" }, [
-        xmlText(`Object "${inst.id}"(class "${inst.class}") 没有可渲染的 readable 投影（stone 可能后台注册中或新建未就绪）。`),
-      ]),
-    ],
-  };
+  // Step 3: 默认空 context window（class = inst.class）——对象无身份文件可渲，不输出 placeholder 文案。
+  return { class: inst.class, content: [] };
 }
 
 // ─────────────────────────── window node rendering ───────────────────────────
