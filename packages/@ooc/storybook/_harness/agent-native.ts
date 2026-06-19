@@ -76,6 +76,51 @@ export async function fetchContextXml(
   return { ctxXml, messageStream, items };
 }
 
+/**
+ * 开启 debug 模式（进程级）——之后每轮 thinkloop 写 `loop_NNNN.{input,output,meta}.json`
+ * （per-loop 全量 context 留存）。默认关（每轮全量写盘有开销，opt-in）。要**按轮取证**
+ * transient 现象（form 窗 submit 即释放 / 逐轮知识激活——最新快照 fetchContextXml 看不到）
+ * 时，**先调本函数再 seedTask**。
+ */
+export async function enableDebug(): Promise<boolean> {
+  const r = await req("POST", "/runtime/debug/enable");
+  return r.status === 200;
+}
+
+/** 列出某 thread 的 per-loop debug 轮次（需先 enableDebug + 跑过 thinkloop）。 */
+export async function listLoops(
+  sessionId: string,
+  objectId: string,
+  threadId: string,
+): Promise<Array<{ loopIndex: number; hasInput?: boolean; hasOutput?: boolean }>> {
+  const r = await req("GET", `/runtime/flows/${sessionId}/${objectId}/threads/${threadId}/debug/loops`);
+  return (r.json?.loops ?? []) as Array<{ loopIndex: number; hasInput?: boolean; hasOutput?: boolean }>;
+}
+
+/**
+ * 取**某一轮**（loopIndex）的 context XML——核验只在中间轮出现的 transient 现象
+ * （form 窗 / 该轮激活的 knowledge）。最新快照 /debug 每轮覆盖、看不到中间轮，故走 per-loop。
+ */
+export async function fetchLoopContextXml(
+  sessionId: string,
+  objectId: string,
+  threadId: string,
+  loopIndex: number,
+): Promise<{ ctxXml: string; items: any[] }> {
+  const r = await req("GET", `/runtime/flows/${sessionId}/${objectId}/threads/${threadId}/debug/loops/${loopIndex}`);
+  const rec = r.json?.input ?? r.json;
+  const items: any[] = rec?.inputItems ?? [];
+  let ctxXml = "";
+  for (const it of items) {
+    const c = it?.content;
+    if (it?.type === "message" && typeof c === "string" && c.trimStart().startsWith("<context>")) {
+      ctxXml = c;
+      break;
+    }
+  }
+  return { ctxXml, items };
+}
+
 /** 读某 thread 的 exec 事件（method + args + say 文本）。 */
 export async function threadExecs(sessionId: string, objectId: string, threadId: string): Promise<Array<{ cmd: string; args: any; msg?: string }>> {
   const r = await req("GET", `/api/flows/${sessionId}/${objectId}/threads/${threadId}`);
