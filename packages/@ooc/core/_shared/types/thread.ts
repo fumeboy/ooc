@@ -9,7 +9,6 @@
  */
 
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
-import type { IntentCache } from "./intent.js";
 
 // ─────────────────────────── flow / stone 引用类型 ───────────────────────────
 
@@ -537,12 +536,6 @@ export type ThreadContext = {
    * （任何 inbox 新消息都唤醒）；未来可能据此做精确路由。
    */
   waitingOn?: string;
-  /**
-   * Intent cache keyed by formId. Populated by WindowManager write path
-   * (openMethodExec / refine / submit) and read by ContextPipeline processors.
-   * Stored on ThreadContext as a runtime-only field; not persisted to disk.
-   */
-  intentCache?: IntentCache;
   /**
    * Transient observability mirror of the windows the ContextPipeline actually
    * rendered into the LLM input on the latest buildInputItems pass (base windows

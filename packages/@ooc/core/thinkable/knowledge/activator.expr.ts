@@ -228,13 +228,16 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
     }
 
     case "intent": {
-      // Check intentCache for any form whose intents match the pattern.
-      const cache = thread.intentCache;
-      if (!cache) return false;
-      for (const entry of cache.values()) {
-        if (!entry.intents) continue;
-        for (const intent of entry.intents) {
-          if (matchesIntentName(intent.name, trigger.intentName)) return true;
+      // open method_exec form 的 route 算出的 intents 落在 data.intentPaths——执行推进到哪、
+      // 意图就到哪，知识随之激活（与 method case 同源于 contextWindows，不读独立缓存）。
+      const list = thread.contextWindows ?? [];
+      for (const w of list) {
+        if (w.class !== "method_exec") continue;
+        if (!isOpen(w)) continue;
+        const intents = (w.data as { intentPaths?: string[] } | undefined)?.intentPaths;
+        if (!intents) continue;
+        for (const name of intents) {
+          if (matchesIntentName(name, trigger.intentName)) return true;
         }
       }
       return false;
@@ -253,12 +256,15 @@ function isOpen(w: OocObjectInstance): boolean {
   return w.status === "open" || w.status === "active" || w.status === undefined;
 }
 
-/** form 的 parent window type；parentObjectId === "root" 或 missing 时视为 "root"。 */
+/** form 的目标 window type；目标 === "root" 或 missing 时视为 "root"。 */
 function parentTypeOf(
   form: OocObjectInstance,
   byId: Map<string, OocObjectInstance>,
 ): string {
-  const pid = form.parentObjectId;
+  // form 的目标对象落在 data.targetObjectId（填表式渐进执行；form 恒 top-level，不设 envelope
+  // parentObjectId 以免目标窗被 budget 裁掉时跟着消失）；envelope parentObjectId 作兜底。
+  const pid =
+    (form.data as { targetObjectId?: string } | undefined)?.targetObjectId ?? form.parentObjectId;
   if (!pid || pid === "root") return "root";
   const parent = byId.get(pid);
   return parent?.class ?? "root";

@@ -9,14 +9,9 @@ import { isCreatorWindowId } from "../../_shared/types/context-window.js";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../../_shared/types/thread.js";
 
 export type {
-  Intent,
-  FormChangeEvent,
   MethodCallSchema,
   MethodArgSpec,
-  IntentCache,
-  IntentCacheEntry,
 } from "@ooc/core/_shared/types/intent.js";
-export { hashArgs, diffArgs } from "@ooc/core/_shared/types/intent.js";
 
 export { BudgetManager } from "./budget.js";
 export type { ContextSnapshot } from "./snapshot.js";

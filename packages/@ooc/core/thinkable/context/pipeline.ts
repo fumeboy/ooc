@@ -30,8 +30,6 @@ export class ContextPipeline {
   }
 
   async run(thread: ThreadContext): Promise<ContextSnapshot> {
-    // intentCache 的 lazy-init —— evaluateTrigger 的 intent case 会读 thread.intentCache。
-    if (!thread.intentCache) thread.intentCache = new Map();
     // thread.contextWindows 已是 OocObjectInstance[]——pipeline 直接以实例信封为流通单元。
     const ctx: PipelineContext = { windows: [...(thread.contextWindows ?? [])] };
 

@@ -350,6 +350,53 @@ describe("evaluateTrigger", () => {
     expect(evaluateTrigger(t, thread({ contextWindows: [sayOnRoot] }))).toBe(false);
   });
 
+  // ── phase 2：填表式渐进执行的知识激活对接 ──
+  test("method::<targetClass>::<m>：form 的 data.targetObjectId 指向目标对象，解析其 class 命中", () => {
+    const t = parseTrigger("method::todo::save");
+    const target: ContextWindow = {
+      id: "note1",
+      class: "todo",
+      title: "n",
+      status: "open",
+      createdAt: 0,
+      data: {},
+    };
+    const f: ContextWindow = {
+      id: "f1",
+      class: "method_exec",
+      title: "f",
+      status: "open",
+      createdAt: 0,
+      data: { method: "save", targetObjectId: "note1" },
+    };
+    expect(evaluateTrigger(t, thread({ contextWindows: [target, f] }))).toBe(true);
+
+    // 目标类不匹配 → 不命中
+    const t2 = parseTrigger("method::file::save");
+    expect(evaluateTrigger(t2, thread({ contextWindows: [target, f] }))).toBe(false);
+  });
+
+  test("intent::<name>：open form 的 data.intentPaths 含该 intent 命中（不再读死的 intentCache）", () => {
+    const t = parseTrigger("intent::create");
+    const f: ContextWindow = {
+      id: "f1",
+      class: "method_exec",
+      title: "f",
+      status: "open",
+      createdAt: 0,
+      data: { method: "save", targetObjectId: "note1", intentPaths: ["create"] },
+    };
+    expect(evaluateTrigger(t, thread({ contextWindows: [f] }))).toBe(true);
+
+    // failed form 不算活跃
+    const failed: ContextWindow = { ...f, status: "failed" };
+    expect(evaluateTrigger(t, thread({ contextWindows: [failed] }))).toBe(false);
+
+    // 不含该 intent 不命中
+    const other: ContextWindow = { ...f, data: { method: "save", targetObjectId: "note1", intentPaths: ["update"] } };
+    expect(evaluateTrigger(t, thread({ contextWindows: [other] }))).toBe(false);
+  });
+
   // ── method:: triggers correctly evaluate ──
   test("method::root::program hits when form on root with method=program is open", () => {
     const t = parseTrigger("method::root::program");

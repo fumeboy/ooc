@@ -92,7 +92,6 @@ function buildEntries(
  */
 function stripVolatileForPersist(thread: ThreadContext): Omit<ThreadContext, "contextWindows"> {
   const {
-    intentCache: _dropIntentCache,
     inbox: _dropInbox,
     contextWindows: _dropContextWindows,
     ...threadRest
