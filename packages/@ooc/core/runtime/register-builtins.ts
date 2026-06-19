@@ -46,8 +46,9 @@ _reg.register("_builtin/agent/pr", PrClass);
 _reg.register("_builtin/knowledge_base/knowledge", KnowledgeClass);
 _reg.register("_builtin/filesystem/file", FileClass);
 _reg.register("_builtin/agent/todo", TodoClass);
-// method_exec_form：method 调用 form（占位 class；form 机制 Wave4 已废，仅类型归位）。
-_reg.register("_builtin/agent/method_exec_form", MethodExecFormClass);
+// method_exec_form：「填表式渐进式执行」的 form class。注册 key = `method_exec`，并入 registry
+// BASE anchor（parentClass:null + persistable inline）——id 前缀 / activator / 投影 class 全用此名。
+_reg.register("method_exec", MethodExecFormClass);
 _reg.register("_builtin/filesystem/search", SearchClass);
 _reg.register("_builtin/agent/skill_index", SkillIndexClass);
 _reg.register("_builtin/agent/plan", PlanClass);

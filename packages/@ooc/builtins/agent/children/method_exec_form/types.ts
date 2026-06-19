@@ -3,20 +3,25 @@
  *
  * 只含业务字段；**不含**窗信封字段（id/class/parentObjectId/title/createdAt/信封 status）——那些由 runtime 管理。
  *
- * 字段（与旧 ActiveForm 一一对应）：
- * - 由 `exec` tool 在 args 不齐全 / 引入新 path/knowledge 时创建
+ * 字段：
+ * - 由 `exec` tool 在目标 method 声明了 `route` 且 route 未返回 quickSubmit 时创建
  * - 自身注册了两条命令 `refine` / `submit`，LLM 通过
  *   `exec(<form_id>, "refine", args={...})` 累加参数；`exec(<form_id>, "submit")` 触发执行
  * - status 是 form 业务生命周期态（非窗信封 status）：open → executing → success | failed
  *   - success：自动从 context 移除（submit 段）
  *   - failed：保留 result，且可通过 refine 回 open（"复活"路径）
- *
- * 注：form 机制 Wave4 已废，本类型仅为类型归位 + 注册占位 class 而保留。
  */
 export interface Data {
+  /**
+   * 本 form 代理的目标对象 id —— submit 时 `runtime.callMethod(targetObjectId, method, accumulatedArgs)`
+   * 回调它真正执行。route 只在 exec 工具边界消费，callMethod 走 runtime 不再触发 route（不递归）。
+   */
+  targetObjectId: string;
   method: string;
   description: string;
   accumulatedArgs: Record<string, unknown>;
+  /** route 返回的提示语；填表未齐时回显给 LLM。 */
+  tip?: string;
   intentPaths: string[];
   loadedKnowledgePaths: string[];
   methodKnowledgePaths?: string[];

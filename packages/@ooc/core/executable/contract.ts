@@ -52,6 +52,17 @@ export interface RuntimeHandle {
    * 找不到窗 / 该窗 class 无 say 时抛清晰错误。
    */
   say?(windowId: string, msg: string): Promise<string | undefined>;
+  /**
+   * 对目标 object 的某 method 跑一次 `route`（填表式渐进执行的意图/提示重算）——解析目标 class 的
+   * method，若声明了 route 则用目标对象 data + 给定 args 求值返回 `ObjectMethodIntents`；无 route /
+   * 找不到目标则返回 undefined。method_exec form 的 refine 用它在累积参数后刷新 tip / intents。
+   * 与 callMethod 区别：runRoute 只算意图不执行 exec、不产副作用。
+   */
+  runRoute?(
+    targetObjectId: string,
+    methodName: string,
+    args: Record<string, unknown>,
+  ): Promise<ObjectMethodIntents | undefined>;
 }
 
 /**

@@ -35,6 +35,7 @@ import { normalizeMethodResult } from "../executable/contract.js";
 import type {
   ExecutableContext,
   ConstructorContext,
+  ObjectMethodIntents,
   RuntimeHandle,
 } from "../executable/contract.js";
 import type { ReadableContext } from "../readable/contract.js";
@@ -185,6 +186,28 @@ export class WindowManager implements RuntimeHandle {
       throw new Error(`say(${windowId}): manager 未绑定 thread（须经 fromThread 构造）`);
     }
     return this.execObjectMethod(windowId, "say", { msg }, this.threadRef);
+  }
+
+  /**
+   * 对目标 object 的某 method 跑一次 route（RuntimeHandle.runRoute）——只算意图/提示、不执行 exec。
+   * method_exec form 的 refine 用它在累积参数后刷新 tip / intents。无目标 / 无 route → undefined。
+   */
+  async runRoute(
+    targetObjectId: string,
+    methodName: string,
+    args: Record<string, unknown>,
+  ): Promise<ObjectMethodIntents | undefined> {
+    const instance = this.instances.get(targetObjectId);
+    if (!instance) return undefined;
+    const method = this.registry.resolveObjectMethod(instance.class, methodName);
+    if (!method?.route) return undefined;
+    const ctx: ExecutableContext = {
+      thread: this.threadRef,
+      object: { id: instance.id, class: instance.class },
+      runtime: this,
+      args,
+    };
+    return method.route(ctx, instance.data, args);
   }
 
   /** 关闭/卸载一个对象实例（从 thread 移除）。 */

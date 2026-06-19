@@ -6,9 +6,11 @@
  *
  * - window_id 缺省 = agent 的 self 窗（agency 所在）；工具方法在成员对象窗（filesystem/terminal/world/knowledge_base）
  * - method 必须是 target window 注册的某个 object method / window method 名
- * - args 由本次 exec 调用**直传**（Wave 4 裁决：form 收集机制废弃，不再经 method_exec 窗累积参数）
+ * - args 由本次 exec 调用**直传**给 method
  *
  * 派发（WindowManager 三/四参契约）：
+ * - object method 声明了 route（填表式渐进执行）→ 工具边界先跑 route：未返回 quickSubmit 则建
+ *   method_exec form 入 context（refine 累积参数 / submit 提交），不直执行；quickSubmit 直执行。
  * - object method（改 data / 副作用，含委托类经 ctx.runtime.instantiate 造子对象）→ execObjectMethod
  * - window method（只动展示投影态）→ execWindowMethod
  * - 两者皆无 → fail-loud（manager throw，本 tool 转成 ok:false）
@@ -114,6 +116,35 @@ export async function handleExecTool(
 
   try {
     if (isObjectMethod) {
+      // 填表式渐进式执行：method 声明了 route 时，route 在工具边界先跑——未返回 quickSubmit
+      // 则建 method_exec form 入 context（不直执行），把 tip 回给 LLM 渐进补参数。
+      // route 只在此边界消费；form.submit 走 runtime.callMethod 回到 execObjectMethod（route-free，不递归）。
+      const methodEntry = registry.resolveObjectMethod(target.class, method)!;
+      if (methodEntry.route) {
+        const routeResult = await methodEntry.route(
+          { thread, object: { id: target.id, class: target.class }, runtime: mgr, args: nestedArgs },
+          target.data,
+          nestedArgs,
+        );
+        if (!routeResult?.quickSubmit) {
+          const formId = await mgr.instantiate("method_exec", {
+            targetObjectId: windowId,
+            method,
+            description: methodEntry.description,
+            accumulatedArgs: nestedArgs,
+            tip: routeResult?.tip,
+            intentPaths: routeResult?.intents,
+            schema: methodEntry.schema,
+            title,
+          });
+          thread.contextWindows = mgr.toData();
+          const tipMsg =
+            routeResult?.tip ??
+            `已开启填表 form ${formId}：refine 补参数、submit 提交执行。`;
+          return successOutput(tipMsg, { method, formId, form: true });
+        }
+        // quickSubmit → 落到下方直执行（与无 route 的 method 同路径）。
+      }
       const result = await mgr.execObjectMethod(windowId, method, nestedArgs, thread);
       thread.contextWindows = mgr.toData();
       return successOutput(result ?? `Method ${method} 已执行。`, {
