@@ -262,9 +262,11 @@ export async function demoViaSupervisor(
   sid: string,
   message: string,
   verify: (ctx: VerifyCtx) => Promise<{ ok: boolean; detail: string }>,
-  opts: { title?: string } = {},
+  opts: { title?: string; target?: string } = {},
 ): Promise<StoryResult> {
-  const seed = await seedTask(sid, "supervisor", message, opts.title ?? `storybook agent-native: ${capability}`);
+  // 默认派给 supervisor；opts.target 可指向具体对象（如 record_demo——验它自己的 object method）。
+  const target = opts.target ?? "supervisor";
+  const seed = await seedTask(sid, target, message, opts.title ?? `storybook agent-native: ${capability}`);
   if (!seed.ok || !seed.threadId) {
     const tcs: TcResult[] = [{ id: `AN-${capability}`, name: capability, status: "FAIL", detail: `seed 失败 status=${seed.raw.status}` }];
     return { capability, tier: "agent-native", tcs, storyTier: "Bad", trace: [] };
@@ -272,14 +274,14 @@ export async function demoViaSupervisor(
   await waitJob(seed.jobId!);
   // LLM 传输层失败（调用超时 / socket 断）= 端点 infra 抖动，非能力问题 → 标 SKIP（rollupTier→OK），
   // 不让端点抖动污染能力回归矩阵（区分「能力坏」与「环境噪音」）。
-  const infra = await threadLlmInfraFailed(sid, "supervisor", seed.threadId);
+  const infra = await threadLlmInfraFailed(sid, target, seed.threadId);
   if (infra) {
     const tcs: TcResult[] = [
       { id: `AN-${capability}`, name: capability, status: "SKIP", detail: `LLM 端点 infra 抖动（非能力问题）：${infra}` },
     ];
     return { capability, tier: "agent-native", tcs, storyTier: rollupTier(tcs), trace: [] };
   }
-  const execs = await threadExecs(sid, "supervisor", seed.threadId);
+  const execs = await threadExecs(sid, target, seed.threadId);
   // agent 对用户的"发话"可经 say（creator 窗）或 end 的 summary 报告——两者都是 agent 的对外答复。
   // lastSay 取最近一条 say.msg；缺失时回退到 end.summary（避免 agent 用 end 总结答复时假 Bad）。
   const sayMsg = [...execs].reverse().find((e) => e.msg)?.msg;
