@@ -20,7 +20,7 @@ import {
   resolveStoneIdentityRef,
 } from "../../persistable/index.js";
 import type { ThreadContext } from "./index.js";
-import type { ObjectRegistry } from "../../runtime/object-registry.js";
+import type { ObjectRegistry, RegisteredClass } from "../../runtime/object-registry.js";
 import { builtinRegistry } from "../../runtime/object-registry.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { OocClass } from "../../runtime/ooc-class.js";
@@ -61,13 +61,31 @@ function makeSelfLoadErrorClass(selfId: string, message: string): OocClass {
  * thread.persistence.objectId 是 thread 的 self window class，但 builtin registry 不认识 stone
  * 对象 class——渲染前须从磁盘加载 `export const Class` 并注册。peer class 由 derivePeerObjectWindows 处理。幂等。
  */
+/**
+ * 一个注册是否「实质」——有任一维度模块（construct/executable/readable/persistable）或 parentClass。
+ * 空占位 `{}`（无任何字段、parentClass 也空）= 前一次 load miss 的产物，不算实质（应重试加载）。
+ */
+function isSubstantiveRegistration(def: RegisteredClass): boolean {
+  return !!(
+    def.construct ||
+    def.executable ||
+    def.readable ||
+    def.persistable ||
+    (def.parentClass !== null && def.parentClass !== undefined)
+  );
+}
+
 export async function ensureSelfObjectTypeRegistered(
   thread: ThreadContext,
   registry: ObjectRegistry = builtinRegistry,
 ): Promise<void> {
   const selfId = thread.persistence?.objectId;
   if (!selfId || selfId === "user") return;
-  if (registry.has(selfId)) return;
+  // 幂等：只对**实质注册**（有 construct/executable/readable/persistable 任一，或有 parentClass）跳过。
+  // 空占位（前一次源码瞬时不可见——对象未提交 stone 仓 / worktree 未就绪——的 load miss 产物）不算实质：
+  // 重试加载以从瞬时 miss 恢复。否则空占位会毒化进程级 builtinRegistry、幂等守卫此后永不复原（须重启）。
+  const existing = registry.getClass(selfId);
+  if (existing && isSubstantiveRegistration(existing)) return;
   // session-aware：business session 内的 self 可能是本 session 新建对象（落 worktree，
   // 未合 main）——经 resolveStoneIdentityRef(read) 路由到 worktree 读其 index.ts，
   // 否则 startup registrar（只扫 stones/）注册不到它，render 取不到 method/readable。

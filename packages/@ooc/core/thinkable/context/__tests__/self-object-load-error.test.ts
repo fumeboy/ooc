@@ -114,6 +114,33 @@ describe("ensureSelfObjectTypeRegistered fail-loud on broken executable", () => 
     expect(serialized).toContain("不要");
   });
 
+  it("(c) 空占位注册不毒化单例：源码后来可见时重新加载（修 Issue#2）", async () => {
+    // 复刻毒化态：前一次 render 在源码瞬时不可见时（如对象未提交 stone 仓 / worktree 未就绪）
+    // load miss → register(selfId, {}) 注册了**空占位**（无 executable/readable/parentClass）。
+    const registry = createObjectRegistry();
+    registry.register("rec_recover", {});
+    expect(registry.has("rec_recover")).toBe(true);
+
+    // 此刻源码已就绪：stone 带合法 index.ts（export const Class，含一条 object method）。
+    await createStoneObject({ baseDir, objectId: "rec_recover" });
+    await writeBrokenStoneClass(
+      baseDir,
+      "rec_recover",
+      `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";\n` +
+        `export const Class: OocClass = { executable: { methods: [\n` +
+        `  { name: "DoThing", description: "do a thing", exec: () => "ok" },\n` +
+        `] } };\n`,
+    );
+
+    const thread = makeSelfThread("rec_recover");
+    await ensureSelfObjectTypeRegistered(thread, registry);
+
+    // 旧实现：has()==true → 幂等守卫跳过 → 永远停在空占位（毒化）。
+    // 修复后：空占位不算实质注册 → 重新加载 → 方法注册上。
+    const def = registry.getClass("rec_recover")!;
+    expect((def.executable?.methods ?? []).map((m) => m.name)).toContain("DoThing");
+  });
+
   it("(b') broken executable error readable carries the underlying load message", async () => {
     await createStoneObject({ baseDir, objectId: "sentry_factor2" });
     await writeBrokenStoneClass(
