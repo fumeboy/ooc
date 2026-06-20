@@ -1,5 +1,10 @@
 # OOC 上下文压缩 — 基于 ContextWindow 的多层衰减设计
 
+> ⚠️ **已被取代（2026-06-20）**：本文是早期草稿，把 compress 设想为 **tool 原语** + 多层自动衰减。
+> 实际方向改为 **compress 是 window method（非原语）**，稳定原语恒 3 个（exec/close/wait）。
+> 完整现状见 `docs/2026-06-20-compress-overview.md`；设计权威见对象树 `thinkable/knowledge/compress.md`。
+> 本文仅留作历史。
+
 **作者**：Supervisor（Claude Code 主会话）
 **日期**：2026-05-25
 **性质**：design 草稿（未落 `meta/object.doc.ts`，未动 `src/`）
