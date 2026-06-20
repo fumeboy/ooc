@@ -17,7 +17,7 @@
 import type { WindowMethod } from "./contract.js";
 
 /** compressLevel 投影档位上限：0 全文 / 1 缩略 / 2 仅句柄。 */
-export const MAX_COMPRESS_LEVEL = 2;
+const MAX_COMPRESS_LEVEL = 2;
 
 interface CompressLevelWin {
   compressLevel?: 0 | 1 | 2;

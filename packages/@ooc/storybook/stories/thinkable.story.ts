@@ -2,7 +2,7 @@
  * Story: thinkable —— 与 LLM 交互、构造 context、按 trigger 激活 knowledge。
  *
  * 控制面（无 LLM）只验**结构/通道**：① seed knowledge（带 activates_on）经 loadKnowledgeIndex
- * 被加载、可被 root window trigger 激活；② Object self.md 作为身份被 readSelf 加载（→ LLM instructions）。
+ * 被加载、可被 root window trigger 激活；② Object self.md 作为身份被 readSelf 加载（→ self 门面窗 self 视角内容，非 instructions）。
  * 「多轮连贯 / 激活质量」属 Tier B（需真 LLM）。规格见 thinkable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -35,10 +35,10 @@ export async function runControlPlane(): Promise<StoryResult> {
         !!doc && hasTrigger, `found=${!!doc}, trigger=${hasTrigger}`);
     }
 
-    // TC-THINK-02: Object self.md 作为身份被加载（→ LLM instructions）
+    // TC-THINK-02: Object self.md 作为身份被加载（→ self 门面窗 self 视角内容，非 instructions）
     {
       const text = await readSelf({ baseDir, objectId: id });
-      rec.ok("TC-THINK-02", "Object self.md 作为身份被 readSelf 加载（进 LLM instructions）",
+      rec.ok("TC-THINK-02", "Object self.md 作为身份被 readSelf 加载（渲为 self 门面窗 self 视角内容，非 instructions）",
         (text ?? "").includes("会思考"), `selfLen=${(text ?? "").length}`);
     }
 
