@@ -13,6 +13,7 @@ import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { isTalkLikeClass } from "../../_shared/types/constants.js";
 import { isCreatorWindowId } from "../../_shared/types/context-window.js";
 import {
+  normalizeSummarizedRanges,
   projectSummarizedRanges,
   type SummarizedRange,
 } from "../../_shared/utils/summarized-ranges.js";
@@ -364,6 +365,62 @@ function buildBudgetWarningItem(
   };
 }
 
+/**
+ * 把 events 折叠区段**吸附到 tool-pair 安全边界**（events compress 读出侧，self 视角专用）。
+ *
+ * Case B：agent 主动折的任意区段若只覆盖一对 function_call / function_call_output 的一半，
+ * 投影后会留下孤儿 tool 块——provider 层（claude-transport）不 sanitize，孤儿 tool_use/tool_result
+ * 会被 LLM provider 拒、本轮 think 崩。这里在投影**前**把区段外扩到覆盖完整配对（两半要么都折、
+ * 要么都留），从根上不产生孤儿。pending call（有 call 无 output，恢复期边界）不外扩、原样保留。
+ *
+ * 纯函数：只调整本轮投影用的 range，不改存储的 `win.summarizedRanges`（expand 仍按原 range 还原）。
+ */
+function snapRangesToToolPairs(
+  events: ProcessEvent[],
+  ranges: SummarizedRange[] | undefined,
+): SummarizedRange[] | undefined {
+  if (!ranges || ranges.length === 0) return ranges;
+  const callIdx = new Map<string, number>();
+  const outIdx = new Map<string, number>();
+  events.forEach((e, i) => {
+    if (e.kind === "function_call") callIdx.set(e.callId, i);
+    else if (e.kind === "function_call_output") outIdx.set(e.callId, i);
+  });
+  // 两半都在场的配对（pending call 无 output → 不参与，故不会被外扩拉进折叠区段）。
+  const pairs: Array<[number, number]> = [];
+  for (const [cid, ci] of callIdx) {
+    const oi = outIdx.get(cid);
+    if (oi !== undefined) pairs.push([Math.min(ci, oi), Math.max(ci, oi)]);
+  }
+  if (pairs.length === 0) return ranges;
+  const snapped = ranges.map((r) => {
+    let fromIdx = r.fromIdx;
+    let toIdx = r.toIdx;
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const [lo, hi] of pairs) {
+        const loIn = lo >= fromIdx && lo <= toIdx;
+        const hiIn = hi >= fromIdx && hi <= toIdx;
+        if (loIn !== hiIn) {
+          // 区段只覆盖配对一半 → 外扩到覆盖另一半。
+          if (lo < fromIdx) {
+            fromIdx = lo;
+            changed = true;
+          }
+          if (hi > toIdx) {
+            toIdx = hi;
+            changed = true;
+          }
+        }
+      }
+    }
+    return { fromIdx, toIdx, summary: r.summary };
+  });
+  // 外扩可能让相邻/重叠区段相交 → normalize 合并去重。
+  return normalizeSummarizedRanges(snapped);
+}
+
 /** 构造 Responses-first LLM 输入 items。 */
 export async function buildInputItems(
   thread: ThreadContext
@@ -399,7 +456,8 @@ export async function buildInputItems(
   )?.win as { summarizedRanges?: SummarizedRange[] } | undefined;
   const transcript = projectSummarizedRanges<ProcessEvent, LlmInputItem>(
     thread.events,
-    selfWin?.summarizedRanges,
+    // 投影前把区段吸附到 tool-pair 安全边界（Case B：防折叠切断 function_call/output 配对留孤儿）。
+    snapRangesToToolPairs(thread.events, selfWin?.summarizedRanges),
     (event) => (event._foldedBy ? [] : processEventToItems(thread, event)),
     (range, foldedCount) => [
       {

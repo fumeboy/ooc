@@ -804,6 +804,73 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
       "turn-D",
     ]);
   });
+
+  // Case B：折叠区段切断 function_call/function_call_output 配对 → 读出侧吸附到安全边界，不留孤儿
+  // tool 块（否则 provider 拒、本轮 think 崩）。events 含 c1、c2 两对工具调用：
+  // idx: 0=t0 1=fc(c1) 2=fco(c1) 3=t3 4=fc(c2) 5=fco(c2) 6=t6
+  const toolEvents: ThreadContext["events"] = [
+    { category: "llm_interaction", kind: "text", text: "t0" },
+    { category: "llm_interaction", kind: "function_call", callId: "c1", toolName: "exec", arguments: {} },
+    { category: "tool_runtime", kind: "function_call_output", callId: "c1", toolName: "exec", output: "r1", ok: true },
+    { category: "llm_interaction", kind: "text", text: "t3" },
+    { category: "llm_interaction", kind: "function_call", callId: "c2", toolName: "exec", arguments: {} },
+    { category: "tool_runtime", kind: "function_call_output", callId: "c2", toolName: "exec", output: "r2", ok: true },
+    { category: "llm_interaction", kind: "text", text: "t6" },
+  ];
+  function toolCallIds(out: Awaited<ReturnType<typeof buildInputItems>>): {
+    calls: string[];
+    outs: string[];
+  } {
+    return {
+      calls: out.input.filter((i) => i.type === "function_call").map((i) => (i as { call_id: string }).call_id),
+      outs: out.input
+        .filter((i) => i.type === "function_call_output")
+        .map((i) => (i as { call_id: string }).call_id),
+    };
+  }
+
+  it("折叠区段同时切断两对（c1 output 半 + c2 call 半）→ 外扩全折、无孤儿", async () => {
+    const selfWindow = makeSelfWindow();
+    // [2,4] 覆盖 fco(c1)@2（call@1 在外）+ t3@3 + fc(c2)@4（output@5 在外）→ 两对各被切一半。
+    selfWindow.win.summarizedRanges = [{ fromIdx: 2, toIdx: 4, summary: "中段折叠" }];
+    const thread = makeThread({
+      id: "t_caseB_both",
+      events: toolEvents,
+      extraWindows: [selfWindow],
+      skipCreatorWindow: true,
+    });
+    const out = await buildInputItems(thread);
+    const { calls, outs } = toolCallIds(out);
+    // 无孤儿：output 集合 === call 集合。
+    expect(new Set(outs)).toEqual(new Set(calls));
+    // 吸附后区段外扩到 [1,5]，两对都进 summary → 无残留 tool 块。
+    expect(calls).toEqual([]);
+    expect(outs).toEqual([]);
+    // 段外原样、摘要出现。
+    expect(assistantTexts(out)).toEqual(["t0", "t6"]);
+    expect(
+      out.input.some(
+        (i) => i.type === "message" && i.role === "system" && (i as { content: string }).content.includes("中段折叠"),
+      ),
+    ).toBe(true);
+  });
+
+  it("折叠只切一对（c1）→ c1 整对折进 summary、完整的 c2 对原样保留（不过度折叠）", async () => {
+    const selfWindow = makeSelfWindow();
+    // [1,1] 只覆盖 fc(c1)@1，output@2 在外 → 切断 c1；c2 对完全在区段外。
+    selfWindow.win.summarizedRanges = [{ fromIdx: 1, toIdx: 1, summary: "折 c1" }];
+    const thread = makeThread({
+      id: "t_caseB_one",
+      events: toolEvents,
+      extraWindows: [selfWindow],
+      skipCreatorWindow: true,
+    });
+    const out = await buildInputItems(thread);
+    const { calls, outs } = toolCallIds(out);
+    expect(new Set(outs)).toEqual(new Set(calls)); // balanced
+    expect(calls).toEqual(["c2"]); // c1 被吸附后整对折叠；c2 原样
+    expect(outs).toEqual(["c2"]);
+  });
 });
 
 describe("transcript 纳入 budget（core10 另一半）", () => {
