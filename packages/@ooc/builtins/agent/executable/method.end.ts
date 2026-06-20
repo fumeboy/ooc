@@ -13,7 +13,7 @@ import type {
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
-import { isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
+import { isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
 import type { Data } from "../types.js";
 
 /**
@@ -34,9 +34,9 @@ function findCreatorWindow(ctx: ExecutableContext): CreatorWindow | undefined {
   const list = ctx.thread?.contextWindows ?? [];
   for (const inst of list) {
     // creator 窗（self-view）每 thread 唯一，身份编码在 id（id=`w_creator_<thread.id>`）——故按
-    // isCreatorWindowId(id) 识别（class-agnostic + forward-compatible），不再读 data.isCreatorWindow。
+    // isSelfThreadWindow(id) 识别（class-agnostic + forward-compatible），不再读 data.isCreatorWindow。
     // 会话字段从 inst.data 读。
-    if (!isCreatorWindowId(inst.id)) continue;
+    if (!isSelfThreadWindow(inst.id)) continue;
     const data = (inst.data ?? {}) as {
       target?: string;
       targetThreadId?: string;

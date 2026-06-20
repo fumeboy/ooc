@@ -24,7 +24,7 @@ import {
 
 /** 会话窗渲染所需的最小窗形态（talk / do 都满足）。 */
 interface ConversationWindowLike {
-  /** 渲染计算入参：本窗是否是 creator 窗（caller 用 isCreatorWindowId(id) 算好传入；非持久化字段）。 */
+  /** 渲染计算入参：本窗是否是 creator 窗（caller 用 isSelfThreadWindow(id) 算好传入；非持久化字段）。 */
   isCreator?: boolean;
   transcriptViewport?: TranscriptViewport;
   /** events compress 折叠态（win.summarizedRanges）：transcript 内点名区段折成摘要占位。 */

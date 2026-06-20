@@ -178,7 +178,7 @@ function isUserOwnedOrCreated(objectId: string | undefined, thread: ThreadContex
   if (objectId === "user") return true;
   if (thread?.creatorObjectId === "user") return true;
   // 兼容旧 thread.json：缺 creatorObjectId 时看 creator window（self-view）是不是指向 user。
-  // creator 窗身份编码在 id（镜像后端 creatorWindowIdOf：id=`w_creator_<threadId>`），按 id 派生。
+  // creator 窗身份编码在 id（镜像后端 threadWindowIdOf：id=`w_creator_<threadId>`），按 id 派生。
   // self-view 会话窗三 class 同形（talk / thread / reflect_request），都带 target。
   const creator = thread?.contextWindows?.find((w) => w.id.startsWith("w_creator_"));
   if (

@@ -30,7 +30,7 @@ import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
-  isCreatorWindowId,
+  isSelfThreadWindow,
 } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
@@ -260,7 +260,7 @@ describe("talk-delivery target='super' alias", () => {
       // super 反思 thread（cross-session 同 object）→ self-view → projection 算出 reflect_request；
       // 会话业务字段 target/targetThreadId 落 inst.data。
       initContextWindows(superAlice, { creatorThreadId: "root", initialTaskTitle: "reflect" });
-      const creator = superAlice.contextWindows.find((w) => isCreatorWindowId(w.id));
+      const creator = superAlice.contextWindows.find((w) => isSelfThreadWindow(w.id));
       expect(creator).toBeDefined();
       // 投影 class 不持久化——存储信封 class 一律 THREAD_CLASS_ID；会话字段在 data。
       expect(creator!.class).toBe(THREAD_CLASS_ID);

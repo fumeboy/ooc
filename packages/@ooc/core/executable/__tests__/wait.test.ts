@@ -3,7 +3,7 @@
  *
  * talk 统一后会话窗（creator/peer/fork）的 inst.class 一律 = THREAD_CLASS_ID（唯一会话载体注册
  * class）；wait 候选都是会话窗。Wave 4 信封：业务字段（target/targetThreadId/isForkWindow）落
- * inst.data；creator 窗身份由 id（creatorWindowIdOf）派生，不存 isCreatorWindow flag。
+ * inst.data；creator 窗身份由 id（threadWindowIdOf）派生，不存 isCreatorWindow flag。
  */
 
 import { describe, expect, it } from "bun:test";
@@ -13,8 +13,8 @@ import type { ThreadContext } from "../../thinkable/context";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import {
   generateWindowId,
-  creatorWindowIdOf,
-  isCreatorWindowId,
+  threadWindowIdOf,
+  isSelfThreadWindow,
   ROOT_WINDOW_ID,
 } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
@@ -38,7 +38,7 @@ function makeTalkInstance(
 
 function findCreatorTalkWindow(thread: ThreadContext): OocObjectInstance {
   const found = thread.contextWindows.find(
-    (w) => w.class === THREAD_CLASS_ID && isCreatorWindowId(w.id),
+    (w) => w.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
   );
   if (!found) throw new Error("test setup: expected creator 会话窗");
   return found;
@@ -121,8 +121,8 @@ describe("wait tool — explicit IO dependency", () => {
 
   it("happy: on=<creator peer 会话窗> → 合法（creator 一律允许）", async () => {
     const thread = makeThread({ skipCreatorWindow: true });
-    // creator 身份编码在 id（creatorWindowIdOf(thread.id)）里。
-    const talk = makeTalkInstance(creatorWindowIdOf(thread.id), { target: "user" });
+    // creator 身份编码在 id（threadWindowIdOf(thread.id)）里。
+    const talk = makeTalkInstance(threadWindowIdOf(thread.id), { target: "user" });
     thread.contextWindows = [talk];
     const out = await callWaitAsync(thread, { on: talk.id });
     expect(out.ok).toBe(true);

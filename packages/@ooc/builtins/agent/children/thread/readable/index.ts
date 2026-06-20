@@ -8,7 +8,7 @@
  *   - **reflect_request**（self-view super）：super flow 的反思自视，额外 surface 沉淀 method。
  *
  * 投影 class 由 readable 内部调 `computeProjectionClass(...)` 从 id 派生的 self/other-view
- * （creator 窗 = `isCreatorWindowId(id)`）+ thread session 动态算，作为 `ReadableProjection.class`
+ * （creator 窗 = `isSelfThreadWindow(id)`）+ thread session 动态算，作为 `ReadableProjection.class`
  * 返回——**不持久化**。三种投影对应 `window` 数组里的 3 个 window decl，渲染期 `resolveWindowClass(
  * _builtin/thread, 投影 class)` 据此决定该窗展示哪些 method（self-view 不 surface close）。
  * 会话 transcript 三种投影同款渲染（renderHead +
@@ -21,7 +21,7 @@ import type {
 } from "@ooc/core/readable/contract.js";
 import type { XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { computeProjectionClass } from "./projection-class.js";
-import { isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
+import { isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
@@ -74,7 +74,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
       children.push(
         ...renderTranscriptOrHandle(
           {
-            isCreator: isCreatorWindowId(ctx.object.id),
+            isCreator: isSelfThreadWindow(ctx.object.id),
             transcriptViewport: win?.transcriptViewport,
             summarizedRanges: win?.summarizedRanges,
           },

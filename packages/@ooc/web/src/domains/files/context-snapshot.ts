@@ -226,10 +226,10 @@ interface _ContextWindowEnvelope {
 export type ContextWindow = _ContextWindowEnvelope & _ContextWindowData;
 
 /**
- * creator 窗身份编码在 window id 里（镜像后端 `creatorWindowIdOf`：id=`w_creator_<threadId>`）——
+ * creator 窗身份编码在 window id 里（镜像后端 `threadWindowIdOf`：id=`w_creator_<threadId>`）——
  * 不再有 `data.isCreatorWindow` 字段，前端按 id 派生「这是不是 creator 窗」。
  */
-export function isCreatorWindowId(id: string | undefined): boolean {
+export function isSelfThreadWindow(id: string | undefined): boolean {
   return !!id && id.startsWith("w_creator_");
 }
 
@@ -371,7 +371,7 @@ function windowSummary(window: ContextWindow): string {
     case "method_exec":
       return `${window.data.method} (${window.status})`;
     case "do":
-      return `→ ${window.data.targetThreadId}${isCreatorWindowId(window.id) ? " · creator" : ""}`;
+      return `→ ${window.data.targetThreadId}${isSelfThreadWindow(window.id) ? " · creator" : ""}`;
     case "todo":
       return previewText(window.data.content);
     case "talk":

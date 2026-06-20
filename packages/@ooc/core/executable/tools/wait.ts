@@ -13,7 +13,7 @@ import type { ThreadContext } from "../../thinkable/context.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
-import { isCreatorWindowId } from "../../_shared/types/context-window.js";
+import { isSelfThreadWindow } from "../../_shared/types/context-window.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 interface WaitCandidate {
@@ -31,7 +31,7 @@ function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
   const out: WaitCandidate[] = [];
   // contextWindows 是 OocObjectInstance[]：会话窗 inst.class 一律 = `_builtin/thread`（唯一会话载体
   // 注册 class）；isForkWindow/target/targetThreadId 从 inst.data 读，creator 窗身份按 id 派生
-  // （isCreatorWindowId）。
+  // （isSelfThreadWindow）。
   for (const w of thread.contextWindows ?? []) {
     // 会话窗（thread 实例：creator / peer / fork）= 唯一可产生未来 IO 的 window；alive=open。
     if (w.class !== THREAD_CLASS_ID) continue;
@@ -41,9 +41,9 @@ function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
       // fork 子线程窗：等子线程（或父线程，creator fork 窗）回报。
       out.push({
         id: w.id,
-        hint: `fork (target_thread=${d.targetThreadId}) — 等${isCreatorWindowId(w.id) ? "父" : "子"}线程回报`,
+        hint: `fork (target_thread=${d.targetThreadId}) — 等${isSelfThreadWindow(w.id) ? "父" : "子"}线程回报`,
       });
-    } else if (isCreatorWindowId(w.id)) {
+    } else if (isSelfThreadWindow(w.id)) {
       out.push({
         id: w.id,
         hint: `creator talk_window (target=${d.target}) — 等创建者发新消息`,
@@ -178,7 +178,7 @@ export async function handleWaitTool(
   }
 
   // R4: 自建 peer 会话窗（非 creator、非 fork）且未 say 过 → 拒绝
-  if (!targetData.isForkWindow && !isCreatorWindowId(target.id) && !hasOutgoingSayOnTalk(thread, target.id)) {
+  if (!targetData.isForkWindow && !isSelfThreadWindow(target.id) && !hasOutgoingSayOnTalk(thread, target.id)) {
     return errorOutput(
       `[wait] talk_window "${onRaw}" (target=${targetData.target}) 是你自建的，` +
         "但尚未 say 过任何消息——对端不知道有人在等回信。请先发出消息再 wait：\n" +

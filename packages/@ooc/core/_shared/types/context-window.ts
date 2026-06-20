@@ -86,23 +86,23 @@ export function generateWindowId(type: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** creator 会话窗 id 的稳定前缀（creator 窗身份编码在 id 里，不另存 isCreatorWindow flag）。 */
-export const CREATOR_WINDOW_ID_PREFIX = "w_creator_";
+/** thread 窗 id 的稳定前缀（thread 窗身份编码在 id 里；字符串保留 w_creator_ 以兼容已持久化 thread-context.json）。 */
+export const THREAD_WINDOW_ID_PREFIX = "w_creator_";
 
-/** 派生稳定的 creator 会话窗 id（talk window，指向 creator）。 */
-export function creatorWindowIdOf(threadId: string): string {
-  return `${CREATOR_WINDOW_ID_PREFIX}${threadId}`;
+/** 派生稳定的 thread 窗 id（自己视角的过程窗；有 creator 时即与 creator 的恒在通道）。 */
+export function threadWindowIdOf(threadId: string): string {
+  return `${THREAD_WINDOW_ID_PREFIX}${threadId}`;
 }
 
 /**
- * 该窗是不是某 thread 的 creator 窗（self-view 与 creator 的恒在通道）。
+ * 该窗是不是本 thread 那**唯一一个** thread 窗（自己视角的过程窗）。
  *
- * creator 窗身份编码在 id（`creatorWindowIdOf`）里，故纯由 id 判定——取代旧的持久化
- * `data.isCreatorWindow` flag。一条 thread 的 context 里至多一条 creator 窗（id=`w_creator_<本thread.id>`）；
- * 其余窗（peer=对端objectId / self/member=类型串 / 工具窗=生成id）都不以此前缀开头。
+ * thread 窗身份编码在 id（`threadWindowIdOf`），纯由 id 判定。一条 thread 的 context 里至多一条
+ * （id=`w_creator_<本thread.id>`）；peer/self/member/工具窗都不以此前缀开头。
+ * 注意：本谓词只答"是不是过程窗"，不答"有没有上游 creator"——后者用 `hasCreatorChannel`。
  */
-export function isCreatorWindowId(id: string): boolean {
-  return id.startsWith(CREATOR_WINDOW_ID_PREFIX);
+export function isSelfThreadWindow(id: string): boolean {
+  return id.startsWith(THREAD_WINDOW_ID_PREFIX);
 }
 
 /**

@@ -11,7 +11,7 @@ import { clampTranscriptToBudget } from "./transcript-clamp.js";
 import { XmlRenderer } from "./renderers/xml.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { isTalkLikeClass } from "../../_shared/types/constants.js";
-import { isCreatorWindowId } from "../../_shared/types/context-window.js";
+import { isSelfThreadWindow } from "../../_shared/types/context-window.js";
 import {
   normalizeSummarizedRanges,
   projectSummarizedRanges,
@@ -56,7 +56,7 @@ function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage |
  *    在跨 object 投递时已经写入,优先使用
  * 2. fallback: 在 thread.contextWindows 中找一个 fork 子线程窗（会话窗 + data.isForkWindow）且
  *    data.targetThreadId === inboxMessage.fromThreadId 的 window;若多个,优先 creator 窗
- *    （isCreatorWindowId(id)——child 视角下的 creator fork 窗是规范配对窗口；它的 self-view class
+ *    （isSelfThreadWindow(id)——child 视角下的 creator fork 窗是规范配对窗口；它的 self-view class
  *    是 thread/reflect_request，故按 isTalkLikeClass 认会话窗而非死写 "talk"）
  * 3. 都没有 → undefined,header 中静默不输出 window_id KV
  */
@@ -70,7 +70,7 @@ function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage
     return d.isForkWindow === true && d.targetThreadId === fromThreadId;
   });
   if (candidates.length === 0) return undefined;
-  const creator = candidates.find((w) => isCreatorWindowId(w.id));
+  const creator = candidates.find((w) => isSelfThreadWindow(w.id));
   return (creator ?? candidates[0])!.id;
 }
 
@@ -88,7 +88,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
       const windowId = resolveInboxWindowId(thread, inboxMessage);
       if (windowId) {
         const win = thread.contextWindows.find((w) => w.id === windowId);
-        const isCreatorWin = !!win && isCreatorWindowId(win.id);
+        const isCreatorWin = !!win && isSelfThreadWindow(win.id);
         if (win && !isCreatorWin) {
           const fromKey = inboxMessage.fromObjectId ?? inboxMessage.fromThreadId;
           // 次要 attention 缩略：window 收到新消息 + 正文前 50 字预览（全文在该窗 transcript）。

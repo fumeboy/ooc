@@ -3,7 +3,7 @@ import "@ooc/core/runtime/register-builtins.js";
 import { OOC_TOOLS, buildAvailableTools } from "../tools/index";
 import { dispatchToolCall } from "../tools";
 import { makeThread } from "../../__tests__/make-thread";
-import { type ContextWindow, isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
+import { type ContextWindow, isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 
@@ -99,7 +99,7 @@ describe("executable tools (object model)", () => {
   it("close 释放任意 window（含 creator——旧 onClose 拒绝 hook 已退役）", async () => {
     const thread = makeThread({ persistence: persistenceOf() });
     const creator = (thread.contextWindows as ContextWindow[]).find(
-      (w) => w.class === THREAD_CLASS_ID && isCreatorWindowId(w.id),
+      (w) => w.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
     );
     expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {
@@ -141,7 +141,7 @@ describe("executable tools (object model)", () => {
   it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait + waitingOn", async () => {
     const thread = makeThread({ inbox: [] });
     const creator = (thread.contextWindows as ContextWindow[]).find(
-      (w) => w.class === THREAD_CLASS_ID && isCreatorWindowId(w.id),
+      (w) => w.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
     );
     expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {

@@ -5,7 +5,7 @@
  * `({ window }: { window: ContextWindow }) => JSX`。do window 的 transcript 由 viewer 正交渲染。
  */
 import React from "react";
-import { type ContextWindow, isCreatorWindowId } from "../../context-snapshot";
+import { type ContextWindow, isSelfThreadWindow } from "../../context-snapshot";
 
 export default function DoWindowDetail({ window }: { window: ContextWindow }) {
   const data = (window.data ?? {}) as { targetThreadId?: string };
@@ -15,7 +15,7 @@ export default function DoWindowDetail({ window }: { window: ContextWindow }) {
         <span className="llm-input-attr-key">target_thread</span>
         <span className="llm-input-attr-value">{data.targetThreadId}</span>
       </div>
-      {isCreatorWindowId(window.id) && (
+      {isSelfThreadWindow(window.id) && (
         <div className="llm-input-attr-row">
           <span className="llm-input-attr-key">role</span>
           <span className="llm-input-attr-value">creator window（不可关闭）</span>

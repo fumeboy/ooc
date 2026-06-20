@@ -12,7 +12,7 @@ import { describe, expect, it } from "bun:test";
 import { buildProtocolKnowledgeWindows } from "../protocol";
 import { makeThread } from "../../../__tests__/make-thread";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
-import { creatorWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
+import { threadWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID, isKnowledgeClass } from "@ooc/core/_shared/types/constants.js";
 
 function paths(windows: { class: string; data?: { path?: string } }[]): string[] {
@@ -137,7 +137,7 @@ describe("root builtin knowledge content（砍机制留协议后的关键协议�
   // 字段在 inst.data（见 init.ts），故 buildCreatorReplyKnowledge 必须读 data 而非信封顶层。
   function makeCreatorReplyThread(isFork: boolean): Parameters<typeof buildProtocolKnowledgeWindows>[0] {
     const threadId = isFork ? "t_fork" : "t_peer";
-    const creatorId = creatorWindowIdOf(threadId);
+    const creatorId = threadWindowIdOf(threadId);
     return makeThread({
       id: threadId,
       skipCreatorWindow: true,

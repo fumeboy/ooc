@@ -54,7 +54,7 @@ export const PR_CLASS_ID = "_builtin/agent/pr";
  *
  * 故凡按"会话窗"语义处理 inst 的逻辑（回信归位、peer 派生、wait、inbox 归窗），一律按
  * inst.class === `_builtin/thread` 识别会话窗，再据 inst.data 的 isForkWindow 区分 fork/peer、
- * 据 id（`isCreatorWindowId`）派生 creator 窗（不存 data.isCreatorWindow flag）——不再按投影值识别。
+ * 据 id（`isSelfThreadWindow`）派生 creator 窗（不存 data.isCreatorWindow flag）——不再按投影值识别。
  */
 export function isTalkLikeClass(cls: string | undefined): boolean {
   return cls === THREAD_CLASS_ID;

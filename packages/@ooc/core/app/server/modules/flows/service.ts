@@ -18,7 +18,7 @@ import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
-  isCreatorWindowId,
+  isSelfThreadWindow,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
 import type { TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
@@ -505,7 +505,7 @@ export function createFlowsService(deps: {
       const existing = (userThread.contextWindows ?? []).find((inst) => {
         if (!isTalkLikeClass(inst.class)) return false;
         const d = (inst.data ?? {}) as TalkData;
-        return !isCreatorWindowId(inst.id) && d.target === target;
+        return !isSelfThreadWindow(inst.id) && d.target === target;
       });
       if (existing) {
         const existingData = existing.data as TalkData;
@@ -814,7 +814,7 @@ export function createFlowsService(deps: {
       // Wave 4：会话窗是 OocObjectInstance，业务字段在 inst.data（=TalkData）。
       const talkWindows = (userThread.contextWindows ?? []).filter((inst) => {
         if (!isTalkLikeClass(inst.class)) return false;
-        return !isCreatorWindowId(inst.id);
+        return !isSelfThreadWindow(inst.id);
       });
       const targetInstance = targetWindowId
         ? talkWindows.find((inst) => inst.id === targetWindowId)

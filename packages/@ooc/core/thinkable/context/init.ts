@@ -13,13 +13,13 @@
  *   跨对象 talk 派生 callee thread；creator 是 caller object 的某个 thread。
  *   data: target=caller object, targetThreadId=caller thread。callee 通过该窗 say 回复给 caller。
  *
- * 两种形态共用 creatorWindowIdOf(threadId) 派生的稳定 id；幂等插入。
+ * 两种形态共用 threadWindowIdOf(threadId) 派生的稳定 id；幂等插入。
  */
 
 import {
   ROOT_WINDOW_ID,
   SESSION_CREATOR_THREAD_ID,
-  creatorWindowIdOf,
+  threadWindowIdOf,
 } from "../../_shared/types/context-window.js";
 import { DEFAULT_TRANSCRIPT_VIEWPORT } from "../../_shared/utils/viewport.js";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
@@ -117,7 +117,7 @@ export function initContextWindows(
     thread.contextWindows = thread.contextWindows ?? [];
     return;
   }
-  const creatorWindowId = creatorWindowIdOf(thread.id);
+  const creatorWindowId = threadWindowIdOf(thread.id);
   const list = thread.contextWindows ?? [];
   if (list.some((w) => w.id === creatorWindowId)) {
     thread.contextWindows = list;
@@ -132,7 +132,7 @@ export function initContextWindows(
   // 形态 + thread session 动态算（context.md 核心 2/8/9）。
   // data/win 统一划分：会话窗状态（target/targetThreadId/isForkWindow）进 inst.data（ThreadData）；
   // transcriptViewport 进 inst.win（ThreadWin）。creator 窗身份 + 会话身份（conversationId）都编码在
-  // id（creatorWindowId=creatorWindowIdOf(thread.id)）里，不存 data flag——消费方按 id 派生。
+  // id（creatorWindowId=threadWindowIdOf(thread.id)）里，不存 data flag——消费方按 id 派生。
   const creatorData: Record<string, unknown> = sameObject
     ? {
         target: thread.persistence?.objectId ?? thread.creatorObjectId ?? "",

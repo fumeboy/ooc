@@ -41,7 +41,7 @@ import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
-import { creatorWindowIdOf, isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
+import { threadWindowIdOf, isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
 import type { TalkData, TalkWindowView } from "../types.js";
 
 export interface TalkDeliveryInput {
@@ -103,7 +103,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   //   super-alice 在 "super" session 回报 user-session 的创建者）→ 派回 creatorSessionId。
   //   这条覆盖 reflectable super→origin 回报通道：creator talk_window 必须能跨 session
   //   找到创建者 thread，否则 readThread(calleeSessionId=自身 session) 永远找不到对端。
-  const isCreatorReply = isCreatorWindowId(callerWindow.id) && callerWindow.target === callerRef.objectId;
+  const isCreatorReply = isSelfThreadWindow(callerWindow.id) && callerWindow.target === callerRef.objectId;
   const crossSessionCreatorReply =
     isCreatorReply &&
     callerThread.creatorSessionId !== undefined &&
@@ -236,7 +236,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
  * 用作 calleeMessage.replyToWindowId,决定 transcript 视图归位:
  *   filterMessagesForTalkWindow 的入站规则是 `m.replyToWindowId === self.id`。
  *
- * 老实现硬写为 callee 的 creator talk_window (creatorWindowIdOf(calleeThread.id))。
+ * 老实现硬写为 callee 的 creator talk_window (threadWindowIdOf(calleeThread.id))。
  * 在 user→callee 的初次派送 OK,但 callee 自己也当 caller 时(典型:assistant 派给 critic,
  * critic 回 assistant) 会把回信错误地塞到 callee 的 creator window(target=user) 上,
  * 与 user 完全无关的消息显示成 user 的消息,且对应的 caller→callee talk_window 反而
@@ -262,7 +262,7 @@ function resolveCalleeReplyToWindowId(
   if (byThreadId) return byThreadId.id;
   const byObjectId = windows.find((w) => w.data.target === callerObjectId);
   if (byObjectId) return byObjectId.id;
-  return creatorWindowIdOf(calleeThread.id);
+  return threadWindowIdOf(calleeThread.id);
 }
 
 async function pathExists(path: string): Promise<boolean> {

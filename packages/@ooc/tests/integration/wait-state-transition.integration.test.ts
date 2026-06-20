@@ -11,7 +11,7 @@ import {
   setupTempFlow,
 } from "./_fixture";
 import {
-  creatorWindowIdOf,
+  threadWindowIdOf,
   ROOT_WINDOW_ID,
   type OocObjectInstance,
 } from "@ooc/core/_shared/types/context-window.js";
@@ -37,8 +37,8 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
     // 让 LLM 可以 wait(on=<该 talk>) 而不被 reject。
     const flow = await createFlowObject({ baseDir: tempRoot, sessionId: "s", objectId: "agent" });
     // Wave4 会话窗：stored class = THREAD_CLASS_ID，target 落 inst.data；creator 窗身份编码在
-    // id（creatorWindowIdOf）里——不再存 isCreatorWindow flag，wait 按 isCreatorWindowId(id) 识别。
-    const creatorTalkId = creatorWindowIdOf("root");
+    // id（threadWindowIdOf）里——不再存 isCreatorWindow flag，wait 按 isSelfThreadWindow(id) 识别。
+    const creatorTalkId = threadWindowIdOf("root");
     const creatorTalk: OocObjectInstance<TalkData> = {
       id: creatorTalkId,
       class: THREAD_CLASS_ID,

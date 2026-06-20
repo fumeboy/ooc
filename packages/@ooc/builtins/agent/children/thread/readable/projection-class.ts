@@ -12,13 +12,13 @@
  * - **other-view（peer/sub 会话窗，非 creator，含父侧 fork 子窗）= 与对端 thread 的对话** → "talk"。
  *
  * 即 isForkWindow 不再影响 class；判别只看「这条窗是不是本 thread 的 self-view」——creator 窗身份
- * 由 id 派生（`isCreatorWindowId`，id=`creatorWindowIdOf(thread.id)`），不再读 data.isCreatorWindow flag。
+ * 由 id 派生（`isSelfThreadWindow`，id=`threadWindowIdOf(thread.id)`），不再读 data.isCreatorWindow flag。
  *
  * 纯函数：不改 window / thread，仅返回投影 class。
  */
 
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
-import { isCreatorWindowId } from "@ooc/core/_shared/types/context-window.js";
+import { isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 
@@ -30,9 +30,9 @@ export function computeProjectionClass(
   thread: ThreadContext,
 ): ProjectionClass {
   // self-view（creator 窗）：thread 与其 creator 的对话面。creator 窗身份由 id 派生
-  // （isCreatorWindowId，不再读 data.isCreatorWindow flag）。super flow 取 reflect_request
+  // （isSelfThreadWindow，不再读 data.isCreatorWindow flag）。super flow 取 reflect_request
   // （反思自视，额外挂沉淀 method），否则取 thread。fork creator 窗（同对象父子）也是 self-view。
-  if (isCreatorWindowId(window.id)) {
+  if (isSelfThreadWindow(window.id)) {
     return isSuperSessionId(thread.persistence?.sessionId ?? "") ? "reflect_request" : "thread";
   }
   // other-view（peer/sub 会话窗，含父侧 fork 子窗）：与对端 thread 的对话 → talk。
