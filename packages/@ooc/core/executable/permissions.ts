@@ -40,15 +40,15 @@ export type PermissionDecision =
  * thinkloop 在分派 tool call 前组装的待审计载荷。
  *
  * - exec: method = args.method (实际 OOC method 名); windowId = args.window_id (目标 window);
- *   args = args.args (method 的业务参数)
- * - close / wait / compress: method = toolName 自身; windowId / args 视情况填
+ *   args = args.args (method 的业务参数)。compress/expand 现为通用 window method，经此路 exec 派发。
+ * - close / wait: method = toolName 自身; windowId / args 视情况填
  */
 export type PendingToolCall = {
   /** 触发的 LLM tool 原语名。 */
   toolName: "exec" | "close" | "wait";
   /**
    * 对 exec: 解析自 args.method 的 method 路径 (例如 "talk", "write_file")。
-   * 对 close/wait/compress: 等于 toolName。
+   * 对 close/wait: 等于 toolName。
    */
   method?: string;
   /** 调用的原始 args (透传给 decider, 便于 escape hatch 做精细判断)。 */

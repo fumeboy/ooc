@@ -68,6 +68,44 @@ export const L2_STORIES: Story[] = [
   }),
 
   story({
+    id: "L2-COMPRESS-WINDOW-METHOD",
+    layer: "thinkable",
+    expectation: "compress/expand 作为通用默认 window method：写入侧 resolveWindowMethod 回退默认表 + 改 compressLevel；读出侧 renderer 按档位投影变短",
+    design:
+      "compress 下沉为通用 window method（readable/default-window-methods.ts:DEFAULT_WINDOW_METHODS），" +
+      "object-registry.ts:resolveWindowMethod 在 class 自有声明未命中时回退默认表；" +
+      "读出侧 thinkable/context/renderers/xml.ts:projectByCompressLevel 按 win.compressLevel 投影详略（0 全文 / 1 缩略 / 2 仅句柄）。",
+    run: async () => {
+      const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
+      const { projectByCompressLevel } = await import("@ooc/core/thinkable/context/renderers/xml");
+      const { xmlElement, xmlText, serializeXml } = await import("@ooc/core/_shared/types/xml");
+
+      // 写入侧：class 无 compress 声明 → resolveWindowMethod 回退默认表。
+      const reg = createObjectRegistry();
+      reg.register("plain_win", { executable: { methods: [] } } as never, { parentClass: null });
+      const compress = reg.resolveWindowMethod("plain_win", "compress");
+      const expand = reg.resolveWindowMethod("plain_win", "expand");
+      check(!!compress && !!expand, "compress/expand 未从默认表解析（resolveWindowMethod 回退缺失）");
+
+      // exec 改档：0→1 递进、封顶 2；expand 反向 1→0（纯投影态、不可变）。
+      const up1 = (await compress!.exec({} as never, {}, { compressLevel: 0 } as never, {} as never)) as { compressLevel: number };
+      check(up1.compressLevel === 1, `compress 应 0→1，得 ${up1.compressLevel}`);
+      const cap = (await compress!.exec({} as never, {}, { compressLevel: 2 } as never, {} as never)) as { compressLevel: number };
+      check(cap.compressLevel === 2, `compress 应封顶 2，得 ${cap.compressLevel}`);
+      const down = (await expand!.exec({} as never, {}, { compressLevel: 1 } as never, {} as never)) as { compressLevel: number };
+      check(down.compressLevel === 0, `expand 应 1→0，得 ${down.compressLevel}`);
+
+      // 读出侧：长内容 level 0 原样、level 2 仅句柄 → 显著变短（可逆闭环）。
+      const long = [xmlElement("readable", {}, [xmlText("x".repeat(500))])];
+      const full = serializeXml(xmlElement("window", {}, projectByCompressLevel(long, 0)));
+      const folded = serializeXml(xmlElement("window", {}, projectByCompressLevel(long, 2)));
+      check(full.includes("x".repeat(500)), "level 0 应原样含全文");
+      check(folded.length < full.length, `level 2 投影应比 level 0 短：full=${full.length} folded=${folded.length}`);
+      check(!folded.includes("x".repeat(500)), "level 2 不应再含全文（已折为句柄）");
+    },
+  }),
+
+  story({
     id: "L2-CONTEXT-MULTITURN",
     layer: "thinkable",
     expectation: "多轮 context 连贯（窗口跨轮保留/压缩）——需真 LLM 多轮",

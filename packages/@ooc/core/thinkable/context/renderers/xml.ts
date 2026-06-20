@@ -37,6 +37,7 @@ import {
   type ObjectRegistry,
 } from "../../../runtime/object-registry.js";
 import type { ReadableContext, ReadableProjection } from "../../../readable/contract.js";
+import { DEFAULT_WINDOW_METHODS } from "../../../readable/default-window-methods.js";
 import { extractBasicDescription, conciseDescription } from "@ooc/core/thinkable/context/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
@@ -150,6 +151,11 @@ export function computeVisibleMethodSet(
     if (merged.has(wm.name)) continue;
     merged.set(wm.name, wm);
   }
+  // 默认 window method（compress/expand 等通用折叠能力）：合入菜单，class/decl 同名已占则不覆盖。
+  for (const wm of DEFAULT_WINDOW_METHODS) {
+    if (merged.has(wm.name)) continue;
+    merged.set(wm.name, wm);
+  }
 
   if (merged.size === 0) return null;
   const names = [...merged.keys()].sort();
@@ -229,6 +235,43 @@ function projectionContentNodes(content: XmlNode[] | string): XmlNode[] {
   return content;
 }
 
+/** level 1 缩略的文本上限（魔数常量；超过才缩略，短窗原样）。 */
+const COMPRESS_LEVEL1_MAX_CHARS = 200;
+
+/** 递归收集节点纯文本（level 1 缩略用）。 */
+function collectNodeText(nodes: XmlNode[]): string {
+  let out = "";
+  for (const n of nodes) {
+    if (n.kind === "text") out += n.value;
+    else if (n.kind === "element" && n.children) out += collectNodeText(n.children);
+  }
+  return out;
+}
+
+/**
+ * 按窗的 `compressLevel` 投影内容详略 —— compress/expand 的**读出侧**（此前 renderer 完全不消费 compressLevel）。
+ * - 0 / undefined：原样全文
+ * - 1：缩略——拍平为截断文本（{@link COMPRESS_LEVEL1_MAX_CHARS}）+ 展开提示；未超限则原样
+ * - 2：仅句柄——丢弃内容，只留折叠占位（title 在调用侧已 push）
+ */
+export function projectByCompressLevel(nodes: XmlNode[], level: 0 | 1 | 2 | undefined): XmlNode[] {
+  if (!level) return nodes;
+  if (level >= 2) {
+    return [
+      xmlElement("compressed", { level: "2" }, [
+        xmlText("(窗已折叠为句柄；exec(method=expand) 展开)"),
+      ]),
+    ];
+  }
+  const text = collectNodeText(nodes);
+  if (text.length <= COMPRESS_LEVEL1_MAX_CHARS) return nodes;
+  return [
+    xmlElement("compressed", { level: "1" }, [
+      xmlText(text.slice(0, COMPRESS_LEVEL1_MAX_CHARS) + " …（已缩略；exec(method=expand) 展开）"),
+    ]),
+  ];
+}
+
 /**
  * 算一个 object 实例的 readable 投影。
  *
@@ -302,7 +345,9 @@ async function renderWindowNode(
 ): Promise<XmlNode> {
   const children: XmlNode[] = [xmlElement("title", {}, [xmlText(inst.title)])];
 
-  children.push(...projectionContentNodes(projection.content));
+  // compress/expand 读出侧：按本窗 compressLevel 投影内容详略（title 已先 push，仅折叠 content）。
+  const compressLevel = (inst.win as { compressLevel?: 0 | 1 | 2 } | undefined)?.compressLevel;
+  children.push(...projectByCompressLevel(projectionContentNodes(projection.content), compressLevel));
 
   const subWindows = allWindows.filter((w) => w.inst.parentObjectId === inst.id);
   if (subWindows.length > 0) {

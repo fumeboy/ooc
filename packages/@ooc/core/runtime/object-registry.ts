@@ -33,6 +33,7 @@ import type {
   WindowClassDecl,
   ReadableModule,
 } from "../readable/contract.js";
+import { resolveDefaultWindowMethod } from "../readable/default-window-methods.js";
 import type { PersistableModule } from "../persistable/contract.js";
 
 export type { RegisteredClass, MethodVisibilityContext };
@@ -187,7 +188,11 @@ export class ObjectRegistry {
     return Array.from(byName.values());
   }
 
-  /** 解析单个 window method（按名，沿继承链首个命中；查所有 window class 声明）。 */
+  /**
+   * 解析单个 window method（按名，沿继承链首个命中；查所有 window class 声明）。
+   * class 自有声明未命中时回退**默认 window method 表**（compress/expand 等通用能力，
+   * class 同名声明优先可 override）。
+   */
   resolveWindowMethod(classId: string, name: string): WindowMethod | undefined {
     for (const cid of this.selfThenChain(classId)) {
       for (const decl of this.store.get(cid)?.readable?.window ?? []) {
@@ -195,7 +200,7 @@ export class ObjectRegistry {
         if (found) return found;
       }
     }
-    return undefined;
+    return resolveDefaultWindowMethod(name);
   }
 
   /** 解析 readable 模块（沿继承链首个声明 readable 的 class）。 */

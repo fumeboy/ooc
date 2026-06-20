@@ -16,7 +16,8 @@ import { WAIT_TOOL } from "./wait.js";
  * 所有 OOC tools —— **3 个稳定原语**：exec / close / wait。
  *
  * 新能力一律走 method / object type、不增顶层 tool（stable_tool_surface）。
- * compress / expand 已退役（裁决：折叠/展开应由各 window 自实现，不走中心 tool）。
+ * compress / expand 下沉为**通用 window method**（默认挂所有 window 公共层，见
+ * `readable/default-window-methods.ts`），经 exec(method=compress/expand) 派发，不走中心 tool。
  */
 export const OOC_TOOLS: LlmTool[] = [EXEC_TOOL, CLOSE_TOOL, WAIT_TOOL];
 
