@@ -55,6 +55,25 @@ export function estimateWindowsTokens(windows: ContextWindow[]): number {
   return total;
 }
 
+/**
+ * transcript（LLM input items：thread event + creator 对话）的 token 估算之和。
+ *
+ * 与 {@link estimateWindowTokens} **同口径**（JSON 序列化长度 / 4），避免估算漂移。
+ * transcript 是自己视角 thread window 的内容通道（context.md 核心 10），与窗口一并计入预算账
+ * —— 它走 message 流而非 XML 窗内容，故此前未被 `estimateWindowsTokens` 覆盖、游离在预算外。
+ */
+export function estimateTranscriptTokens(items: readonly unknown[]): number {
+  let total = 0;
+  for (const item of items) {
+    try {
+      total += Math.ceil(JSON.stringify(item).length / 4);
+    } catch {
+      total += 100;
+    }
+  }
+  return total;
+}
+
 /** 从 stone 配置 / 默认值加载 budget 阈值。 */
 export function loadBudgetThresholds(thread: ThreadContext): BudgetThresholds {
   const parsed = readBudgetConfigFile(thread);

@@ -38,3 +38,19 @@ context.md 核心 10 / 3.5 明文：thread event + 与 creator 的对话是**自
 - 复用既有估算口径，不新增名词/机制（克制熵增）。
 - 中间态打破存量测试只登记账本、统一跑绿。
 - 不要自己 commit（交回 Supervisor 整合）。
+
+## 6. 落地结果（2026-06-20，Supervisor 整合）
+
+按 §2 范围落地，与设计一致（无偏差）：
+
+- `thinkable/context/budget.ts` 新增 `estimateTranscriptTokens(items)`——与 `estimateWindowTokens` 同口径（JSON 长度 / 4），口径统一不漂移。
+- `thinkable/context/index.ts` `buildInputItems`：`currentTokens = estimateWindowsTokens(snapshot.windows) + estimateTranscriptTokens(transcript)`——transcript 计入预算账。
+- `buildBudgetWarningItem` 增 `transcriptTokens` 参数：`<context_budget_warning>` 暴露 `transcript="…"` 占比；建议文案指向正确杠杆——窗口可 `close`，transcript（历史叙事）不能 close、只能 `exec(method="compress", args={scope:"events", keepTail:N, summary:"…"})` 折叠。
+- 未做（保持范围）：未挪折叠载体；未做 auto 自动触发（后续，gated on 本 Issue）；transcript 仍走 message 流渲染通道（只补账、不改通道）。
+
+测试：`thinkable/__tests__/context.test.ts` describe「transcript 纳入 budget」3 例（estimateTranscriptTokens 随量增长 + 小体量无警告 + 大 transcript 仅 events 即顶过 soft、warning 含 `transcript=` 且指向 compress）。`bun run verify` 全绿（714 pass）+ storybook gate 绿（64 pass）。
+
+## 7. 后续（不在本 Issue）
+
+- **auto/emergency 自动触发**：transcript token 超阈时由框架代 agent exec `compress(scope=events, keepTail=N)`（复用本 Issue 已有的 transcript 账 + 已有 window method）。
+- **transcript 内容由自己视角 thread window 承载**（core10 另一半的"归属"半）：随 thread-as-object 弧收敛（见 context.md 3.7 + `docs/2026-06-20-events-compress-design.md` §9）。

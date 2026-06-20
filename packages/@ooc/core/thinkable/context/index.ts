@@ -1,7 +1,12 @@
 import type { LlmInputItem } from "../llm/types";
 import { isBuiltinObjectId, objectDir, resolveStoneIdentityRef, stoneDir, threadDir } from "../../persistable";
 import { createDefaultPipeline } from "./pipeline.js";
-import { estimateWindowsTokens, loadBudgetThresholds, type BudgetThresholds } from "./budget.js";
+import {
+  estimateTranscriptTokens,
+  estimateWindowsTokens,
+  loadBudgetThresholds,
+  type BudgetThresholds,
+} from "./budget.js";
 import { XmlRenderer } from "./renderers/xml.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { isTalkLikeClass } from "../../_shared/types/constants.js";
@@ -334,24 +339,27 @@ function reconcilePeerWindowsIntoContext(
 }
 
 /**
- * 当本轮可见窗口的 token 估算超过 soft 阈值时，构造一条瞬时 system 警告。
+ * 当本轮 context 估算（窗口 + transcript）超过 soft 阈值时，构造一条瞬时 system 警告。
  *
  * 仅影响本轮 LLM 输入，不进 thread.events。overflow（被 budget 排除的窗口）由
- * XmlRenderer 的 <context_overflow> 节点直接呈现，这里只补一条 soft 档提示，
- * 提示 LLM 可主动 compress 精简。
+ * XmlRenderer 的 <context_overflow> 节点直接呈现，这里只补一条 soft 档提示，提示 LLM 主动精简：
+ * 窗口可 `close`，但 transcript（历史叙事）不能 close、只能 `compress(scope=events)` 折叠
+ * —— 故 transcript 占比高时显式指向该杠杆。
  */
 function buildBudgetWarningItem(
   currentTokens: number,
   thresholds: BudgetThresholds,
+  transcriptTokens: number,
 ): LlmInputItem {
   return {
     type: "message",
     role: "system",
     content:
-      `<context_budget_warning current="${currentTokens}" soft="${thresholds.soft}" hard="${thresholds.hard}"/>\n` +
-      `当前估算 token 接近预算上限 (current=${currentTokens}, soft=${thresholds.soft}, hard=${thresholds.hard})。` +
+      `<context_budget_warning current="${currentTokens}" transcript="${transcriptTokens}" soft="${thresholds.soft}" hard="${thresholds.hard}"/>\n` +
+      `当前估算 token 接近预算上限 (current=${currentTokens}, 其中 transcript=${transcriptTokens}, soft=${thresholds.soft}, hard=${thresholds.hard})。` +
       `系统已按相关性把低相关窗口排除在 context 之外（见 <context_overflow>）。你可主动 ` +
-      `close 不再需要的 window 进一步精简 context，或继续推进任务。`,
+      `close 不再需要的 window；历史叙事（transcript）占比高时用 exec(method="compress", args={scope:"events", keepTail:N, summary:"…"}) ` +
+      `折叠早期过程，或继续推进任务。`,
   };
 }
 
@@ -411,12 +419,17 @@ export async function buildInputItems(
   const pathsItem = await buildPathsItem(thread);
 
   // Budget soft-warning: 预算分配由 pipeline.run 唯一负责（snapshot.windows 即 in-budget
-  // 集合，overflow 由 renderer 的 <context_overflow> 呈现）。这里只在可见窗口仍超 soft
+  // 集合，overflow 由 renderer 的 <context_overflow> 呈现）。这里只在 context 估算仍超 soft
   // 阈值时补一条瞬时警告，紧跟 XML context message 之后，使 LLM 看到 context 即看到提示。
+  // current = 窗口估算 + transcript 估算（context.md 核心 10：transcript 是自己视角 thread window
+  // 的内容通道、走 message 流，与窗口一并计入预算账——否则 events append-only 无界增长却不报警）。
   const thresholds = loadBudgetThresholds(thread);
-  const currentTokens = estimateWindowsTokens(snapshot.windows);
+  const transcriptTokens = estimateTranscriptTokens(transcript);
+  const currentTokens = estimateWindowsTokens(snapshot.windows) + transcriptTokens;
   const budgetWarning =
-    currentTokens > thresholds.soft ? [buildBudgetWarningItem(currentTokens, thresholds)] : [];
+    currentTokens > thresholds.soft
+      ? [buildBudgetWarningItem(currentTokens, thresholds, transcriptTokens)]
+      : [];
 
   return {
     input: [

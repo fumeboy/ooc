@@ -805,3 +805,61 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
     ]);
   });
 });
+
+describe("transcript 纳入 budget（core10 另一半）", () => {
+  // transcript（thread event + creator 对话）是自己视角 thread window 的内容通道，与窗口一并计入
+  // 预算账——否则 events append-only 无界增长却不报 soft-warning，终将撑爆 context。
+  function budgetWarning(out: Awaited<ReturnType<typeof buildInputItems>>): string | undefined {
+    const item = out.input.find(
+      (i) =>
+        i.type === "message" &&
+        i.role === "system" &&
+        (i as { content: string }).content.includes("<context_budget_warning"),
+    );
+    return item ? (item as { content: string }).content : undefined;
+  }
+
+  it("estimateTranscriptTokens 随内容量增长（与窗口同口径）", async () => {
+    const { estimateTranscriptTokens } = await import("../context/budget");
+    const small = estimateTranscriptTokens([{ type: "message", role: "assistant", content: "x" }]);
+    const big = estimateTranscriptTokens([
+      { type: "message", role: "assistant", content: "x".repeat(4000) },
+    ]);
+    expect(small).toBeGreaterThan(0);
+    expect(big).toBeGreaterThan(small);
+    expect(big).toBeGreaterThan(1000); // 4000 字符 /4 ≈ 1000 token
+  });
+
+  it("transcript 体量小：current 不超 soft → 无 budget warning", async () => {
+    const thread = makeThread({
+      id: "t_budget_small",
+      events: [
+        { category: "llm_interaction", kind: "text", text: "短叙事一" },
+        { category: "llm_interaction", kind: "text", text: "短叙事二" },
+      ],
+      skipCreatorWindow: true,
+    });
+    expect(budgetWarning(await buildInputItems(thread))).toBeUndefined();
+  });
+
+  it("transcript 体量大：仅 events（无大窗）即把 current 顶过 soft → warning 触发且 current 含 transcript", async () => {
+    // 默认 soft=100000 token；60 条 ~9000 字符 text event ≈ 60×2260 ≈ 135K token，仅 transcript 即越 soft。
+    const events: ThreadContext["events"] = Array.from({ length: 60 }, (_, i) => ({
+      category: "llm_interaction",
+      kind: "text",
+      text: `第${i}轮：` + "x".repeat(9000),
+    }));
+    const thread = makeThread({ id: "t_budget_big", events, skipCreatorWindow: true });
+    const warn = budgetWarning(await buildInputItems(thread));
+    expect(warn).toBeDefined();
+    // warning 暴露 transcript 占比，且 transcript 估算应是 current 的主体（证明 transcript 被计入）。
+    const m = warn!.match(/current="(\d+)" transcript="(\d+)"/);
+    expect(m).not.toBeNull();
+    const current = Number(m![1]);
+    const transcript = Number(m![2]);
+    expect(transcript).toBeGreaterThan(100000); // 仅 transcript 即越 soft
+    expect(current).toBeGreaterThanOrEqual(transcript);
+    // 指向正确杠杆：transcript 不能 close、只能 compress(scope=events)。
+    expect(warn).toContain('scope:"events"');
+  });
+});
