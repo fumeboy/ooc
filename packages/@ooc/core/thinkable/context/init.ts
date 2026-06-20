@@ -112,50 +112,50 @@ export function initContextWindows(
     thread.contextWindows = thread.contextWindows ?? [];
     return;
   }
-  if (!hasRealCreator(thread, opts)) {
-    // self-driven root thread —— 没有可指向的 creator，don't inject phantom do_window
-    thread.contextWindows = thread.contextWindows ?? [];
-    return;
-  }
-  const creatorWindowId = threadWindowIdOf(thread.id);
+
+  // 统一注入「自己视角 thread 窗」（过程窗）：每条 thread 恰好一个，承载 thread.events（+ events folds，
+  // 读出侧见 buildInputItems）。creator 对话是它**内建的上游通道**——有上游（hasRealCreator）则带 creator
+  // data；self-driven root 则空通道（纯过程窗，hasCreatorChannel=false → 不被 wait 当 IO 源、不触发任何
+  // creator affordance，替代旧 `!hasRealCreator` 不注入窗的防 phantom-do 守卫）。
+  // inst.class=THREAD_CLASS_ID（唯一会话载体注册 class）；投影 class（thread/talk/reflect_request）渲染期由
+  // thread readable computeProjectionClass 据 id + thread session 动态算（context.md 核心 2/8/9）。
+  const threadWindowId = threadWindowIdOf(thread.id);
   const list = thread.contextWindows ?? [];
-  if (list.some((w) => w.id === creatorWindowId)) {
+  if (list.some((w) => w.id === threadWindowId)) {
     thread.contextWindows = list;
     return;
   }
 
+  const realCreator = hasRealCreator(thread, opts);
   const creatorThreadId = opts.creatorThreadId ?? SESSION_CREATOR_THREAD_ID;
-  const sameObject = isCreatorSelf(thread);
-
-  // 会话窗 inst.class = `_builtin/thread`（唯一会话载体注册 class）。投影 class（thread/talk/
-  // reflect_request）不写进 inst.class——渲染期由 thread readable 内 computeProjectionClass 据窗
-  // 形态 + thread session 动态算（context.md 核心 2/8/9）。
-  // data/win 统一划分：会话窗状态（target/targetThreadId/isForkWindow）进 inst.data（ThreadData）；
-  // transcriptViewport 进 inst.win（ThreadWin）。creator 窗身份 + 会话身份（conversationId）都编码在
-  // id（creatorWindowId=threadWindowIdOf(thread.id)）里，不存 data flag——消费方按 id 派生。
-  const creatorData: Record<string, unknown> = sameObject
-    ? {
-        target: thread.persistence?.objectId ?? thread.creatorObjectId ?? "",
-        targetThreadId: creatorThreadId,
-        isForkWindow: true,
-      }
-    : {
-        target: thread.creatorObjectId!,
-        targetThreadId: creatorThreadId,
-      };
-  const creatorWindow: OocObjectInstance = {
-    id: creatorWindowId,
+  // 上游 creator 通道 data：同对象→fork 子窗；跨对象→peer 会话窗；self-driven root→空 data。
+  const threadData: Record<string, unknown> = !realCreator
+    ? {}
+    : isCreatorSelf(thread)
+      ? {
+          target: thread.persistence?.objectId ?? thread.creatorObjectId ?? "",
+          targetThreadId: creatorThreadId,
+          isForkWindow: true,
+        }
+      : {
+          target: thread.creatorObjectId!,
+          targetThreadId: creatorThreadId,
+        };
+  const threadWindow: OocObjectInstance = {
+    id: threadWindowId,
     class: THREAD_CLASS_ID,
     parentObjectId: ROOT_WINDOW_ID,
     title: opts.initialTaskTitle,
     status: "open",
     createdAt: Date.now(),
-    data: creatorData,
-    // creator 窗每次 init 幂等重注入（transient：不持久化死 _ref）；transcriptViewport 投影态进 win。
+    data: threadData,
+    // 过程窗每轮 init 幂等重注入（transient：不单独落 state.json 死 _ref）；transcriptViewport / summarizedRanges
+    // 投影态进 win。注：transient 不影响 inline 持久化——THREAD_CLASS_ID inline 类整窗落 thread-context.json，
+    // win（含 folds）随之跨 reload 存活（reload 后 hydrate 还原 → 本幂等检查命中即跳过）。
     win: { transient: true, transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
   };
 
-  thread.contextWindows = [creatorWindow, ...list];
+  thread.contextWindows = [threadWindow, ...list];
 }
 
 /**
