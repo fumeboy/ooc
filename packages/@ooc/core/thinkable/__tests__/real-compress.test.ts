@@ -6,15 +6,16 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { createStoneObject, ensureStoneRepo, writeSelf } from "../../persistable";
-import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
+import { ROOT_WINDOW_ID, threadWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { createLlmClient } from "../llm/client";
 import { buildInputItems, type ThreadContext } from "../context";
 import { think } from "../thinkloop";
 
 /**
  * events compress 真实 LLM 验证 —— 驱动真实 think() 走完整生产链：
- * 真 LLM 决策 → exec tool 派发（默认目标 self 窗）→ 通用 compress window method（scope=events）
- * → 写 win.summarizedRanges → 读出侧 buildInputItems 按折叠态投影变短。
+ * 真 LLM 决策 → exec(window_id=thread 窗) 派发 → thread class compress window method（scope=events，
+ * 能力归属内容所在的窗）→ 写 thread 窗 win.summarizedRanges → 读出侧 buildInputItems 折叠投影变短。
  *
  * gate：`RUN_REAL_COMPRESS_TEST=1`（非 CI；需 .env 真 LLM 配置）。
  * 跑：`RUN_REAL_COMPRESS_TEST=1 bun test packages/@ooc/core/thinkable/__tests__/real-compress.test.ts`
@@ -70,8 +71,8 @@ describe.skipIf(!shouldRun)("events compress —— 真实 LLM 端到端", () =>
         category: "context_change",
         kind: "inject",
         text:
-          "你的对话历史已较长，需要折叠早期过程以节省上下文。请只调用一次 exec 工具，参数等价于：" +
-          'method="compress", title="折叠早期历史", args={ scope: "events", keepTail: 2, ' +
+          "你的对话历史已较长，需要折叠早期过程以节省上下文。events 折叠归你的 thread 窗——请只调用一次 exec 工具，参数等价于：" +
+          `method="compress", window_id="${threadWindowIdOf("t_real_compress")}", title="折叠早期历史", args={ scope: "events", keepTail: 2, ` +
           'summary: "<把第1-3轮的要点浓缩成一句中文摘要>" }。只调用这一次，不要输出多余解释。',
       },
     ];
@@ -81,6 +82,7 @@ describe.skipIf(!shouldRun)("events compress —— 真实 LLM 端到端", () =>
       events: history,
       contextWindows: [
         {
+          // self 门面窗（identity + agency）——不再承载 events 折叠。
           id: TESTER,
           class: TESTER,
           parentObjectId: ROOT_WINDOW_ID,
@@ -89,6 +91,18 @@ describe.skipIf(!shouldRun)("events compress —— 真实 LLM 端到端", () =>
           createdAt: 1,
           data: {},
           win: { transient: true, isSelfWindow: true },
+        },
+        {
+          // 自己视角 thread 窗（events 折叠载体）：events-compress 归此窗（compress.md 核7）。
+          // 无 creator 通道（compress_tester 无上游）= self-driven 形态，events 折叠照常。
+          id: threadWindowIdOf("t_real_compress"),
+          class: THREAD_CLASS_ID,
+          parentObjectId: ROOT_WINDOW_ID,
+          title: "thread",
+          status: "open",
+          createdAt: 1,
+          data: {},
+          win: { transient: true },
         },
       ],
       persistence: { baseDir: world, sessionId: "s_real", objectId: TESTER, threadId: "t_real_compress" },
@@ -103,12 +117,12 @@ describe.skipIf(!shouldRun)("events compress —— 真实 LLM 端到端", () =>
     const client = createLlmClient();
     await think(thread, client);
 
-    // 写入侧证据：self 窗 win.summarizedRanges 被真实 compress 调用写入（走完整 exec→window-manager 链）。
-    const selfWin = thread.contextWindows.find(
-      (w) => (w.win as { isSelfWindow?: boolean } | undefined)?.isSelfWindow,
+    // 写入侧证据：**thread 窗** win.summarizedRanges 被真实 compress 调用写入（走完整 exec→window-manager 链）。
+    const threadWin = thread.contextWindows.find(
+      (w) => w.id === threadWindowIdOf("t_real_compress"),
     )?.win as { summarizedRanges?: Array<{ fromIdx: number; toIdx: number; summary: string }> } | undefined;
-    expect(selfWin?.summarizedRanges?.length ?? 0).toBeGreaterThanOrEqual(1);
-    const range = selfWin!.summarizedRanges![0]!;
+    expect(threadWin?.summarizedRanges?.length ?? 0).toBeGreaterThanOrEqual(1);
+    const range = threadWin!.summarizedRanges![0]!;
     expect(range.summary.trim().length).toBeGreaterThan(0);
 
     // 读出侧证据：再建一次 context，折叠区段已被 summary 占位替换 → assistant 文本变少 + summary 出现。

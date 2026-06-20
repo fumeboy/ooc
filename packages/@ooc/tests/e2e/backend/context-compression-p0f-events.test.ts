@@ -1,18 +1,19 @@
 /**
- * P0f — events 流 head/tail ring + 中段摘要 e2e。
+ * compress Case A —— 跨 job（scheduler_yielded → reload）events 折叠持久化 e2e gate。
  *
- * 验证:
- * 1. 默认 fold 中段: head_ring (J=10) + tail_ring (K=40) 之外的 events 被 _foldedBy 标记
- * 2. 渲染层: 只保留 head + 1 条 summary + tail = 51 个渲染单元
- * 3. 持久化: _foldedBy 字段保留进 thread.json, reload 后 fold 状态不丢
- * 4. target_event_ids 路径: 仅指定的连续区段被 fold
- * 5. 错误路径: summary 缺失 / target_event_ids 非连续 → 结构化错误, thread 状态不变
+ * 验证载体收敛后的归宿：events 折叠态挂**自己视角 thread 窗**（class=THREAD_CLASS_ID，inline 持久化）：
+ *   1. 经 exec(window_id=thread 窗, method="compress", scope=events) 写入 win.summarizedRanges；
+ *   2. writeThread → readThread（模拟 job 切片 scheduler_yielded → reload）；
+ *   3. 折叠态跨 reload 存活（THREAD_CLASS_ID inline 整窗落 thread-context.json、builtin 类 hydrate 恒注册）；
+ *   4. reload 后 buildInputItems 投影仍折叠（assistant 文本数降 + events_summary 出现）。
+ *   含 **self-driven root**（空 creator 通道的 thread 窗）用例——它没有上游 creator，但同样承载 events 折叠。
  *
- * 不依赖 RUN_BACKEND_E2E gate: fixture-based unit-style 验收。
+ * 取代旧 `_foldedBy` object-data 折叠 e2e（已退役：折叠改 win 投影态、不改 thread.events）。
+ * fixture-based、零真 LLM、可进 CI。
  */
 
-import { describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { describe, expect, it, beforeEach, afterEach } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,22 +21,21 @@ import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
 import type { ProcessEvent } from "@ooc/core/thinkable/context";
 import { buildInputItems } from "@ooc/core/thinkable/context";
+import { createFlowObject } from "@ooc/core/persistable";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import {
+  threadWindowIdOf,
+  ROOT_WINDOW_ID,
+  type ContextWindow,
+} from "@ooc/core/_shared/types/context-window.js";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
-// 触发 windows/ 各 type 的 side-effect 注册。
+// 触发 builtin class 注册（hydrate 用 builtinRegistry.has + isInlinePersisted 判定保留）。
 import "@ooc/core/runtime/register-builtins.js";
 
-const SESSION_PREFIX = "_test_thinkable_p0f_events";
-const ts = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+const SESSION_PREFIX = "_test_compress_caseA";
 
-// 注：compress/expand 已从中心 exec 退役（见下方 describe.skip 说明）。
-// 包装成与旧 compress tool 调用等价的 toolCall，输出 JSON 仍带 tool:"compress"。
-function compressCall(id: string, compressArgs: Record<string, unknown>) {
-  return { id, name: "exec" as const, arguments: { method: "compress", title: "compress", args: compressArgs } };
-}
-
-/** 构造一个简单可控的 text event,带稳定 id 便于断言。 */
 function mkTextEvent(idx: number): ProcessEvent {
   return {
     id: `e_text_${String(idx).padStart(3, "0")}`,
@@ -45,270 +45,141 @@ function mkTextEvent(idx: number): ProcessEvent {
   };
 }
 
-// SKIP：compress/expand 已从中心 exec 移除（裁决：折叠/展开应由各 window 自实现）。
-// 本 e2e 验的是旧的中心 compress(scope=events) 路径；待 per-window 折叠机制落地后按新协议重写。
-describe.skip("[p0f] context compression — compress(scope=events) + 渲染层 fold", () => {
-  it("默认 fold 中段: 60 条 events → head(10) + summary + tail(40), 51 渲染单元", async () => {
-    const thread = makeThread();
-    // 注入 60 条 events
-    for (let i = 0; i < 60; i++) {
-      thread.events.push(mkTextEvent(i));
-    }
-    const baselineEventsLen = thread.events.length;
-    expect(baselineEventsLen).toBe(60);
+type Items = Awaited<ReturnType<typeof buildInputItems>>["input"];
+function assistantTextCount(input: Items): number {
+  return input.filter(
+    (i) => i.type === "message" && i.role === "assistant" && /text event #/.test((i as { content: string }).content),
+  ).length;
+}
+function hasEventsSummary(input: Items): boolean {
+  return input.some(
+    (i) => i.type === "message" && i.role === "system" && /events_summary/.test((i as { content: string }).content),
+  );
+}
 
-    // 调用 compress(scope=events) — 经 exec（compress 不再是顶层 tool）；不提供 target_event_ids → 默认 fold 中段
-    const out = await dispatchToolCall(thread, {
-      id: "call_compress_events_1",
-      name: "exec",
-      arguments: {
-        method: "compress",
-        title: "fold middle events",
-        args: {
-          scope: "events",
-          summary: "earlier setup phase, including 3 file opens and 2 search runs",
-          quality_hint: "curated",
-        },
-      },
+/** 经 exec 在指定 thread 窗上 compress(scope=events)。 */
+async function compressEventsOn(
+  thread: Parameters<typeof dispatchToolCall>[0],
+  threadWinId: string,
+  args: Record<string, unknown>,
+): Promise<void> {
+  const out = await dispatchToolCall(thread, {
+    id: "c1",
+    name: "exec",
+    arguments: { method: "compress", window_id: threadWinId, title: "fold early history", args: { scope: "events", ...args } },
+  });
+  const parsed = JSON.parse(out) as { ok?: boolean; error?: string };
+  expect(parsed.error, `exec compress 失败：${parsed.error ?? ""}`).toBeUndefined();
+  expect(parsed.ok).toBe(true);
+}
+
+function summarizedRangesOf(thread: { contextWindows?: ContextWindow[] }, id: string): unknown[] {
+  const win = thread.contextWindows?.find((w) => w.id === id)?.win as { summarizedRanges?: unknown[] } | undefined;
+  return win?.summarizedRanges ?? [];
+}
+
+describe("[caseA] events 折叠跨 job（scheduler_yielded → reload）持久化", () => {
+  let baseDir: string;
+
+  beforeEach(async () => {
+    baseDir = await mkdtemp(join(tmpdir(), `${SESSION_PREFIX}-`));
+  });
+  afterEach(async () => {
+    await rm(baseDir, { recursive: true, force: true });
+  });
+
+  it("有 creator 的 thread：compress(scope=events) 写 thread 窗 win → reload 折叠不丢", async () => {
+    const sessionId = `${SESSION_PREFIX}_creator`;
+    const persistence: ThreadPersistenceRef = { baseDir, sessionId, objectId: "agent_c", threadId: "t_main" };
+    await createFlowObject(persistence);
+
+    // makeThread（!skipCreatorWindow）经 initContextWindows 注入自己视角 thread 窗（带占位 creator 通道）。
+    const thread = makeThread({ id: "t_main", persistence });
+    for (let i = 0; i < 6; i++) thread.events.push(mkTextEvent(i));
+    const threadWinId = threadWindowIdOf("t_main");
+    expect(thread.contextWindows.some((w) => w.id === threadWinId)).toBe(true);
+
+    // 折叠前 transcript 6 条 assistant 文本。
+    expect(assistantTextCount((await buildInputItems(thread)).input)).toBe(6);
+
+    // events-compress 经 exec 派发到 thread 窗 → 写 win.summarizedRanges（keepTail=2 折早期 4 条）。
+    await compressEventsOn(thread, threadWinId, { keepTail: 2, summary: "早期四轮：建立任务上下文" });
+    expect(summarizedRangesOf(thread, threadWinId).length).toBe(1);
+
+    // 持久化 + reload（模拟 scheduler_yielded → reload）。
+    await writeThread(thread);
+    const restored = await readThread({ baseDir, sessionId, objectId: "agent_c" }, "t_main");
+    expect(restored).toBeDefined();
+
+    // 折叠态跨 reload 存活（inline thread 窗，无后门、无冷启动丢窗）。
+    expect(summarizedRangesOf(restored!, threadWinId).length).toBe(1);
+
+    // reload 后 buildInputItems 投影仍折叠。
+    const after = await buildInputItems(restored!);
+    expect(assistantTextCount(after.input)).toBeLessThan(6);
+    expect(hasEventsSummary(after.input)).toBe(true);
+  });
+
+  it("self-driven root：空 creator 通道的 thread 窗承载折叠 → reload 不丢", async () => {
+    const sessionId = `${SESSION_PREFIX}_root`;
+    const persistence: ThreadPersistenceRef = { baseDir, sessionId, objectId: "agent_root", threadId: "t_root_self" };
+    await createFlowObject(persistence);
+    const threadWinId = threadWindowIdOf("t_root_self");
+
+    // self-driven root：手动注入**空 creator 通道**的 thread 窗（skipCreatorWindow 避免 makeThread 给占位 creator）。
+    const threadWindow = {
+      id: threadWinId,
+      class: THREAD_CLASS_ID,
+      parentObjectId: ROOT_WINDOW_ID,
+      title: "thread",
+      status: "open",
+      createdAt: 1,
+      data: {},
+      win: { transient: true },
+    } as unknown as ContextWindow;
+    const thread = makeThread({
+      id: "t_root_self",
+      persistence,
+      extraWindows: [threadWindow],
+      skipCreatorWindow: true,
     });
-    const parsed = JSON.parse(out);
-    expect(parsed.ok).toBe(true);
-    expect(parsed.tool).toBe("compress");
-    expect(parsed.folded_count).toBe(60 - 10 - 40); // = 10
-    expect(parsed.folded_range.start_index).toBe(10);
-    expect(parsed.folded_range.end_index).toBe(20);
-    expect(parsed.head_ring).toBe(10);
-    expect(parsed.tail_ring).toBe(40);
-    expect(typeof parsed.summary_event_id).toBe("string");
+    for (let i = 0; i < 6; i++) thread.events.push(mkTextEvent(i));
 
-    const summaryId = parsed.summary_event_id as string;
+    await compressEventsOn(thread, threadWinId, { keepTail: 2, summary: "root 早期摘要" });
+    expect(summarizedRangesOf(thread, threadWinId).length).toBe(1);
 
-    // thread.events 物理不真删 — 原 60 条仍在, 加上 1 条 summary + 1 条 context_compressed
-    expect(thread.events.length).toBe(60 + 2);
+    await writeThread(thread);
+    const restored = await readThread({ baseDir, sessionId, objectId: "agent_root" }, "t_root_self");
+    expect(restored).toBeDefined();
+    expect(summarizedRangesOf(restored!, threadWinId).length).toBe(1);
 
-    // 中段 [10..19] 被打上 _foldedBy=<summaryId>
-    for (let i = 0; i < 60; i++) {
-      // events 数组中,原 60 条 + summary 插在 fold 区段结束位置(原 index=20 之后)
-      // 所以位置 0..19 是原 index 0..19, 位置 20 是 summary, 位置 21..60 是原 index 20..59
-      let originalIdx = i;
-      let arrayPos = i;
-      if (i >= 20) arrayPos = i + 1; // summary 插在 fold 末尾后
-      const e = thread.events[arrayPos];
-      expect(e.id).toBe(`e_text_${String(originalIdx).padStart(3, "0")}`);
-      if (originalIdx >= 10 && originalIdx < 20) {
-        expect(e._foldedBy).toBe(summaryId);
-      } else {
-        expect(e._foldedBy).toBeUndefined();
-      }
-    }
-
-    // 验证 head_ring (0..9) 与 tail_ring (20..59) 未被标记
-    const head = thread.events.slice(0, 10);
-    expect(head.every((e) => !e._foldedBy)).toBe(true);
-
-    // summary event 自身位于 index=20
-    const summaryEvent = thread.events[20];
-    expect(summaryEvent.category).toBe("context_change");
-    if (summaryEvent.category === "context_change" && summaryEvent.kind === "events_summary") {
-      expect(summaryEvent.id).toBe(summaryId);
-      expect(summaryEvent.count).toBe(10);
-      expect(summaryEvent.summary).toContain("earlier setup phase");
-      expect(summaryEvent.qualityHint).toBe("curated");
-      expect(summaryEvent.scope).toBe("user");
-      expect(summaryEvent.earliestEventId).toBe("e_text_010");
-      expect(summaryEvent.latestEventId).toBe("e_text_019");
-    } else {
-      throw new Error("summary event 类型断言失败");
-    }
-
-    // 末尾有 context_compressed 事件
-    const lastEvent = thread.events[thread.events.length - 1];
-    if (lastEvent.category === "context_change" && lastEvent.kind === "context_compressed") {
-      expect(lastEvent.reason).toBe("user-events-fold");
-      expect(lastEvent.scope).toBe("events");
-      expect(lastEvent.windowIds).toEqual([]);
-    } else {
-      throw new Error("末尾应为 context_compressed 事件");
-    }
-
-    // 渲染层验证: head(10) + summary(1) + tail(40) = 51 个 text/system 单元
-    // 加上末尾 context_compressed 自身的 system message 渲染 = 52
-    // 任务要求"51 个渲染单元" — 这里把 context_compressed 也算进去会变 52,
-    // 但题目目标是验证 head + summary + tail 出现; 我们精确分类断言。
-    const { input } = await buildInputItems(thread);
-    // 滤掉非 transcript 部分(XML context + paths)
-    // 第一条 system message 是 XML context, 没 persistence 时无 paths item;
-    // 后续都是 events transcript。
-    const transcriptItems = input.slice(1); // 剥掉首条 XML context
-
-    // 找到 transcript 中包含 "text event #" 的 assistant 单元 → 应是 head(10) + tail(40) = 50
-    const textUnits = transcriptItems.filter(
-      (it) => it.type === "message" && it.role === "assistant" && /text event #/.test(it.content),
-    );
-    expect(textUnits.length).toBe(50);
-
-    // summary system message 应该出现并包含摘要文本
-    const summaryItems = transcriptItems.filter(
-      (it) => it.type === "message" && it.role === "system" && /events_summary count=10/.test(it.content),
-    );
-    expect(summaryItems.length).toBe(1);
-    expect((summaryItems[0] as { content: string }).content).toContain("earlier setup phase");
-
-    // head + summary + tail 总共 51 个渲染单元 (不算末尾 context_compressed 自身的系统消息)
-    const headSummaryTail = textUnits.length + summaryItems.length;
-    expect(headSummaryTail).toBe(51);
-
-    // head 的第 1 条 / tail 的最后 1 条应该出现在文本中(顺序应是 head 在前, tail 在后)
-    const headFirstIdx = transcriptItems.findIndex(
-      (it) => it.type === "message" && /text event #0$/m.test(it.content),
-    );
-    const tailLastIdx = transcriptItems.findIndex(
-      (it) => it.type === "message" && /text event #59$/m.test(it.content),
-    );
-    const summaryIdx = transcriptItems.findIndex(
-      (it) => it.type === "message" && /events_summary count=10/.test(it.content),
-    );
-    expect(headFirstIdx).toBeGreaterThanOrEqual(0);
-    expect(summaryIdx).toBeGreaterThan(headFirstIdx);
-    expect(tailLastIdx).toBeGreaterThan(summaryIdx);
+    const after = await buildInputItems(restored!);
+    expect(assistantTextCount(after.input)).toBeLessThan(6);
+    expect(hasEventsSummary(after.input)).toBe(true);
   });
 
-  it("持久化: _foldedBy 字段保留进 thread.json, reload 后 fold 状态仍保持", async () => {
-    const tmpRoot = mkdtempSync(join(tmpdir(), "ooc-p0f-persist-"));
-    try {
-      const ref: ThreadPersistenceRef = {
-        baseDir: tmpRoot,
-        sessionId: `${SESSION_PREFIX}_persist_${ts()}`,
-        objectId: "test-obj",
-        threadId: "t_p0f_persist",
-      };
-      const thread = makeThread({ persistence: ref, id: "t_p0f_persist" });
-      for (let i = 0; i < 60; i++) {
-        thread.events.push(mkTextEvent(i));
-      }
+  it("可逆：expand(scope=events) 清空折叠态 → reload 后 transcript 完整还原", async () => {
+    const sessionId = `${SESSION_PREFIX}_expand`;
+    const persistence: ThreadPersistenceRef = { baseDir, sessionId, objectId: "agent_e", threadId: "t_exp" };
+    await createFlowObject(persistence);
+    const thread = makeThread({ id: "t_exp", persistence });
+    for (let i = 0; i < 6; i++) thread.events.push(mkTextEvent(i));
+    const threadWinId = threadWindowIdOf("t_exp");
 
-      const out = await dispatchToolCall(thread, compressCall("call_compress_events_persist", {
-        scope: "events",
-        summary: "persisted fold test",
-      }));
-      const parsed = JSON.parse(out);
-      expect(parsed.ok).toBe(true);
-      const summaryId = parsed.summary_event_id as string;
+    await compressEventsOn(thread, threadWinId, { keepTail: 2, summary: "折叠" });
+    expect(assistantTextCount((await buildInputItems(thread)).input)).toBeLessThan(6);
 
-      await writeThread(thread);
-      const restored = await readThread(ref, "t_p0f_persist");
-      expect(restored).toBeDefined();
-      const restoredEvents = restored!.events;
+    // expand 清空折叠（不给 at）→ 还原。
+    const out = await dispatchToolCall(thread, {
+      id: "e1",
+      name: "exec",
+      arguments: { method: "expand", window_id: threadWinId, title: "expand all", args: { scope: "events" } },
+    });
+    expect((JSON.parse(out) as { ok?: boolean }).ok).toBe(true);
+    expect(summarizedRangesOf(thread, threadWinId).length).toBe(0);
 
-      // 找回 summary event
-      const sum = restoredEvents.find(
-        (e) => e.category === "context_change" && e.kind === "events_summary" && e.id === summaryId,
-      );
-      expect(sum).toBeDefined();
-
-      // _foldedBy 锚点保留: 被 fold 区段每条仍带 _foldedBy=summaryId
-      const foldedCount = restoredEvents.filter((e) => e._foldedBy === summaryId).length;
-      expect(foldedCount).toBe(10);
-
-      // 渲染层 reload 后仍跳过 folded events
-      const { input } = await buildInputItems(restored!);
-      const textUnits = input.filter(
-        (it) => it.type === "message" && it.role === "assistant" && /text event #/.test(it.content),
-      );
-      expect(textUnits.length).toBe(50); // head(10) + tail(40)
-    } finally {
-      rmSync(tmpRoot, { recursive: true, force: true });
-    }
-  });
-
-  it("target_event_ids: 仅指定的连续区段被 fold, 其余正常", async () => {
-    const thread = makeThread();
-    for (let i = 0; i < 30; i++) {
-      thread.events.push(mkTextEvent(i));
-    }
-
-    // 指定 5 条连续 (index 5..9)
-    const targetIds = [
-      "e_text_005",
-      "e_text_006",
-      "e_text_007",
-      "e_text_008",
-      "e_text_009",
-    ];
-
-    const out = await dispatchToolCall(thread, compressCall("call_compress_events_targets", {
-      scope: "events",
-      summary: "explicit 5-event fold",
-      target_event_ids: targetIds,
-    }));
-    const parsed = JSON.parse(out);
-    expect(parsed.ok).toBe(true);
-    expect(parsed.folded_count).toBe(5);
-    const summaryId = parsed.summary_event_id as string;
-
-    // 仅 5..9 被 fold, 其余无标记
-    const folded = thread.events.filter((e) => e._foldedBy === summaryId);
-    expect(folded.length).toBe(5);
-    const foldedIds = folded.map((e) => e.id).sort();
-    expect(foldedIds).toEqual(targetIds.slice().sort());
-  });
-
-  it("错误: summary 缺失 → 结构化错误, thread 状态不变", async () => {
-    const thread = makeThread();
-    for (let i = 0; i < 60; i++) {
-      thread.events.push(mkTextEvent(i));
-    }
-    const snapshotLen = thread.events.length;
-
-    const out = await dispatchToolCall(thread, compressCall("call_compress_events_missing_summary", {
-      scope: "events",
-      // summary 故意缺失
-    }));
-    const parsed = JSON.parse(out);
-    expect(parsed.ok).toBe(false);
-    expect(parsed.tool).toBe("compress");
-    expect(parsed.error).toContain("summary");
-
-    // thread.events 不应被改动
-    expect(thread.events.length).toBe(snapshotLen);
-    expect(thread.events.every((e) => !e._foldedBy)).toBe(true);
-  });
-
-  it("错误: target_event_ids 不连续 → 结构化错误, thread 状态不变", async () => {
-    const thread = makeThread();
-    for (let i = 0; i < 30; i++) {
-      thread.events.push(mkTextEvent(i));
-    }
-    const snapshotLen = thread.events.length;
-
-    const out = await dispatchToolCall(thread, compressCall("call_compress_events_noncontiguous", {
-      scope: "events",
-      summary: "should fail",
-      target_event_ids: ["e_text_001", "e_text_002", "e_text_005"], // 跳跃,非连续
-    }));
-    const parsed = JSON.parse(out);
-    expect(parsed.ok).toBe(false);
-    expect(parsed.error).toContain("连续");
-
-    expect(thread.events.length).toBe(snapshotLen);
-    expect(thread.events.every((e) => !e._foldedBy)).toBe(true);
-  });
-
-  it("错误: 默认路径下 events 数量不足以触发中段 fold → 结构化错误", async () => {
-    const thread = makeThread();
-    // 只有 30 条, 低于 head(10) + tail(40) = 50
-    for (let i = 0; i < 30; i++) {
-      thread.events.push(mkTextEvent(i));
-    }
-    const snapshotLen = thread.events.length;
-
-    const out = await dispatchToolCall(thread, compressCall("call_compress_events_under_capacity", {
-      scope: "events",
-      summary: "too small",
-    }));
-    const parsed = JSON.parse(out);
-    expect(parsed.ok).toBe(false);
-    expect(parsed.error).toContain("无中段可 fold");
-    expect(thread.events.length).toBe(snapshotLen);
+    await writeThread(thread);
+    const restored = await readThread({ baseDir, sessionId, objectId: "agent_e" }, "t_exp");
+    expect(assistantTextCount((await buildInputItems(restored!)).input)).toBe(6);
   });
 });

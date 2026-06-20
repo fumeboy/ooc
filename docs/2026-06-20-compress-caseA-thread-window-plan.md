@@ -17,9 +17,12 @@
 
 > 格式：`- [ ] <test file>::<case> —— <断言为何坏 + 期望新行为>`。Task 3-6 跑 `bun test packages/@ooc/core/` 后把**新增** FAIL 追加到这里。
 
-- [ ] **[Task4]** `packages/@ooc/storybook/stories/L2_thinkable.stories.ts` (L2-COMPRESS-EVENTS) —— 测 compress(scope=events) 经 **universal default** 解析；Task4 后 events 移到 thread class、universal scope=events 抛错 → 该 story `resolveWindowMethod` 走默认表折 events 的断言失效。**期望新行为**：断言 events-compress 经 thread class（resolveWindowMethod(THREAD_CLASS_ID,'compress')=threadCompress）解析；universal compress(events) 抛错指向 thread 窗。
-- [ ] **[Task3 覆盖缺口，非失败]** 无现存单测断言 self-driven root context 形状（注入 thread 窗 / 无 say-IO 源 / folds 跨 reload）→ Task7 e2e gate 新增 self-driven root 用例补。
-- [ ] **[Task5]** `packages/@ooc/core/thinkable/__tests__/context.test.ts` "events compress — self-view fold" 4 例（折叠 events[0..2] / 可逆 expand / tool-pair 切两对外扩 / 切一对保另一对）—— setup 把 summarizedRanges 设在 **self 门面窗**（win.isSelfWindow），读侧现从 **thread 窗**（isSelfThreadWindow id）读 → 折叠不生效。**期望新行为**：测试 setup 改把 summarizedRanges 挂到 thread 窗实例（id=`w_creator_<threadId>` / threadWindowIdOf）。
+- [x] **[Task4]** `L2_thinkable.stories.ts` (L2-COMPRESS-EVENTS) —— ✅ 改测 events-compress 经 thread class（builtinRegistry.resolveWindowMethod(THREAD_CLASS_ID,'compress')）解析 + 非 thread 窗 compress(events) 抛错边界。storybook 64 pass。
+- [x] **[Task3 覆盖缺口]** ✅ Task7 e2e gate 新增 self-driven root 用例（空通道 thread 窗 folds 跨 reload 不丢）。
+- [x] **[Task5]** `context.test.ts` "events compress — self-view fold" 4 例 —— ✅ makeSelfWindow→makeThreadWindow(threadId)（id=threadWindowIdOf、class=THREAD_CLASS_ID），summarizedRanges 挂 thread 窗。context.test 31 pass。
+- [x] **[Task7]** `real-compress.test.ts`（真 LLM gate）—— ✅ 加 thread 窗载体、inject 指令带 window_id、写侧证据读 thread 窗（待真 LLM 实跑验证）。
+- [x] **[Task7]** 新跨 job reload e2e gate `context-compression-p0f-events.test.ts` —— ✅ 重写（退役 _foldedBy 路径）：creator-having + self-driven root + 可逆，3 pass。
+- [x] **[Task7]** `check-no-deprecated-symbols.sh` —— ✅ 加 creatorWindowIdOf/isCreatorWindowId/CREATOR_WINDOW_ID_PREFIX 退役模式防回潮。
 
 ---
 

@@ -23,8 +23,10 @@ async function buildContext(
 import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf, ensureStoneRepo, ensureSessionWorktree } from "../../persistable";
 import {
   ROOT_WINDOW_ID,
+  threadWindowIdOf,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**
@@ -708,18 +710,19 @@ describe("buildInputItems self.md → self 窗 self 视角（不再灌 instructi
 });
 
 describe("events compress — self-view fold (win.summarizedRanges)", () => {
-  // 折叠 self 视角的 thread.events transcript：self 窗 win.summarizedRanges 把段内连续 events
-  // 折成一条 summary 占位（读出侧 context/index.ts:buildInputItems）。不改 thread.events、可逆。
-  function makeSelfWindow(): ContextWindow & { win: Record<string, unknown> } {
+  // 折叠 self 视角的 thread.events transcript：载体是**自己视角 thread 窗**（id=threadWindowIdOf(threadId)，
+  // class=THREAD_CLASS_ID），其 win.summarizedRanges 把段内连续 events 折成一条 summary 占位（读出侧
+  // context/index.ts:buildInputItems find(isSelfThreadWindow)）。不改 thread.events、可逆。
+  function makeThreadWindow(threadId: string): ContextWindow & { win: Record<string, unknown> } {
     return {
-      id: "agent_x",
-      class: "agent_x",
+      id: threadWindowIdOf(threadId),
+      class: THREAD_CLASS_ID,
       parentObjectId: ROOT_WINDOW_ID,
-      title: "agent_x",
+      title: "thread",
       status: "open",
       createdAt: 1,
       data: {},
-      win: { transient: true, isSelfWindow: true },
+      win: { transient: true },
     } as ContextWindow & { win: Record<string, unknown> };
   }
 
@@ -737,18 +740,18 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   }
 
   it("折叠 events[0..2] → 段内折成一条 summary、transcript item 数降、段外原样", async () => {
-    const selfWindow = makeSelfWindow();
+    const threadWin = makeThreadWindow("t_fold");
     const thread = makeThread({
       id: "t_fold",
       events: fourTurns,
-      extraWindows: [selfWindow],
+      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
 
     const baseline = await buildInputItems(thread);
     expect(assistantTexts(baseline)).toEqual(["turn-A", "turn-B", "turn-C", "turn-D"]);
 
-    selfWindow.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "早期三轮上下文" }];
+    threadWin.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "早期三轮上下文" }];
     const folded = await buildInputItems(thread);
 
     // 段内三 events 折成一条 summary 占位；段外 turn-D 原样。
@@ -767,14 +770,14 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   });
 
   it("视角隔离：self 折叠不改 thread.events（object data 一字不动）", async () => {
-    const selfWindow = makeSelfWindow();
+    const threadWin = makeThreadWindow("t_iso");
     const thread = makeThread({
       id: "t_iso",
       events: fourTurns,
-      extraWindows: [selfWindow],
+      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
-    selfWindow.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "折叠" }];
+    threadWin.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "折叠" }];
     await buildInputItems(thread);
     // thread.events 是 object data —— 折叠只动 win 投影态，events 原封不动（peer 视角读 messages，不受影响）。
     expect(thread.events.length).toBe(4);
@@ -787,16 +790,16 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   });
 
   it("可逆：清空 summarizedRanges（expand）→ transcript 完整还原", async () => {
-    const selfWindow = makeSelfWindow();
+    const threadWin = makeThreadWindow("t_rev");
     const thread = makeThread({
       id: "t_rev",
       events: fourTurns,
-      extraWindows: [selfWindow],
+      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
-    selfWindow.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "折叠" }];
+    threadWin.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "折叠" }];
     expect(assistantTexts(await buildInputItems(thread))).toEqual(["turn-D"]);
-    selfWindow.win.summarizedRanges = [];
+    threadWin.win.summarizedRanges = [];
     expect(assistantTexts(await buildInputItems(thread))).toEqual([
       "turn-A",
       "turn-B",
@@ -830,13 +833,13 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   }
 
   it("折叠区段同时切断两对（c1 output 半 + c2 call 半）→ 外扩全折、无孤儿", async () => {
-    const selfWindow = makeSelfWindow();
+    const threadWin = makeThreadWindow("t_caseB_both");
     // [2,4] 覆盖 fco(c1)@2（call@1 在外）+ t3@3 + fc(c2)@4（output@5 在外）→ 两对各被切一半。
-    selfWindow.win.summarizedRanges = [{ fromIdx: 2, toIdx: 4, summary: "中段折叠" }];
+    threadWin.win.summarizedRanges = [{ fromIdx: 2, toIdx: 4, summary: "中段折叠" }];
     const thread = makeThread({
       id: "t_caseB_both",
       events: toolEvents,
-      extraWindows: [selfWindow],
+      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
     const out = await buildInputItems(thread);
@@ -856,13 +859,13 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   });
 
   it("折叠只切一对（c1）→ c1 整对折进 summary、完整的 c2 对原样保留（不过度折叠）", async () => {
-    const selfWindow = makeSelfWindow();
+    const threadWin = makeThreadWindow("t_caseB_one");
     // [1,1] 只覆盖 fc(c1)@1，output@2 在外 → 切断 c1；c2 对完全在区段外。
-    selfWindow.win.summarizedRanges = [{ fromIdx: 1, toIdx: 1, summary: "折 c1" }];
+    threadWin.win.summarizedRanges = [{ fromIdx: 1, toIdx: 1, summary: "折 c1" }];
     const thread = makeThread({
       id: "t_caseB_one",
       events: toolEvents,
-      extraWindows: [selfWindow],
+      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
     const out = await buildInputItems(thread);

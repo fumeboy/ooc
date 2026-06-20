@@ -51,9 +51,16 @@ declare -a FORBIDDEN_PATTERNS=(
   #    删 PersistableModule.container / ThreadContainerPersistence / threadContainer。
   "ThreadContainerPersistence"
   "\\bthreadContainer\\b"
-  # —— isCreatorWindow 去状态化（2026-06-16）：creator 窗身份编码在 id（creatorWindowIdOf），不存
-  #    data flag。精确禁「字段重声明」isCreatorWindow?:（不命中 isCreatorWindowId helper / .isCreatorWindow 访问）。
+  # —— isCreatorWindow 去状态化（2026-06-16）：creator 窗身份编码在 id，不存 data flag。
+  #    精确禁「字段重声明」isCreatorWindow?:（不命中 .isCreatorWindow 访问）。
   "isCreatorWindow\\?:"
+  # —— creator 窗概念退役 → thread 窗（compress Case A 载体收敛，2026-06-20）：一条 thread 恰好一个
+  #    thread 窗（过程），creator 对话是其内建上游通道、非独立窗。符号改名（id 字符串 w_creator_ 保留）：
+  #    creatorWindowIdOf→threadWindowIdOf / isCreatorWindowId→isSelfThreadWindow /
+  #    CREATOR_WINDOW_ID_PREFIX→THREAD_WINDOW_ID_PREFIX。禁旧名防回潮。
+  "creatorWindowIdOf"
+  "isCreatorWindowId"
+  "CREATOR_WINDOW_ID_PREFIX"
 )
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）

@@ -111,21 +111,36 @@ export const L2_STORIES: Story[] = [
     expectation:
       "compress(scope=events) 折叠 thread 历史 transcript 为摘要占位：win.summarizedRanges 写入侧 + projectSummarizedRanges 读出侧 item 数降 + summary 出现 + 视角隔离 + expand 还原",
     design:
-      "events 折叠是通用 window method（readable/default-window-methods.ts:compress scope=events），" +
-      "改 win.summarizedRanges（视角独立投影态，不碰 thread.events）；读出侧 _shared/utils/summarized-ranges.ts:" +
-      "projectSummarizedRanges 把段内连续 items 折成一条 summary（self 视角 context/index.ts 折 events、peer 视角 conversation-render 折 messages）。可逆。",
+      "events 折叠是 **thread class 自声明**的 window method（agent/children/thread/readable/compress-events.ts:threadCompress scope=events，" +
+      "能力归属「内容所在的窗」compress.md 核7），改 win.summarizedRanges（视角独立投影态，不碰 thread.events）；通用默认表对 scope=events 抛错指向 thread 窗。" +
+      "读出侧 _shared/utils/summarized-ranges.ts:projectSummarizedRanges 把段内连续 items 折成一条 summary（self 视角 context/index.ts 折 events、peer 视角 conversation-render 折 messages）。可逆。",
     run: async () => {
-      const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
+      await import("@ooc/core/runtime/register-builtins.js");
+      const { builtinRegistry, createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const { projectSummarizedRanges } = await import(
         "@ooc/core/_shared/utils/summarized-ranges"
       );
+      const { THREAD_CLASS_ID } = await import("@ooc/core/_shared/types/constants");
 
-      // 写入侧：class 无 compress 声明 → resolveWindowMethod 回退默认表；scope=events 改 summarizedRanges。
+      // 能力归属：events 折叠归 thread class（compress.md 核 7），非通用默认表。resolveWindowMethod
+      // 沿 THREAD_CLASS_ID 的 readable.window[] 找到 threadCompress/threadExpand（不按投影 class 过滤）。
+      const compress = builtinRegistry.resolveWindowMethod(THREAD_CLASS_ID, "compress");
+      const expand = builtinRegistry.resolveWindowMethod(THREAD_CLASS_ID, "expand");
+      check(!!compress && !!expand, "thread class 未声明 compress/expand（events 能力归属缺失）");
+
+      // 能力边界：非 thread 窗（plain_win）走通用默认表，compress(scope=events) 抛错指向 thread 窗
+      // （避免错窗静默落折叠态 → 写读不同窗静默失效，silent-swallow ban）。
       const reg = createObjectRegistry();
       reg.register("plain_win", { executable: { methods: [] } } as never, { parentClass: null });
-      const compress = reg.resolveWindowMethod("plain_win", "compress");
-      const expand = reg.resolveWindowMethod("plain_win", "expand");
-      check(!!compress && !!expand, "compress/expand 未从默认表解析");
+      const plainCompress = reg.resolveWindowMethod("plain_win", "compress");
+      check(!!plainCompress, "plain_win compress 未从默认表解析");
+      let threw = false;
+      try {
+        await plainCompress!.exec({} as never, {}, {}, { scope: "events", keepTail: 1, summary: "x" } as never);
+      } catch {
+        threw = true;
+      }
+      check(threw, "非 thread 窗 compress(scope=events) 应抛错（events 折叠不属本层）");
 
       // keepTail：ctx.thread.events 长度 5、keepTail=2 → 折叠 events[0..2]（保留末 2 条）。
       const ctx5 = { thread: { events: [0, 1, 2, 3, 4] } } as never;
