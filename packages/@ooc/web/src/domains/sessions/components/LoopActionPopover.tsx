@@ -1,11 +1,9 @@
 /**
  * LoopActionPopover — timeline 交互弹层。
  *
- * 两种使用形态 (由 `mode` 区分, 共用同款 backdrop + card 样式, 避免引入第二种 UI 语言):
  * - "permission" : 显示 permission_ask 详情 + Approve / Reject 按钮 (+ 可选 reason)。
  *                  按钮触发 POST /api/runtime/.../permission, 成功后调 onResolved 让父级
  *                  refresh timeline; 失败时在 popover 内显示错误 (silent-swallow ban)。
- * - "summary"    : 展示 events_summary 完整 summary 文本 (badge tooltip 只截 100 字)。
  *
  * 设计取舍:
  * - 用 modal-backdrop / compact-modal 现有 token, 不引入新 popover 容器系统;
@@ -19,7 +17,7 @@
 import { useState } from "react";
 import type { LoopEvent } from "./LoopEventBadge";
 
-export type LoopActionPopoverMode = "permission" | "summary";
+export type LoopActionPopoverMode = "permission";
 
 export interface LoopActionPopoverProps {
   mode: LoopActionPopoverMode;
@@ -71,20 +69,16 @@ export function LoopActionPopover({
       }}
     >
       <div className="modal-card compact-modal loop-action-card" onClick={(e) => e.stopPropagation()}>
-        {mode === "permission" ? (
-          <PermissionContent
-            event={event}
-            reason={reason}
-            setReason={setReason}
-            submitting={submitting}
-            error={error}
-            onApprove={() => void handleDecide("approve")}
-            onReject={() => void handleDecide("reject")}
-            onClose={onClose}
-          />
-        ) : (
-          <SummaryContent event={event} onClose={onClose} />
-        )}
+        <PermissionContent
+          event={event}
+          reason={reason}
+          setReason={setReason}
+          submitting={submitting}
+          error={error}
+          onApprove={() => void handleDecide("approve")}
+          onReject={() => void handleDecide("reject")}
+          onClose={onClose}
+        />
       </div>
     </div>
   );
@@ -182,28 +176,3 @@ function PermissionContent({
   );
 }
 
-function SummaryContent({ event, onClose }: { event: LoopEvent; onClose: () => void }) {
-  const count = typeof event.count === "number" ? event.count : 0;
-  const summary = typeof event.summary === "string" ? event.summary : "";
-  return (
-    <>
-      <header className="loop-action-header">
-        <strong>Events summary</strong>
-        <span className="muted small">{count} events folded</span>
-      </header>
-      <pre className="loop-action-summary" data-testid="loop-action-summary">
-        {summary || "(no summary)"}
-      </pre>
-      <div className="modal-actions loop-action-buttons">
-        <button
-          type="button"
-          className="btn small"
-          onClick={onClose}
-          data-testid="loop-action-close"
-        >
-          Close
-        </button>
-      </div>
-    </>
-  );
-}

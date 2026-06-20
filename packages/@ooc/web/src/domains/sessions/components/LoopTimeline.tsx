@@ -101,12 +101,11 @@ export function partitionEventsByLoop(
 }
 
 /**
- * 单击 badge → 决定下一步动作（permission popover / summary popover / scroll）。
+ * 单击 badge → 决定下一步动作（permission popover / scroll）。
  * 时光机模式下 "scroll" 退化为 "切到该 loop"（如果还知道该 event 属于哪个 loop）。
  */
 export type BadgeClickAction =
   | { type: "open-permission"; event: LoopEvent }
-  | { type: "open-summary"; event: LoopEvent }
   | { type: "scroll"; event: LoopEvent };
 
 export function planBadgeClickAction(event: LoopEvent): BadgeClickAction {
@@ -114,9 +113,6 @@ export function planBadgeClickAction(event: LoopEvent): BadgeClickAction {
     event.category === "permission" && event.kind === "permission_ask";
   if (isPermissionAsk && !event.decided) {
     return { type: "open-permission", event };
-  }
-  if (event.category === "context_change" && event.kind === "events_summary") {
-    return { type: "open-summary", event };
   }
   return { type: "scroll", event };
 }
@@ -306,10 +302,6 @@ export function LoopTimeline({ sessionId, objectId, threadId, fetcher }: LoopTim
       const action = planBadgeClickAction(event);
       if (action.type === "open-permission") {
         setPopoverState({ mode: "permission", event });
-        return;
-      }
-      if (action.type === "open-summary") {
-        setPopoverState({ mode: "summary", event });
         return;
       }
       // scroll: 时光机里 "scroll" 退化为 "切到该 event 所属 loop"

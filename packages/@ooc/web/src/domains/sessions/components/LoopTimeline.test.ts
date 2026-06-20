@@ -159,19 +159,6 @@ describe("classifyLoopEvent — type-dispatch 表", () => {
     expect(spec?.tooltip).toContain("blocked");
   });
 
-  it("events_summary → purple + count+summary in tooltip", () => {
-    const evt: LoopEvent = {
-      category: "context_change",
-      kind: "events_summary",
-      count: 12,
-      summary: "tool spam folded",
-    };
-    const spec = classifyLoopEvent(evt);
-    expect(spec?.color).toBe("purple");
-    expect(spec?.tooltip).toContain("12 events folded");
-    expect(spec?.tooltip).toContain("tool spam folded");
-  });
-
   it("tool_result ok=false → orange + 'fail' label", () => {
     const evt: LoopEvent = {
       category: "tool_runtime",
@@ -232,7 +219,6 @@ describe("isKeyEvent — 噪音过滤", () => {
   it("关键事件全部命中 isKeyEvent", () => {
     const keys: LoopEvent[] = [
       { category: "context_change", kind: "context_compressed", reason: "user-compress" } as LoopEvent,
-      { category: "context_change", kind: "events_summary", count: 1, summary: "x" } as LoopEvent,
       { category: "permission", kind: "permission_ask", method: "x" } as LoopEvent,
       { category: "permission", kind: "permission_denied", method: "x", reason: "y" } as LoopEvent,
       { category: "tool_runtime", kind: "function_call_output", toolName: "exec", ok: false } as LoopEvent,

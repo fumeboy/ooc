@@ -27,9 +27,6 @@ export interface LoopEvent {
   levelChange?: string;
   reason?: string;
   scope?: string;
-  /** events_summary */
-  count?: number;
-  summary?: string;
   /** permission_ask / permission_denied */
   method?: string;
   argsSummary?: string;
@@ -112,18 +109,6 @@ export function classifyLoopEvent(event: LoopEvent): LoopEventBadgeSpec | undefi
       color: "gray",
       tooltip: `context_compressed: ${reason || "(no reason)"} · ${wSummary}`,
       label: "compress",
-    };
-  }
-
-  if (event.category === "context_change" && event.kind === "events_summary") {
-    const count = typeof event.count === "number" ? event.count : 0;
-    const raw = (event.summary ?? "").toString();
-    const summary = raw.length > 100 ? raw.slice(0, 100) + "…" : raw;
-    return {
-      icon: "📚",
-      color: "purple",
-      tooltip: `${count} events folded: ${summary || "(no summary)"}`,
-      label: `summary ×${count}`,
     };
   }
 

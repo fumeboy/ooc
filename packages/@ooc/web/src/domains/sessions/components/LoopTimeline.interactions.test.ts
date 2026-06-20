@@ -10,8 +10,6 @@
  *  2. approve 流程: planBadgeClickAction(permission_ask, pending) → "open-permission";
  *                   executeDecide({action:"approve"}) → fetcher 收到 POST + 正确 body
  *  3. reject 流程: executeDecide({action:"reject", reason:"test reject"}) → body 含 reason
- *  4. events_summary 展开: planBadgeClickAction(events_summary) → "open-summary";
- *                          popover content 渲染全文 (单测视角: buildDecideBody 不应被调到)
  *  5. 错误路径: fetcher 抛错 → executeDecide rethrow (silent-swallow ban)
  *  6. anchor id: loopEventAnchorId 在 event.id / toolCallId / fallback 三档优先级正确
  *
@@ -177,23 +175,6 @@ describe("R0d-2: approve/reject 流程", () => {
     const body = buildDecideBody(evt, { action: "approve" });
     expect(body.eventId).toBeUndefined();
     expect(body.action).toBe("approve");
-  });
-});
-
-describe("R0d-3: events_summary 展开", () => {
-  it("Case 4: events_summary → 'open-summary'", () => {
-    const evt: LoopEvent = {
-      category: "context_change",
-      kind: "events_summary",
-      count: 12,
-      summary:
-        "this is a long summary text that exceeds the 100 char tooltip cutoff used by classifyLoopEvent",
-    };
-    const action = planBadgeClickAction(evt);
-    expect(action.type).toBe("open-summary");
-    expect(action.event).toBe(evt);
-    // 全文应在 event 上原样保留 (popover 渲染时拿 event.summary 显示完整版)
-    expect((action.event.summary as string).length).toBeGreaterThan(50);
   });
 });
 
