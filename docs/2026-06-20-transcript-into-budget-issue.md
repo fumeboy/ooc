@@ -50,7 +50,19 @@ context.md 核心 10 / 3.5 明文：thread event + 与 creator 的对话是**自
 
 测试：`thinkable/__tests__/context.test.ts` describe「transcript 纳入 budget」3 例（estimateTranscriptTokens 随量增长 + 小体量无警告 + 大 transcript 仅 events 即顶过 soft、warning 含 `transcript=` 且指向 compress）。`bun run verify` 全绿（714 pass）+ storybook gate 绿（64 pass）。
 
-## 7. 后续（不在本 Issue）
+## 7. auto/emergency 兜底（已落地，2026-06-20）
 
-- **auto/emergency 自动触发**：transcript token 超阈时由框架代 agent exec `compress(scope=events, keepTail=N)`（复用本 Issue 已有的 transcript 账 + 已有 window method）。
+派单原设想"框架代 agent exec `compress` 持久折叠"。落地时改为**瞬态钳制**（Supervisor 裁决，理由见下），更安全、更贴 OOC 哲学：
+
+**实现**：`thinkable/context/transcript-clamp.ts` `clampTranscriptToBudget(items, budget)` + `buildInputItems` 接线——`currentTokens > hard` 时把 transcript 钳到 `(hard - 窗口估算)` 内（丢最早、留最近后缀），插一条可见 `[context_change:context_clamped]` marker 指向 `compress(scope=events)`。
+
+**为何瞬态钳制而非框架代调 compress（持久折叠）**：
+- **与窗 overflow 同模型**：窗超 hard 由 `BudgetManager.allocate` per-round 踢进 overflow（瞬态、不持久化）；transcript 钳制是其等价物。不违 `budget.ts` "预算不自动推进档位"（那是持久压缩态；钳制是渲染期 per-round）。
+- **不 mutate 持久态**：不写 win/不改 `thread.events`/不生成 lossy 占位摘要——守"写入自由、agent 主导持久 compress"（agent 仍可、且应主动折叠；钳制只是防撑爆的安全网）。
+- **tool-pair 安全天然**：钳制保留后缀，function_call 必在其 output 前 → 只可能孤儿 output（call 在被丢前缀），sanitize 丢之即可；provider 层（`claude-transport.ts`）不 sanitize 孤儿 tool_result，必须在此堵住。比持久折叠任意区段（可能切断配对）安全。
+- **可逆**：纯本轮渲染影响，agent 一旦主动 compress、钳制即不再触发。
+
+**测试**：`transcript-clamp.test.ts`（钳制/floor/tool-pair sanitize 单元）+ `context.test.ts`「应急兜底」（越 hard → marker + transcript 钳短 + `thread.events` 不动）。verify 全绿（725 pass）。
+
+**剩余后续**：
 - **transcript 内容由自己视角 thread window 承载**（core10 另一半的"归属"半）：随 thread-as-object 弧收敛（见 context.md 3.7 + `docs/2026-06-20-events-compress-design.md` §9）。

@@ -862,4 +862,33 @@ describe("transcript 纳入 budget（core10 另一半）", () => {
     // 指向正确杠杆：transcript 不能 close、只能 compress(scope=events)。
     expect(warn).toContain('scope:"events"');
   });
+
+  it("应急兜底：current 越 hard → transcript 本轮被钳、插 marker、thread.events 不动", async () => {
+    // 默认 hard=180000 token；100 条 ~9000 字符 text event ≈ 100×2260 ≈ 226K token > hard。
+    const events: ThreadContext["events"] = Array.from({ length: 100 }, (_, i) => ({
+      category: "llm_interaction",
+      kind: "text",
+      text: `第${i}轮：` + "x".repeat(9000),
+    }));
+    const thread = makeThread({ id: "t_clamp", events, skipCreatorWindow: true });
+    const out = await buildInputItems(thread);
+
+    // 插了可见 marker（silent-swallow ban），指向 compress。
+    const marker = out.input.find(
+      (i) =>
+        i.type === "message" &&
+        i.role === "system" &&
+        (i as { content: string }).content.includes("[context_change:context_clamped]"),
+    );
+    expect(marker).toBeDefined();
+    expect((marker as { content: string }).content).toContain('scope:"events"');
+
+    // 本轮 transcript 被钳短：assistant 文本项 < 100（最早被省略）。
+    const texts = out.input.filter((i) => i.type === "message" && i.role === "assistant");
+    expect(texts.length).toBeLessThan(100);
+    expect(texts.length).toBeGreaterThan(0); // floor：不清空
+
+    // thread.events 一字不动（瞬态钳制只影响本轮渲染、不改 object data）。
+    expect(thread.events.length).toBe(100);
+  });
 });

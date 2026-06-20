@@ -7,6 +7,7 @@ import {
   loadBudgetThresholds,
   type BudgetThresholds,
 } from "./budget.js";
+import { clampTranscriptToBudget } from "./transcript-clamp.js";
 import { XmlRenderer } from "./renderers/xml.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { isTalkLikeClass } from "../../_shared/types/constants.js";
@@ -424,8 +425,34 @@ export async function buildInputItems(
   // current = 窗口估算 + transcript 估算（context.md 核心 10：transcript 是自己视角 thread window
   // 的内容通道、走 message 流，与窗口一并计入预算账——否则 events append-only 无界增长却不报警）。
   const thresholds = loadBudgetThresholds(thread);
+  const windowsTokens = estimateWindowsTokens(snapshot.windows);
   const transcriptTokens = estimateTranscriptTokens(transcript);
-  const currentTokens = estimateWindowsTokens(snapshot.windows) + transcriptTokens;
+  const currentTokens = windowsTokens + transcriptTokens;
+
+  // 应急兜底（emergency_guard）：current 越 hard 时，把 transcript 钳到 (hard - 窗口估算) 内
+  // ——丢最早、留最近、tool-pair 安全（transcript-clamp.ts）。与窗 overflow 同模型：per-round、
+  // 瞬态、不改 thread.events、不动 win、不持久化、不生成摘要。插一条可见 marker 指向 compress
+  // （silent-swallow ban）。这是安全网，agent 仍应主动 compress 持久折叠。
+  let renderedTranscript = transcript;
+  let clampMarker: LlmInputItem[] = [];
+  if (currentTokens > thresholds.hard) {
+    const transcriptBudget = Math.max(thresholds.hard - windowsTokens, 0);
+    const { kept, omittedCount } = clampTranscriptToBudget(transcript, transcriptBudget);
+    if (omittedCount > 0) {
+      renderedTranscript = kept;
+      clampMarker = [
+        {
+          type: "message",
+          role: "system",
+          content:
+            `[context_change:context_clamped] 最早 ${omittedCount} 条 transcript 项本轮被省略以适配预算 ` +
+            `(current≈${currentTokens} > hard=${thresholds.hard})。完整历史仍在 thread.events（未丢失）；` +
+            `用 exec(method="compress", args={scope:"events", keepTail:N, summary:"…"}) 持久折叠早期过程。`,
+        },
+      ];
+    }
+  }
+
   const budgetWarning =
     currentTokens > thresholds.soft
       ? [buildBudgetWarningItem(currentTokens, thresholds, transcriptTokens)]
@@ -440,7 +467,8 @@ export async function buildInputItems(
       },
       ...budgetWarning,
       ...(pathsItem ? [pathsItem] : []),
-      ...transcript
+      ...clampMarker,
+      ...renderedTranscript
     ]
   };
 }
