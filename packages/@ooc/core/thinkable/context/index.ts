@@ -174,25 +174,6 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
     ];
   }
 
-  if (event.category === "context_change" && event.kind === "events_summary") {
-    // events 中段被折叠后的摘要节点:LLM 视野中替换被 _foldedBy 标记的原 events,
-    // visibility-first 仍可见(否则就 silent-swallow 了)。
-    const idTag = event.id ? ` id=${event.id}` : "";
-    const earliest = event.earliestEventId ? ` earliest=${event.earliestEventId}` : "";
-    const latest = event.latestEventId ? ` latest=${event.latestEventId}` : "";
-    const quality = event.qualityHint ? ` quality=${event.qualityHint}` : "";
-    const scope = event.scope ? ` scope=${event.scope}` : "";
-    return [
-      {
-        type: "message",
-        role: "system",
-        content:
-          `[context_change:events_summary count=${event.count}${idTag}${earliest}${latest}${quality}${scope}] ` +
-          `${event.count} events folded, summary by LLM:\n${event.summary}`,
-      },
-    ];
-  }
-
   if (event.category === "permission" && event.kind === "permission_ask") {
     // 渲染区分 pending / approved / rejected 三态;让 LLM 在 transcript 中看到完整审批历史。
     const windowTag = event.windowId ? ` window_id=${event.windowId}` : "";
@@ -452,7 +433,6 @@ export async function buildInputItems(
   // 载体收敛（compress Case A）：折叠态挂 thread 窗（isSelfThreadWindow，THREAD_CLASS_ID inline 天然
   // 持久化）、不再挂 self 门面窗（identity，isSelfWindow）。写侧 events-compress 归属 thread class
   // → 写读同窗。折叠态视角独立（存 win、不改 thread.events），可逆。
-  // （旧 _foldedBy/events_summary 脚手架保留为 auto 兜底休眠路径：renderItem 内仍跳过 _foldedBy。）
   const selfThreadWin = thread.contextWindows?.find(
     (w) => isSelfThreadWindow(w.id),
   )?.win as { summarizedRanges?: SummarizedRange[] } | undefined;
@@ -460,7 +440,7 @@ export async function buildInputItems(
     thread.events,
     // 投影前把区段吸附到 tool-pair 安全边界（Case B：防折叠切断 function_call/output 配对留孤儿）。
     snapRangesToToolPairs(thread.events, selfThreadWin?.summarizedRanges),
-    (event) => (event._foldedBy ? [] : processEventToItems(thread, event)),
+    (event) => processEventToItems(thread, event),
     (range, foldedCount) => [
       {
         type: "message",

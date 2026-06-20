@@ -125,18 +125,14 @@ export function deriveStoneFromThread(threadRef: ThreadPersistenceRef): StoneObj
 /**
  * ProcessEvent 共享的可选字段;所有 variants 都可承载它们。
  *
- * - `id`: events_summary 必须可被 _foldedBy 引用,所以引入稳定 event id 概念。
- *   其他类型的 event 也可选地携带 id (用于 compress(scope=events, target_event_ids) 指定);
- *   旧 thread.json 没有 id 字段属于正常情况,渲染层会按数组下标 fallback。
- * - `_foldedBy`: 该事件已被某条 events_summary 折叠;渲染时跳过,实际数据仍在
- *   thread.events 中保留。下划线前缀但**保留**进 thread.json,
- *   因为它是 fold 状态的唯一持久化锚点。
+ * - `id`: 事件稳定标识(可选)。旧 thread.json 无 id 字段属正常,渲染层按数组下标 fallback。
+ *
+ * 注:events 折叠不再改 thread.events（旧 `_foldedBy` 标记 / `events_summary` 事件已随 compress
+ * Case A 退役）——折叠态活在自己视角 thread 窗的 `win.summarizedRanges`（投影态、可逆、不动 events）。
  */
 export type ProcessEventCommon = {
-  /** 事件稳定标识; events_summary 必填,其他 variants 可选。 */
+  /** 事件稳定标识(可选)。 */
   id?: string;
-  /** 该事件已被指定 events_summary event id 折叠,渲染层跳过,持久化保留。 */
-  _foldedBy?: string;
 };
 
 /**
@@ -291,32 +287,6 @@ export type ProcessEvent = ProcessEventCommon & (
       reason: "max_ticks";
       /** 触发时已跑过的 LLM 轮数（call_started 计数），observability。 */
       rounds?: number;
-    }
-  | {
-      /**
-       * 事件来源：events 流中段折叠后形成的摘要节点。
-       *
-       * 由 LLM 在 compress(scope=events, summary=...) 调用中主动提供摘要文本。
-       * 未来 emergency guard 也可触发本 event (scope="auto") — 那时 summary 是占位文本。
-       *
-       * 渲染策略 (processEventToItems): events_summary 渲染为一条 system message,
-       * 内含 count + summary,LLM 视野中替换被 _foldedBy 标记的原 events 序列。
-       */
-      category: "context_change";
-      /** events 流中段被折叠为一条摘要。 */
-      kind: "events_summary";
-      /** 被折叠掉的原 event 数量。 */
-      count: number;
-      /** 被折叠区段最早 event 的 id (可选; 旧 event 可能无 id)。 */
-      earliestEventId?: string;
-      /** 被折叠区段最晚 event 的 id (可选; 旧 event 可能无 id)。 */
-      latestEventId?: string;
-      /** 摘要正文; LLM 在 compress(scope=events) 调用中提供。 */
-      summary: string;
-      /** 摘要质量提示 (LLM 自评 / auto 时为 "rough")。 */
-      qualityHint?: "rough" | "curated";
-      /** 谁触发本次 fold: user=LLM 主动 compress, auto=未来 emergency_guard 自动触发。 */
-      scope?: "user" | "auto";
     }
   | {
       /**
