@@ -7,7 +7,7 @@
  *   activates_on 对当前 thread 逐篇匹配，命中才注入——Object 只在相关交互面看到对应切片。
  * - **creator-reply 协议**：动态按 creator talk window 的 id 生成，不属于静态 builtin 知识。
  */
-import { isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
+import { hasCreatorChannel } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
@@ -122,12 +122,12 @@ export async function buildProtocolKnowledgeWindows(
 ): Promise<OocObjectInstance<KnowledgeData>[]> {
   const windows: OocObjectInstance<KnowledgeData>[] = await buildRootKnowledgeWindows(thread);
 
-  // creator-reply 协议：每个 self-view（creator）会话窗一条，按 window id 去重。
-  // creator 窗身份编码在 id（id=`w_creator_<thread.id>`），按 isSelfThreadWindow 识别
-  // （class-agnostic + forward-compatible，不再读 data.isCreatorWindow flag）。
+  // creator-reply 协议：每个**有上游 creator 通道**的过程窗一条，按 window id 去重。
+  // 按 hasCreatorChannel（thread 窗 id 前缀 + data 带 target/isForkWindow）识别；
+  // self-driven root 的空通道过程窗无 creator 可回 → 不生成此协议知识。
   const seen = new Set<string>();
   for (const w of thread.contextWindows ?? []) {
-    if (!isSelfThreadWindow(w.id)) continue;
+    if (!hasCreatorChannel(w)) continue;
     const path = `internal/windows/${w.class}/creator-reply/${w.id}`;
     if (seen.has(path)) continue;
     seen.add(path);

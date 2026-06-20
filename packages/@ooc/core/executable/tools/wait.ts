@@ -43,7 +43,7 @@ function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
         id: w.id,
         hint: `fork (target_thread=${d.targetThreadId}) — 等${isSelfThreadWindow(w.id) ? "父" : "子"}线程回报`,
       });
-    } else if (isSelfThreadWindow(w.id)) {
+    } else if (isSelfThreadWindow(w.id) && d.target != null) {
       out.push({
         id: w.id,
         hint: `creator talk_window (target=${d.target}) — 等创建者发新消息`,
@@ -177,8 +177,9 @@ export async function handleWaitTool(
     );
   }
 
-  // R4: 自建 peer 会话窗（非 creator、非 fork）且未 say 过 → 拒绝
-  if (!targetData.isForkWindow && !isSelfThreadWindow(target.id) && !hasOutgoingSayOnTalk(thread, target.id)) {
+  // R4: 非合法 IO 源 → 拒绝。合法 = fork 窗 / 有上游 creator 通道的 thread 窗 / 已 say 过的自建 peer。
+  // 空通道 thread 窗（self-driven root 的过程窗）isSelfThreadWindow 为真但无 target → 不是 IO 源、须拒（防死锁）。
+  if (!targetData.isForkWindow && !(isSelfThreadWindow(target.id) && targetData.target != null) && !hasOutgoingSayOnTalk(thread, target.id)) {
     return errorOutput(
       `[wait] talk_window "${onRaw}" (target=${targetData.target}) 是你自建的，` +
         "但尚未 say 过任何消息——对端不知道有人在等回信。请先发出消息再 wait：\n" +

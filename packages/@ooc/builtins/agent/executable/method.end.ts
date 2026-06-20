@@ -13,7 +13,7 @@ import type {
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
-import { isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
+import { hasCreatorChannel } from "@ooc/core/_shared/types/context-window.js";
 import type { Data } from "../types.js";
 
 /**
@@ -33,10 +33,10 @@ type CreatorWindow = {
 function findCreatorWindow(ctx: ExecutableContext): CreatorWindow | undefined {
   const list = ctx.thread?.contextWindows ?? [];
   for (const inst of list) {
-    // creator 窗（self-view）每 thread 唯一，身份编码在 id（id=`w_creator_<thread.id>`）——故按
-    // isSelfThreadWindow(id) 识别（class-agnostic + forward-compatible），不再读 data.isCreatorWindow。
-    // 会话字段从 inst.data 读。
-    if (!isSelfThreadWindow(inst.id)) continue;
+    // 本 thread 的过程窗（self-view）每 thread 唯一，身份编码在 id（id=`w_creator_<thread.id>`）。
+    // auto-reply 只对**有上游 creator 通道**的过程窗（hasCreatorChannel：data 带 target/isForkWindow）；
+    // self-driven root 的空通道过程窗 → 返回 undefined → end 忽略 result（既有降级）。
+    if (!hasCreatorChannel(inst)) continue;
     const data = (inst.data ?? {}) as {
       target?: string;
       targetThreadId?: string;

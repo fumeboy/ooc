@@ -106,6 +106,18 @@ export function isSelfThreadWindow(id: string): boolean {
 }
 
 /**
+ * 本 thread 窗有没有真正的**上游 creator 通道**（可 say / 可 wait / 可 auto-reply 的对端）。
+ * = 是自己的 thread 窗（`isSelfThreadWindow`）且 data 带 creator 端点（target 或 isForkWindow）。
+ * self-driven root 的 thread 窗：是过程窗但**无上游** → 此谓词为假 → 不触发任何 creator affordance
+ * （say 菜单 / wait IO 源 / end auto-reply / creator-reply 协议知识都 gate 在此）。
+ */
+export function hasCreatorChannel(w: { id: string; data?: unknown }): boolean {
+  if (!isSelfThreadWindow(w.id)) return false;
+  const d = (w.data ?? {}) as { target?: string; isForkWindow?: boolean };
+  return d.target != null || d.isForkWindow === true;
+}
+
+/**
  * 不应持久化进 thread-context.json 的窗：self 门面窗 + member 门面窗。
  *
  * 两者都由 init 每轮从对象身份/类声明确定性重注入（initContextWindows /
