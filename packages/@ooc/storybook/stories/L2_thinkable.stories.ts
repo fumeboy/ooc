@@ -106,6 +106,92 @@ export const L2_STORIES: Story[] = [
   }),
 
   story({
+    id: "L2-COMPRESS-EVENTS",
+    layer: "thinkable",
+    expectation:
+      "compress(scope=events) 折叠 thread 历史 transcript 为摘要占位：win.summarizedRanges 写入侧 + projectSummarizedRanges 读出侧 item 数降 + summary 出现 + 视角隔离 + expand 还原",
+    design:
+      "events 折叠是通用 window method（readable/default-window-methods.ts:compress scope=events），" +
+      "改 win.summarizedRanges（视角独立投影态，不碰 thread.events）；读出侧 _shared/utils/summarized-ranges.ts:" +
+      "projectSummarizedRanges 把段内连续 items 折成一条 summary（self 视角 context/index.ts 折 events、peer 视角 conversation-render 折 messages）。可逆。",
+    run: async () => {
+      const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
+      const { projectSummarizedRanges } = await import(
+        "@ooc/core/_shared/utils/summarized-ranges"
+      );
+
+      // 写入侧：class 无 compress 声明 → resolveWindowMethod 回退默认表；scope=events 改 summarizedRanges。
+      const reg = createObjectRegistry();
+      reg.register("plain_win", { executable: { methods: [] } } as never, { parentClass: null });
+      const compress = reg.resolveWindowMethod("plain_win", "compress");
+      const expand = reg.resolveWindowMethod("plain_win", "expand");
+      check(!!compress && !!expand, "compress/expand 未从默认表解析");
+
+      // keepTail：ctx.thread.events 长度 5、keepTail=2 → 折叠 events[0..2]（保留末 2 条）。
+      const ctx5 = { thread: { events: [0, 1, 2, 3, 4] } } as never;
+      const folded = (await compress!.exec(ctx5, {}, {}, {
+        scope: "events",
+        keepTail: 2,
+        summary: "早期三轮：建立任务上下文",
+      } as never)) as { summarizedRanges?: Array<{ fromIdx: number; toIdx: number; summary: string }> };
+      check(
+        folded.summarizedRanges?.length === 1 &&
+          folded.summarizedRanges[0]!.fromIdx === 0 &&
+          folded.summarizedRanges[0]!.toIdx === 2,
+        `keepTail=2 应折 events[0..2]，得 ${JSON.stringify(folded.summarizedRanges)}`,
+      );
+
+      // 显式区段：fromIdx/toIdx 点名折叠 events[1..3]（不依赖 ctx 长度）。
+      const ranged = (await compress!.exec({} as never, {}, {}, {
+        scope: "events",
+        fromIdx: 1,
+        toIdx: 3,
+        summary: "中段噪声 tool 结果",
+      } as never)) as { summarizedRanges?: Array<{ fromIdx: number; toIdx: number }> };
+      check(
+        ranged.summarizedRanges?.[0]?.fromIdx === 1 && ranged.summarizedRanges?.[0]?.toIdx === 3,
+        `显式区段应折 [1..3]，得 ${JSON.stringify(ranged.summarizedRanges)}`,
+      );
+
+      // 读出侧：6 个 item，折叠 [1..3] → 段内 3 个折成 1 条 summary，总 item 数 6→4（降）。
+      const items = ["a", "b", "c", "d", "e", "f"];
+      const renderItem = (s: string) => [`item:${s}`];
+      const renderSummary = (r: { summary: string }, n: number) => [`SUMMARY(${n}):${r.summary}`];
+      const full = projectSummarizedRanges(items, undefined, renderItem, renderSummary);
+      check(full.length === 6, `无折叠应 6 项，得 ${full.length}`);
+      const projected = projectSummarizedRanges(
+        items,
+        [{ fromIdx: 1, toIdx: 3, summary: "折叠 bcd" }],
+        renderItem,
+        renderSummary,
+      );
+      check(projected.length === 4, `折 [1..3] 应 6→4 项，得 ${projected.length}：${JSON.stringify(projected)}`);
+      check(
+        projected.includes("SUMMARY(3):折叠 bcd") &&
+          !projected.includes("item:b") &&
+          projected.includes("item:a") &&
+          projected.includes("item:e"),
+        `折叠后应 summary 替换段内、段外原样：${JSON.stringify(projected)}`,
+      );
+
+      // 视角隔离：同一 items，winB（无折叠态）投影不受 winA 折叠影响。
+      const viewB = projectSummarizedRanges(items, undefined, renderItem, renderSummary);
+      check(viewB.length === 6, `视角隔离：另一视角无折叠应仍 6 项，得 ${viewB.length}`);
+
+      // 可逆：expand(scope=events) 清空折叠态 → 投影还原全长。
+      const cleared = (await expand!.exec({} as never, {}, ranged as never, {
+        scope: "events",
+      } as never)) as { summarizedRanges?: unknown[] };
+      check(
+        !cleared.summarizedRanges || cleared.summarizedRanges.length === 0,
+        `expand 应清空折叠态，得 ${JSON.stringify(cleared.summarizedRanges)}`,
+      );
+      const restored = projectSummarizedRanges(items, cleared.summarizedRanges as never, renderItem, renderSummary);
+      check(restored.length === 6, `expand 还原后应 6 项，得 ${restored.length}`);
+    },
+  }),
+
+  story({
     id: "L2-CONTEXT-MULTITURN",
     layer: "thinkable",
     expectation: "多轮 context 连贯（窗口跨轮保留/压缩）——需真 LLM 多轮",

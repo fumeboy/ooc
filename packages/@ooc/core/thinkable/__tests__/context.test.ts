@@ -706,3 +706,102 @@ describe("buildInputItems self.md → self 窗 self 视角（不再灌 instructi
     expect(xml).toContain('<self object_id="bob">');
   });
 });
+
+describe("events compress — self-view fold (win.summarizedRanges)", () => {
+  // 折叠 self 视角的 thread.events transcript：self 窗 win.summarizedRanges 把段内连续 events
+  // 折成一条 summary 占位（读出侧 context/index.ts:buildInputItems）。不改 thread.events、可逆。
+  function makeSelfWindow(): ContextWindow & { win: Record<string, unknown> } {
+    return {
+      id: "agent_x",
+      class: "agent_x",
+      parentObjectId: ROOT_WINDOW_ID,
+      title: "agent_x",
+      status: "open",
+      createdAt: 1,
+      data: {},
+      win: { transient: true, isSelfWindow: true },
+    } as ContextWindow & { win: Record<string, unknown> };
+  }
+
+  const fourTurns: ThreadContext["events"] = [
+    { category: "llm_interaction", kind: "text", text: "turn-A" },
+    { category: "llm_interaction", kind: "text", text: "turn-B" },
+    { category: "llm_interaction", kind: "text", text: "turn-C" },
+    { category: "llm_interaction", kind: "text", text: "turn-D" },
+  ];
+
+  function assistantTexts(out: Awaited<ReturnType<typeof buildInputItems>>): string[] {
+    return out.input
+      .filter((i) => i.type === "message" && i.role === "assistant")
+      .map((i) => (i as { content: string }).content);
+  }
+
+  it("折叠 events[0..2] → 段内折成一条 summary、transcript item 数降、段外原样", async () => {
+    const selfWindow = makeSelfWindow();
+    const thread = makeThread({
+      id: "t_fold",
+      events: fourTurns,
+      extraWindows: [selfWindow],
+      skipCreatorWindow: true,
+    });
+
+    const baseline = await buildInputItems(thread);
+    expect(assistantTexts(baseline)).toEqual(["turn-A", "turn-B", "turn-C", "turn-D"]);
+
+    selfWindow.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "早期三轮上下文" }];
+    const folded = await buildInputItems(thread);
+
+    // 段内三 events 折成一条 summary 占位；段外 turn-D 原样。
+    expect(assistantTexts(folded)).toEqual(["turn-D"]);
+    const summary = folded.input.find(
+      (i) =>
+        i.type === "message" &&
+        i.role === "system" &&
+        (i as { content: string }).content.includes("events_summary") &&
+        (i as { content: string }).content.includes("早期三轮上下文"),
+    );
+    expect(summary).toBeDefined();
+    expect((summary as { content: string }).content).toContain("count=3");
+    // 总 item 数下降（3 条折成 1 条）。
+    expect(folded.input.length).toBeLessThan(baseline.input.length);
+  });
+
+  it("视角隔离：self 折叠不改 thread.events（object data 一字不动）", async () => {
+    const selfWindow = makeSelfWindow();
+    const thread = makeThread({
+      id: "t_iso",
+      events: fourTurns,
+      extraWindows: [selfWindow],
+      skipCreatorWindow: true,
+    });
+    selfWindow.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "折叠" }];
+    await buildInputItems(thread);
+    // thread.events 是 object data —— 折叠只动 win 投影态，events 原封不动（peer 视角读 messages，不受影响）。
+    expect(thread.events.length).toBe(4);
+    expect(thread.events.map((e) => (e as { text?: string }).text)).toEqual([
+      "turn-A",
+      "turn-B",
+      "turn-C",
+      "turn-D",
+    ]);
+  });
+
+  it("可逆：清空 summarizedRanges（expand）→ transcript 完整还原", async () => {
+    const selfWindow = makeSelfWindow();
+    const thread = makeThread({
+      id: "t_rev",
+      events: fourTurns,
+      extraWindows: [selfWindow],
+      skipCreatorWindow: true,
+    });
+    selfWindow.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "折叠" }];
+    expect(assistantTexts(await buildInputItems(thread))).toEqual(["turn-D"]);
+    selfWindow.win.summarizedRanges = [];
+    expect(assistantTexts(await buildInputItems(thread))).toEqual([
+      "turn-A",
+      "turn-B",
+      "turn-C",
+      "turn-D",
+    ]);
+  });
+});

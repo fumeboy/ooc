@@ -5,6 +5,10 @@
  * creator 窗渲句柄、非 creator 窗渲 viewport + transcript。本 helper 抽出这段共享逻辑
  * （readable hook 算 messages + head 节点后调用它）。filter（fork 按 targetThreadId /
  * peer 按 windowId）寻址不同，由 filterMessagesForTalkWindow 各自处理。
+ *
+ * events compress（peer 视角读出）：会话窗 win 的 `summarizedRanges` 先把 messages 折成
+ * message-or-summary 渲染单元（段内连续 messages 替换为一条 summary 占位），再叠 viewport 末 N 条
+ * 节流——两者干净组合（applyTranscriptViewport 泛型作用于渲染单元）。
  */
 import type { ThreadMessage } from "@ooc/core/_shared/types/thread.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
@@ -13,20 +17,32 @@ import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   type TranscriptViewport,
 } from "@ooc/core/_shared/utils/viewport.js";
+import {
+  projectSummarizedRanges,
+  type SummarizedRange,
+} from "@ooc/core/_shared/utils/summarized-ranges.js";
 
 /** 会话窗渲染所需的最小窗形态（talk / do 都满足）。 */
 interface ConversationWindowLike {
   /** 渲染计算入参：本窗是否是 creator 窗（caller 用 isCreatorWindowId(id) 算好传入；非持久化字段）。 */
   isCreator?: boolean;
   transcriptViewport?: TranscriptViewport;
+  /** events compress 折叠态（win.summarizedRanges）：transcript 内点名区段折成摘要占位。 */
+  summarizedRanges?: SummarizedRange[];
 }
+
+/** transcript 折叠后的渲染单元：原始 message 或一条折叠摘要占位。 */
+type TranscriptUnit =
+  | { kind: "msg"; m: ThreadMessage }
+  | { kind: "summary"; summary: string; count: number };
 
 /**
  * 渲染会话窗的 transcript 区（或 creator 句柄）。返回应 push 进 children 的节点。
  *
  * - **creator 窗（主要 attention）**：内容走 LLM message 流；此处只渲句柄
  *   （`is_creator_window` + `transcript_in_messages` 指引），不内联 transcript。
- * - **非 creator 窗（次要 attention）**：渲 `transcript_viewport` 元信息 + 切片后的 `transcript`。
+ * - **非 creator 窗（次要 attention）**：先按 summarizedRanges 折叠 messages 成渲染单元，
+ *   再渲 `transcript_viewport` 元信息 + viewport 切片后的 `transcript`（含 summary 占位）。
  */
 export function renderTranscriptOrHandle(
   window: ConversationWindowLike,
@@ -43,9 +59,17 @@ export function renderTranscriptOrHandle(
     ];
   }
 
+  // events compress：先折叠成渲染单元（段内连续 messages → 一条 summary 占位）。
+  const units = projectSummarizedRanges<ThreadMessage, TranscriptUnit>(
+    messages,
+    window.summarizedRanges,
+    (m) => [{ kind: "msg", m }],
+    (range, count) => [{ kind: "summary", summary: range.summary, count }],
+  );
+
   const viewport: TranscriptViewport =
     window.transcriptViewport ?? DEFAULT_TRANSCRIPT_VIEWPORT;
-  const { visible, earlierCount } = applyTranscriptViewport(messages, viewport);
+  const { visible, earlierCount } = applyTranscriptViewport(units, viewport);
 
   const viewportAttrs: Record<string, string> = { total: String(messages.length) };
   if (typeof viewport.tail === "number") {
@@ -62,12 +86,14 @@ export function renderTranscriptOrHandle(
       xmlElement(
         "transcript",
         {},
-        visible.map((m) =>
-          xmlElement("message", { id: m.id, source: m.source }, [
-            xmlElement("from_thread_id", {}, [xmlText(m.fromThreadId)]),
-            xmlElement("to_thread_id", {}, [xmlText(m.toThreadId)]),
-            xmlElement("content", {}, [xmlText(m.content)]),
-          ]),
+        visible.map((u) =>
+          u.kind === "summary"
+            ? xmlElement("events_summary", { count: String(u.count) }, [xmlText(u.summary)])
+            : xmlElement("message", { id: u.m.id, source: u.m.source }, [
+                xmlElement("from_thread_id", {}, [xmlText(u.m.fromThreadId)]),
+                xmlElement("to_thread_id", {}, [xmlText(u.m.toThreadId)]),
+                xmlElement("content", {}, [xmlText(u.m.content)]),
+              ]),
         ),
       ),
     );

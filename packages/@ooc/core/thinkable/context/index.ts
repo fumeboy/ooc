@@ -6,6 +6,10 @@ import { XmlRenderer } from "./renderers/xml.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { isTalkLikeClass } from "../../_shared/types/constants.js";
 import { isCreatorWindowId } from "../../_shared/types/context-window.js";
+import {
+  projectSummarizedRanges,
+  type SummarizedRange,
+} from "../../_shared/utils/summarized-ranges.js";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../../_shared/types/thread.js";
 
 export type {
@@ -377,9 +381,27 @@ export async function buildInputItems(
   // never persisted. See _shared/types/thread.ts:_renderedWindows.
   thread._renderedWindows = snapshot.windows;
 
-  // fold _foldedBy events; events_summary renders as its own placeholder
-  const transcript = thread.events.flatMap((event) =>
-    event._foldedBy ? [] : processEventToItems(thread, event),
+  // self 视角 transcript：thread.events 平铺成 message 流，按 self 窗投影态 win 的
+  // summarizedRanges 折叠——落在某段内的连续 events 替换为一条 summary 占位，段外正常渲。
+  // 折叠态视角独立（存 self 窗 win，不改 thread.events），可逆。events compress 读出侧。
+  // （旧 _foldedBy/events_summary 脚手架保留为 auto 兜底休眠路径：renderItem 内仍跳过 _foldedBy。）
+  const selfWin = thread.contextWindows?.find(
+    (w) => (w.win as { isSelfWindow?: boolean } | undefined)?.isSelfWindow === true,
+  )?.win as { summarizedRanges?: SummarizedRange[] } | undefined;
+  const transcript = projectSummarizedRanges<ProcessEvent, LlmInputItem>(
+    thread.events,
+    selfWin?.summarizedRanges,
+    (event) => (event._foldedBy ? [] : processEventToItems(thread, event)),
+    (range, foldedCount) => [
+      {
+        type: "message",
+        role: "system",
+        content:
+          `[context_change:events_summary count=${foldedCount} ` +
+          `range=${range.fromIdx}-${range.toIdx} scope=events] ` +
+          `${foldedCount} events folded, summary by LLM:\n${range.summary}`,
+      },
+    ],
   );
 
   // self.md 身份不再单独灌进 system instructions——它作为 self 窗的 self 视角内容渲进 context

@@ -73,7 +73,11 @@ const readable: ReadableModule<Data, ThreadWin> = {
       consumedMessageIds = messages.map((m) => m.id);
       children.push(
         ...renderTranscriptOrHandle(
-          { isCreator: isCreatorWindowId(ctx.object.id), transcriptViewport: win?.transcriptViewport },
+          {
+            isCreator: isCreatorWindowId(ctx.object.id),
+            transcriptViewport: win?.transcriptViewport,
+            summarizedRanges: win?.summarizedRanges,
+          },
           messages,
         ),
       );

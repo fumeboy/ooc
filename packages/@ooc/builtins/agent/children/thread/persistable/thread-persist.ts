@@ -70,7 +70,17 @@ function buildEntries(
   const entries: ThreadContextEntry[] = [];
   for (const window of windows) {
     if (window.id === ROOT_WINDOW_ID) continue;
-    if (isNonPersistedWindow(window)) continue;
+    if (isNonPersistedWindow(window)) {
+      // self/member 门面窗默认不落盘（无独立 state.json，落 `_ref` 必 missing 刷屏）。
+      // 例外：win 携带跨轮折叠态（events compress 的 summarizedRanges）时整窗 **inline** 落盘
+      // ——data 确定性 = {}，inline 无 `_ref` 缺失风险；否则折叠态每轮 init 重注入即丢，
+      // 任务跨 job 切片（scheduler_yielded → reload）后 transcript 自动复原、压缩静默失效。
+      const win = window.win as { summarizedRanges?: unknown[] } | undefined;
+      if (win?.summarizedRanges && win.summarizedRanges.length > 0) {
+        entries.push(window as ContextWindow);
+      }
+      continue;
+    }
     if (registry.isInlinePersisted(window.class)) {
       entries.push(window as ContextWindow);
     } else {

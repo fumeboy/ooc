@@ -94,3 +94,48 @@ win.summarizedRanges?: Array<{ fromIdx: number; toIdx: number; summary: string }
 - 中间态打破存量测试只登记账本、不逐条修；改完统一跑绿。
 - 自验证 session 用 `_test_evcompress_<timestamp>` 前缀，验完清理。
 - 复用既有类型，新增名词前先问能否复用（克制熵增）。
+
+## 9. 落地结果（2026-06-20，Supervisor 整合）
+
+实现前对 §1/§5 前提做了代码核验，用户 grilling 修正了两处认知，结论：**win.summarizedRanges
+方案对两视角都对（用户拍板成立）**，但原 §1/§5 的论证依据被证伪、需更正：
+
+1. **两视角读的不是同一份 events（§1 论证更正）**：self 视角 transcript = `thread.events`
+   （`thinkable/context/index.ts` buildInputItems），peer 视角 transcript = `filterTalkMessages`
+   只读 `thread.inbox`/`outbox` messages（`builtins/agent/children/thread/readable/talk-render.ts`
+   filterTalkMessages + `conversation-render.ts`）——**peer 视角根本看不到 `thread.events`**。
+   故折叠 `thread.events` 天生只影响 self 视角，"跨视角污染"不存在；§5 把 events_summary 判为
+   "跨视角共享"是基于"两视角共享 events"的误读。**但 peer 视角有自己的 transcript（messages）
+   要折**——win.summarizedRanges 正好通用服务它（用户拍板的核心洞察成立）。
+
+2. **win 确有持久化的家（§2"可持久化"成立）**：`THREAD_CLASS_ID` 是 `mode:"inline"`
+   （`builtins/agent/children/thread/persistable/index.ts`），inline 窗整窗（含 win）落
+   thread-context.json（`thread-persist.ts` buildEntries → hydrate `win: env.win`）。`win.transient`
+   只管 `saveObjectData`（要不要单独 state.json），不影响 inline 窗的 win 持久化。故会话窗
+   （talk/creator/peer）的 summarizedRanges 跨 reload 存活。**唯一例外是 self 门面窗**
+   （`isSelfWindow`，`buildEntries` 默认跳过）——为此补：self 窗带 summarizedRanges 时整窗
+   inline 落盘（data 确定性={}，无死 _ref；init 幂等守卫 reload 后保留）。
+
+### 实现（统一存储 + 通用投影，零第二机制）
+- `_shared/utils/summarized-ranges.ts`：`SummarizedRange` 类型 + 纯增删 helper（写入侧不夹边）+
+  通用 `projectSummarizedRanges(items, ranges, renderItem, renderSummary)`（段内连续 items 折成一条 summary）。
+- `readable/default-window-methods.ts`：`compress`/`expand` 按 `args.scope` 分流——`windows`（默认）
+  改 `compressLevel`（既有）；`events` 改 `summarizedRanges`（`keepTail=N` 保留末 N 条 / `fromIdx,toIdx`
+  点名区段，`summary` agent 自写）。加 schema 供菜单发现。
+- 读出侧：self 视角 `context/index.ts` 按 self 窗 summarizedRanges 折 `thread.events`；peer 视角
+  `conversation-render.ts` 按会话窗 summarizedRanges 折 messages（与 viewport 干净组合）。
+- 持久化：`thread-persist.ts` self 窗带 summarizedRanges 时整窗 inline 落盘。
+- 测试：storybook `L2-COMPRESS-EVENTS`（Tier A 控制面）+ `thinkable/__tests__/context.test.ts`
+  （buildInputItems 端到端 self 折叠）+ `thinkable/__tests__/real-compress.test.ts`
+  （真 LLM 自主 compress，gate `RUN_REAL_COMPRESS_TEST=1`，已实证：keepTail=2 折早期 5 轮为一条摘要）。
+
+### §5 脚手架处置（更新）
+旧 `_foldedBy`/`events_summary`（thread.events object data）**user 路径不再依赖**——self 折叠走
+win.summarizedRanges。读出侧 `context/index.ts` 仍保留 `_foldedBy` 跳过为休眠兜底（renderItem 内），
+`events_summary` event kind 渲染保留——**专留 auto/emergency 阶段裁决**（§7），无写入侧故当前 dormant。
+
+### 后续（仍不在本 Issue）
+- auto / emergency_guard 兜底（逼近 budget hard 自动折叠）+ 据此裁决 `_foldedBy`/`events_summary` 去留。
+- `context_compressed` event 落账（observability）。
+- peer 视角 keepTail 便捷模式（当前 keepTail 取 `ctx.thread.events.length`，对 self transcript 精确；
+  talk 窗用显式 fromIdx/toIdx，读出侧按真实 messages.length clamp 兜底）。

@@ -25,9 +25,15 @@ export interface Data {
   isForkWindow?: boolean;
 }
 
-/** thread 的**投影态**（与 Data 分离）：transcript 渲染窗口。window method `set_transcript_window` 读写。 */
+/**
+ * thread 的**投影态**（与 Data 分离）：
+ * - `transcriptViewport`：transcript 渲染窗口（window method `set_transcript_window` 读写）。
+ * - `summarizedRanges`：events compress 折叠态——transcript 内点名区段折成摘要占位
+ *   （通用 window method `compress(scope=events)` 读写；视角独立、随 inline thread 窗持久化）。
+ */
 export interface ThreadWin {
   transcriptViewport?: import("@ooc/core/_shared/utils/viewport.js").TranscriptViewport;
+  summarizedRanges?: import("@ooc/core/_shared/utils/summarized-ranges.js").SummarizedRange[];
 }
 
 /**
