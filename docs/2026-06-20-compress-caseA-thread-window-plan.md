@@ -17,7 +17,8 @@
 
 > 格式：`- [ ] <test file>::<case> —— <断言为何坏 + 期望新行为>`。Task 3-6 跑 `bun test packages/@ooc/core/` 后把**新增** FAIL 追加到这里。
 
-（初始为空，执行时填充）
+- [ ] **[Task4]** `packages/@ooc/storybook/stories/L2_thinkable.stories.ts` (L2-COMPRESS-EVENTS) —— 测 compress(scope=events) 经 **universal default** 解析；Task4 后 events 移到 thread class、universal scope=events 抛错 → 该 story `resolveWindowMethod` 走默认表折 events 的断言失效。**期望新行为**：断言 events-compress 经 thread class（resolveWindowMethod(THREAD_CLASS_ID,'compress')=threadCompress）解析；universal compress(events) 抛错指向 thread 窗。
+- [ ] **[Task3 覆盖缺口，非失败]** 无现存单测断言 self-driven root context 形状（注入 thread 窗 / 无 say-IO 源 / folds 跨 reload）→ Task7 e2e gate 新增 self-driven root 用例补。
 
 ---
 
