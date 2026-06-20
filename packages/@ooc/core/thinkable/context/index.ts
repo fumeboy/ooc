@@ -447,17 +447,19 @@ export async function buildInputItems(
   // never persisted. See _shared/types/thread.ts:_renderedWindows.
   thread._renderedWindows = snapshot.windows;
 
-  // self 视角 transcript：thread.events 平铺成 message 流，按 self 窗投影态 win 的
+  // self 视角 transcript：thread.events 平铺成 message 流，按**自己视角 thread 窗**投影态 win 的
   // summarizedRanges 折叠——落在某段内的连续 events 替换为一条 summary 占位，段外正常渲。
-  // 折叠态视角独立（存 self 窗 win，不改 thread.events），可逆。events compress 读出侧。
+  // 载体收敛（compress Case A）：折叠态挂 thread 窗（isSelfThreadWindow，THREAD_CLASS_ID inline 天然
+  // 持久化）、不再挂 self 门面窗（identity，isSelfWindow）。写侧 events-compress 归属 thread class
+  // → 写读同窗。折叠态视角独立（存 win、不改 thread.events），可逆。
   // （旧 _foldedBy/events_summary 脚手架保留为 auto 兜底休眠路径：renderItem 内仍跳过 _foldedBy。）
-  const selfWin = thread.contextWindows?.find(
-    (w) => (w.win as { isSelfWindow?: boolean } | undefined)?.isSelfWindow === true,
+  const selfThreadWin = thread.contextWindows?.find(
+    (w) => isSelfThreadWindow(w.id),
   )?.win as { summarizedRanges?: SummarizedRange[] } | undefined;
   const transcript = projectSummarizedRanges<ProcessEvent, LlmInputItem>(
     thread.events,
     // 投影前把区段吸附到 tool-pair 安全边界（Case B：防折叠切断 function_call/output 配对留孤儿）。
-    snapRangesToToolPairs(thread.events, selfWin?.summarizedRanges),
+    snapRangesToToolPairs(thread.events, selfThreadWin?.summarizedRanges),
     (event) => (event._foldedBy ? [] : processEventToItems(thread, event)),
     (range, foldedCount) => [
       {

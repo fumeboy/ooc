@@ -19,6 +19,7 @@
 
 - [ ] **[Task4]** `packages/@ooc/storybook/stories/L2_thinkable.stories.ts` (L2-COMPRESS-EVENTS) —— 测 compress(scope=events) 经 **universal default** 解析；Task4 后 events 移到 thread class、universal scope=events 抛错 → 该 story `resolveWindowMethod` 走默认表折 events 的断言失效。**期望新行为**：断言 events-compress 经 thread class（resolveWindowMethod(THREAD_CLASS_ID,'compress')=threadCompress）解析；universal compress(events) 抛错指向 thread 窗。
 - [ ] **[Task3 覆盖缺口，非失败]** 无现存单测断言 self-driven root context 形状（注入 thread 窗 / 无 say-IO 源 / folds 跨 reload）→ Task7 e2e gate 新增 self-driven root 用例补。
+- [ ] **[Task5]** `packages/@ooc/core/thinkable/__tests__/context.test.ts` "events compress — self-view fold" 4 例（折叠 events[0..2] / 可逆 expand / tool-pair 切两对外扩 / 切一对保另一对）—— setup 把 summarizedRanges 设在 **self 门面窗**（win.isSelfWindow），读侧现从 **thread 窗**（isSelfThreadWindow id）读 → 折叠不生效。**期望新行为**：测试 setup 改把 summarizedRanges 挂到 thread 窗实例（id=`w_creator_<threadId>` / threadWindowIdOf）。
 
 ---
 
