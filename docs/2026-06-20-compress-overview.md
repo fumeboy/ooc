@@ -64,12 +64,13 @@ compress 长期是"写进退役注释、无人兑现"的承诺。`windows` scope
 | 应急兜底 | transcript 越 hard 瞬态钳制（保留后缀、tool-pair 安全） | `53c9d502` |
 | 设计权威 | 对象树 `compress.md`（四段结构） | `c7f6358`(ooc-0) |
 | Case B 修复 | events 折叠投影**吸附到 tool-pair 安全边界**，防孤儿 tool 块崩 think | `503c933e` + `1e6e0fc`(ooc-0) |
+| **Case A 载体收敛** | 折叠态从 self 门面窗收敛到**自己视角 thread 窗**（无 creator 窗概念：一条 thread 一个 thread 窗、creator 对话是其上游通道）；谓词拆 `isSelfThreadWindow`/`hasCreatorChannel`；events-compress 能力归属 thread class；删持久化后门 + 冷启动丢窗洞；跨 job reload e2e gate + 真 LLM 实证 | `feat/context-window-axiom`（Task1-7） |
 
-**能力面**：两 scope（windows 档位 / events 历史折叠）、可逆、视角独立、`keepTail` + `{fromIdx,toIdx}` 两种粒度、**三层防溢出**（agent 主动 compress → soft warning 提示 → emergency 钳制兜底）、tool-pair 安全。
+**能力面**：两 scope（windows 档位 / events 历史折叠）、可逆、视角独立、`keepTail` + `{fromIdx,toIdx}` 两种粒度、**三层防溢出**（agent 主动 compress → soft warning 提示 → emergency 钳制兜底）、tool-pair 安全。折叠态挂自己视角 thread 窗（inline 天然持久化、含 self-driven root）。
 
-**测试**：storybook `L2-COMPRESS-EVENTS`（Tier A 控制面 gate）+ `context.test.ts`（buildInputItems 端到端：折叠/视角隔离/可逆/预算/应急钳制/Case B）+ `transcript-clamp.test.ts`（钳制/floor/sanitize）+ `real-compress.test.ts`（真 LLM 自主 compress，gate `RUN_REAL_COMPRESS_TEST=1`）。`bun run verify` 全绿（727 pass）+ storybook gate 绿。
+**测试**：storybook `L2-COMPRESS-EVENTS`（Tier A 控制面 gate；events-compress 经 thread class 解析 + 错窗边界）+ `context.test.ts`（buildInputItems 端到端：折叠/视角隔离/可逆/预算/应急钳制/Case B，折叠态挂 thread 窗）+ `transcript-clamp.test.ts`（钳制/floor/sanitize）+ `context-compression-p0f-events.test.ts`（**跨 job reload 活 gate**：creator-having + self-driven root + 可逆）+ `real-compress.test.ts`（真 LLM 经 thread 窗 window_id 自压缩，gate `RUN_REAL_COMPRESS_TEST=1`，已实跑 pass）。`bun run verify` 全绿（721 pass）+ storybook gate 绿（64 pass）。
 
-**已知过渡债**：self 视角折叠态停在 self 门面窗（决策 2.2.3）——能用、普适，但语义混 + 持久化靠写盘后门 + stone 对象冷启动 `registry.has(objectId)=false` 时丢窗丢 folds（builtin 类对象无碍）。
+**过渡债已清（2026-06-20）**：原 self 视角折叠态停在 self 门面窗（决策 2.2.3）的语义混 + 写盘后门 + 冷启动丢窗洞——已随 Case A 载体收敛全部消除（折叠态挂 inline 持久化的 thread 窗、后门删、builtin 类冷启动恒注册）。
 
 ---
 
@@ -82,17 +83,19 @@ compress 长期是"写进退役注释、无人兑现"的承诺。`windows` scope
 - **预算三层防溢出**：transcript 计入预算账（core10）→ 超 soft 报 `<context_budget_warning>`（含 transcript 占比、指向 compress）→ 超 hard 瞬态钳制（保留最近、tool-pair 安全、插可见 marker）。
 - **tool-pair 安全**：provider 层不 sanitize 孤儿 tool_use/tool_result（会被 LLM 拒），故 events 折叠投影前**吸附区段到完整配对边界**（`snapRangesToToolPairs`）、钳制对后缀 sanitize 孤儿 output。
 
-### 4.2 归宿与剩余工作（Case A：载体收敛）
+### 4.2 Case A 载体收敛（已落，2026-06-20）
 
-唯一剩余是**自视折叠载体从 self 门面窗收敛到"自己视角 thread window"**（`context.md` 核 9/10、`compress.md` Case A）。它属 **thread-as-object 弧（备忘 S3）**，是较大重构，须一并解决：
+**自视折叠载体已从 self 门面窗收敛到"自己视角 thread 窗"**（`context.md` 核 9/10、`compress.md` Case A）。设计敲定走**统一模型**：无独立"creator 窗"概念——一条 thread 恰好一个 **thread 窗（过程）**，creator 对话是它内建的上游通道（self-driven root 通道为空）。落地清单全兑现：
 
-- 给每条 thread（含 **self-driven root**，当前无 creator 窗）合成一个承载 events 的自己视角 thread window；
-- 身份门面（self.md）**独立保留**（POV-keyed `xml.ts`，不可并入会话窗）；
-- 载体窗 id 须满足读出侧识别谓词（否则写读不同窗静默失效）；
-- transcript 内容由该窗承载（core10 的"归属"半，与已落地的"预算账"半合璧）；
-- 补一个**跨 job（scheduler_yielded → reload）的活 e2e gate**（现有 events compress e2e 是 `describe.skip`、测已退役的 `_foldedBy` 路径）。
+- 每条 thread（含 **self-driven root**）始终注入自己视角 thread 窗（`init.ts`：creator 通道 data 条件化）；
+- 身份门面（self.md）+ agency（object methods）**留 self 门面窗**（POV-keyed `xml.ts`，exec 默认目标不变）——「自己」与「过程」各归各窗；
+- 谓词拆 `isSelfThreadWindow`（自视检测，含 root）/ `hasCreatorChannel`（有上游，gate wait/end/protocol/say）——读侧折叠源 + 写侧 exec 命中同一 thread 窗；
+- **写侧能力归属**：events-compress 移入 thread class、universal 只留 windows scope（错窗 scope=events 抛错指向 thread 窗）；
+- transcript 内容由 thread 窗承载（core10"归属"半 + 已落"预算账"半合璧）；
+- 折叠态挂 thread 窗 win（THREAD_CLASS_ID inline 天然持久化）→ self 门面窗持久化后门删、冷启动丢窗洞消失；
+- **跨 job（scheduler_yielded → reload）活 e2e gate**（重写 `context-compression-p0f-events.test.ts`，退役 `_foldedBy` 路径；creator-having + self-driven root + 可逆）+ 真 LLM 实证（经 thread 窗 window_id 自压缩）。
 
-收敛完成后：折叠态挂该窗 win（inline 天然持久化）→ self 门面窗持久化后门可删、冷启动丢窗洞消失、语义归位。**不单独抢做**——随 thread-as-object 弧整体落。
+设计/计划：`docs/2026-06-20-compress-caseA-thread-window-{convergence,plan}.md`。
 
 ### 4.3 不做 / 边界
 
