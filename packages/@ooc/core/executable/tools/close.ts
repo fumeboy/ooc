@@ -7,7 +7,7 @@
  * - 从 thread 移除该实例
  * - 移窗后：若该窗引用某对象（`referencedObjectId`），且该对象 session refcount 归零 → 经
  *   `dispatchUnactiveIfZero` 单次泛型派发该 class 的 `unactive` 钩子（refcount 归 0 触发；
- *   thread 的 unactive 把 fork 子线程切 canceled 并级联停用子树）。
+ *   thread 的 unactive 通知被解引用线程「无消息订阅者」、由其自决（不强制终结）。
  *
  * 注：旧契约里 type 注册的 onClose hook 已随承重墙 deferred hook 废弃；副作用现由
  * class 的 `unactive` 生命周期钩子（refcount 0↔1）+ `closable` 标记表达。

@@ -396,8 +396,7 @@ export type ThreadStatus =
   | "waiting"
   | "done"
   | "failed"
-  | "paused"
-  | "canceled";
+  | "paused";
 
 /**
  * 单个线程的运行时上下文。

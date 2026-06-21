@@ -94,7 +94,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
       window_methods: [setTranscriptWindowMethod, threadCompress, threadResize],
     },
     // other-view：与对端 peer/sub 的对话（含父侧 fork 子窗）；可关（关窗经 close 原语、非 method——
-    // 关 fork 子窗触发 thread.unactive 切 canceled + 级联）。
+    // 关 fork 子窗触发 thread.unactive 通知「无订阅者」、自决）。
     // **不挂 compress/resize**（Case E 裁决，2026-06-21）：summarizer-fold 是自我视角能力——折自己那条
     // append-only 主历史（thread.events，单写者、index 稳）。talk transcript 是 filterTalkMessages 跨双流
     // createdAt 重排的**派生视图**（index 不稳、且 harvest 从不写 talk 窗）。talk 压缩走 window-overflow +

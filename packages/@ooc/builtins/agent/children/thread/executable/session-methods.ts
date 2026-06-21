@@ -7,7 +7,7 @@
  *
  * 注：**wait 是 3 原语之一（非 method）**——经 `core/executable/tools/wait.ts` 独立 tool 入口表达。
  * 关窗也是原语（`core/executable/tools/close.ts`）、**不是** thread method——关一个 fork 子线程窗经
- * refcount 归 0 触发 thread.unactive（切 canceled + 级联），见 `index.ts`。
+ * refcount 归 0 触发 thread.unactive（通知「无订阅者」、自决），见 `index.ts`。
  *
  * 签名 `(ctx, self=Data, args)`：self 是会话窗状态（target / targetThreadId / isForkWindow），
  * ctx.object.id 是窗实例 id（= 会话身份），ctx.thread 是当前执行 thread。

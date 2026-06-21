@@ -95,7 +95,7 @@ describe("referencedObjectId (fork-only)", () => {
 
 // ─────────────────────── Task 1.2: countSessionReferences ───────────────────────
 
-describe("countSessionReferences (内存树, 排除 done/failed/canceled)", () => {
+describe("countSessionReferences (内存树, 排除 done/failed)", () => {
   test("fork 子仅被父 fork 窗引用 → 1；父去窗 → 0", () => {
     const p = thr("t_p", "running", [forkWin("w_f", "t_c")]);
     expect(countSessionReferences(p, "t_c")).toBe(1);
@@ -120,8 +120,8 @@ describe("countSessionReferences (内存树, 排除 done/failed/canceled)", () =
     expect(countSessionReferences(child, "t_c")).toBe(1);
   });
 
-  test("canceled 线程持有的引用不计数", () => {
-    const c = thr("t_c2", "canceled", [forkWin("w", "x")]);
+  test("退出态(done)线程持有的引用不计数", () => {
+    const c = thr("t_c2", "done", [forkWin("w", "x")]);
     const p = thr("t_p2", "running", []);
     (p.childThreads as Record<string, ThreadContext>)["t_c2"] = c;
     expect(countSessionReferences(p, "x")).toBe(0);
@@ -204,14 +204,14 @@ describe("dispatchUnactiveIfZero (单次泛型, fast-path)", () => {
   });
 
   test("delete 路径过滤掉残留引用 targetId 的内存窗（防御清理）", async () => {
-    // 残留引用窗活在退出态（canceled）线程 → refcount 0 → dispatch 仍触发；removeObjectFromSession
+    // 残留引用窗活在退出态（done）线程 → refcount 0 → dispatch 仍触发；removeObjectFromSession
     // 把 ctxThread 顶层引用 targetId 的窗过滤掉（防御性内存清理）。
     const reg = createObjectRegistry();
     reg.register("_test/gc2", {
       unactive: { description: "", exec: () => ({ delete: true }) },
     });
-    // 顶层有一个引用 o_x 的窗，但其所在线程是 canceled（退出态）→ 不计入 refcount → dispatch 触发删除。
-    const p = thr("t_np", "canceled", [forkWin("w_ref", "o_x")]);
+    // 顶层有一个引用 o_x 的窗，但其所在线程是 done（退出态）→ 不计入 refcount → dispatch 触发删除。
+    const p = thr("t_np", "done", [forkWin("w_ref", "o_x")]);
     await dispatchUnactiveIfZero(p, "o_x", "_test/gc2", reg);
     expect(p.contextWindows.some((w) => referencedObjectId(w) === "o_x")).toBe(false);
   });

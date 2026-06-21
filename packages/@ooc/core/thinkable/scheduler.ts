@@ -70,9 +70,9 @@ function emitChildEndNotifications(root: ThreadContext): void {
       // compress v2：summarizer fork 的结束由 harvestSummarizerForks 内部回收，
       // 不发 child-end 通知（避免污染父会话 + 与 harvest 双记，C2）。
       if (child.isSummarizer) continue;
-      // canceled 同 done/failed = 终态：发 child-end marker，让等待父唤醒 + 看见子（含级联）被取消
-      // （object-lifecycle：fork 子窗被关 → 子线程 unactive→canceled）。
-      if (child.status !== "done" && child.status !== "failed" && child.status !== "canceled") continue;
+      // 终态 done/failed 才发 child-end marker（让等待父唤醒）。
+      // 注：本函数（emitChildEndNotifications）整体将由 onChildTerminal 退潮移除，此处仅随终态集收敛。
+      if (child.status !== "done" && child.status !== "failed") continue;
       // tail 区分 child 的每次 end；lastExecutedAt 在 end 那一 tick 被设上，
       // 之后 child 不再被调度直到父 continue 触发它重启
       const tail = child.lastExecutedAt ?? 0;

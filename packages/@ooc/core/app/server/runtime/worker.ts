@@ -296,13 +296,9 @@ async function syncCrossObjectCalleeEnds(
       continue;
     }
     if (!callee) continue;
-    // 终态（含 canceled）才向 caller 回报：canceled callee 同 done/failed，不再运行、给出终态通知。
-    if (
-      callee.status !== "done" &&
-      callee.status !== "failed" &&
-      callee.status !== "canceled"
-    )
-      continue;
+    // 终态 done/failed 才向 caller 回报。注：本函数（syncCrossObjectCalleeEnds）整体随 say 读侧
+    // 退潮移除（→ thread-as-referencable-object），此处仅随终态集收敛。
+    if (callee.status !== "done" && callee.status !== "failed") continue;
 
     const tail = callee.lastExecutedAt ?? 0;
     const marker = `[talk:${w.id}:${callee.status}@${tail}]`;

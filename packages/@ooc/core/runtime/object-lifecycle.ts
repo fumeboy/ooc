@@ -5,7 +5,7 @@
  * `.ooc-world-meta/.../children/object/self.md`（对象生命周期核心）。
  *
  * `ContextWindow` 是对 object 的引用；`close` 移除一个引用；引用计数清空触发可选的 `unactive`。
- * 本模块**泛型、零 thread builtin import**——只 import core 内部类型/谓词；级联/canceled 等
+ * 本模块**泛型、零 thread builtin import**——只 import core 内部类型/谓词；通知语义等
  * thread-specific policy 活在 thread builtin 的 unactive body。
  */
 import type { OocObjectInstance } from "./ooc-class.js";
@@ -18,7 +18,7 @@ import { objectDir, type FlowObjectRef } from "../persistable/common.js";
 import { evictObjectFromTable } from "./session-object-table.js";
 import { rm } from "node:fs/promises";
 
-/** refcount 活动态：退出态 done/failed/canceled 排除（spec §2.2/§3.2，D1 confirmed）。 */
+/** refcount 活动态：退出态 done/failed 排除（spec §2.2/§3.2，D1 confirmed）。 */
 const ACTIVE_STATUS = new Set(["running", "waiting", "paused"]);
 
 /**
@@ -64,7 +64,7 @@ function reachableThreads(start: ThreadContext): Map<string, ThreadContext> {
 
 /**
  * session 内存树非退出态线程中，外部引用 targetId 的窗数（自引用已由 referencedObjectId 排除）。
- * 退出态 {done, failed, canceled} 的线程持有的窗不计数（spec §2.2/§3.2）。v1 不盘扫。
+ * 退出态 {done, failed} 的线程持有的窗不计数（spec §2.2/§3.2）。v1 不盘扫。
  */
 export function countSessionReferences(ctxThread: ThreadContext, targetId: string): number {
   let n = 0;
