@@ -3,6 +3,7 @@ import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { buildInputItems, type ProcessEvent, type ThreadContext } from "./context";
+import { maybeAutoCompress } from "./context/compress-fork";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "./llm/types";
 import { LlmTimeoutError } from "./llm/timeout";
 
@@ -378,6 +379,11 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     // <context_overflow> 呈现，soft 档警告由 buildInputItems 注入。thinkloop 不再自行
     // 裁剪 thread.contextWindows——窗口是持久实体，仅由显式 close/compress 移除。
     const llmInput = await buildInputItems(thread);
+
+    // compress v2 auto-trigger：未总结 transcript 超 autoCompressLevel 阈值（或 compress 置 intent）
+    // 且无在途 compress → fork 一条 summarizer 子线程压缩早期过程（dormant：未 resize/intent 且未超阈值时 no-op）。
+    await maybeAutoCompress(thread, llmInput.transcriptTokens ?? 0);
+
     const tools = getAvailableTools(thread);
 
     // 输入输出记录点挂到 observable。

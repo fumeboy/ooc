@@ -405,7 +405,7 @@ function snapRangesToToolPairs(
 /** 构造 Responses-first LLM 输入 items。 */
 export async function buildInputItems(
   thread: ThreadContext
-): Promise<{ instructions?: string; input: LlmInputItem[] }> {
+): Promise<{ instructions?: string; input: LlmInputItem[]; transcriptTokens?: number }> {
   // ContextPipeline + XmlRenderer production path
   const pipeline = createDefaultPipeline();
   const snapshot = await pipeline.run(thread);
@@ -499,6 +499,7 @@ export async function buildInputItems(
       : [];
 
   return {
+    transcriptTokens,
     input: [
       {
         type: "message",
