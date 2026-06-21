@@ -70,8 +70,6 @@ describe("stone file IO", () => {
     await expect(stat(join(stoneDir(ref), "readme.md"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
-  // data.json 迁到 flow 层；详见 src/persistable/__tests__/flow-data.test.ts（待补）。
-
   test("executable/index.ts round trip (canonical)", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "dave" });

@@ -30,9 +30,9 @@ export interface PersistableModule<Data = any> {
   /**
    * 持久化模式（class 自声明，取代旧的 registry `isBuiltinFeature` 标志）。
    * - `"inline"`：实例是所属 thread 的**运行态自有窗**（会话窗等），整窗随该 thread 的
-   *   `thread-context.json` **inline 落盘**、不写独立 `state.json`——save/load 由 thread-context
+   *   `thread-context.json` **inline 落盘**、不单独落 `data.json`——save/load 由 thread-context
    *   底座代劳，本模块只声明 mode（薄壳）。
-   * - 缺省：**独立 object**，写自己的 `state.json`，thread-context 仅存 `_ref` 引用。
+   * - 缺省：**独立 object**，写自己的 `data.json`（裸 Data），thread-context 仅存 `_ref` 引用。
    */
   mode?: "inline";
   /** 把实例 Data 写盘（inline 模式由底座代劳、不需要，故可选）。 */

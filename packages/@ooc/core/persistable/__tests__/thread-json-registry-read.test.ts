@@ -3,7 +3,7 @@
  *
  * Wave4 后 readThread 的窗状态来源是 thread-context.json（hydrateContextWindows），
  * 不再读旧 ooc-6「context.json registry + params.order/compressLevel 投影」双写期路径
- * ——那条 registry-priority 读路径已退役（writeContextRegistry/writeRuntimeObjectState
+ * ——那条 registry-priority 读路径已退役（writeContextRegistry/writeRuntimeObjectData
  * 仍作为孤立 IO 原语存在，但 readThread 不再消费）。本文件验证仍存在的行为：
  *   1. registry references missing object → graceful（thread-context.json 不引它即不出现）。
  *   2. builtin inline 窗经 writeThread 落 thread-context.json，reload 还原。

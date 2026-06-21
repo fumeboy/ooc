@@ -3,7 +3,7 @@
  *
  * 这是「系统默认持久化 + class 自定义 persistable」的通用编织点，适用于**任何** object 实例
  * （file/search/process/plan/…，以及 thread 容器里的独立子窗）：
- * - `inst.data`（业务数据，object 维度，跨线程共享）→ 该 object 的 `state.json`。
+ * - `inst.data`（业务数据，object 维度，跨线程共享）→ 该 object 的 `data.json`（裸 Data）。
  *   优先 `registry.resolvePersistable(class).save/load`，否则系统默认 JSON 序列化。
  *
  * thread 容器（thread.json / thread-context.json / inbox / hydrate）的**逻辑**不在此——那是
@@ -17,7 +17,7 @@ import type { OocObjectInstance } from "../runtime/ooc-class.js";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import { objectDir, type FlowObjectRef, type ThreadPersistenceRef } from "./common.js";
 import type { PersistableContext } from "./contract.js";
-import { writeRuntimeObjectState } from "./flow-runtime-object.js";
+import { writeRuntimeObjectData } from "./flow-runtime-object.js";
 import { createFlowObject } from "./flow-object.js";
 import { observeWarn } from "../observable/log-aggregator.js";
 
@@ -57,7 +57,7 @@ export function persistableCtx(ref: FlowObjectRef): PersistableContext {
 
 /**
  * 非持久化实例 —— self 门面 / member / peer / creator 等每轮 init 幂等重注入的实例。
- * 它们由确定性重建、无独立 state.json；落盘只会变成死 _ref 刷屏，写盘端统一剔除。
+ * 它们由确定性重建、无独立 data.json；落盘只会变成死 _ref 刷屏，写盘端统一剔除。
  * 约定标记：`win.transient === true`（init.ts 注入时设）。
  */
 export function isTransientInstance(instance: OocObjectInstance): boolean {
@@ -65,8 +65,8 @@ export function isTransientInstance(instance: OocObjectInstance): boolean {
 }
 
 /**
- * 把某实例的 `inst.data` 刷到它的 `state.json`。
- * 优先 class 自定义 `resolvePersistable(class).save`，否则系统默认（writeRuntimeObjectState）。
+ * 把某实例的 `inst.data` 刷到它的 `data.json`（裸 Data）。
+ * 优先 class 自定义 `resolvePersistable(class).save`，否则系统默认（writeRuntimeObjectData）。
  * inline（运行态自有窗，data 随 thread-context inline）/ transient / root 跳过。
  */
 export async function saveObjectData(
@@ -92,9 +92,9 @@ export async function saveObjectData(
     if (custom?.save) {
       await custom.save(persistableCtx(ref), instance.data);
     } else {
-      await writeRuntimeObjectState(
+      await writeRuntimeObjectData(
         ref,
-        { id: instance.id, class: instance.class, data: instance.data } as unknown as Parameters<typeof writeRuntimeObjectState>[1],
+        instance.data as Record<string, unknown>,
       );
     }
   } catch (e) {

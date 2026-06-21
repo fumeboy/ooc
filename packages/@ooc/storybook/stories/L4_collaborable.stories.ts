@@ -33,7 +33,7 @@ export const L4_STORIES: Story[] = [
       // Wave4 对象模型：会话窗 stored class = thread 的 stone objectId "_builtin/agent/thread"
       //（"talk" 是 readable computeProjectionClass 按 POV 算的投影 class，不落盘）。
       // 会话窗是 inline 持久化（thread persistable.mode=inline）：整窗 inline 进 user thread-context
-      // entry，data.target 直接可读（不写独立 state.json）。
+      // entry，data.target 直接可读（不写独立 data.json）。
       const entries = (ctx.contextWindows ?? []) as any[];
       const sessionEntry = entries.find((w) => normalizeClassId(w.class ?? "") === "agent/thread");
       check(

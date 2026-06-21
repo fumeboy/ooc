@@ -133,7 +133,7 @@ export class ObjectRegistry {
 
   /**
    * 该 class 的实例是否 **inline 持久化**（运行态自有窗：整窗随所属 thread 的
-   * thread-context.json inline 落盘、不写独立 state.json）。
+   * thread-context.json inline 落盘、不写独立 data.json）。
    * 沿继承链查 `persistable.mode === "inline"`——取代旧的 `isBuiltinFeature` 标志，
    * 持久化策略归 class 自己的 persistable 维度声明，registry 不再硬编码标志位。
    */

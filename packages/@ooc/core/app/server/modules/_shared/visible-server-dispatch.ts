@@ -11,10 +11,9 @@ import type { ObjectRegistry } from "@ooc/core/runtime/object-registry";
 import type { FlowObjectRef } from "@ooc/core/_shared/types/thread.js";
 import { persistableCtx } from "@ooc/core/persistable/object-data.js";
 import {
-  readRuntimeObjectState,
-  writeRuntimeObjectState,
+  readRuntimeObjectData,
+  writeRuntimeObjectData,
 } from "@ooc/core/persistable";
-import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import {
   normalizeMethodResult,
   type ObjectMethodResult,
@@ -52,7 +51,7 @@ export async function dispatchVisibleServerMethod(
     );
   }
 
-  // load 当前 data。优先 class 自定义 persistable.load；否则系统默认（state.json 的 `.data`，
+  // load 当前 data。优先 class 自定义 persistable.load；否则系统默认（data.json 的裸 Data，
   // 与 object-data.saveObjectData 同布局）。无盘上数据 → 空 Data，由 method 初始化字段。
   const persistable = registry.resolvePersistable(classId);
   const ctx = persistableCtx(flowRef);
@@ -60,8 +59,7 @@ export async function dispatchVisibleServerMethod(
   if (persistable?.load) {
     data = ((await persistable.load(ctx)) as Record<string, unknown>) ?? {};
   } else {
-    const state = await readRuntimeObjectState(flowRef);
-    data = ((state as { data?: Record<string, unknown> } | undefined)?.data) ?? {};
+    data = (await readRuntimeObjectData(flowRef)) ?? {};
   }
 
   // exec 改入参 data（pass-by-ref）→ reportDataEdit eager 落盘（与 thinkloop object method 一致约定）。
@@ -75,12 +73,8 @@ export async function dispatchVisibleServerMethod(
         if (persistable?.save) {
           await persistable.save(persistableCtx(flowRef), data);
         } else {
-          // 系统默认：落 state.json `{ id, class, data }`（与 saveObjectData 同布局）。
-          await writeRuntimeObjectState(flowRef, {
-            id: flowRef.objectId,
-            class: classId,
-            data,
-          } as unknown as ContextWindow);
+          // 系统默认：落 data.json 裸 Data（与 saveObjectData 同布局）。
+          await writeRuntimeObjectData(flowRef, data);
         }
       },
     },

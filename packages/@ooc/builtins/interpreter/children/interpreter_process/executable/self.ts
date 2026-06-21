@@ -1,5 +1,4 @@
 import { stoneDir, type StoneObjectRef } from "@ooc/core/persistable/index.js";
-import { readData as readFlowData, mergeData as mergeFlowData } from "../persistable/flow-data.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
 
@@ -17,9 +16,9 @@ export interface InterpreterSelf {
    * 找不到 windowId / method 时抛清晰错误。
    */
   callMethod: (windowId: string, command: string, args?: Record<string, unknown>) => Promise<unknown>;
-  /** 读 data.json 中的字段；不存在返回 undefined。 */
+  /** 读本 interpreter_process 实例自身 data（userData 子字段）中的字段；不存在返回 undefined。 */
   getData: (key: string) => Promise<unknown>;
-  /** 顶层 merge 写 data.json 中的字段。 */
+  /** 顶层 merge 写本 interpreter_process 实例自身 data（userData 子字段）中的字段，随默认 data.json 落盘。 */
   setData: (key: string, value: unknown) => Promise<void>;
   /** 读取当前 thread 的局部数据（interpreter_process 跨 exec 共享通道）。 */
   getThreadLocal: (key: string) => unknown;
@@ -31,20 +30,26 @@ export interface InterpreterSelf {
  * 构造 interpreter 注入的 self 对象。
  *
  * - dir：stone 目录绝对路径
- * - getData/setData：读写 flow object 的 `data.json`
- *   （`flows/<sid>/objects/<self>/data.json`）。
- *   无 thread.persistence 时 getData 返回 undefined / setData no-op。
- * - getThreadLocal/setThreadLocal：thread 级临时数据，跨 ts/js exec 共享
+ * - getData/setData：读写**本 interpreter_process 实例自身的 data**（`data.userData` 子字段，
+ *   隔离 history 投影）。setData 写入活的 userData 引用后调 reportDataEdit，随默认 data.json
+ *   落盘、并在下次 exec 时 hydrate 回来。
+ * - getThreadLocal/setThreadLocal：thread 级临时数据（in-memory，不持久化），跨 ts/js exec 共享
  *
  * `callMethod`：经 `runtime.callMethod`（RuntimeHandle）委托调当前 thread 内某 object 的
  * object method（runtime 解析目标 class → resolveObjectMethod → 三参 exec）。runtime 缺席
  * （无 persistence / 未接通）或目标无该 method 时抛清晰错误。getData/setData/getThreadLocal/
- * setThreadLocal 不依赖 dispatch，原样保留。
+ * setThreadLocal 不依赖 dispatch。
+ *
+ * @param userData         本 process 实例自身 data 的 `userData` 子字段（活引用，setData 直接改写它）
+ * @param reportDataEdit   通知 runtime data 已改、需重新持久化（construct 阶段可缺省——
+ *                         setData 改写的 userData 随 construct 返回的 Data 落盘）
  */
 export function createInterpreterSelf(
   stoneRef: StoneObjectRef,
   thread: ThreadContext,
+  userData: Record<string, unknown>,
   runtime?: RuntimeHandle,
+  reportDataEdit?: () => Promise<void>,
 ): InterpreterSelf {
   const dir = stoneDir(stoneRef);
   const self: InterpreterSelf = {
@@ -60,15 +65,11 @@ export function createInterpreterSelf(
       return runtime.callMethod(windowId, command, args ?? {});
     },
     async getData(key) {
-      const persistence = thread.persistence;
-      if (!persistence) return undefined;
-      const data = await readFlowData(persistence);
-      return data[key];
+      return userData[key];
     },
     async setData(key, value) {
-      const persistence = thread.persistence;
-      if (!persistence) return;
-      await mergeFlowData(persistence, { [key]: value });
+      userData[key] = value;
+      await reportDataEdit?.();
     },
     getThreadLocal(key) {
       return thread.threadLocalData?.[key];

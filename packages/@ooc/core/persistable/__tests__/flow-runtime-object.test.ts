@@ -1,26 +1,21 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  runtimeObjectStateFile,
-  writeRuntimeObjectState,
-  readRuntimeObjectState,
+  runtimeObjectDataFile,
+  writeRuntimeObjectData,
+  readRuntimeObjectData,
 } from "../flow-runtime-object";
 import { __resetSerialQueueForTests } from "@ooc/core/runtime/serial-queue";
-import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import type { FlowObjectRef } from "../common";
 
-describe("flow-runtime-object — ooc-6 P5'.1 flat runtime layout", () => {
+describe("flow-runtime-object — ooc-6 P5'.1 flat runtime layout (裸 data.json)", () => {
   let baseDir: string;
   let ref: FlowObjectRef;
-  const sampleWindow: ContextWindow = {
-    id: "todo_run_xyz",
-    class: "_builtin/agent/todo",
-    title: "demo todo",
-    status: "open",
-    createdAt: 1717000000000,
-    data: { content: "demo todo body" },
+  const sampleData: Record<string, unknown> = {
+    content: "demo todo body",
+    done: false,
   };
 
   beforeEach(async () => {
@@ -33,28 +28,42 @@ describe("flow-runtime-object — ooc-6 P5'.1 flat runtime layout", () => {
     await rm(baseDir, { recursive: true, force: true });
   });
 
-  it("computes correct path: flows/<sid>/objects/<oid>/state.json", () => {
-    expect(runtimeObjectStateFile(ref)).toBe(
-      join(baseDir, "flows", "sess_rt", "objects", "todo_run_xyz", "state.json"),
+  it("computes correct path: flows/<sid>/objects/<oid>/data.json", () => {
+    expect(runtimeObjectDataFile(ref)).toBe(
+      join(baseDir, "flows", "sess_rt", "objects", "todo_run_xyz", "data.json"),
     );
   });
 
-  it("write + read roundtrip preserves the ContextWindow shape", async () => {
-    await writeRuntimeObjectState(ref, sampleWindow);
-    const back = await readRuntimeObjectState(ref);
-    expect(back).toEqual(sampleWindow);
+  it("write + read roundtrip preserves the bare Data shape", async () => {
+    await writeRuntimeObjectData(ref, sampleData);
+    const back = await readRuntimeObjectData(ref);
+    expect(back).toEqual(sampleData);
+  });
+
+  it("writes bare data (no {id,class,data} envelope) to disk", async () => {
+    await writeRuntimeObjectData(ref, sampleData);
+    const onDisk = JSON.parse(await readFile(runtimeObjectDataFile(ref), "utf8"));
+    expect(onDisk).toEqual(sampleData);
+    expect(onDisk).not.toHaveProperty("data");
+    expect(onDisk).not.toHaveProperty("class");
+  });
+
+  it("strips contextWindows before writing", async () => {
+    await writeRuntimeObjectData(ref, { ...sampleData, contextWindows: [{ id: "x" }] });
+    const back = await readRuntimeObjectData(ref);
+    expect(back).toEqual(sampleData);
+    expect(back).not.toHaveProperty("contextWindows");
   });
 
   it("read returns undefined when file missing (ENOENT graceful)", async () => {
-    const back = await readRuntimeObjectState(ref);
+    const back = await readRuntimeObjectData(ref);
     expect(back).toBeUndefined();
   });
 
-  it("update overwrites previous state.json contents", async () => {
-    await writeRuntimeObjectState(ref, sampleWindow);
-    const updated: ContextWindow = { ...sampleWindow, title: "renamed" } as ContextWindow;
-    await writeRuntimeObjectState(ref, updated);
-    const back = await readRuntimeObjectState(ref);
-    expect(back?.title).toBe("renamed");
+  it("update overwrites previous data.json contents", async () => {
+    await writeRuntimeObjectData(ref, sampleData);
+    await writeRuntimeObjectData(ref, { ...sampleData, content: "renamed" });
+    const back = await readRuntimeObjectData(ref);
+    expect(back?.content).toBe("renamed");
   });
 });

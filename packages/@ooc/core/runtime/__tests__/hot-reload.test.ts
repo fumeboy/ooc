@@ -66,8 +66,8 @@ describe("parseStoneChange 路径解析", () => {
   test("不认识的子目录（如 database/、files/、pools/、flows/）→ null", () => {
     expect(parseStoneChange(WORLD, `${WORLD}/stones/alice/database/data.sqlite`)).toBeNull();
     expect(parseStoneChange(WORLD, `${WORLD}/stones/alice/files/x.txt`)).toBeNull();
-    expect(parseStoneChange(WORLD, `${WORLD}/pools/foo/state.json`)).toBeNull();
-    expect(parseStoneChange(WORLD, `${WORLD}/flows/bar/alice/state.json`)).toBeNull();
+    expect(parseStoneChange(WORLD, `${WORLD}/pools/foo/data.json`)).toBeNull();
+    expect(parseStoneChange(WORLD, `${WORLD}/flows/bar/alice/data.json`)).toBeNull();
   });
 
   test("world 外的路径 → null", () => {

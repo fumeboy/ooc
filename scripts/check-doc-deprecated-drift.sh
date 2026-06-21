@@ -102,6 +102,14 @@ declare -a FORBIDDEN_PATTERNS=(
   "archiveForkChild"
   "ObjectDestructor"
   "destruct\\?:"
+  # —— object data 落盘统一 data.json（2026-06-21）退役 state.json + session 草稿 ——
+  # 终态：默认持久化落盘文件名恒为 data.json（裸 data，class 由 .flow.json 承载）；interpreter
+  # getData/setData 收紧为本实例 userData，删 flow 级独立「session 草稿」概念。下列当 live 教即 drift
+  # （迁移说明用 退役/→/已删 标记豁免）。注意：data.json 是 live 文件名、勿裸 grep。
+  "state\\.json"
+  "session 草稿"
+  "session 级.*草稿"
+  "flow 级.*data\\.json.*草稿"
 )
 
 # 退役标记词：命中行含其一 = 合法的「退役说明」，放行。

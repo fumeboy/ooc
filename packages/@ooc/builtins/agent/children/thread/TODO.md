@@ -108,7 +108,7 @@ const persistable: PersistableModule = {
 
 - **退役**：`PersistableModule.container`、`ThreadContainerPersistence`、`thread/persistable/thread-container.ts`、
   `Data.isCreatorWindow` 字段、`close` 里的 isCreatorWindow 运行时检查。
-- **保留（归属原则证明它们是对的）**：`thread-context.json` / `_ref` / per-object `state.json`（窗=引用、
+- **保留（归属原则证明它们是对的）**：`thread-context.json` / `_ref` / per-object `data.json`（窗=引用、
   对象=数据的分层）、`object-data.ts` 的 custom-or-default dispatch、路径原语、串行写、inbox per-message 目录。
 - **conversationId 去状态化（2026-06-16 已落地）**：`conversationId` 恒等于窗实例 id，删 `Data` 字段；
   消费方一律用 `ctx.object.id` / `window.id`（readable renderHead 传入 id；前端 TalkWindowDetail 显示 window.id）。
