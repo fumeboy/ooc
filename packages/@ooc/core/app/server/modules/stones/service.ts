@@ -217,10 +217,14 @@ export function createStonesService({
         await createStoneObject(wtRef, classId ? { class: classId } : undefined);
         // self.md 协议（visible.display_name_from_self_md）：首行 = displayName。
         // 显式 self 文本优先；否则把 name 写成首行（提供有意义的 displayName）。
-        if (self !== undefined) {
-          await writeSelf(wtRef, self);
-        } else if (name !== undefined) {
-          await writeSelf(wtRef, name);
+        // 仅 agent（class=_builtin/agent）有 self.md；非 agent 无 self.md，displayName 降级 objectId。
+        const isAgent = classId === "_builtin/agent";
+        if (isAgent) {
+          if (self !== undefined) {
+            await writeSelf(wtRef, self);
+          } else if (name !== undefined) {
+            await writeSelf(wtRef, name);
+          }
         }
         if (readable !== undefined) await writeReadable(wtRef, readable);
       });
