@@ -36,9 +36,22 @@ ooc-philosophy / ooc-glossary / engineering-harness / testing-strategy / authori
 及各 `children/<dim>/`（self.md 核心设计 + knowledge）。原 `meta/` 已不存在——能力测试框架 storybook 已提级到 `packages/@ooc/storybook/`。
 
 阅读顺序建议：
-1. 先 `.ooc-world-meta/.../supervisor/self.md` 建立"OOC 是什么 + 9 维度"的心智模型（+ knowledge/ooc-philosophy / ooc-glossary）。
+0. 先 supervisor `knowledge/index.md`——**全部核心设计的设计层总览**（顶层 / 对象模型 / 各维度 / builtins / 跨维度·内置对象交叉契约），一处看全 OOC 怎么设计、并链向各 self.md 看实施细节。
+1. 再 `.ooc-world-meta/.../supervisor/self.md` 建立"OOC 是什么 + 维度分层"的心智模型（+ knowledge/ooc-philosophy / ooc-glossary）。
 2. 再 supervisor `knowledge/engineering-harness.md` 看你所在的角色与协作模式。
 3. 接到具体任务后，去对应维度对象 `children/<dim>/`（self.md 核心设计 + knowledge）。
+
+## 系统设计调整工作流（issue → review → 裁决）
+
+任何**系统设计调整**（维度核心 / 对象模型 / 交叉契约 / builtin 设计的增删改、退役某符号/概念）都走这条流程——它是「涨潮必退潮」的退潮闸门。权威规范见 supervisor `knowledge/design-workflow.md`；设计元素注册表见 `knowledge/index.md`（A–E 区每个 `##` 元素 = 一个设计元素）。
+
+不走这条流程：纯实现 bug 修复（不动设计契约）、测试增补、错别字。判据是「这次改动是否触动某个设计元素的契约」。
+
+1. **发起 issue**：在 `.ooc-world-meta/stones/main/docs/issues/` 新建 `YYYY-MM-DD-<slug>.md`（模板见该目录 `README.md`）：背景 / 现状（锚 index.md 对应 `##` 节）/ 改动提案 / **受影响设计元素**（对照 index.md `##` 清单逐一列出）/ 风险与权衡 / 待裁决点。
+2. **review fan-out**：并发派 sub agent——**每个受影响设计元素各派一个 reviewer**（以「我是这个元素的主人」视角审改动对该元素的契约影响、补具体评论）＋ **一个完整性批评官**（扫 index.md 全清单 + self.md，专问"还漏了哪个未被列为受影响、却会被波及的元素"，并查内部自洽 / 与 source 一致 / 术语漂移 / 设计-实施越界）。reviewer **不自己 commit、不直接改文件**，只回评论给 Supervisor 汇总。
+3. **汇总裁决 + 一致性回流**：Supervisor 汇总各 reviewer + 完整性批评官意见记进 issue → 裁决跨维度冲突与待决点 → 落地（改 self.md〔面向实施〕/ index.md〔面向设计〕/ 代码）→ **强制成对回流**（改一处必同步另一处；退役某符号/概念时全树〔index.md + 各 self.md + builtin md〕引用一并清理）→ issue 标 `landed`。
+
+要点：index.md（面向设计）与各 self.md（面向实施）是**同一设计的两个投影**，靠步骤 3 的成对回流防漂移；脱离此流程的零散设计改动是漂移之源。
 
 ## 你的工作模式（当前 interim runtime）
 
