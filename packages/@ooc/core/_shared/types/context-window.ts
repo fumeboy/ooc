@@ -42,54 +42,14 @@ export type ContextWindow = OocObjectInstance;
 /** runtime object 实例 —— ContextWindow 的 canonical 形态。 */
 export type { OocObjectInstance } from "../../runtime/ooc-class.js";
 
-// ───────────────── object / context-window 拆分（P0 draft 类型，additive、未启用）─────────────────
-// 设计裁决：docs/issues/2026-06-21-object-contextwindow-split.md（方案 B：inline-vs-ref 对齐持久）。
-// 当前 `ContextWindow = OocObjectInstance`（一 struct 混装 object 身份 + window 视角态）是已知债。
-// 目标：**object 是持久身份**（OocObject）、**context window 是对 object 的引用 + 本窗视角态**
-// （InlineWindow 内联 object / RefWindow 仅持 ref，对齐持久 inline/_ref）。投影 class 渲染期算、不入窗结构。
-// P0 仅引入类型、**不启用**（ContextWindow 仍 = OocObjectInstance）；P1 起接 WindowManager 并切 union。
-
-/** object —— 持久身份：注册 class（恒真实 class、非投影 class）+ 业务 data。一份、可被多窗引用。 */
-export interface OocObject<Data = unknown> {
-  id: string;
-  class: string;
-  data: Data;
-}
-
-/** context window 视角态信封（两形态共有；与 object data 分离落盘）。 */
-export interface WindowView<Win = unknown> {
-  id: string;
-  status: WindowStatus;
-  title: string;
-  createdAt: number;
-  parentObjectId?: string;
-  /** 结构窗保护：construct 标 false → close 原语拒关（对象模型核心 10）。 */
-  closable?: boolean;
-  /** 投影态（window method 读写、与 object data 分离）；投影 class 渲染期算、不入此结构。 */
-  win?: Win;
-}
-
-/** A 态：object 内联（thread 自有窗 / talk / todo 等 isInlinePersisted=true，整窗随 thread 落盘）。 */
-export interface InlineWindow<Data = unknown, Win = unknown> extends WindowView<Win> {
-  object: { class: string; data: Data };
-}
-
-/** B 态：只持对 object 的引用，data 经 WindowManager objectCache 解析（P2）；id = objectId（现 1:1）。 */
-export interface RefWindow<Win = unknown> extends WindowView<Win> {
-  objectRef: { objectId: string; class: string };
-}
-
-/** 拆分后 context window 的目标形态（P1 起切换；P0 未启用，故另名、暂不替换 ContextWindow）。 */
-export type ContextWindowSplit = InlineWindow | RefWindow;
-
 // ─────────────────── object 解析 accessor（读者经此取 object data/class，而非直读窗）───────────────────
-// 目的：把「从窗取被引对象的 data/class」收敛到一处，让 P3 切 union（inline→object.data /
-// ref→objectCache 解析）只改这两个函数体、而非 ~37 个读者站点。当前对象身份已收进 `.object`
-// 子对象（OocObjectInstance.object = { class, data }），故经此取值；P3 切 union 时更新函数体。
-// 读者迁移规则：读「被引用对象的业务数据/注册 class」→ 用本 accessor；读「窗自身视角态」
-// （status/title/win/closable/id）→ 仍直读窗（那是 window 侧、不迁）。
+// 收敛「从窗取被引对象的 data/class」到一处。对象身份收在 `.object` 子对象
+// （OocObjectInstance.object = { class, data }）——B→A：该 `.object` 在内存里是指向 session 对象表
+// 单一实例的**共享引用**（runtime/session-object-table.ts），磁盘上窗只持 `objectRef`。
+// 读者规则：读「被引用对象的业务数据/注册 class」→ 用本 accessor；读「窗自身视角态」
+// （status/title/win/closable/id）→ 直读窗（window 侧、不迁）。
 
-/** 取一个 context window 所引用对象的业务 data（inline 窗=内联 object；ref 窗=P3 起经 objectCache 解析）。 */
+/** 取一个 context window 所引用对象的业务 data（= session 对象表中该 objectId 单一实例的 data）。 */
 export function objectDataOf<Data = unknown>(w: OocObjectInstance<Data>): Data {
   return w.object.data;
 }
