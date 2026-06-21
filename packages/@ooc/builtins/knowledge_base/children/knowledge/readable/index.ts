@@ -27,13 +27,14 @@ import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
 import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
 import type { Data } from "../types.js";
-import { displayResize } from "@ooc/core/readable/display-resize.js";
 
 const MAX_KNOWLEDGE_BYTES = 8192;
 
 /** knowledge 的**投影态**（与 Data 分离）：行/列 viewport（仅 explicit 来源使用）。 */
 export interface KnowledgeWin {
   viewport: Viewport;
+  /** compress v2：展示档位（本窗 resize 设；renderer projectByCompressLevel 据此投影详略）。 */
+  compressLevel?: 0 | 1 | 2;
 }
 
 /** window method：调整展示视口（返回新 win；不碰 Data）。 */
@@ -52,6 +53,25 @@ const setViewportMethod: WindowMethod<Data, KnowledgeWin> = {
     const merged = mergeViewport(before?.viewport ?? DEFAULT_VIEWPORT, args);
     if (!merged.ok) throw new Error(`[knowledge.set_viewport] ${merged.error}`);
     return { viewport: merged.viewport };
+  },
+};
+
+/**
+ * window method：调本知识窗展示档位 compressLevel（compress v2 resize 协议，本 class 自实现）。
+ * 0=全文 / 1=缩略 / 2=仅句柄——读出侧 xml.ts:projectByCompressLevel 据此投影正文详略。
+ */
+const resizeMethod: WindowMethod<Data, KnowledgeWin> = {
+  name: "resize",
+  description: "调本知识窗展示档位 level：0=全文，1=缩略，2=仅标题句柄。",
+  schema: {
+    args: {
+      level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
+    },
+  },
+  exec: (_ctx: ReadableContext, _self: Data, before: KnowledgeWin, args: Record<string, unknown>): KnowledgeWin => {
+    const raw = (args as { level?: number }).level;
+    const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
+    return { ...before, compressLevel: level };
   },
 };
 
@@ -123,7 +143,7 @@ const readable: ReadableModule<Data, KnowledgeWin> = {
     {
       class: "knowledge",
       object_methods: ["reload", "close"],
-      window_methods: [setViewportMethod, displayResize],
+      window_methods: [setViewportMethod, resizeMethod],
     },
   ],
 };

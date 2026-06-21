@@ -73,14 +73,24 @@ export const L2_STORIES: Story[] = [
     expectation:
       "compress v2 协议：内容窗经 class 自声明 resize 设展示档位 compressLevel（无通用默认）；读出侧 projectByCompressLevel 按档位投影变短",
     design:
-      "compress v2：无通用默认窗方法表（default-window-methods 已删）。内容窗（file/search/…）在自己 readable 的 " +
-      "window_methods 声明 displayResize（core/readable/display-resize.ts）设 compressLevel；未声明的 class 无 resize（no default）。" +
+      "compress v2：无通用默认窗方法表（default-window-methods 已删）。内容窗（file/search/…）各自在自己 readable 的 " +
+      "window_methods **各自实现** resize 设 compressLevel（允许重复、无共享默认实现）；未声明的 class 无 resize（no default）。" +
       "读出侧 xml.ts:projectByCompressLevel 按 win.compressLevel 投影详略（0 全文 / 1 缩略 / 2 仅句柄）。",
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
-      const { displayResize } = await import("@ooc/core/readable/display-resize");
       const { projectByCompressLevel } = await import("@ooc/core/thinkable/context/renderers/xml");
       const { xmlElement, xmlText, serializeXml } = await import("@ooc/core/_shared/types/xml");
+
+      // 内容窗 class 各自实现的 resize（compress v2：无共享默认实现；这里模拟某内容窗自实现一份）。
+      const selfResize = {
+        name: "resize",
+        description: "调本窗展示档位 level：0=全文 / 1=缩略 / 2=仅句柄。",
+        schema: { args: { level: { type: "number", required: true, enum: [0, 1, 2] } } },
+        exec: (_c: never, _s: unknown, before: { compressLevel?: number }, args: { level?: number }) => ({
+          ...before,
+          compressLevel: Math.max(0, Math.min(2, typeof args?.level === "number" ? args.level : 0)),
+        }),
+      };
 
       // no default：未声明 resize/compress 的 class → resolveWindowMethod 返 undefined（无通用回退）。
       const reg = createObjectRegistry();
@@ -88,10 +98,10 @@ export const L2_STORIES: Story[] = [
       check(reg.resolveWindowMethod("plain_win", "resize") === undefined, "no default：未声明 class 不应有 resize");
       check(reg.resolveWindowMethod("plain_win", "compress") === undefined, "no default：未声明 class 不应有 compress");
 
-      // class 自声明 displayResize → 解析到；exec 设 compressLevel 档位。
+      // class 各自实现 resize → 解析到；exec 设 compressLevel 档位。
       reg.register(
         "content_win",
-        { readable: { readable: () => ({ class: "content_win", content: [] }), window: [{ class: "content_win", object_methods: [], window_methods: [displayResize] }] } } as never,
+        { readable: { readable: () => ({ class: "content_win", content: [] }), window: [{ class: "content_win", object_methods: [], window_methods: [selfResize] }] } } as never,
         { parentClass: null },
       );
       const resize = reg.resolveWindowMethod("content_win", "resize");

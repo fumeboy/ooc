@@ -6,7 +6,7 @@
  *     在 token 预算内返回 { visible, overflow }; overflow 不丢, 由 renderer 的
  *     <context_overflow> 呈现
  *
- * compressLevel 仅由 LLM 的 compress/expand 命令与 renderer 显式控制——预算不自动推进档位。
+ * compressLevel 仅由内容窗各自实现的 `resize`（设档位）与 renderer 显式控制——预算不自动推进档位。
  *
  * 配置: stones/<self>/config/context-budget.json
  *   { "budget": { "soft": number, "hard": number } }
