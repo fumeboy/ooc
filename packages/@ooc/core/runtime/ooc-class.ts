@@ -14,7 +14,7 @@
 import type {
   ExecutableModule,
   ObjectConstructor,
-  ObjectDestructor,
+  ObjectLifecycleHook,
 } from "../executable/contract.js";
 import type { ReadableModule } from "../readable/contract.js";
 import type { PersistableModule } from "../persistable/contract.js";
@@ -32,7 +32,8 @@ export interface World {
  * 一个 ooc class 的后端程序路由（`index.ts` 的 `export const Class`）。
  *
  * - construct   : 仅**非单例** class 注册（`exec(ctx, args)` 产出新实例初始 Data）；单例 class 省略
- * - destruct    : 对象销毁清理（与 construct 对应；暂仅接口，机制待实现）
+ * - active      : 对象 session refcount 0→1 激活钩子（可选；v1 仅类型槽、暂不接派发）
+ * - unactive    : 对象 session refcount 1→0 停用钩子（可选；复用旧 destruct 槽；可返回 {delete:true} 自决删除）
  * - init        : **World 启动时执行**一次的 class 级初始化 `(world) => err`（返回错误信息，空=成功）；
  *                 用于起后台通道/长连接等（如 feishu_app 起 lark event relay）。机制（World 启动时
  *                 遍历调 init）待实现。
@@ -46,7 +47,8 @@ export interface World {
  */
 export interface OocClass<Data = any> {
   construct?: ObjectConstructor<Data>;
-  destruct?: ObjectDestructor<Data>;
+  active?: ObjectLifecycleHook; // v1 仅类型槽（dispatch 待首个 active body，spec §6）
+  unactive?: ObjectLifecycleHook;
   init?: (world: World) => string | Promise<string>;
   executable?: ExecutableModule<Data>;
   readable?: ReadableModule<Data>;
@@ -81,4 +83,6 @@ export interface OocObjectInstance<Data = unknown, Win = unknown> {
   createdAt: number;
   data: Data;
   win?: Win;
+  /** 结构窗保护：construct 标 false → close 原语拒关（缺省 undefined = 可关）。spec §5。 */
+  closable?: boolean;
 }

@@ -182,16 +182,32 @@ export interface ObjectConstructor<Data = any, Args = any> {
 }
 
 /**
- * 对象 **destructor**（与 construct 对应）—— 对象销毁/卸载时的清理逻辑。
+ * 对象生命周期钩子的执行上下文 —— 在 construct 上下文之上携带 refcount 变动的目标 id。
  *
- * `exec(ctx, self)` 在对象被销毁前执行清理（释放进程 / 关连接 / 级联归档 children…）；
- * 与 construct 镜像：construct 产出初始 Data、destruct 消费末态 self 做收尾。
- *
- * 注：**暂仅接口定义**——runtime 何时调用 destruct（close 原语 / world 关停 / GC）的机制待实现。
+ * 生命周期钩子作用于**既有**对象（不产 Data）；body 经 ctx 自解析它要操作的对象：
+ * `thread` 是解引用发生处的线程、`targetId` 是 refcount 跨 0↔1 的对象 id。
  */
-export interface ObjectDestructor<Data = any> {
+export interface LifecycleContext extends ConstructorContext {
+  /** refcount 跨 0↔1 的对象 id（钩子 body 据此定位自己要操作的对象）。 */
+  targetId: string;
+}
+
+/** unactive 返回值：delete:true → core 把 object 彻底从 session 移除（含持久化文件）；缺省=只停用。 */
+export interface UnactiveResult {
+  delete?: boolean;
+}
+
+/**
+ * 对象生命周期钩子（active/unactive 共用）—— 与 construct 对称、按 refcount 0↔1 触发。
+ * 与 construct 签名不同：作用于既有对象、不产 Data；body 经 ctx（thread + targetId）自解析目标。
+ * 皆可选。无独立 destruct —— OOC object 默认持久身份；unactive 可经返回 {delete:true} 自决彻底删除
+ * （refcount-0-gated，故无悬空引用）。仅 unactive 路径 honor delete；active 返回值忽略。
+ */
+export interface ObjectLifecycleHook {
   description: string;
-  exec: (ctx: ConstructorContext, self: Data) => void | Promise<void>;
+  exec: (
+    ctx: LifecycleContext,
+  ) => void | UnactiveResult | Promise<void | UnactiveResult>;
 }
 
 /** executable 维度模块 —— `executable/index.ts` 的 default export。 */

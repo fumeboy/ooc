@@ -26,6 +26,7 @@ import type { MethodVisibilityContext } from "../_shared/types/registry.js";
 import type { OocClass } from "./ooc-class.js";
 import type {
   ObjectConstructor,
+  ObjectLifecycleHook,
   ObjectMethod,
 } from "../executable/contract.js";
 import type {
@@ -115,6 +116,8 @@ export class ObjectRegistry {
       ...existing,
       ...cls,
       construct: cls.construct ?? existing?.construct,
+      active: cls.active ?? existing?.active,
+      unactive: cls.unactive ?? existing?.unactive,
       executable: cls.executable ?? existing?.executable,
       readable: cls.readable ?? existing?.readable,
       persistable: cls.persistable ?? existing?.persistable,
@@ -160,6 +163,24 @@ export class ObjectRegistry {
     for (const cid of this.selfThenChain(classId)) {
       const ctor = this.store.get(cid)?.construct;
       if (ctor) return ctor;
+    }
+    return undefined;
+  }
+
+  /** 解析 active 生命周期钩子 —— 沿继承链首个声明 active 的 class 胜出（同 resolveConstructor）。 */
+  resolveActive(classId: string): ObjectLifecycleHook | undefined {
+    for (const cid of this.selfThenChain(classId)) {
+      const h = this.store.get(cid)?.active;
+      if (h) return h;
+    }
+    return undefined;
+  }
+
+  /** 解析 unactive 生命周期钩子 —— 沿继承链首个声明 unactive 的 class 胜出（同 resolveConstructor）。 */
+  resolveUnactive(classId: string): ObjectLifecycleHook | undefined {
+    for (const cid of this.selfThenChain(classId)) {
+      const h = this.store.get(cid)?.unactive;
+      if (h) return h;
     }
     return undefined;
   }
@@ -264,6 +285,8 @@ export class ObjectRegistry {
         this.store.set(classId, {
           ...existing,
           construct: def.construct ?? existing.construct,
+          active: def.active ?? existing.active,
+          unactive: def.unactive ?? existing.unactive,
           executable: def.executable ?? existing.executable,
           readable: def.readable ?? existing.readable,
           persistable: def.persistable ?? existing.persistable,
