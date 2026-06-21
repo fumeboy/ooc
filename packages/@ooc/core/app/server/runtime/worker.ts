@@ -295,7 +295,13 @@ async function syncCrossObjectCalleeEnds(
       continue;
     }
     if (!callee) continue;
-    if (callee.status !== "done" && callee.status !== "failed") continue;
+    // 终态（含 canceled）才向 caller 回报：canceled callee 同 done/failed，不再运行、给出终态通知。
+    if (
+      callee.status !== "done" &&
+      callee.status !== "failed" &&
+      callee.status !== "canceled"
+    )
+      continue;
 
     const tail = callee.lastExecutedAt ?? 0;
     const marker = `[talk:${w.id}:${callee.status}@${tail}]`;

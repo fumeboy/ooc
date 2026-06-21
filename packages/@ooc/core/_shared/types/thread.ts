@@ -395,7 +395,13 @@ export type ThreadMessage = {
  * 线程调度状态。status="waiting" 表示等待 inbox 新消息（不再有 waitingType 细分）。
  * 显式提取为具名 type，便于复用。
  */
-export type ThreadStatus = "running" | "waiting" | "done" | "failed" | "paused";
+export type ThreadStatus =
+  | "running"
+  | "waiting"
+  | "done"
+  | "failed"
+  | "paused"
+  | "canceled";
 
 /**
  * 单个线程的运行时上下文。

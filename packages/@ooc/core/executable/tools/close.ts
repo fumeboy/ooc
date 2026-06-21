@@ -2,17 +2,22 @@
  * close tool — 关闭任意 ContextWindow（对象实例）。
  *
  * 原语 close：
+ * - 结构窗保护：`inst.closable === false`（construct 期标的恒在通道，如 thread/creator 门面窗）→ 拒关、报错。
  * - 级联：parent 关闭 → 所有 sub-window 强制关闭（WindowManager.close 内部处理）
  * - 从 thread 移除该实例
+ * - 移窗后：若该窗引用某对象（`referencedObjectId`），且该对象 session refcount 归零 → 经
+ *   `dispatchUnactiveIfZero` 单次泛型派发该 class 的 `unactive` 钩子（refcount 归 0 触发；
+ *   thread 的 unactive 把 fork 子线程切 canceled 并级联停用子树）。
  *
- * 注：旧契约里 type 注册的 onClose hook（creator talk_window 拒绝关闭、fork 子窗 archive 子线程等）
- * 已随承重墙 deferred hook 一并废弃；如需 close 副作用，由对应 class 的方法层自理。
+ * 注：旧契约里 type 注册的 onClose hook 已随承重墙 deferred hook 废弃；副作用现由
+ * class 的 `unactive` 生命周期钩子（refcount 0↔1）+ `closable` 标记表达。
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
 import { builtinRegistry, type ObjectRegistry } from "../../runtime/object-registry.js";
 import { WindowManager } from "../../runtime/window-manager.js";
+import { referencedObjectId, dispatchUnactiveIfZero } from "../../runtime/object-lifecycle.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 export const CLOSE_TOOL: LlmTool = {
@@ -53,7 +58,19 @@ export async function handleCloseTool(
   const existing = mgr.get(windowId);
   if (!existing) return errorOutput(`close 失败：window ${windowId} 不存在。`);
 
+  // 结构窗保护：construct 期标的恒在通道（thread 与 creator 的门面窗）不可关。
+  if (existing.closable === false) {
+    return errorOutput(
+      `[close] window ${windowId} 不可关闭（结构窗：thread 与 creator 的恒在通道）。`,
+    );
+  }
+
+  // 关后从 map 取不到实例 → 关前先捕获它引用的目标对象 id + 它的 class（派生派发所需）。
+  const target = referencedObjectId(existing);
+  const targetClass = existing.class;
+
   await mgr.close(windowId);
-  thread.contextWindows = mgr.toData();
+  thread.contextWindows = mgr.toData(); // 先同步，refcount 才看得到「窗已移除」
+  if (target) await dispatchUnactiveIfZero(thread, target, targetClass, registry);
   return successOutput(`[close] window ${windowId} 已关闭。原因：${reason}`);
 }

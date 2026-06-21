@@ -68,7 +68,7 @@ export const addUserTalkWindowBody = t.Object({
 export type ListThreadsItem = {
   objectId: string;
   threadId: string;
-  status: "running" | "waiting" | "done" | "failed" | "paused";
+  status: "running" | "waiting" | "done" | "failed" | "paused" | "canceled";
   createdAt?: number;
   parentThreadId?: string;
   creatorThreadId?: string;

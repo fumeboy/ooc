@@ -36,7 +36,7 @@ const AGENT_WIN = {
  * 覆盖（仍存在的行为）：
  * - tool 集合定义（exec / close / wait）
  * - exec 直传 args 在目标窗上立即执行（agency plan → 造 plan 对象；form 机制已废）
- * - close 释放任意 window（含 creator——旧 onClose 拒绝 hook 已随承重墙退役）
+ * - close 拒绝结构窗（creator/self 门面窗 closable:false，construct 标记 + 原语 honor）
  * - close 缺 reason 拒绝
  * - wait 切到 waiting + 写 inboxSnapshotAtWait + waitingOn
  * - compress 经 exec(method="compress") 路由 + scope 行为
@@ -96,19 +96,25 @@ describe("executable tools (object model)", () => {
     expect(parsed.error).toContain("未注册");
   });
 
-  it("close 释放任意 window（含 creator——旧 onClose 拒绝 hook 已退役）", async () => {
+  it("close 拒绝结构窗（creator/self 门面窗 closable:false，construct 标记）", async () => {
+    // 生命周期重构：creator 门面窗是 thread 与 creator 的恒在通道，construct 标 closable:false；
+    // close 原语 honor 之、拒关报错（取代旧 Wave-4「关任何窗」+ 已退役的 onClose 拒绝 hook）。
     const thread = makeThread({ persistence: persistenceOf() });
     const creator = (thread.contextWindows as ContextWindow[]).find(
       (w) => w.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
     );
     expect(creator).toBeDefined();
+    expect(creator!.closable).toBe(false);
     const output = await dispatchToolCall(thread, {
       id: "call_1",
       name: "close",
       arguments: { window_id: creator!.id, reason: "不需要了" },
     });
-    expect((thread.contextWindows as ContextWindow[]).find((w) => w.id === creator!.id)).toBeUndefined();
-    expect(JSON.parse(output).ok).toBe(true);
+    const parsed = JSON.parse(output);
+    expect(parsed.ok).toBe(false);
+    expect(parsed.error).toContain("不可关闭");
+    // 拒关 → 窗仍在。
+    expect((thread.contextWindows as ContextWindow[]).find((w) => w.id === creator!.id)).toBeDefined();
   });
 
   it("close 缺 reason 时拒绝", async () => {

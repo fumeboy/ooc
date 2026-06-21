@@ -69,6 +69,12 @@ declare -a FORBIDDEN_PATTERNS=(
   "DEFAULT_WINDOW_METHODS"
   "threadExpand"
   "\\bfoldEvents\\b"
+  # —— 对象生命周期重构（2026-06-21）：dead destruct 槽复用为 active?/unactive?（refcount 0↔1）。
+  #    退役符号防回潮（注：thread close 方法虽退役，但 closeMethod 是众 builtin 的通用局部名、
+  #    不可作精确禁；其退役由 fork-unactive/tools 测试 + 设计文档守）：
+  "ObjectDestructor"
+  "destruct\\?:"
+  "\\barchiveForkChild\\b"
 )
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）

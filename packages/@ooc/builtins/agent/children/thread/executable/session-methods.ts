@@ -1,23 +1,21 @@
 /**
- * thread —— 会话 object method（say / close / share）。
+ * thread —— 会话 object method（say）。
  *
  * thread 是唯一会话载体注册 class（context.md 核心 2/8/9）；所有会话窗（creator/peer/sub/fork）
- * 都是 thread 实例。这三个会话 method 全部归 thread：
- *   - say   : 发一条消息给对端（peer 走磁盘 talk-delivery / fork 走内存树派送）
- *   - close : 关本会话窗（fork 子窗 close → archive 子线程；creator 窗不可关）
- *   - share : 跨 thread 传 window 引用（仅 fork 子线程窗可用）
+ * 都是 thread 实例。会话 method 归 thread：
+ *   - say : 发一条消息给对端（peer 走磁盘 talk-delivery / fork 走内存树派送）
  *
  * 注：**wait 是 3 原语之一（非 method）**——经 `core/executable/tools/wait.ts` 独立 tool 入口表达。
+ * 关窗也是原语（`core/executable/tools/close.ts`）、**不是** thread method——关一个 fork 子线程窗经
+ * refcount 归 0 触发 thread.unactive（切 canceled + 级联），见 `index.ts`。
  *
  * 签名 `(ctx, self=Data, args)`：self 是会话窗状态（target / targetThreadId / isForkWindow），
- * ctx.object.id 是窗实例 id（= 会话身份），ctx.thread 是当前执行 thread。creator 窗（self-view）
- * 不可 close 由 readable 投影可见性表达（不 surface close），不在 method 内查 flag。
- * say/close 的 delivery / fork 派送实现物保留在 core talk 域，本类 import 复用。
+ * ctx.object.id 是窗实例 id（= 会话身份），ctx.thread 是当前执行 thread。
+ * say 的 delivery / fork 派送实现物保留在 core talk 域，本类 import 复用。
  *
  * deferred（agency 深层 thinkloop 语义，登记 WAVE4-WALL-broken-tests.md）：say 的 fork 派送完整
  * 运行时语义（子 thread thinkloop 启动、end 经 say 回报）仍依赖 scheduler/worker 协作，本轮保留
- * 行为骨架（写双方 inbox/outbox + 事件），不在 method 内闭合完整调度。share 的 owner 借/还机制随
- * 对象模型重构重新设计，本轮只保留骨架 + 报告未支持。
+ * 行为骨架（写双方 inbox/outbox + 事件），不在 method 内闭合完整调度。
  */
 import type {
   ExecutableContext,
@@ -27,7 +25,6 @@ import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import {
-  archiveForkChild,
   findThreadInScope,
   makeMessage,
   appendInbox,
@@ -124,27 +121,4 @@ export const sayMethod: ObjectMethod<Data> = {
   exec: (ctx, self, args) => executeSay(ctx, self, args),
 };
 
-// ─────────────────────────── close ──────────────────────────────
-
-const closeMethod: ObjectMethod<Data> = {
-  name: "close",
-  description:
-    "Close this talk_window. Fork child windows archive the child thread.",
-  permission: () => "allow",
-  exec: (ctx, self) => {
-    // creator 窗（self-view）不可关 —— 由 readable 投影可见性表达（thread/reflect_request 不 surface
-    // close），故本 impl 只服务 talk（other-view）窗，不再做 isCreatorWindow 运行时检查。
-    // fork 子线程窗 close → archive 对应子线程（peer 会话窗纯关窗，无副作用）。
-    if (self.isForkWindow && ctx.thread) {
-      archiveForkChild(ctx.thread, asTalkWindowView(ctx.object.id, self));
-    }
-    // 实例移除经 runtime（close primitive / WindowManager.close）；此处只负责副作用。
-    void ctx.runtime?.close?.(ctx.object.id);
-    return undefined;
-  },
-};
-
-export const sessionMethods: ObjectMethod<Data>[] = [
-  sayMethod,
-  closeMethod,
-];
+export const sessionMethods: ObjectMethod<Data>[] = [sayMethod];

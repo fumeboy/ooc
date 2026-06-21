@@ -10,7 +10,7 @@
  * 投影 class 由 readable 内部调 `computeProjectionClass(...)` 从 id 派生的 self/other-view
  * （creator 窗 = `isSelfThreadWindow(id)`）+ thread session 动态算，作为 `ReadableProjection.class`
  * 返回——**不持久化**。三种投影对应 `window` 数组里的 3 个 window decl，渲染期 `resolveWindowClass(
- * _builtin/thread, 投影 class)` 据此决定该窗展示哪些 method（self-view 不 surface close）。
+ * _builtin/thread, 投影 class)` 据此决定该窗展示哪些 method。close 不再是 method（已塌回 close 原语）。
  * 会话 transcript 三种投影同款渲染（renderHead +
  * filterTalkMessages + renderTranscriptOrHandle），实现物保留在 core talk 域，本 readable import 复用。
  */
@@ -86,17 +86,18 @@ const readable: ReadableModule<Data, ThreadWin> = {
     return { class: projectionClass, content: children, consumedMessageIds };
   },
   window: [
-    // self-view 非 super：thread 与 creator 的恒在通道。**不 surface close**——creator 窗不可关，
-    // 由投影可见性表达（取代旧 close 里的 data.isCreatorWindow 检查）。
+    // self-view 非 super：thread 与 creator 的恒在通道。结构窗（construct 标 closable:false）→ close
+    // 原语拒关（取代旧 close method 里的 data.isCreatorWindow 检查）。
     {
       class: "thread",
       object_methods: ["say"],
       window_methods: [setTranscriptWindowMethod, threadCompress, threadResize],
     },
-    // other-view：与对端 peer/sub 的对话（含父侧 fork 子窗）；可关。
+    // other-view：与对端 peer/sub 的对话（含父侧 fork 子窗）；可关（关窗经 close 原语、非 method——
+    // 关 fork 子窗触发 thread.unactive 切 canceled + 级联）。
     {
       class: "talk",
-      object_methods: ["say", "close"],
+      object_methods: ["say"],
       window_methods: [setTranscriptWindowMethod, threadCompress, threadResize],
     },
     // self-view super：反思自视（恒在通道，同样不 surface close）；会话 method + 2 个 reflectable 沉淀 method。

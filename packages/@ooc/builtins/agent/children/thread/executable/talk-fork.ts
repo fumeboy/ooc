@@ -3,14 +3,10 @@
  *
  * fork 子线程窗（isForkWindow=true）是同对象内的父子双向通道：
  * - `say` 走内存树寻址（findThreadInScope，同 session 同 job、不付磁盘 IO）
- * - close / archive：把子线程标记为 paused
- *
- * Wave 4：share 的 owner 借/还机制（依赖每窗 sharing 字段 = SharingState）随对象模型重构删除，
- * 故 archive 不再做 returnBorrowedOwners；window 引用借/还语义在 OocObjectInstance 模型下待重设计。
+ * - 关 fork 子窗：经 close 原语 → refcount 归 0 触发 thread.unactive 切 canceled + 级联（见 index.ts）。
  */
 
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
-import type { TalkWindowView } from "../types.js";
 
 export function generateMessageId(): string {
   return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -65,16 +61,4 @@ export function findThreadInScope(self: ThreadContext, targetId: string): Thread
     cur = cur._parentThreadRef;
   }
   return null;
-}
-
-/** archive fork 子线程窗对应的子线程（close / onClose 复用）。 */
-export function archiveForkChild(thread: ThreadContext | undefined, window: TalkWindowView): void {
-  if (!thread) return;
-  const targetThreadId = window.targetThreadId;
-  if (!targetThreadId) return;
-  const child = findChild(thread, targetThreadId);
-  if (!child) return;
-  if (child.status === "running" || child.status === "waiting") {
-    child.status = "paused";
-  }
 }
