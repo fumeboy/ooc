@@ -7,13 +7,13 @@
       "dependencies": {
         "@larksuiteoapi/node-sdk": "^1.65.0",
         "@ooc/builtins/_shared": "workspace:*",
+        "@ooc/builtins/agent/method_exec_form": "workspace:*",
         "@ooc/builtins/agent/plan": "workspace:*",
         "@ooc/builtins/agent/skill_index": "workspace:*",
         "@ooc/builtins/agent/todo": "workspace:*",
         "@ooc/builtins/filesystem/file": "workspace:*",
         "@ooc/builtins/filesystem/search": "workspace:*",
         "@ooc/builtins/knowledge_base/knowledge": "workspace:*",
-        "@ooc/builtins/root": "workspace:*",
         "@ooc/core": "workspace:*",
         "@ooc/storybook": "workspace:*",
         "@ooc/web": "workspace:*",
@@ -36,6 +36,10 @@
     },
     "packages/@ooc/builtins/agent": {
       "name": "@ooc/builtins/agent",
+      "version": "0.1.0",
+    },
+    "packages/@ooc/builtins/agent/children/method_exec_form": {
+      "name": "@ooc/builtins/agent/method_exec_form",
       "version": "0.1.0",
     },
     "packages/@ooc/builtins/agent/children/plan": {
@@ -131,13 +135,6 @@
         "react": "^19.0.0",
       },
     },
-    "packages/@ooc/builtins/root": {
-      "name": "@ooc/builtins/root",
-      "version": "0.1.0",
-      "dependencies": {
-        "react": "^19.0.0",
-      },
-    },
     "packages/@ooc/builtins/runtime": {
       "name": "@ooc/builtins/runtime",
       "version": "0.1.0",
@@ -178,6 +175,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@ooc/builtins/agent": "workspace:*",
+        "@ooc/builtins/agent/method_exec_form": "workspace:*",
         "@ooc/builtins/agent/plan": "workspace:*",
         "@ooc/builtins/agent/pr": "workspace:*",
         "@ooc/builtins/agent/skill_index": "workspace:*",
@@ -193,7 +191,6 @@
         "@ooc/builtins/interpreter/interpreter_process": "workspace:*",
         "@ooc/builtins/knowledge_base": "workspace:*",
         "@ooc/builtins/knowledge_base/knowledge": "workspace:*",
-        "@ooc/builtins/root": "workspace:*",
         "@ooc/builtins/runtime": "workspace:*",
         "@ooc/builtins/supervisor": "workspace:*",
         "@ooc/builtins/terminal": "workspace:*",
@@ -238,7 +235,6 @@
         "@ooc/builtins/filesystem/search": "workspace:*",
         "@ooc/builtins/interpreter/interpreter_process": "workspace:*",
         "@ooc/builtins/knowledge_base/knowledge": "workspace:*",
-        "@ooc/builtins/root": "workspace:*",
         "@ooc/builtins/terminal/terminal_process": "workspace:*",
         "@radix-ui/react-dialog": "^1.1.15",
         "@uiw/react-codemirror": "^4.25.8",
@@ -425,6 +421,8 @@
 
     "@ooc/builtins/agent": ["@ooc/builtins/agent@workspace:packages/@ooc/builtins/agent"],
 
+    "@ooc/builtins/agent/method_exec_form": ["@ooc/builtins/agent/method_exec_form@workspace:packages/@ooc/builtins/agent/children/method_exec_form"],
+
     "@ooc/builtins/agent/plan": ["@ooc/builtins/agent/plan@workspace:packages/@ooc/builtins/agent/children/plan"],
 
     "@ooc/builtins/agent/pr": ["@ooc/builtins/agent/pr@workspace:packages/@ooc/builtins/agent/children/pr"],
@@ -456,8 +454,6 @@
     "@ooc/builtins/knowledge_base": ["@ooc/builtins/knowledge_base@workspace:packages/@ooc/builtins/knowledge_base"],
 
     "@ooc/builtins/knowledge_base/knowledge": ["@ooc/builtins/knowledge_base/knowledge@workspace:packages/@ooc/builtins/knowledge_base/children/knowledge"],
-
-    "@ooc/builtins/root": ["@ooc/builtins/root@workspace:packages/@ooc/builtins/root"],
 
     "@ooc/builtins/runtime": ["@ooc/builtins/runtime@workspace:packages/@ooc/builtins/runtime"],
 

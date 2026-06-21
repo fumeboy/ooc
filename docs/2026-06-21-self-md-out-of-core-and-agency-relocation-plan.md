@@ -60,6 +60,10 @@ import { todoMethod } from "./method.todo.js";
 ```
 `methods` 数组加 `endMethod, todoMethod`；文件头注释补一行"end/todo —— thread 作用域操作（从 agent agency 迁入）"。
 
+- [ ] **Step 1.4b：thread/readable 投影窗 surface end/todo（🔴 review 抓到的缺口——缺则 LLM 不可见）**
+
+编辑 `packages/@ooc/builtins/agent/children/thread/readable/index.ts`：找 `thread` 投影窗的 `WindowClassDecl`（self-view 非 super，现 `object_methods` 含 `say` 等），把 `end`/`todo` 加进其 `object_methods`。**只加到 `thread` 投影窗**——`talk`（other-view）/ `reflect_request`（super）**不加**（end/todo 是 self-view thread 自管）。读该文件确认三个投影窗 decl 的结构再改。验证：method 注册（executable）+ surface（readable）两侧都到位，否则 end/todo 静默失效。
+
 - [ ] **Step 1.5：grep 残留引用收口**
 
 Run: `grep -rn "endMethod\|todoMethod\|executable/method\.end\|executable/method\.todo" packages/@ooc/builtins/agent --include="*.ts" | grep -v children/thread`
@@ -137,11 +141,18 @@ const readable: ReadableModule<Data> = {
     class: "agent",
     content: self?.self && self.self.trim().length > 0 ? self.self : "",
   }),
+  // 🔴 必带 window decl——否则 self 门面窗 agency 静默失效（review 抓到）。
+  // 只列 talk/plan（end/todo 已迁 thread，不在 agent agency）。
+  window: [
+    { class: "agent", object_methods: ["talk", "plan"], window_methods: [] },
+  ],
 };
 
 export default readable;
 ```
-> 注：`ReadableModule` 的 `readable` 返回 `{class, content}`（content 可为 string 或 xml 节点数组，见 `terminal_process/readable/index.ts:25`）。空字符串 content → renderer 落空窗回退。确认 `@ooc/core/readable/contract.js` 的 `ReadableModule`/`ReadableContext` 导出名（Run: `grep -n "export.*Readable" packages/@ooc/core/readable/contract.ts`）。
+> 注 1：`ReadableModule` 的 `readable` 返回 `{class, content}`（content 可为 string 或 xml 节点数组，见 `terminal_process/readable/index.ts:25`）。空字符串 content → renderer 落空窗回退。确认 `@ooc/core/readable/contract.js` 的 `ReadableModule`/`ReadableContext`/`WindowClassDecl` 导出名 + `window` 字段结构（Run: `grep -n "export.*Readable\|WindowClassDecl\|window" packages/@ooc/core/readable/contract.ts`）。
+> 注 2：**先核实 agent 现在没 readable 时，self 门面窗 agency（talk/plan/todo/end）是经哪条 window decl surface 的**（默认投影？root window？）——P3 接管后 window decl 的 `object_methods` 必须覆盖现有 agency（减去迁走的 end/todo），即 `[talk, plan]`，否则破坏 agency 可见性。这是本 Task 风险最高处。
+> 注 3：`class` 字段取值需与 self 门面窗的投影 class 约定一致（self 门面窗 `inst.class=objectId`；投影 class 怎么定由现有默认投影决定）——核实后取正确值，勿臆造 `"agent"`。
 
 - [ ] **Step 3.2：agent/index.ts 装配 readable**
 
@@ -330,11 +341,23 @@ git add -A && git commit -m "refactor(persistable): stone-self 下沉 agent buil
 
 ---
 
-## Task 6：对象树 agent.md / 维度 self.md 文档回流（push ooc-0）
+## Task 6：对象树文档回流 + 退潮（push ooc-0）
+
+> **权威回流清单见 issue** `.ooc-world-meta/stones/main/docs/issues/2026-06-21-self-md-out-of-core-and-agency-relocation.md` 的「一致性回流清单」+「裁决」段——本 Task 逐条落实。除 agency/self.md 实现归属回流外，**还含 review 裁决的退潮项**：
+> - **frontmatter**（🔴 喂 LLM）：`agent.md` 第 3 行 `description` 里 `agency talk/plan/todo/end`→`talk/plan`、「无自定义 readable」→「自定义 readable 渲 data.self」。
+> - **退潮「self.md 进 instructions」三处**：`index.md:136`（readable×thinkable）+ `thinkable/self.md` identity 子模块 + `thinkable/knowledge/tests.md` TC-THINK-02 → 统一「不进 thinkloop instructions、渲为 self 门面窗 self 视角内容」（代码权威：`core/thinkable/context/index.ts:456-457`）。
+> - **退潮幽灵符号**：`index.md:140` `loadSelfInstructions`（代码已无）。
+> - **核心条补 plan**：`object/self.md` 核心 9/10 + `index.md:168` `## agent`：agency 显式 = talk/plan，end/todo 不属 agent agency。
+> - **thread.md**：object method 清单补 end/todo/close/new_feat_branch/create_pr…；加 todo 语义说明（不改 thread Data、在 thread context 内登记 todo 对象）。
+> - **index.md `## builtins`**：措辞精化为「class=_builtin/agent 实例才有 self.md」。
+> - **不纳入本次**（issue 范围外，登记）：thread status=canceled、share 实现、createObjectInSession readableMd 必填、displayName 协议重设计。
 
 **Files（在 `.ooc-world-meta/stones/main`）:**
-- Modify: `objects/supervisor/children/object/knowledge/builtins/agent.md`
-- Modify（按需）: `objects/supervisor/children/object/self.md`、`children/readable/self.md`
+- Modify: `objects/supervisor/children/object/knowledge/builtins/agent.md`（frontmatter + §一/§二/§三/§四，穷举见 issue review 的 agent reviewer 清单）
+- Modify: `objects/supervisor/children/object/self.md`（核心 9/10）
+- Modify: `objects/supervisor/knowledge/index.md`（`## agent` / `## builtins` / `## readable × thinkable` / `## persistable × thinkable`）
+- Modify: `objects/supervisor/children/thinkable/self.md`（identity 子模块退潮）、`children/thinkable/knowledge/tests.md`（TC-THINK-02）、`children/thinkable/knowledge/thread.md`（method 清单 + todo 语义）
+- Modify（按需）: `children/readable/self.md`
 
 - [ ] **Step 6.1：agent.md self×executable —— agency 改 talk/plan**
 
