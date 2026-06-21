@@ -16,8 +16,4 @@ export const knowledgeFileBody = t.Object({
   path: t.String(),
   content: t.Optional(t.String()),
 });
-export const callMethodBody = t.Object({
-  method: t.String(),
-  args: t.Optional(t.Record(t.String(), t.Any())),
-});
 export const putFileBody = t.Object({ path: t.String(), content: t.String() });

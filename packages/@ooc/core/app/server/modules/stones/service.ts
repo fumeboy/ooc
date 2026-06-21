@@ -9,10 +9,6 @@ import {
   writeReadable,
 } from "@ooc/core/persistable";
 import { readSelf, writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
-import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
-import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
-import type { VisibleServerContext } from "@ooc/core/_shared/types/visible-server.js";
-import { normalizeMethodResult } from "@ooc/core/executable/contract.js";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { parseKnowledgeFile, parseActivatesOn } from "@ooc/core/thinkable/knowledge";
 import { mkdir, stat, writeFile } from "node:fs/promises";
@@ -342,49 +338,6 @@ export function createStonesService({
         ok: true,
         ...(warning ? { warning } : {}),
       };
-    },
-    async callMethod({ objectId, method, args = {} }: { objectId: string; method: string; args?: Record<string, unknown> }) {
-      await ensureStoneExists(objectId);
-      // 加载 stone 的 `export const Class` 并注册进 per-call registry（seedFrom builtins 以解析
-      // 继承链上的 object method）；该 stone 无 index.ts（纯 self.md 对象）= 没有可调方法。
-      const registry = createObjectRegistry();
-      let registered: boolean;
-      try {
-        registered = await defaultServerLoader.loadAndRegisterStoneClass(ref(objectId), objectId, registry);
-      } catch (error) {
-        throw new AppServerError(
-          "METHOD_LOAD_FAILED",
-          `failed to load object class for stone ${objectId}: ${(error as Error).message}`,
-          { objectId, method }
-        );
-      }
-      // HTTP call_method 走 **visible/server** dispatch（人类侧）。A2 v1 stone scope 无 session/flow ref——
-      // 无 reportDataEdit 注入（无副作用落盘通道；stone scope data 落点延后）。无 visible/server 方法 → METHOD_NOT_FOUND。
-      const mod = registered ? registry.resolveVisibleServer(objectId) : undefined;
-      const entry = mod?.methods.find((m) => m.name === method);
-      if (!entry) {
-        throw new AppServerError(
-          "METHOD_NOT_FOUND",
-          `visible/server method '${method}' not found on stone '${objectId}'`,
-          { objectId, method, available: (mod?.methods ?? []).map((m) => m.name) }
-        );
-      }
-      try {
-        // stone scope 无 flow session：reportDataEdit 缺省（暂只支持无副作用/纯查询）。
-        const ctx: VisibleServerContext = {
-          baseDir,
-          session: { baseDir, sessionId: "" },
-          object: { id: objectId, class: objectId },
-          args,
-        };
-        return normalizeMethodResult(await entry.exec(ctx, {} as never, args) as never);
-      } catch (error) {
-        throw new AppServerError(
-          "INTERNAL_ERROR",
-          `method '${method}' threw: ${(error as Error).message}`,
-          { objectId, method }
-        );
-      }
     },
   };
 }

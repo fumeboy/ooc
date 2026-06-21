@@ -1,7 +1,6 @@
 import { Elysia } from "elysia";
 import type { ServerConfig } from "../../bootstrap/config";
 import type { WorldRuntime } from "@ooc/core/runtime";
-import { callMethodApi } from "./api.call-method";
 import { createKnowledgeDirectoryApi } from "./api.create-knowledge-directory";
 import { createKnowledgeFileApi } from "./api.create-knowledge-file";
 import { createStoneApi } from "./api.create-stone";
@@ -32,6 +31,5 @@ export function stonesModule(
     .use(getSelfApi(service))
     .use(getReadableApi(service))
     .use(getServerSourceApi(service))
-    .use(putFileApi(service))
-    .use(callMethodApi(service));
+    .use(putFileApi(service));
 }
