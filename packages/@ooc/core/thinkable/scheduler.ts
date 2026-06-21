@@ -146,7 +146,7 @@ function selectNextThread(threads: ThreadContext[]): ThreadContext {
  * 之后清 `inFlightCompress`（解除 force-wait）；若父在本 compress 上 waiting → 直接翻 running 唤醒
  * （内部回收，不靠 inbox 污染 / child-end 通知）。
  */
-function harvestSummarizerForks(root: ThreadContext): void {
+export function harvestSummarizerForks(root: ThreadContext): void {
   for (const thread of iterateThreads(root)) {
     const selfWin = thread.contextWindows?.find((w) => isSelfThreadWindow(w.id))?.win as
       | {
