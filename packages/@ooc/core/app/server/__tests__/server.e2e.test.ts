@@ -36,10 +36,10 @@ describe("app server local e2e", () => {
     expect(created.objectId).toBe("stone-e2e-1");
 
     const putSelf = await app.handle(
-      new Request("http://localhost/api/stones/stone-e2e-1/self", {
+      new Request("http://localhost/api/stones/stone-e2e-1/file", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: '{"ok":true,"n":1}' }),
+        body: JSON.stringify({ path: "self.md", content: '{"ok":true,"n":1}' }),
       })
     );
     expect(putSelf.status).toBe(200);

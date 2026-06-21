@@ -51,7 +51,7 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-REFL-02: 经 HTTP 改 self.md（自修改身份）
     {
       const newSelf = "# Mirror V2\nI evolved.";
-      const w = await putJson(app, `/api/stones/${id}/self`, { text: newSelf }, CONFIRM);
+      const w = await putJson(app, `/api/stones/${id}/file`, { path: "self.md", content: newSelf }, CONFIRM);
       const g = await getJson(app, `/api/stones/${id}/self`);
       const diskOk = readFileSync(join(dirOf(id), "self.md"), "utf8") === newSelf;
       rec.ok("TC-REFL-02", "经 HTTP 改 self.md（自修改身份）",
@@ -62,7 +62,7 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-REFL-03: 经 HTTP 改 readable（自修改对外呈现）
     {
       const content = "对外介绍：我能反思自己。";
-      const w = await putJson(app, `/api/stones/${id}/readable`, { text: content }, CONFIRM);
+      const w = await putJson(app, `/api/stones/${id}/file`, { path: "readable.md", content }, CONFIRM);
       const g = await getJson(app, `/api/stones/${id}/readable`);
       rec.ok("TC-REFL-03", "经 HTTP 改 readable（自修改对外呈现）",
         w.status === 200 && w.json?.ok === true && g.json?.text === content,

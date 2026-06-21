@@ -31,7 +31,7 @@ export async function runControlPlane(): Promise<StoryResult> {
     // TC-PERS-02: 经 HTTP 改 self 产生新 commit（worktree 版本化，可审计可回滚）
     {
       const before = stoneCommits(baseDir, rel(id, "self.md")).length;
-      await putJson(app, `/api/stones/${id}/self`, { text: "# Keeper v2\n演化了。" }, { "X-Overwrite-Confirm": "true" });
+      await putJson(app, `/api/stones/${id}/file`, { path: "self.md", content: "# Keeper v2\n演化了。" }, { "X-Overwrite-Confirm": "true" });
       const after = stoneCommits(baseDir, rel(id, "self.md")).length;
       rec.ok("TC-PERS-02", "经 HTTP 改 self 产生新 commit（版本化、可审计）",
         after > before, `commits ${before} → ${after}`);

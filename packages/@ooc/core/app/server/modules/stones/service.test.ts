@@ -18,7 +18,7 @@ describe("stones service", () => {
       expect(created.commitSha).toMatch(/^[0-9a-f]{40}$/);
       expect(created.merged).toBe(true);
 
-      const put = await service.putSelf({ objectId: "agent", text: "# agent" });
+      const put = await service.putFile({ objectId: "agent", path: "self.md", content: "# agent" });
       expect(put.commitSha).toMatch(/^[0-9a-f]{40}$/);
       expect(put.merged).toBe(true);
 

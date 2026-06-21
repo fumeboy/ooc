@@ -54,13 +54,13 @@ export const L7_STORIES: Story[] = [
   story({
     id: "L7-SERVER-SOURCE-RW",
     layer: "programmable",
-    expectation: "PUT 再 GET /api/stones/:id/server-source 读写一致",
-    design: "programmable：Object 方法源经控制面可读可写。modules/stones/api.put/get-server-source",
+    expectation: "PUT /file(executable/index.ts) 再 GET /server-source 读写一致",
+    design: "programmable：Object 方法源经控制面可读可写。modules/stones/api.put-file + api.get-server-source",
     run: async ({ app }) => {
       const id = "prog_src";
       await postJson(app, "/api/stones", { objectId: id });
       const code = "export const window = { methods: { ping: { description: 'ping', for_ui_access: true, exec: () => ({ ok: true, data: 'pong' }) } } };\n";
-      const put = await putJson(app, `/api/stones/${id}/server-source`, { code }, { "X-Overwrite-Confirm": "true" });
+      const put = await putJson(app, `/api/stones/${id}/file`, { path: "executable/index.ts", content: code }, { "X-Overwrite-Confirm": "true" });
       check(put.status === 200, `PUT status=${put.status}`);
       const get = await getJson(app, `/api/stones/${id}/server-source`);
       check(get.json?.code === code, `读写不一致：${JSON.stringify(get.json?.code)?.slice(0, 60)}`);
