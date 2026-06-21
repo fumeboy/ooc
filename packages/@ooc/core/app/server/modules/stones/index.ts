@@ -10,10 +10,8 @@ import { getSelfApi } from "./api.get-self";
 import { getServerSourceApi } from "./api.get-server-source";
 import { getStoneApi } from "./api.get-stone";
 import { listStonesApi } from "./api.list-stones";
-import { putReadableApi } from "./api.put-readable";
+import { putFileApi } from "./api.put-file";
 import { putKnowledgeFileApi } from "./api.put-knowledge-file";
-import { putSelfApi } from "./api.put-self";
-import { putServerSourceApi } from "./api.put-server-source";
 import { createStonesService } from "./service";
 
 export function stonesModule(
@@ -32,10 +30,8 @@ export function stonesModule(
     .use(putKnowledgeFileApi(service))
     .use(getStoneApi(service))
     .use(getSelfApi(service))
-    .use(putSelfApi(service))
     .use(getReadableApi(service))
-    .use(putReadableApi(service))
     .use(getServerSourceApi(service))
-    .use(putServerSourceApi(service))
+    .use(putFileApi(service))
     .use(callMethodApi(service));
 }
