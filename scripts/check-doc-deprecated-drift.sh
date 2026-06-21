@@ -92,6 +92,13 @@ declare -a FORBIDDEN_PATTERNS=(
   "threadExpand"
   "compress\\(scope"
   "compress.*两 scope"
+  # —— object 激活生命周期（active/unactive 经引用计数，2026-06-21）退役旧 close-method / destruct 面 ——
+  # 终态：thread close 是 tool 原语（移引用）非 thread object method；删除是 unactive 返回 {delete} 自决、
+  # 无独立 destruct 钩子。下列退役符号当 live 教即 drift（迁移说明用 退役/→/已删 标记豁免）。
+  # 精确到符号——不宽匹配 close（terminal/interpreter/plan/file/search 的 close object method 仍是 live API）。
+  "archiveForkChild"
+  "ObjectDestructor"
+  "destruct\\?:"
 )
 
 # 退役标记词：命中行含其一 = 合法的「退役说明」，放行。
