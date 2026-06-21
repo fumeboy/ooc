@@ -68,141 +68,93 @@ export const L2_STORIES: Story[] = [
   }),
 
   story({
-    id: "L2-COMPRESS-WINDOW-METHOD",
+    id: "L2-RESIZE-DISPLAY",
     layer: "thinkable",
-    expectation: "compress/expand 作为通用默认 window method：写入侧 resolveWindowMethod 回退默认表 + 改 compressLevel；读出侧 renderer 按档位投影变短",
+    expectation:
+      "compress v2 协议：内容窗经 class 自声明 resize 设展示档位 compressLevel（无通用默认）；读出侧 projectByCompressLevel 按档位投影变短",
     design:
-      "compress 下沉为通用 window method（readable/default-window-methods.ts:DEFAULT_WINDOW_METHODS），" +
-      "object-registry.ts:resolveWindowMethod 在 class 自有声明未命中时回退默认表；" +
-      "读出侧 thinkable/context/renderers/xml.ts:projectByCompressLevel 按 win.compressLevel 投影详略（0 全文 / 1 缩略 / 2 仅句柄）。",
+      "compress v2：无通用默认窗方法表（default-window-methods 已删）。内容窗（file/search/…）在自己 readable 的 " +
+      "window_methods 声明 displayResize（core/readable/display-resize.ts）设 compressLevel；未声明的 class 无 resize（no default）。" +
+      "读出侧 xml.ts:projectByCompressLevel 按 win.compressLevel 投影详略（0 全文 / 1 缩略 / 2 仅句柄）。",
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
+      const { displayResize } = await import("@ooc/core/readable/display-resize");
       const { projectByCompressLevel } = await import("@ooc/core/thinkable/context/renderers/xml");
       const { xmlElement, xmlText, serializeXml } = await import("@ooc/core/_shared/types/xml");
 
-      // 写入侧：class 无 compress 声明 → resolveWindowMethod 回退默认表。
+      // no default：未声明 resize/compress 的 class → resolveWindowMethod 返 undefined（无通用回退）。
       const reg = createObjectRegistry();
       reg.register("plain_win", { executable: { methods: [] } } as never, { parentClass: null });
-      const compress = reg.resolveWindowMethod("plain_win", "compress");
-      const expand = reg.resolveWindowMethod("plain_win", "expand");
-      check(!!compress && !!expand, "compress/expand 未从默认表解析（resolveWindowMethod 回退缺失）");
+      check(reg.resolveWindowMethod("plain_win", "resize") === undefined, "no default：未声明 class 不应有 resize");
+      check(reg.resolveWindowMethod("plain_win", "compress") === undefined, "no default：未声明 class 不应有 compress");
 
-      // exec 改档：0→1 递进、封顶 2；expand 反向 1→0（纯投影态、不可变）。
-      const up1 = (await compress!.exec({} as never, {}, { compressLevel: 0 } as never, {} as never)) as { compressLevel: number };
-      check(up1.compressLevel === 1, `compress 应 0→1，得 ${up1.compressLevel}`);
-      const cap = (await compress!.exec({} as never, {}, { compressLevel: 2 } as never, {} as never)) as { compressLevel: number };
-      check(cap.compressLevel === 2, `compress 应封顶 2，得 ${cap.compressLevel}`);
-      const down = (await expand!.exec({} as never, {}, { compressLevel: 1 } as never, {} as never)) as { compressLevel: number };
-      check(down.compressLevel === 0, `expand 应 1→0，得 ${down.compressLevel}`);
+      // class 自声明 displayResize → 解析到；exec 设 compressLevel 档位。
+      reg.register(
+        "content_win",
+        { readable: { readable: () => ({ class: "content_win", content: [] }), window: [{ class: "content_win", object_methods: [], window_methods: [displayResize] }] } } as never,
+        { parentClass: null },
+      );
+      const resize = reg.resolveWindowMethod("content_win", "resize");
+      check(!!resize, "content_win 声明的 resize 未解析");
+      const set2 = (await resize!.exec({} as never, {}, { compressLevel: 0 } as never, { level: 2 } as never)) as { compressLevel: number };
+      check(set2.compressLevel === 2, `resize(level=2) 应设 compressLevel=2，得 ${set2.compressLevel}`);
 
-      // 读出侧：长内容 level 0 原样、level 2 仅句柄 → 显著变短（可逆闭环）。
+      // 读出侧：level 0 原样、level 2 仅句柄 → 显著变短。
       const long = [xmlElement("readable", {}, [xmlText("x".repeat(500))])];
       const full = serializeXml(xmlElement("window", {}, projectByCompressLevel(long, 0)));
       const folded = serializeXml(xmlElement("window", {}, projectByCompressLevel(long, 2)));
       check(full.includes("x".repeat(500)), "level 0 应原样含全文");
-      check(folded.length < full.length, `level 2 投影应比 level 0 短：full=${full.length} folded=${folded.length}`);
-      check(!folded.includes("x".repeat(500)), "level 2 不应再含全文（已折为句柄）");
+      check(folded.length < full.length && !folded.includes("x".repeat(500)), "level 2 应折为句柄、显著变短");
     },
   }),
 
   story({
-    id: "L2-COMPRESS-EVENTS",
+    id: "L2-COMPRESS-V2",
     layer: "thinkable",
     expectation:
-      "compress(scope=events) 折叠 thread 历史 transcript 为摘要占位：win.summarizedRanges 写入侧 + projectSummarizedRanges 读出侧 item 数降 + summary 出现 + 视角隔离 + expand 还原",
+      "compress v2 协议（thread 窗）：compress 无参意图置 compressIntent / resize 设 autoCompressLevel；阈值判定 transcript-gated；读出侧 projectSummarizedRanges 折叠",
     design:
-      "events 折叠是 **thread class 自声明**的 window method（agent/children/thread/readable/compress-events.ts:threadCompress scope=events，" +
-      "能力归属「内容所在的窗」compress.md 核7），改 win.summarizedRanges（视角独立投影态，不碰 thread.events）；通用默认表对 scope=events 抛错指向 thread 窗。" +
-      "读出侧 _shared/utils/summarized-ranges.ts:projectSummarizedRanges 把段内连续 items 折成一条 summary（self 视角 context/index.ts 折 events、peer 视角 conversation-render 折 messages）。可逆。",
+      "compress v2：thread class 自声明 compress（无参→置 win.compressIntent，框架 fork summarizer 折早期历史、摘要由 fork 生成）" +
+      "+ resize（设 win.autoCompressLevel 自动压缩档位）。compress-trigger.ts:autoCompressThreshold/shouldAutoCompress 据档位 + " +
+      "未总结 transcript token 判定触发（transcript-gated H3）。harvest 记 win.summarizedRanges；读出侧 projectSummarizedRanges 投影。",
     run: async () => {
       await import("@ooc/core/runtime/register-builtins.js");
-      const { builtinRegistry, createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
-      const { projectSummarizedRanges } = await import(
-        "@ooc/core/_shared/utils/summarized-ranges"
-      );
+      const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
       const { THREAD_CLASS_ID } = await import("@ooc/core/_shared/types/constants");
+      const { autoCompressThreshold, shouldAutoCompress } = await import("@ooc/core/thinkable/context/compress-trigger");
+      const { projectSummarizedRanges } = await import("@ooc/core/_shared/utils/summarized-ranges");
 
-      // 能力归属：events 折叠归 thread class（compress.md 核 7），非通用默认表。resolveWindowMethod
-      // 沿 THREAD_CLASS_ID 的 readable.window[] 找到 threadCompress/threadExpand（不按投影 class 过滤）。
+      // thread class 自声明 compress（intent）+ resize（autoCompressLevel）——无通用默认表。
       const compress = builtinRegistry.resolveWindowMethod(THREAD_CLASS_ID, "compress");
-      const expand = builtinRegistry.resolveWindowMethod(THREAD_CLASS_ID, "expand");
-      check(!!compress && !!expand, "thread class 未声明 compress/expand（events 能力归属缺失）");
+      const resize = builtinRegistry.resolveWindowMethod(THREAD_CLASS_ID, "resize");
+      check(!!compress && !!resize, "thread class 未声明 compress/resize（v2 协议缺失）");
 
-      // 能力边界：非 thread 窗（plain_win）走通用默认表，compress(scope=events) 抛错指向 thread 窗
-      // （避免错窗静默落折叠态 → 写读不同窗静默失效，silent-swallow ban）。
-      const reg = createObjectRegistry();
-      reg.register("plain_win", { executable: { methods: [] } } as never, { parentClass: null });
-      const plainCompress = reg.resolveWindowMethod("plain_win", "compress");
-      check(!!plainCompress, "plain_win compress 未从默认表解析");
-      let threw = false;
-      try {
-        await plainCompress!.exec({} as never, {}, {}, { scope: "events", keepTail: 1, summary: "x" } as never);
-      } catch {
-        threw = true;
-      }
-      check(threw, "非 thread 窗 compress(scope=events) 应抛错（events 折叠不属本层）");
+      // compress 无参 → 置 compressIntent；resize(level=2) → 设 autoCompressLevel。
+      const ci = (await compress!.exec({} as never, {}, {} as never, {} as never)) as { compressIntent?: boolean };
+      check(ci.compressIntent === true, "compress 应置 compressIntent=true");
+      const rl = (await resize!.exec({} as never, {}, {} as never, { level: 2 } as never)) as { autoCompressLevel?: number };
+      check(rl.autoCompressLevel === 2, `resize(level=2) 应设 autoCompressLevel=2，得 ${rl.autoCompressLevel}`);
 
-      // keepTail：ctx.thread.events 长度 5、keepTail=2 → 折叠 events[0..2]（保留末 2 条）。
-      const ctx5 = { thread: { events: [0, 1, 2, 3, 4] } } as never;
-      const folded = (await compress!.exec(ctx5, {}, {}, {
-        scope: "events",
-        keepTail: 2,
-        summary: "早期三轮：建立任务上下文",
-      } as never)) as { summarizedRanges?: Array<{ fromIdx: number; toIdx: number; summary: string }> };
+      // 触发判定（transcript-gated）：档位→阈值（2=soft/2 / 1=soft / 0=hard）；超阈值/intent 触发、在途不触发。
+      const T = { soft: 100000, hard: 180000 };
       check(
-        folded.summarizedRanges?.length === 1 &&
-          folded.summarizedRanges[0]!.fromIdx === 0 &&
-          folded.summarizedRanges[0]!.toIdx === 2,
-        `keepTail=2 应折 events[0..2]，得 ${JSON.stringify(folded.summarizedRanges)}`,
+        autoCompressThreshold(2, T) === 50000 && autoCompressThreshold(1, T) === 100000 && autoCompressThreshold(0, T) === 180000,
+        "autoCompressThreshold 档位映射错",
       );
+      check(shouldAutoCompress({ transcriptTokens: 60000, autoCompressLevel: 2, compressIntent: false, inFlight: false, thresholds: T }), "超档位阈值应触发");
+      check(!shouldAutoCompress({ transcriptTokens: 999999, autoCompressLevel: 2, compressIntent: true, inFlight: true, thresholds: T }), "在途 compress 不应再触发");
 
-      // 显式区段：fromIdx/toIdx 点名折叠 events[1..3]（不依赖 ctx 长度）。
-      const ranged = (await compress!.exec({} as never, {}, {}, {
-        scope: "events",
-        fromIdx: 1,
-        toIdx: 3,
-        summary: "中段噪声 tool 结果",
-      } as never)) as { summarizedRanges?: Array<{ fromIdx: number; toIdx: number }> };
-      check(
-        ranged.summarizedRanges?.[0]?.fromIdx === 1 && ranged.summarizedRanges?.[0]?.toIdx === 3,
-        `显式区段应折 [1..3]，得 ${JSON.stringify(ranged.summarizedRanges)}`,
-      );
-
-      // 读出侧：6 个 item，折叠 [1..3] → 段内 3 个折成 1 条 summary，总 item 数 6→4（降）。
-      const items = ["a", "b", "c", "d", "e", "f"];
-      const renderItem = (s: string) => [`item:${s}`];
-      const renderSummary = (r: { summary: string }, n: number) => [`SUMMARY(${n}):${r.summary}`];
-      const full = projectSummarizedRanges(items, undefined, renderItem, renderSummary);
-      check(full.length === 6, `无折叠应 6 项，得 ${full.length}`);
+      // 读出侧投影（载体不变）：6 项折 [1..3] → 4 项 + summary 替换段内、段外原样。
       const projected = projectSummarizedRanges(
-        items,
+        ["a", "b", "c", "d", "e", "f"],
         [{ fromIdx: 1, toIdx: 3, summary: "折叠 bcd" }],
-        renderItem,
-        renderSummary,
+        (s: string) => [`item:${s}`],
+        (r: { summary: string }, n: number) => [`SUMMARY(${n}):${r.summary}`],
       );
-      check(projected.length === 4, `折 [1..3] 应 6→4 项，得 ${projected.length}：${JSON.stringify(projected)}`);
       check(
-        projected.includes("SUMMARY(3):折叠 bcd") &&
-          !projected.includes("item:b") &&
-          projected.includes("item:a") &&
-          projected.includes("item:e"),
-        `折叠后应 summary 替换段内、段外原样：${JSON.stringify(projected)}`,
+        projected.length === 4 && projected.includes("SUMMARY(3):折叠 bcd") && !projected.includes("item:b") && projected.includes("item:e"),
+        `折 [1..3] 应 6→4、summary 替换段内段外原样：${JSON.stringify(projected)}`,
       );
-
-      // 视角隔离：同一 items，winB（无折叠态）投影不受 winA 折叠影响。
-      const viewB = projectSummarizedRanges(items, undefined, renderItem, renderSummary);
-      check(viewB.length === 6, `视角隔离：另一视角无折叠应仍 6 项，得 ${viewB.length}`);
-
-      // 可逆：expand(scope=events) 清空折叠态 → 投影还原全长。
-      const cleared = (await expand!.exec({} as never, {}, ranged as never, {
-        scope: "events",
-      } as never)) as { summarizedRanges?: unknown[] };
-      check(
-        !cleared.summarizedRanges || cleared.summarizedRanges.length === 0,
-        `expand 应清空折叠态，得 ${JSON.stringify(cleared.summarizedRanges)}`,
-      );
-      const restored = projectSummarizedRanges(items, cleared.summarizedRanges as never, renderItem, renderSummary);
-      check(restored.length === 6, `expand 还原后应 6 项，得 ${restored.length}`);
     },
   }),
 

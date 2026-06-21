@@ -61,6 +61,14 @@ declare -a FORBIDDEN_PATTERNS=(
   "creatorWindowIdOf"
   "isCreatorWindowId"
   "CREATOR_WINDOW_ID_PREFIX"
+  # —— compress v2（resize 协议，2026-06-21）：compress=无参折叠意图 / resize=档位（替代 expand），
+  #    无通用默认窗方法表。退役：通用默认表 default-window-methods（resolveDefaultWindowMethod /
+  #    DEFAULT_WINDOW_METHODS）、expand 窗方法（threadExpand）、agent 给 scope/keepTail/summary 的
+  #    旧 compress（foldEvents helper）。禁精确符号防回潮（不命中 storybook 的「default-window-methods 已删」说明串）。
+  "resolveDefaultWindowMethod"
+  "DEFAULT_WINDOW_METHODS"
+  "threadExpand"
+  "\\bfoldEvents\\b"
 )
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）

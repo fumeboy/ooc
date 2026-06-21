@@ -9,7 +9,9 @@
  * 本模块补上这层**应急兜底**：current 越 hard 时把 transcript 钳到预算内（丢最早、留最近），
  * 与窗 overflow **同模型**——per-round、瞬态、**不改 `thread.events`、不动 win、不持久化、不生成摘要**。
  * 它只是"本轮渲染少喂点最早历史"，不是"自动推进压缩档位"（不违 `budget.ts` 预算不自动推进档位的不变量）。
- * agent 仍可（且应）主动 `exec(compress, scope=events)` 持久折叠——那是 agent 的上下文工程主权。
+ * v2 关系：这是 force-wait（在途 summarizer fork 时强制等待，`compress-fork.ts:maybeForceWaitForCompress`）
+ * 之下的 **clamp floor**——force-wait 等不及（无在途 fork 却已溢出 / fork 未回）时仍保证不崩。
+ * agent 仍可（且应）主动 `exec(method="compress")`（无参意图）持久折叠——那是 agent 的上下文工程主权。
  *
  * **tool-pair 安全**：钳制保留的是 transcript 的**后缀**；function_call 必排在其 function_call_output
  * 之前，故后缀里不会出现"call 在后缀内、output 被丢"的孤儿 call，只可能出现"output 在后缀内、其 call

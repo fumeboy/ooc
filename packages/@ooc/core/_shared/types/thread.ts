@@ -255,22 +255,22 @@ export type ProcessEvent = ProcessEventCommon & (
     }
   | {
       /**
-       * 事件来源：context 压缩档位变化。
+       * 事件来源：context 折叠发生（compress v2）。
        *
-       * 由 compress tool / expand method / 自然衰减 + emergency guard 触发。
-       * 每次压缩档位切换写一条本事件,与现有 ProcessEvent 同序进 thread.json /
-       * debug 落盘 / contextSnapshot,LLM 视野中也可见。
+       * 由 `harvestSummarizerForks` 在 summarizer fork 完成（done→记段 / failed→关自动压缩）时写一条，
+       * 与现有 ProcessEvent 同序进 thread.json / debug 落盘 / contextSnapshot,LLM 视野中也可见
+       * （silent-swallow ban：折叠对 LLM 透明）。
        */
       category: "context_change";
-      /** 压缩档位切换:每次 compressLevel 变化一次写一条。 */
+      /** 折叠发生:每次 harvest 记段 / 记失败写一条。 */
       kind: "context_compressed";
-      /** 受影响的 window id 列表(events scope 时为空数组)。 */
+      /** 受影响的 window id 列表(transcript 折叠为空数组)。 */
       windowIds: string[];
-      /** 档位变化,形如 "0→1" / "1→0" / "1→2"。 */
+      /** 折叠标记,形如 "auto-fold" / "auto-fold-failed"。 */
       levelChange: string;
-      /** 触发原因:user-compress / user-expand / idle-fold / age-fold / emergency 等。 */
+      /** 触发原因:auto-summarized / summarizer-fork-failed 等。 */
       reason: string;
-      /** 触发 scope:windows / events / auto;LLM 主动 compress 时来自 args。 */
+      /** 折叠作用域(v2 仅 transcript events 折叠)。 */
       scope?: "windows" | "events" | "auto";
     }
   | {

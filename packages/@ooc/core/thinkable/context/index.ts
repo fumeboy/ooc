@@ -146,9 +146,9 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
   }
 
   if (event.category === "context_change" && event.kind === "context_compressed") {
-    // 压缩档位切换:silent-swallow ban 要求 LLM 能看见;以 system message 注入,
-    // 简洁陈述档位变化 + 原因,不引入新协议(LLM 看到后可继续 / 也可 expand 回滚)。
-    const target = event.windowIds.length > 0 ? event.windowIds.join(",") : "(events scope)";
+    // 折叠发生:silent-swallow ban 要求 LLM 能看见;以 system message 注入,
+    // 简洁陈述折叠 + 原因,不引入新协议(LLM 看到后据此继续推进)。
+    const target = event.windowIds.length > 0 ? event.windowIds.join(",") : "(transcript)";
     return [
       {
         type: "message",
@@ -326,8 +326,8 @@ function reconcilePeerWindowsIntoContext(
  *
  * 仅影响本轮 LLM 输入，不进 thread.events。overflow（被 budget 排除的窗口）由
  * XmlRenderer 的 <context_overflow> 节点直接呈现，这里只补一条 soft 档提示，提示 LLM 主动精简：
- * 窗口可 `close`，但 transcript（历史叙事）不能 close、只能 `compress(scope=events)` 折叠
- * —— 故 transcript 占比高时显式指向该杠杆。
+ * 窗口可 `close`，但 transcript（历史叙事）不能 close、只能 `compress` 折叠（无参意图：框架
+ * fork summarizer 摘要早期历史）—— 故 transcript 占比高时显式指向该杠杆。
  */
 function buildBudgetWarningItem(
   currentTokens: number,
@@ -341,8 +341,8 @@ function buildBudgetWarningItem(
       `<context_budget_warning current="${currentTokens}" transcript="${transcriptTokens}" soft="${thresholds.soft}" hard="${thresholds.hard}"/>\n` +
       `当前估算 token 接近预算上限 (current=${currentTokens}, 其中 transcript=${transcriptTokens}, soft=${thresholds.soft}, hard=${thresholds.hard})。` +
       `系统已按相关性把低相关窗口排除在 context 之外（见 <context_overflow>）。你可主动 ` +
-      `close 不再需要的 window；历史叙事（transcript）占比高时用 exec(method="compress", args={scope:"events", keepTail:N, summary:"…"}) ` +
-      `折叠早期过程，或继续推进任务。`,
+      `close 不再需要的 window；历史叙事（transcript）占比高时用 exec(method="compress") ` +
+      `折叠早期过程（无参意图，框架 fork summarizer 摘要早期历史），或继续推进任务。`,
   };
 }
 
@@ -354,7 +354,7 @@ function buildBudgetWarningItem(
  * 会被 LLM provider 拒、本轮 think 崩。这里在投影**前**把区段外扩到覆盖完整配对（两半要么都折、
  * 要么都留），从根上不产生孤儿。pending call（有 call 无 output，恢复期边界）不外扩、原样保留。
  *
- * 纯函数：只调整本轮投影用的 range，不改存储的 `win.summarizedRanges`（expand 仍按原 range 还原）。
+ * 纯函数：只调整本轮投影用的 range，不改存储的 `win.summarizedRanges`（存的是 harvest 写入的原始段）。
  */
 function snapRangesToToolPairs(
   events: ProcessEvent[],
@@ -430,9 +430,9 @@ export async function buildInputItems(
 
   // self 视角 transcript：thread.events 平铺成 message 流，按**自己视角 thread 窗**投影态 win 的
   // summarizedRanges 折叠——落在某段内的连续 events 替换为一条 summary 占位，段外正常渲。
-  // 载体收敛（compress Case A）：折叠态挂 thread 窗（isSelfThreadWindow，THREAD_CLASS_ID inline 天然
-  // 持久化）、不再挂 self 门面窗（identity，isSelfWindow）。写侧 events-compress 归属 thread class
-  // → 写读同窗。折叠态视角独立（存 win、不改 thread.events），可逆。
+  // 载体挂 thread 窗（isSelfThreadWindow，THREAD_CLASS_ID inline 天然持久化）、不挂 self 门面窗。
+  // summarizedRanges 由 harvestSummarizerForks 写入（compress 无参意图 → fork summarizer 摘要 → harvest
+  // 折段）。折叠态视角独立（存 win、不改 thread.events）——thread.events 全量历史始终保留。
   const selfThreadWin = thread.contextWindows?.find(
     (w) => isSelfThreadWindow(w.id),
   )?.win as { summarizedRanges?: SummarizedRange[] } | undefined;
@@ -447,7 +447,7 @@ export async function buildInputItems(
         role: "system",
         content:
           `[context_change:events_summary count=${foldedCount} ` +
-          `range=${range.fromIdx}-${range.toIdx} scope=events] ` +
+          `range=${range.fromIdx}-${range.toIdx}] ` +
           `${foldedCount} events folded, summary by LLM:\n${range.summary}`,
       },
     ],
@@ -472,7 +472,8 @@ export async function buildInputItems(
   // 应急兜底（emergency_guard）：current 越 hard 时，把 transcript 钳到 (hard - 窗口估算) 内
   // ——丢最早、留最近、tool-pair 安全（transcript-clamp.ts）。与窗 overflow 同模型：per-round、
   // 瞬态、不改 thread.events、不动 win、不持久化、不生成摘要。插一条可见 marker 指向 compress
-  // （silent-swallow ban）。这是安全网，agent 仍应主动 compress 持久折叠。
+  // （silent-swallow ban）。这是 clamp floor 安全网（v2 force-wait 之下的兜底）：force-wait 已等不及
+  // （在途 fork 未回 / 无在途但已溢出）时仍保证不崩；agent 仍应主动 compress 持久折叠。
   let renderedTranscript = transcript;
   let clampMarker: LlmInputItem[] = [];
   if (currentTokens > thresholds.hard) {
@@ -487,7 +488,7 @@ export async function buildInputItems(
           content:
             `[context_change:context_clamped] 最早 ${omittedCount} 条 transcript 项本轮被省略以适配预算 ` +
             `(current≈${currentTokens} > hard=${thresholds.hard})。完整历史仍在 thread.events（未丢失）；` +
-            `用 exec(method="compress", args={scope:"events", keepTail:N, summary:"…"}) 持久折叠早期过程。`,
+            `用 exec(method="compress") 持久折叠早期过程（无参意图，框架 fork summarizer 摘要）。`,
         },
       ];
     }

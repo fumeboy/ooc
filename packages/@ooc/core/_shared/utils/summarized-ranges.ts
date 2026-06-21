@@ -9,8 +9,9 @@
  * 一个存储形态 + 一个通用投影 helper（{@link projectSummarizedRanges}）服务两视角——
  * 各调用点传入自己的 item 列表与渲染函数，落在某 range 内的连续 items 折成一条 summary 占位。
  *
- * 折叠是 window method（纯函数改 win、返回新 win、零副作用，契合 readable/contract WindowMethod）；
- * 不碰 object data（`thread.events` 一字不改），故可逆——展开即还原。
+ * 段由谁写：self 视角 thread 窗的段由 `harvestSummarizerForks` 写入（compress 无参意图 → 框架 fork
+ * summarizer 摘要早期历史 → harvest 折段）。投影态视角独立、不碰 object data（`thread.events` 一字不改）
+ * ——thread.events 全量历史始终保留（折叠只改本窗读出投影，不删原始事件）。
  */
 
 /** 被折叠区段：`thread.events` / messages 的数组 index 区间（含两端）+ agent 提供的摘要。 */
@@ -19,7 +20,7 @@ export interface SummarizedRange {
   fromIdx: number;
   /** 区段终点 index（含）。 */
   toIdx: number;
-  /** 该区段的摘要文本（agent 在 compress(scope=events) 调用中提供）。 */
+  /** 该区段的摘要文本（由 summarizer fork 生成、harvest 写入）。 */
   summary: string;
 }
 
