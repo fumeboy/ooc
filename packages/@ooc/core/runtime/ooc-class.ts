@@ -18,6 +18,7 @@ import type {
 } from "../executable/contract.js";
 import type { ReadableModule } from "../readable/contract.js";
 import type { PersistableModule } from "../persistable/contract.js";
+import type { VisibleServerModule } from "../_shared/types/visible-server.js";
 import type { WindowStatus } from "../_shared/types/context-window.js";
 
 /**
@@ -37,9 +38,10 @@ export interface World {
  * - init        : **World 启动时执行**一次的 class 级初始化 `(world) => err`（返回错误信息，空=成功）；
  *                 用于起后台通道/长连接等（如 feishu_app 起 lark event relay）。机制（World 启动时
  *                 遍历调 init）待实现。
- * - executable  : object method（改数据 / 副作用）
+ * - executable  : object method（改数据 / 副作用；LLM 在 thinkloop 行使）
  * - readable    : 投影成 context window + window method
  * - persistable : 自定义序列化（省略走系统默认）
+ * - visibleServer : 人类侧服务端 API（HTTP 控制面编辑 object data；无 thinkloop thread）
  *
  * 注：constructor 槽位命名为 **`construct`** 而非 `constructor` —— JS `Object.prototype.constructor`
  * 会遮蔽该键（`({}).constructor === Object` 恒真 → 单例无法被识别；TS 也会拿 `Function` 去比对类型而报错）。
@@ -53,6 +55,7 @@ export interface OocClass<Data = any> {
   executable?: ExecutableModule<Data>;
   readable?: ReadableModule<Data>;
   persistable?: PersistableModule<Data>;
+  visibleServer?: VisibleServerModule<Data>;
 }
 
 /**

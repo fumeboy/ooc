@@ -5,12 +5,19 @@
  * 安全边界拒绝 executable 路径；visible 变更触发后端 stone:changed kind=view 事件；
  * UI↔行为闭环（callMethod 端点调通 executable）。规格见 visible 对象 knowledge/tests.md（.ooc-world-meta）。
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { stoneDir as realStoneDir } from "@ooc/core/persistable";
+import { stoneDir as realStoneDir, createFlowSession, createFlowObject } from "@ooc/core/persistable";
 import { mkServer, postJson, getJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult } from "../_harness/types";
+
+/** 读 flows/<sid>/objects/<oid>/state.json（系统默认 object data 落盘；不存在 → undefined）。 */
+function readStateJson(baseDir: string, sid: string, oid: string): any | undefined {
+  const p = join(baseDir, "flows", sid, "objects", oid, "state.json");
+  if (!existsSync(p)) return undefined;
+  try { return JSON.parse(readFileSync(p, "utf8")); } catch { return undefined; }
+}
 
 const VITE = "http://localhost:5173";
 
@@ -89,23 +96,54 @@ export async function runControlPlane(): Promise<StoryResult> {
       }
     }
 
-    // TC-VIS-05: UI↔行为闭环 —— visible 组件存在 + callMethod 端点调通 executable。
-    // 新模型：visible/index.tsx 是前端组件（callMethod 经 HTTP 调后端）；executable 程序路由由
-    // stone 根 index.ts 的 `export const Class`（OocClass）装配，object method 三参 `(ctx, self, args)`、
-    // 返回 ObjectMethodResult `{ data }`。call_method 经 server-loader 从根 index.ts 取 for_ui_access 方法。
+    // TC-VIS-05: UI↔行为闭环 —— visible 组件存在 + callMethod 端点调通 visible/server。
+    // 新模型：visible/index.tsx 是前端组件（callMethod 经 HTTP 调后端）；人类侧服务端 API 由
+    // stone 根 index.ts 的 `export const Class.visibleServer`（VisibleServerModule）装配，
+    // method 三参 `(ctx, self, args)`、返回 ObjectMethodResult `{ data }`。
+    // call_method 经 registry.resolveVisibleServer 取方法（退役 executable 的 for_ui_access）。
     {
       const id = "ui_loop";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "visible/index.tsx",
         `export default function Demo({ callMethod }: any) { const onClick = () => callMethod?.("greet", { name: "ooc" }); return null; }`);
       writeStoneFile(baseDir, id, "index.ts",
-        `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";\nexport const Class: OocClass = { executable: { methods: [{ name: "greet", description: "greet", for_ui_access: true, exec: (ctx, self, args) => ({ data: { hello: args.name } }) }] } };`);
+        `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";\nexport const Class: OocClass = { visibleServer: { methods: [{ name: "greet", description: "greet", exec: (ctx, self, args) => ({ data: { hello: args.name } }) }] } };`);
       await sleep(300);
       const urlResp = await getJson(app, `/api/objects/stone/${id}/client-source-url`);
       const callResp = await postJson(app, `/api/stones/${id}/call_method`, { method: "greet", args: { name: "ooc" } });
-      rec.ok("TC-VIS-05", "UI↔行为闭环：visible 组件存在 + callMethod 端点调通 executable",
+      rec.ok("TC-VIS-05", "UI↔行为闭环：visible 组件存在 + callMethod 端点调通 visible/server",
         urlResp.status === 200 && callResp.json?.data?.hello === "ooc",
         `urlOk=${urlResp.status}, call=${JSON.stringify(callResp.json?.data)}`);
+    }
+
+    // TC-VIS-06（demonstrator）: flow scope visible/server 端到端 —— builtin todo 的 visibleServer
+    // 方法经 HTTP call_method 编辑 object data + reportDataEdit 系统默认落 state.json。
+    // 验证机制全链路：.flow.json:class 解析 builtin todo → resolveVisibleServer 沿链找方法 →
+    // exec 改入参 data → reportDataEdit → 读回 state.json 反映改动。
+    {
+      const sid = "vis-demo-todo";
+      const oid = "todo_1";
+      await createFlowSession(baseDir, sid);
+      // 建标准 flow object：.flow.json:class = builtin todo（继承链上有 visibleServer）。
+      await createFlowObject({ baseDir, sessionId: sid, objectId: oid }, { class: "_builtin/agent/todo" });
+
+      // set_content：写正文 → reportDataEdit 落 state.json。
+      const r1 = await postJson(app, `/api/flows/${sid}/${oid}/call_method`,
+        { method: "set_content", args: { content: "买牛奶" } });
+      const st1 = readStateJson(baseDir, sid, oid);
+      const setOk = r1.status === 200 && r1.json?.data?.content === "买牛奶"
+        && st1?.data?.content === "买牛奶";
+
+      // toggle_done：基于刚落盘的 data 翻转 status（验证 load→exec→save 闭环跨调用）。
+      const r2 = await postJson(app, `/api/flows/${sid}/${oid}/call_method`,
+        { method: "toggle_done", args: {} });
+      const st2 = readStateJson(baseDir, sid, oid);
+      const toggleOk = r2.status === 200 && r2.json?.data?.status === "done"
+        && st2?.data?.status === "done" && st2?.data?.content === "买牛奶";
+
+      rec.ok("TC-VIS-06", "flow scope visible/server 端到端：todo set_content/toggle_done 改 data + 落 state.json",
+        setOk && toggleOk,
+        `set: call=${JSON.stringify(r1.json?.data)} disk=${JSON.stringify(st1?.data)}; toggle: call=${JSON.stringify(r2.json?.data)} disk=${JSON.stringify(st2?.data)}`);
     }
   } finally {
     await srv.cleanup();

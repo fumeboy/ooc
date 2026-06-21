@@ -3,14 +3,16 @@ import {
   createFlowSession,
   ensureSessionWorktree,
   objectDir,
+  readFlowObjectClass,
   threadDir,
   STONE_CHILDREN_SUBDIR,
 } from "@ooc/core/persistable";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
-import { loadStoneClass } from "@ooc/core/runtime/server-loader";
+import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
 import { resolveStoneIdentityRef } from "@ooc/core/persistable";
+import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
-import { normalizeMethodResult } from "@ooc/core/executable/contract.js";
+import { dispatchVisibleServerMethod } from "../_shared/visible-server-dispatch";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
@@ -887,15 +889,21 @@ export function createFlowsService(deps: {
       args?: Record<string, unknown>;
     }) {
       await ensureFlowObjectExists(sessionId, objectId);
-      // Wave 4：loadObjectWindow（旧窗-方法映射）→ loadStoneClass（OocClass 装配入口）。
-      // 解析对象 stone ref（read 模式：feat 绑定优先 → session worktree → main canonical）。
-      let cls;
+      // HTTP 控制面 callMethod 走 **visible/server** dispatch（人类侧编辑 object data；无 thinkloop thread）。
+      // load 对象 Class 注册进 per-call registry（seedFrom builtins 解析继承链上的 visibleServer / persistable）。
+      const registry = createObjectRegistry();
       try {
         const stoneRef = await resolveStoneIdentityRef(
           { baseDir: deps.baseDir, sessionId, objectId },
           "read",
         );
-        cls = (await loadStoneClass(stoneRef))?.cls;
+        await defaultServerLoader.loadAndRegisterStoneClass(stoneRef, objectId, registry);
+        // flow object 的继承 class 落 `.flow.json`（非 stone package.json）——builtin-class 实例
+        // （如 todo）经此把 objectId 链到 builtin class，让 resolveVisibleServer 沿链找到方法。
+        const flowClass = await readFlowObjectClass({ baseDir: deps.baseDir, sessionId, objectId });
+        if (flowClass) {
+          registry.register(objectId, {}, { parentClass: flowClass });
+        }
       } catch (error) {
         throw new AppServerError(
           "METHOD_LOAD_FAILED",
@@ -903,25 +911,16 @@ export function createFlowsService(deps: {
           { sessionId, objectId, method }
         );
       }
-      // HTTP call_method 只暴露 executable.methods 里标了 for_ui_access 的 object method（人类/client 侧专路）。
-      const methods = cls?.executable?.methods ?? [];
-      const entry = methods.find((m) => m.name === method);
-      if (!entry || entry.for_ui_access !== true) {
-        throw new AppServerError(
-          "METHOD_NOT_FOUND",
-          `method '${method}' not found or not for_ui_access on flow object '${objectId}'`,
-          { sessionId, objectId, method, available: methods.filter((m) => m.for_ui_access === true).map((m) => m.name) }
-        );
-      }
       try {
-        // HTTP 入口无 thread/runtime live 实例，最小 ctx 只带 object 信封 + args；self 给空 Data。
-        // 新契约：exec(ctx, self, args)。
-        const ctx = {
-          object: { id: objectId, class: objectId },
+        return await dispatchVisibleServerMethod(
+          registry,
+          { baseDir: deps.baseDir, sessionId, objectId },
+          objectId,
+          method,
           args,
-        };
-        return normalizeMethodResult(await entry.exec(ctx as never, {} as never, args));
+        );
       } catch (error) {
+        if (error instanceof AppServerError) throw error;
         throw new AppServerError(
           "INTERNAL_ERROR",
           `method '${method}' threw: ${(error as Error).message}`,

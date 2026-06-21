@@ -107,7 +107,7 @@ export interface WorldFixture {
     page: string;
     code: string;
   }): void;
-  /** 给 stone 写 executable/index.ts；window.methods 里 for_ui_access 方法通过 callMethod 调到。 */
+  /** 给 stone 写根 index.ts；Class.visibleServer.methods 里的方法通过 callMethod（HTTP）调到。 */
   writeStoneServer(objectId: string, code: string): void;
   /** 在 stones 目录下创建一个空 stone（.stone.json + 必要骨架）。 */
   createStone(objectId: string): void;
@@ -188,7 +188,8 @@ export const test = base.extend<{ world: WorldFixture }>({
       },
       writeStoneServer(objectId, code) {
         pendingSeeds.push(() => {
-          const dir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId), "server");
+          // 根 index.ts 的 `export const Class`（visible/server 方法在 Class.visibleServer）。
+          const dir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId));
           mkdirSync(dir, { recursive: true });
           writeFileSync(join(dir, "index.ts"), code, "utf8");
         });

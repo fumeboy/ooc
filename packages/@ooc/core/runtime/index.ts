@@ -18,7 +18,7 @@
 export { createWorldRuntime } from "./world-runtime.js";
 export type { WorldRuntime, WorldRuntimeConfig } from "./world-runtime.js";
 
-export { createObjectRegistry, builtinRegistry, filterMethodsByVisibility } from "./object-registry.js";
+export { createObjectRegistry, builtinRegistry } from "./object-registry.js";
 export type { ObjectRegistry } from "./object-registry.js";
 
 export { createObservableStore, defaultObservableStore } from "./observable-store.js";

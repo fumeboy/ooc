@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { objectDir, toJson, type FlowObjectRef } from "./common";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
@@ -54,6 +54,24 @@ export class ClassNotFoundError extends Error {
 /** flow object 元数据文件 `.flow.json` 的绝对路径。 */
 export function flowMetadataFile(ref: FlowObjectRef): string {
   return join(objectDir(ref), ".flow.json");
+}
+
+/**
+ * 读取 flow object 的继承 class（`.flow.json:class`）。
+ *
+ * flow object 的 class 落 `.flow.json`（非 stone `package.json`）——HTTP 控制面 visible/server
+ * dispatch 解析其继承链时据此找 class（如 builtin `_builtin/agent/todo`）。
+ * 不存在 / 解析失败 / 无 class 字段 → undefined（dispatch 退化用 objectId 自身）。
+ */
+export async function readFlowObjectClass(ref: FlowObjectRef): Promise<string | undefined> {
+  try {
+    const raw = await readFile(flowMetadataFile(ref), "utf8");
+    const meta = JSON.parse(raw) as FlowObjectMetadata;
+    const cls = meta?.class;
+    return typeof cls === "string" && cls.trim().length > 0 ? cls.trim() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** session 目录绝对路径。 */

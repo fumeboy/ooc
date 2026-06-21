@@ -57,12 +57,12 @@ export const L0_STORIES: Story[] = [
     id: "L0-SELF-COMMIT",
     layer: "persistable",
     expectation: "经 HTTP PUT 改 self 在 stones/main 多出一个 commit",
-    design: "persistable：身份演化经 worktree commit 版本化、可审计可回滚。modules/stones/api.put-self.ts",
+    design: "persistable：身份演化经 worktree commit 版本化、可审计可回滚。modules/stones/api.put-file.ts",
     run: async ({ app, baseDir }) => {
       const id = "keeper";
       await postJson(app, "/api/stones", { objectId: id, self: "# v1" });
       const before = stoneCommits(baseDir, join("objects", id, "self.md")).length;
-      await putJson(app, `/api/stones/${id}/self`, { text: "# v2\n演化了。" }, { "X-Overwrite-Confirm": "true" });
+      await putJson(app, `/api/stones/${id}/file`, { path: "self.md", content: "# v2\n演化了。" }, { "X-Overwrite-Confirm": "true" });
       const after = stoneCommits(baseDir, join("objects", id, "self.md")).length;
       check(after > before, `commit 数未增长：${before} → ${after}`);
     },

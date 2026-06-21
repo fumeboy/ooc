@@ -38,6 +38,7 @@ export {
   createFlowSession,
   createFlowObject,
   flowMetadataFile,
+  readFlowObjectClass,
   sessionDir,
   sessionMetadataFile,
   ClassNotFoundError,

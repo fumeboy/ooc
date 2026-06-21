@@ -6,13 +6,12 @@ import {
   readExecutableSource,
   readReadable,
   stoneDir,
-  writeExecutableSource,
   writeReadable,
 } from "@ooc/core/persistable";
 import { readSelf, writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
-import type { ExecutableContext } from "@ooc/core/executable/contract";
+import type { VisibleServerContext } from "@ooc/core/_shared/types/visible-server.js";
 import { normalizeMethodResult } from "@ooc/core/executable/contract.js";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { parseKnowledgeFile, parseActivatesOn } from "@ooc/core/thinkable/knowledge";
@@ -46,6 +45,38 @@ function ensureInside(root: string, target: string, details: Record<string, unkn
   const rel = relative(resolvedRoot, resolvedTarget);
   if (rel === "" || (!rel.startsWith("..") && !isAbsolute(rel))) return resolvedTarget;
   throw new AppServerError("INVALID_INPUT", "knowledge path escapes knowledge directory", details);
+}
+
+const EDITABLE_STONE_EXACT = new Set(["self.md", "readable.md", "executable/index.ts", "visible/index.tsx"]);
+const KNOWLEDGE_PREFIX = "knowledge/";
+
+/**
+ * path 三层防护：
+ * 1. NUL / 绝对路径 / `..` segment（复用 safeKnowledgePath 逻辑）
+ * 2. 白名单——精确匹配 EDITABLE_STONE_EXACT 或 knowledge/ 前缀（子路径同样防穿越，限 .md）
+ * 3. 其余（package.json / .git / node_modules / types.ts / 根 index.ts 等）一律拒绝
+ *
+ * 返回规范化 relPath（使用平台 sep）。
+ */
+function assertEditableStonePath(path: string, objectId: string): string {
+  // 层 1：复用 safeKnowledgePath 的 NUL / 绝对 / .. 校验
+  const relPath = safeKnowledgePath(path);
+  // 规范化为 POSIX 风格做白名单比对（sep 可能是 \ on Windows）
+  const posix = relPath.split(sep).join("/");
+  // 层 2+3：白名单
+  if (EDITABLE_STONE_EXACT.has(posix)) return relPath;
+  if (posix.startsWith(KNOWLEDGE_PREFIX)) {
+    const sub = posix.slice(KNOWLEDGE_PREFIX.length);
+    if (!sub || sub.includes("/")) {
+      // 不允许 knowledge/ 本身或多级子路径
+      throw new AppServerError("INVALID_INPUT", `path '${path}' is not an editable stone file`, { objectId, path });
+    }
+    if (!sub.endsWith(".md")) {
+      throw new AppServerError("INVALID_INPUT", `path '${path}' is not an editable stone file`, { objectId, path });
+    }
+    return relPath;
+  }
+  throw new AppServerError("INVALID_INPUT", `path '${path}' is not an editable stone file`, { objectId, path });
 }
 
 /**
@@ -243,35 +274,32 @@ export function createStonesService({
       await ensureStoneExists(objectId);
       return { text: (await readSelf(ref(objectId))) ?? "" };
     },
-    async putSelf({ objectId, text, confirmOverwrite = false }: { objectId: string; text: string; confirmOverwrite?: boolean }) {
-      await ensureStoneExists(objectId);
-      await ensureOverwriteAllowed(join(dir(objectId), "self.md"), confirmOverwrite, { objectId, field: "self" });
-      const versioned = await runVersioned(objectId, `http:putSelf ${objectId}`, async (branch) => {
-        await writeSelf({ baseDir, objectId, _stonesBranch: branch }, text);
-      });
-      return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged };
-    },
     async getReadable({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
       return { text: (await readReadable(ref(objectId))) ?? "" };
-    },
-    async putReadable({ objectId, text, confirmOverwrite = false }: { objectId: string; text: string; confirmOverwrite?: boolean }) {
-      await ensureStoneExists(objectId);
-      await ensureOverwriteAllowed(join(dir(objectId), "readable.md"), confirmOverwrite, { objectId, field: "readable" });
-      const versioned = await runVersioned(objectId, `http:putReadable ${objectId}`, async (branch) => {
-        await writeReadable({ baseDir, objectId, _stonesBranch: branch }, text);
-      });
-      return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged };
     },
     async getServerSource({ objectId }: { objectId: string }) {
       await ensureStoneExists(objectId);
       return { code: (await readExecutableSource(ref(objectId))) ?? "" };
     },
-    async putServerSource({ objectId, code, confirmOverwrite = false }: { objectId: string; code: string; confirmOverwrite?: boolean }) {
+    async putFile({
+      objectId,
+      path,
+      content,
+      confirmOverwrite = false,
+    }: {
+      objectId: string;
+      path: string;
+      content: string;
+      confirmOverwrite?: boolean;
+    }) {
       await ensureStoneExists(objectId);
-      await ensureOverwriteAllowed(join(dir(objectId), "executable", "index.ts"), confirmOverwrite, { objectId, field: "server-source" });
-      const versioned = await runVersioned(objectId, `http:putServerSource ${objectId}`, async (branch) => {
-        await writeExecutableSource({ baseDir, objectId, _stonesBranch: branch }, code);
+      const relPath = assertEditableStonePath(path, objectId);
+      await ensureOverwriteAllowed(join(dir(objectId), relPath), confirmOverwrite, { objectId, path: relPath });
+      const versioned = await runVersioned(objectId, `http:putFile ${objectId} ${relPath}`, async (branch) => {
+        const target = join(stoneDir({ baseDir, objectId, _stonesBranch: branch }), relPath);
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, content, "utf8");
       });
       return { ok: true, commitSha: versioned.commitSha, merged: versioned.merged };
     },
@@ -330,23 +358,26 @@ export function createStonesService({
           { objectId, method }
         );
       }
-      // HTTP call_method 只暴露标了 for_ui_access 的 object method（人类/client 侧专路）。
-      const methods = registered ? registry.resolveObjectMethods(objectId) : [];
-      const entry = methods.find((m) => m.name === method);
-      if (!entry || entry.for_ui_access !== true) {
+      // HTTP call_method 走 **visible/server** dispatch（人类侧）。A2 v1 stone scope 无 session/flow ref——
+      // 无 reportDataEdit 注入（无副作用落盘通道；stone scope data 落点延后）。无 visible/server 方法 → METHOD_NOT_FOUND。
+      const mod = registered ? registry.resolveVisibleServer(objectId) : undefined;
+      const entry = mod?.methods.find((m) => m.name === method);
+      if (!entry) {
         throw new AppServerError(
           "METHOD_NOT_FOUND",
-          `method '${method}' not found or not for_ui_access on stone '${objectId}'`,
-          { objectId, method, available: methods.filter((m) => m.for_ui_access === true).map((m) => m.name) }
+          `visible/server method '${method}' not found on stone '${objectId}'`,
+          { objectId, method, available: (mod?.methods ?? []).map((m) => m.name) }
         );
       }
       try {
-        // HTTP 入口无 thread/runtime；注入 self.dir（stone 身份目录）让 for_ui_access 方法
-        // 能读写自己 stone 文件（reflectable）。响应即规范化 method result（ObjectMethodResult）——前端从 data
-        // 取结构化数据、result 取消息文本。
-        const ctx: ExecutableContext = { object: { id: objectId, class: objectId }, args };
-        const self = { dir: dir(objectId) } as never;
-        return normalizeMethodResult(await entry.exec(ctx, self, args));
+        // stone scope 无 flow session：reportDataEdit 缺省（暂只支持无副作用/纯查询）。
+        const ctx: VisibleServerContext = {
+          baseDir,
+          session: { baseDir, sessionId: "" },
+          object: { id: objectId, class: objectId },
+          args,
+        };
+        return normalizeMethodResult(await entry.exec(ctx, {} as never, args) as never);
       } catch (error) {
         throw new AppServerError(
           "INTERNAL_ERROR",

@@ -175,10 +175,10 @@ describe("PUT 覆盖性写无护栏", () => {
     );
     // 第一次 PUT,无 confirm,允许
     const first = await app.handle(
-      new Request("http://localhost/api/stones/_test_executable_target_1/self", {
+      new Request("http://localhost/api/stones/_test_executable_target_1/file", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: "first content" }),
+        body: JSON.stringify({ path: "self.md", content: "first content" }),
       })
     );
     expect(first.status).toBe(200);
@@ -196,10 +196,10 @@ describe("PUT 覆盖性写无护栏", () => {
     );
     // 已存在 self.md,再 PUT 没带 header — 应被拒
     const blocked = await app.handle(
-      new Request("http://localhost/api/stones/_test_executable_target_2/self", {
+      new Request("http://localhost/api/stones/_test_executable_target_2/file", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: "overwrite attempt" }),
+        body: JSON.stringify({ path: "self.md", content: "overwrite attempt" }),
       })
     );
     expect(blocked.status).toBe(409);
@@ -209,10 +209,10 @@ describe("PUT 覆盖性写无护栏", () => {
 
     // 带 confirm header 后允许
     const allowed = await app.handle(
-      new Request("http://localhost/api/stones/_test_executable_target_2/self", {
+      new Request("http://localhost/api/stones/_test_executable_target_2/file", {
         method: "PUT",
         headers: { "content-type": "application/json", "x-overwrite-confirm": "true" },
-        body: JSON.stringify({ text: "overwrite OK" }),
+        body: JSON.stringify({ path: "self.md", content: "overwrite OK" }),
       })
     );
     expect(allowed.status).toBe(200);
@@ -228,10 +228,10 @@ describe("PUT 覆盖性写无护栏", () => {
       })
     );
     const blocked = await app.handle(
-      new Request("http://localhost/api/stones/_test_executable_target_3/readable", {
+      new Request("http://localhost/api/stones/_test_executable_target_3/file", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: "v2" }),
+        body: JSON.stringify({ path: "readable.md", content: "v2" }),
       })
     );
     expect(blocked.status).toBe(409);
@@ -248,19 +248,19 @@ describe("PUT 覆盖性写无护栏", () => {
     );
     // first PUT — 不存在,允许
     const first = await app.handle(
-      new Request("http://localhost/api/stones/_test_executable_target_4/server-source", {
+      new Request("http://localhost/api/stones/_test_executable_target_4/file", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: "export const a = 1;" }),
+        body: JSON.stringify({ path: "executable/index.ts", content: "export const a = 1;" }),
       })
     );
     expect(first.status).toBe(200);
     // 第二次 — 没 confirm 应被拒
     const blocked = await app.handle(
-      new Request("http://localhost/api/stones/_test_executable_target_4/server-source", {
+      new Request("http://localhost/api/stones/_test_executable_target_4/file", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: "export const a = 2;" }),
+        body: JSON.stringify({ path: "executable/index.ts", content: "export const a = 2;" }),
       })
     );
     expect(blocked.status).toBe(409);
@@ -295,10 +295,10 @@ describe("PUT 覆盖性写无护栏", () => {
   test("PUT 对不存在的 stone → 404 (ensureStoneExists 先行)", async () => {
     const { app } = await makeApp();
     const res = await app.handle(
-      new Request("http://localhost/api/stones/_test_never_created/self", {
+      new Request("http://localhost/api/stones/_test_never_created/file", {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: "leaks should not create stone" }),
+        body: JSON.stringify({ path: "self.md", content: "leaks should not create stone" }),
       })
     );
     expect(res.status).toBe(404);

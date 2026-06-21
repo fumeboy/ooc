@@ -3,7 +3,7 @@
  *
  * 覆盖完成判据 1-6（除 2/3/4 真 LLM 路径外）：
  * - FC1: 没写 client (stone scope) → StoneFallback 名片 (Identity / About / Entry points)
- * - FC2: 写了正常的 stone client → 渲染按钮，callMethod 命中 for_ui_access 方法 data 显示
+ * - FC2: 写了正常的 stone client → 渲染按钮，callMethod 命中 visible/server 方法 data 显示
  * - FC3: 写了会抛错的 client → 红色错误块带堆栈，且不发任何 talk 请求
  * - FC4: 写了语法错误的 client → 红色加载错误块 (stone scope 改为 StoneFallback + error 折叠)
  * - FC5: 写了 flow page → 渲染并能拿到 sessionId
@@ -27,13 +27,13 @@ test.describe("Object Client Renderer e2e", () => {
     world.createStone("pingpong");
     world.writeStoneServer(
       "pingpong",
-      `export const window = { methods: {
-        ping: {
+      `export const Class = { visibleServer: { methods: [
+        {
+          name: "ping",
           description: "echoes back",
-          for_ui_access: true,
-          exec: async ({ args }) => ({ ok: true, data: { pong: args.value ?? "default" } }),
+          exec: async (_ctx, _self, args) => ({ data: { pong: args.value ?? "default" } }),
         },
-      } };`,
+      ] } };`,
     );
     world.writeStoneClient(
       "pingpong",

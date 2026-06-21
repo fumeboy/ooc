@@ -117,7 +117,6 @@ export const sayMethod: ObjectMethod<Data> = {
   schema: SAY_SCHEMA,
   permission: () => "allow",
   public: true,
-  for_ui_access: true,
   exec: (ctx, self, args) => executeSay(ctx, self, args),
 };
 
