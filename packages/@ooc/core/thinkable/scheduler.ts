@@ -152,6 +152,7 @@ function harvestSummarizerForks(root: ThreadContext): void {
       | {
           summarizedRanges?: SummarizedRange[];
           inFlightCompress?: { forkThreadId: string; fromIdx: number; toIdx: number };
+          autoCompressLevel?: 0 | 1 | 2;
         }
       | undefined;
     const inFlight = selfWin?.inFlightCompress;
@@ -173,6 +174,21 @@ function harvestSummarizerForks(root: ThreadContext): void {
           windowIds: [],
           levelChange: "auto-fold",
           reason: "auto-summarized",
+          scope: "events",
+        },
+      ];
+    } else if (child && child.status === "failed") {
+      // summarizer fork 失败：关掉本窗自动压缩（防反复 spawn-fail livelock），插可见 note（silent-swallow-ban）；
+      // 超 hard 由 buildInputItems clamp floor 兜底。agent 可再 resize 重开。
+      selfWin.autoCompressLevel = 0;
+      thread.events = [
+        ...thread.events,
+        {
+          category: "context_change",
+          kind: "context_compressed",
+          windowIds: [],
+          levelChange: "auto-fold-failed",
+          reason: "summarizer-fork-failed; auto-compress 已关闭，可 resize 重开",
           scope: "events",
         },
       ];

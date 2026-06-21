@@ -3,7 +3,7 @@ import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { buildInputItems, type ProcessEvent, type ThreadContext } from "./context";
-import { maybeAutoCompress } from "./context/compress-fork";
+import { maybeAutoCompress, maybeForceWaitForCompress } from "./context/compress-fork";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "./llm/types";
 import { LlmTimeoutError } from "./llm/timeout";
 
@@ -383,6 +383,13 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     // compress v2 auto-trigger：未总结 transcript 超 autoCompressLevel 阈值（或 compress 置 intent）
     // 且无在途 compress → fork 一条 summarizer 子线程压缩早期过程（dormant：未 resize/intent 且未超阈值时 no-op）。
     await maybeAutoCompress(thread, llmInput.transcriptTokens ?? 0);
+
+    // compress v2 force-wait：context 超 hard 且有在途 compress → 切 waiting、本轮不 LLM call
+    // （等 summarizer 富摘要、不给 LLM 看 lossy clamp）；无在途则照走 buildInputItems clamp floor。
+    if (maybeForceWaitForCompress(thread, llmInput.transcriptTokens ?? 0)) {
+      await writeThread(thread);
+      return;
+    }
 
     const tools = getAvailableTools(thread);
 

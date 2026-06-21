@@ -115,6 +115,8 @@ export async function maybeAutoCompress(
   thread: ThreadContext,
   transcriptTokens: number,
 ): Promise<void> {
+  // summarizer fork 自身不再自动压缩（防递归 spawn）；其 seed 若超 budget 由 buildInputItems clamp floor 兜底。
+  if (thread.isSummarizer) return;
   const win = thread.contextWindows?.find((w) => isSelfThreadWindow(w.id))?.win as
     | CompressV2Win
     | undefined;
@@ -144,4 +146,29 @@ export async function maybeAutoCompress(
     return;
   }
   await spawnSummarizerFork(thread, fromIdx, toIdx);
+}
+
+/**
+ * compress v2 force-wait —— thinkloop（auto-trigger 后、LLM call 前）。
+ * context 超 hard **且**有在途 summarizer fork → 把本线程切 waiting（waitingOn="compress:<forkId>"），
+ * 本轮不 LLM call；fork 完成由 harvest 折叠 + 直接唤醒。即「宁等富摘要、不给 LLM 看 lossy clamp」。
+ * 无在途 compress（fork 未起/已失败）→ 不 force-wait，本轮照走 buildInputItems 的 clamp floor（保不崩，C3）。
+ * 返回 true 表示已切 waiting（调用方应 return 本轮）。summarizer fork 自身不 force-wait（防自锁）。
+ */
+export function maybeForceWaitForCompress(
+  thread: ThreadContext,
+  transcriptTokens: number,
+): boolean {
+  if (thread.isSummarizer) return false;
+  const win = thread.contextWindows?.find((w) => isSelfThreadWindow(w.id))?.win as
+    | CompressV2Win
+    | undefined;
+  const inFlight = win?.inFlightCompress;
+  if (!inFlight) return false;
+  const thresholds = loadBudgetThresholds(thread);
+  if (transcriptTokens <= thresholds.hard) return false; // 未超 hard：proactive 场景继续，不必等
+  thread.status = "waiting";
+  thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
+  thread.waitingOn = `compress:${inFlight.forkThreadId}`;
+  return true;
 }
