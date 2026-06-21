@@ -40,7 +40,8 @@ import type { ReadableContext, ReadableProjection } from "../../../readable/cont
 import { extractBasicDescription, conciseDescription } from "@ooc/core/thinkable/context/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
-import { readSelf, readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "../../../persistable/index.js";
+import { readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "../../../persistable/index.js";
+import { persistableCtx, runtimeObjectRef } from "../../../persistable/object-data.js";
 import {
   appendNode,
   optionalElement,
@@ -288,6 +289,25 @@ export async function resolveProjection(
     persistence,
   };
 
+  // self 门面窗 hydrate：self 门面窗注入时 data 为空（init.ts），其身份正文（self.md）由
+  // **该对象的 persistable.load** 读盘——renderer 不再直接 readSelf（对象模型核心 9：self.md
+  // 只属 agent 实例，读取下沉为 persistable.load 经 registry 派发）。hydrate 后 Step1 的
+  // agent readable 拿到 data.self 渲身份。无 persistence / 非 self 门面窗 / 已有 data → 跳过。
+  const isSelfWindow = (inst.win as { isSelfWindow?: boolean } | undefined)?.isSelfWindow === true;
+  const dataEmpty = !inst.data || Object.keys(inst.data as Record<string, unknown>).length === 0;
+  if (isSelfWindow && dataEmpty && persistence) {
+    const load = registry.resolvePersistable(inst.class)?.load;
+    const ref = runtimeObjectRef(thread, inst);
+    if (load && ref) {
+      try {
+        const loaded = await load(persistableCtx(ref));
+        if (loaded) inst = { ...inst, data: loaded };
+      } catch {
+        // hydrate 失败 fail-soft：data 仍为空，Step1 readable 渲空身份。
+      }
+    }
+  }
+
   // Step 1: Class.readable（沿继承链解析）
   const mod = registry.resolveReadable(inst.class);
   if (mod) {
@@ -305,19 +325,16 @@ export async function resolveProjection(
     }
   }
 
-  // Step 2: 默认投影——按视角渲对象的身份文件（无自定义 readable module 时）。
-  // self.md / readable.md 是所有 ooc object 的通用身份文件：
-  //   - self 视角（看自己，thread.self objectId === inst.id）→ 渲 self.md（自我身份）
-  //   - peer 视角（别人看它）→ 渲 readable.md（面向他人的描述）
-  // self.md 不再单独灌进 system instructions——身份只活在 self 窗这一处（见 buildInputItems）。
+  // Step 2: 默认投影——渲对象**面向他人**的 readable.md（无自定义 readable module 时的 peer 视角）。
+  // self 视角（self 门面窗）不再走这里：agent 的 self.md 身份由 Step1 的 agent readable module 渲，
+  // 其 data.self 已在上方经 persistable.load hydrate——renderer 不再直接 readSelf。
   if (persistence) {
     try {
       const stoneRef: StoneObjectRef = await resolveStoneIdentityRef(
         { baseDir: persistence.baseDir, sessionId: persistence.sessionId, objectId: inst.id },
         "read",
       );
-      const isSelfView = !!thread.persistence?.objectId && thread.persistence.objectId === inst.id;
-      const text = isSelfView ? await readSelf(stoneRef) : await readReadable(stoneRef);
+      const text = await readReadable(stoneRef);
       if (text && text.trim().length > 0) {
         return { class: inst.class, content: text };
       }
