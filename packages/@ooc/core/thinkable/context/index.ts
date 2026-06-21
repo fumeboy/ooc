@@ -148,15 +148,12 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
   if (event.category === "context_change" && event.kind === "context_compressed") {
     // 折叠发生:silent-swallow ban 要求 LLM 能看见;以 system message 注入,
     // 简洁陈述折叠 + 原因,不引入新协议(LLM 看到后据此继续推进)。
-    const target = event.windowIds.length > 0 ? event.windowIds.join(",") : "(transcript)";
+    // fold 恒是自我主历史窗 transcript（Case E：不建 talk-fold），故无 windowIds/scope 维度。
     return [
       {
         type: "message",
         role: "system",
-        content:
-          `[context_change:context_compressed] ${event.levelChange} ` +
-          `window_ids=${target} reason=${event.reason}` +
-          (event.scope ? ` scope=${event.scope}` : ""),
+        content: `[context_change:context_compressed] ${event.levelChange} reason=${event.reason}`,
       },
     ];
   }

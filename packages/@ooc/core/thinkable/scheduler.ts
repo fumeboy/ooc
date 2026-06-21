@@ -173,10 +173,8 @@ export function harvestSummarizerForks(root: ThreadContext): void {
         {
           category: "context_change",
           kind: "context_compressed",
-          windowIds: [],
           levelChange: "auto-fold",
           reason: "auto-summarized",
-          scope: "events",
         },
       ];
     } else if (child && child.status === "failed") {
@@ -188,10 +186,8 @@ export function harvestSummarizerForks(root: ThreadContext): void {
         {
           category: "context_change",
           kind: "context_compressed",
-          windowIds: [],
           levelChange: "auto-fold-failed",
           reason: "summarizer-fork-failed; auto-compress 已关闭，可 resize 重开",
-          scope: "events",
         },
       ];
     }

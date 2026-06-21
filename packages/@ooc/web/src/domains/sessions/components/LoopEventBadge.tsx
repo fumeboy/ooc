@@ -3,7 +3,7 @@
  *
  * - 严格 type-dispatch 风格: 新增 event 类型时只加 case, 不动调用方。
  * - 非关键事件 (普通 text / reasoning / 普通 tool_use 等) 不进 badge — 减噪音原则。
- * - 颜色与 tooltip 必须有信息密度: tooltip 含触发原因 / windowIds / decided 时间等,
+ * - 颜色与 tooltip 必须有信息密度: tooltip 含触发原因 / decided 时间等,
  *   让悬停就能判断"这条 chip 代表了什么", 不用展开 loop 全文。
  *
  * 单测见 LoopTimeline.test.ts (整张 timeline 用例覆盖关键 event 高亮断言)。
@@ -22,11 +22,9 @@ import type { ReactNode } from "react";
 export interface LoopEvent {
   category?: string;
   kind?: string;
-  /** context_compressed */
-  windowIds?: string[];
+  /** context_compressed（compress v2：fold 恒 self-view transcript，无 windowIds/scope 维度）。 */
   levelChange?: string;
   reason?: string;
-  scope?: string;
   /** permission_ask / permission_denied */
   method?: string;
   argsSummary?: string;

@@ -264,14 +264,10 @@ export type ProcessEvent = ProcessEventCommon & (
       category: "context_change";
       /** 折叠发生:每次 harvest 记段 / 记失败写一条。 */
       kind: "context_compressed";
-      /** 受影响的 window id 列表(transcript 折叠为空数组)。 */
-      windowIds: string[];
       /** 折叠标记,形如 "auto-fold" / "auto-fold-failed"。 */
       levelChange: string;
       /** 触发原因:auto-summarized / summarizer-fork-failed 等。 */
       reason: string;
-      /** 折叠作用域(v2 仅 transcript events 折叠)。 */
-      scope?: "windows" | "events" | "auto";
     }
   | {
       /**
