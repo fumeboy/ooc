@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { derivePeerObjectWindows } from "../object-windows.js";
 import { makeThread } from "../../../__tests__/make-thread";
+import { setSessionObject } from "../../../runtime/session-object-table.js";
 import {
   createStoneObject,
   writeReadable,
@@ -20,26 +21,52 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     await rm(baseDir, { recursive: true, force: true });
   });
 
-  function makePeerThread(objectId: string, extraWindows: any[] = []): any {
-    return makeThread({
+  // talk 窗 spec：B→A 后窗（OocObjectRef）不持 data，data 经 session 对象表解析。
+  // 这里记下 spec，makePeerThread 构造时把窗（ref）入 contextWindows、data 入对象表。
+  interface TalkWinSpec {
+    id: string;
+    class: string;
+    target: string;
+    conversationId: string;
+    createdAt: number;
+  }
+
+  function makePeerThread(objectId: string, talkSpecs: TalkWinSpec[] = []): any {
+    const extraWindows = talkSpecs.map((s) => ({
+      id: s.id,
+      class: s.class,
+      parentWindowId: "root",
+      title: `talk to ${s.target}`,
+      status: "open" as const,
+      createdAt: s.createdAt,
+    }));
+    const thread = makeThread({
       id: "t_root",
       objectId,
       persistence: { baseDir, sessionId: "sess_1", objectId, threadId: "t_root" },
       extraWindows,
       skipCreatorWindow: true,
     });
+    // 窗引用的对象 data（target / conversationId）登记进 session 对象表（objectDataOf 经此解析）。
+    for (const s of talkSpecs) {
+      setSessionObject(thread, {
+        id: s.id,
+        class: s.class,
+        data: { target: s.target, conversationId: s.conversationId },
+      });
+    }
+    return thread;
   }
 
-  // Wave4 会话窗：stored class = _builtin/agent/thread；target / conversationId 落 inst.data
+  // Wave4 会话窗：stored class = _builtin/agent/thread；target / conversationId 落对象 data
   // （talk 只是 readable 投影 class，peer 派生按 isTalkLikeClass 认 thread class）。
-  function talkWin(id: string, target: string, createdAt = 100): any {
+  function talkWin(id: string, target: string, createdAt = 100): TalkWinSpec {
     return {
       id,
-      parentObjectId: "root",
-      title: `talk to ${target}`,
-      status: "open",
+      class: "_builtin/agent/thread",
+      target,
+      conversationId: `conv_${id}`,
       createdAt,
-      object: { class: "_builtin/agent/thread", data: { target, conversationId: `conv_${id}` } },
     };
   }
 
@@ -59,7 +86,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     const thread = makePeerThread("agent_self", [talkWin("w_talk_1", "agent_peer1")]);
     const result = await derivePeerObjectWindows(thread);
     expect(result.length).toBe(1);
-    expect(result[0]!.object.class).toBe("agent_peer1" as any);
+    expect(result[0]!.class).toBe("agent_peer1");
     expect(result[0]!.id).toBe("agent_peer1");
   });
 
@@ -73,7 +100,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     const thread = makePeerThread("agent_self", [talkWin("w_talk_user", "user")]);
     const result = await derivePeerObjectWindows(thread);
     expect(result.map((w) => w.id)).toContain("user");
-    expect(result.find((w) => w.id === "user")?.object.class).toBe("user" as any);
+    expect(result.find((w) => w.id === "user")?.class).toBe("user");
   });
 
   it("derives peer objects from sibling stones (default visibility)", async () => {

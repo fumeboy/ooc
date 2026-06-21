@@ -25,6 +25,7 @@ import {
   writeLoopDebugOutput,
 } from "./debug-file.js";
 import { buildWindowsSnapshot } from "./window-hash.js";
+import { getSessionObjectTable } from "../runtime/session-object-table.js";
 import { defaultObservableStore } from "../runtime/observable-store.js";
 import type {
   LlmLoopHandle,
@@ -176,6 +177,7 @@ export async function finishLlmLoop(
     const snapshotWindows = thread._renderedWindows ?? thread.contextWindows ?? [];
     const windowsSnapshot = await buildWindowsSnapshot(
       snapshotWindows,
+      getSessionObjectTable(thread),
       previousSnapshot,
     );
     const resultTextBytes = payload.result ? byteLength(payload.result.text) : 0;

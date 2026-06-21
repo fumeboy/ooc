@@ -17,7 +17,9 @@ import { createObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { createStoneObject, stoneDir } from "@ooc/core/persistable";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader.js";
 import { makeThread } from "../../../../__tests__/make-thread";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 describe("resolveProjection 默认投影视角分流", () => {
   let baseDir: string;
@@ -30,17 +32,22 @@ describe("resolveProjection 默认投影视角分流", () => {
     await rm(baseDir, { recursive: true, force: true });
   });
 
+  // 构造 context window（OocObjectRef，不持 data）+ 把其引用对象的 data 登记进 thread 的
+  // session 对象表（resolveProjection 经表解析 data）。
   const instOf = (
+    thread: ThreadContext,
     id: string,
-    overrides: Partial<Omit<OocObjectInstance, "object">> & { class?: string; data?: unknown } = {},
-  ): OocObjectInstance => {
+    overrides: Partial<Omit<OocObjectRef, "class">> & { class?: string; data?: unknown } = {},
+  ): OocObjectRef => {
     const { class: cls, data, ...rest } = overrides;
+    const klass = cls ?? id;
+    setSessionObject(thread, { id, class: klass, data: data ?? {} });
     return {
       id,
+      class: klass,
       title: id,
       status: "open",
       createdAt: 0,
-      object: { class: cls ?? id, data: data ?? {} },
       ...rest,
     };
   };
@@ -60,8 +67,9 @@ describe("resolveProjection 默认投影视角分流", () => {
     // self 门面窗：inst.class=_builtin/agent（resolveReadable/resolvePersistable 命中 agent 模块），
     // win.isSelfWindow + data 空 → resolveProjection 经 persistable.load 读盘 hydrate data.self，
     // 再由 agent readable 渲出身份正文。
-    const selfWin = instOf("obj_a", { class: "_builtin/agent", win: { isSelfWindow: true } as never });
-    const proj = await resolveProjection(selfWin, threadViewedBy("obj_a"), createObjectRegistry(), {
+    const thread = threadViewedBy("obj_a");
+    const selfWin = instOf(thread, "obj_a", { class: "_builtin/agent", win: { isSelfWindow: true } as never });
+    const proj = await resolveProjection(selfWin, thread, createObjectRegistry(), {
       baseDir,
       sessionId: "s1",
     });
@@ -74,7 +82,8 @@ describe("resolveProjection 默认投影视角分流", () => {
     await writeFile(join(stoneDir({ baseDir, objectId: "obj_a" }), "readable.md"), "obj_a 面向他人的描述", "utf8");
 
     // 视角者是 obj_b，投影 obj_a → peer 视角 → readable.md，不是 self.md
-    const proj = await resolveProjection(instOf("obj_a"), threadViewedBy("obj_b"), createObjectRegistry(), {
+    const thread = threadViewedBy("obj_b");
+    const proj = await resolveProjection(instOf(thread, "obj_a"), thread, createObjectRegistry(), {
       baseDir,
       sessionId: "s1",
     });
@@ -85,7 +94,8 @@ describe("resolveProjection 默认投影视角分流", () => {
   it("self.md / readable.md 皆空 → 空 context window，无 placeholder 文案", async () => {
     await createStoneObject({ baseDir, objectId: "obj_c" }); // self.md/readable.md 空
 
-    const proj = await resolveProjection(instOf("obj_c"), threadViewedBy("obj_c"), createObjectRegistry(), {
+    const thread = threadViewedBy("obj_c");
+    const proj = await resolveProjection(instOf(thread, "obj_c"), thread, createObjectRegistry(), {
       baseDir,
       sessionId: "s1",
     });

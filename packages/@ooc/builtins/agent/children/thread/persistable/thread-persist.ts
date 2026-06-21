@@ -55,7 +55,11 @@ import {
 } from "@ooc/core/thinkable/context/init.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
+import {
+  setSessionObject,
+  getSessionObjectTable,
+} from "@ooc/core/runtime/session-object-table.js";
 import { observeWarn } from "@ooc/core/observable/log-aggregator.js";
 
 /**
@@ -68,7 +72,9 @@ import { observeWarn } from "@ooc/core/observable/log-aggregator.js";
 function buildEntries(
   windows: Iterable<ContextWindow>,
   registry: ObjectRegistry,
+  thread: ThreadContext,
 ): ThreadContextEntry[] {
+  const table = getSessionObjectTable(thread);
   const entries: ThreadContextEntry[] = [];
   for (const window of windows) {
     if (window.id === ROOT_WINDOW_ID) continue;
@@ -77,14 +83,9 @@ function buildEntries(
     // 旧"带 summarizedRanges 就 inline 落 self 门面窗"后门已删——events 折叠态现挂**自己视角 thread 窗**
     // （THREAD_CLASS_ID inline 类整窗落盘、folds 随之跨 reload 存活；builtin 类 hydrate 恒注册、无冷启动丢窗洞）。
     if (registry.isInlinePersisted(classOf(window))) {
-      // 磁盘格式平铺：内存 `.object.{class,data}` → 盘上顶层 `class`/`data`（历史形态不变）；
-      // 其余窗视角态字段（id/title/status/createdAt/parentObjectId/win/closable/objectRef）原样保留。
-      const { object: _object, ...view } = window;
-      entries.push({
-        ...view,
-        class: classOf(window),
-        data: objectDataOf(window),
-      });
+      // 磁盘平铺重组（边界翻译）：窗 ref（id/class/视角态）+ 从 session 对象表取回该 objectId 的 data
+      // → 平铺 entry（历史磁盘格式不变）。内存里窗不持 data、data 在对象表。
+      entries.push({ ...window, data: objectDataOf(window, table) });
     } else {
       entries.push({
         id: window.id,
@@ -106,13 +107,18 @@ function stripVolatileForPersist(thread: ThreadContext): Omit<ThreadContext, "co
   const {
     inbox: _dropInbox,
     contextWindows: _dropContextWindows,
+    // 运行态字段不进 thread.json：_objectTable 是 Map（JSON 序列化成 {} → reload 后 .set 崩）；
+    // _renderedWindows / _parentThreadRef 同为运行态（后者还是循环引用），一并剥。
+    _objectTable: _dropObjectTable,
+    _renderedWindows: _dropRenderedWindows,
+    _parentThreadRef: _dropParentThreadRef,
     ...threadRest
   } = thread;
   return threadRest;
 }
 
 /**
- * 把 thread-context.json 的 entry hydrate 成内存 OocObjectInstance[]。
+ * 把 thread-context.json 的 entry hydrate 成内存 OocObjectRef[]。
  * - inline class：data 随 entry inline，直接成实例。
  * - 独立对象：entry 剥了 data（在各自 data.json），另读合回 inst.data。
  * 未注册 class 的实例丢弃（打 warn）。
@@ -120,7 +126,8 @@ function stripVolatileForPersist(thread: ThreadContext): Omit<ThreadContext, "co
 async function hydrateContextWindows(
   persistence: ThreadPersistenceRef,
   registry: ObjectRegistry,
-): Promise<OocObjectInstance[]> {
+  thread: ThreadContext,
+): Promise<OocObjectRef[]> {
   let file: Awaited<ReturnType<typeof readThreadContext>>;
   try {
     file = await readThreadContext(persistence);
@@ -135,10 +142,10 @@ async function hydrateContextWindows(
     return [];
   }
 
-  const instances: OocObjectInstance[] = [];
+  const instances: OocObjectRef[] = [];
   for (const entry of file.contextWindows as ThreadContextEntry[]) {
     if (!entry || typeof entry !== "object") continue;
-    const env = entry as Partial<OocObjectInstance> & { id?: string; class?: string };
+    const env = entry as Partial<OocObjectRef> & { id?: string; class?: string };
     if (typeof env.id !== "string" || typeof env.class !== "string") continue;
     if (!registry.has(env.class)) {
       observeWarn(
@@ -175,14 +182,16 @@ async function hydrateContextWindows(
     const isInline = registry.isInlinePersisted(env.class);
     const refObjectId =
       (entry as { refObjectId?: string }).refObjectId ?? env.id;
-    // 盘上平铺 `env.class`/`data` → 内存收进 `.object={class,data}`（窗视角态字段留在顶层）。
+    // 边界拆分：盘上平铺 entry → ① object 实例（id/class/data）登记进 session 对象表；
+    // ② context window（id/class/视角态、不持 data）入 contextWindows。
+    setSessionObject(thread, { id: env.id, class: env.class, data: data ?? {} });
     instances.push({
       id: env.id,
-      parentObjectId: env.parentObjectId,
+      class: env.class,
+      parentWindowId: env.parentWindowId,
       title: env.title ?? env.id,
       status: env.status ?? "open",
       createdAt: env.createdAt ?? Date.now(),
-      object: { class: env.class, data: data ?? {} },
       win: env.win,
       ...(isInline ? {} : { objectRef: { objectId: refObjectId, class: env.class } }),
     });
@@ -200,11 +209,11 @@ export async function saveThread(_ctx: PersistableContext, thread: ThreadContext
   await mkdir(threadDir(thread.persistence), { recursive: true });
   // inbox → 独立 per-message 目录（append-only，并发安全），再从 thread.json strip 掉。
   await persistInboxMessages(thread.persistence, thread.inbox);
-  // contextWindows（OocObjectInstance[]）→ thread-context.json（窗状态：元信息 + win + 引用）+
+  // contextWindows（OocObjectRef[]）→ thread-context.json（窗状态：元信息 + win + 引用）+
   // 各独立对象 data 落各自 data.json（不内联）。
   const tref = threadPersistRef(thread);
   if (tref) {
-    await writeThreadContext(tref, buildEntries(thread.contextWindows ?? [], registry));
+    await writeThreadContext(tref, buildEntries(thread.contextWindows ?? [], registry, thread));
   }
   for (const inst of thread.contextWindows ?? []) {
     if (isTransientInstance(inst)) continue;
@@ -255,7 +264,7 @@ export async function loadThread(ctx: PersistableContext): Promise<ThreadContext
     ...dirInbox,
     ...((parsed.inbox ?? []).filter((m) => !seenInbox.has(m.id))),
   ];
-  restored.contextWindows = await hydrateContextWindows(persistence, registry);
+  restored.contextWindows = await hydrateContextWindows(persistence, registry, restored);
   // 兜底注入：缺 creator window 时补一个（初始 creator 对话 window）。
   initContextWindows(restored, {
     creatorThreadId: restored.creatorThreadId,

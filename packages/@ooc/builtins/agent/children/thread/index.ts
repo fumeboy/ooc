@@ -40,6 +40,7 @@ import {
   referencedObjectId,
   countSessionReferences,
 } from "@ooc/core/runtime/object-lifecycle.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import persistable from "./persistable/index.js";
@@ -130,7 +131,7 @@ async function execFork(ctx: ConstructorContext, selfObjectId: string): Promise<
 
 /**
  * construct —— 创建 talk_window。target=自己 objectId ⇒ fork 子线程；否则 peer 会话。
- * 返回新实例的 Data（runtime 据此包成 OocObjectInstance 实例）。会话身份（conversationId）恒等于
+ * 返回新实例的 Data（runtime 据此包成 OocObjectRef 实例）。会话身份（conversationId）恒等于
  * runtime 分配的实例 id——不入 Data，readable/say 一律用 ctx.object.id。
  */
 const talkConstructor: ObjectConstructor<Data> = {
@@ -214,8 +215,9 @@ async function cancelSubtree(scope: ThreadContext, targetId: string, visited: Se
   t.status = "canceled"; // 停用 = 切终态 canceled（身份留存、不 delete，spec §2.2）
   visited.add(targetId);
   if (t.persistence) await writeThread(t); // 刷盘 canceled，防 bootstrap 按盘上 running 复活
+  const table = getSessionObjectTable(t);
   for (const w of t.contextWindows ?? []) {
-    const child = referencedObjectId(w);
+    const child = referencedObjectId(w, table);
     if (child && !visited.has(child) && countSessionReferences(t, child) === 0) {
       await cancelSubtree(t, child, visited);
     }

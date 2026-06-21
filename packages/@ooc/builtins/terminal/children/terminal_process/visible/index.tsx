@@ -2,15 +2,14 @@
  * terminal_process 详情面板 —— 渲染 bash exec history（末条展开 script + output，其余折叠）。
  */
 import type { Data, ProcessExecRecord } from "../types.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
-import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class";
 import React from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { previewText } from "@ooc/builtins/_shared/visible/utils";
 
 /** terminal_process 详情面板（bash exec history 读自实例 `data`）。 */
-export default function TerminalProcessWindowDetail({ window }: { window: OocObjectInstance<Data> }) {
-  const history: ProcessExecRecord[] = objectDataOf(window).history;
+export default function TerminalProcessWindowDetail({ window }: { window: OocObjectRef & { data: Data } }) {
+  const history: ProcessExecRecord[] = window.data.history;
   return (
     <>
       <div className="llm-input-attrs">

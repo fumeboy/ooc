@@ -29,9 +29,9 @@
  */
 
 /**
- * 后端 OocObjectInstance（runtime/ooc-class.ts）在前端的最小镜像 —— **元信息 + data + win 三分**。
+ * 后端 OocObjectRef（runtime/ooc-class.ts）在前端的最小镜像 —— **元信息 + data + win 三分**。
  *
- * 元信息字段（id / class / title / status / createdAt / parentObjectId）由 runtime 管理，
+ * 元信息字段（id / class / title / status / createdAt / parentWindowId）由 runtime 管理，
  * 顶层平铺；业务数据归 `.data`（按 class 区分形态）；投影态归 `.win`。前端按 `.class` narrow，
  * 业务字段读 `.data.xxx`。
  */
@@ -192,8 +192,7 @@ interface _ContextWindowEnvelope {
   title: string;
   status?: string;
   createdAt?: number;
-  /** 父对象 id（后端 OocObjectInstance.parentObjectId）；旧数据可能写 parentWindowId。 */
-  parentObjectId?: string;
+  /** 父窗 id（后端 OocObjectRef.parentWindowId）。 */
   parentWindowId?: string;
   /** 投影态（与 data 分离）；多数 class 无投影态。 */
   win?: unknown;
@@ -220,7 +219,7 @@ interface _ContextWindowEnvelope {
 }
 
 /**
- * ContextWindow —— 元信息 + data（+ win）。镜像后端 `OocObjectInstance`。
+ * ContextWindow —— 元信息 + data（+ win）。镜像后端 `OocObjectRef`。
  * 按 `.class` narrow（discriminant 在 `_ContextWindowData`），业务字段读 `.data.xxx`。
  */
 export type ContextWindow = _ContextWindowEnvelope & _ContextWindowData;
@@ -235,7 +234,7 @@ export function isSelfThreadWindow(id: string | undefined): boolean {
 
 /** 取 window 的父对象 id（兼容旧 parentWindowId 字段）。 */
 export function windowParentId(window: ContextWindow): string | undefined {
-  return window.parentObjectId ?? window.parentWindowId;
+  return window.parentWindowId ?? window.parentWindowId;
 }
 
 /**

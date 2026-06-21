@@ -1,33 +1,35 @@
 import { describe, expect, test } from "bun:test";
-import { WindowManager } from "../window-manager.js";
-import { createObjectRegistry } from "../object-registry.js";
 import {
   getSessionObjectTable,
+  getSessionObject,
+  setSessionObject,
   evictObjectFromTable,
-  objectKeyOf,
+  materializeWindow,
 } from "../session-object-table.js";
-import type { OocObjectInstance } from "../ooc-class.js";
+import { objectDataOf } from "../../_shared/types/context-window.js";
+import type { OocObjectRef } from "../ooc-class.js";
 import type { ThreadContext } from "../../_shared/types/thread.js";
 
 /**
  * session-object-table —— B→A 回归网：钉死「一 session 一 objectId 一持 data 实例 + window=对它的
- * 共享引用」。结构改动打破任一即红。
+ * 引用（不持 data）」。data 的唯一内存归宿是表（挂内存线程树**根**、按 objectId 键）；窗（OocObjectRef）
+ * 只持 id(=objectId)+缓存 class+视角态。结构改动打破任一即红。
  */
 
 const FILE_CLASS = "_builtin/filesystem/file";
 
-const refWin = (id: string, objectId: string, data: unknown): OocObjectInstance => ({
+const refWin = (id: string): OocObjectRef => ({
   id,
+  class: FILE_CLASS,
   title: "t",
   status: "open",
   createdAt: 0,
-  object: { class: FILE_CLASS, data },
-  objectRef: { objectId, class: FILE_CLASS },
+  objectRef: { objectId: id, class: FILE_CLASS },
 });
 
 const mkThread = (
   id: string,
-  windows: OocObjectInstance[],
+  windows: OocObjectRef[],
   parent?: ThreadContext,
 ): ThreadContext =>
   ({
@@ -39,63 +41,74 @@ const mkThread = (
   }) as unknown as ThreadContext;
 
 describe("session-object-table B→A 不变量", () => {
-  test("同 objectId 跨 thread 多窗经 fromThread 解析到同一 object 引用（共享单一实例）", () => {
-    const reg = createObjectRegistry();
-    const wP = refWin("obj_x", "obj_x", { v: 1 });
-    const wC = refWin("obj_x", "obj_x", { v: 1 }); // 另一 thread 对同一 object 的引用
+  test("表挂内存线程树根：子 thread 取表解析到与父同一份（session 作用域）", () => {
+    const wP = refWin("obj_x");
+    const wC = refWin("obj_x"); // 另一 thread 对同一 object 的引用
     const parent = mkThread("t_p", [wP]);
     const child = mkThread("t_c", [wC], parent);
 
-    WindowManager.fromThread(parent, reg); // 注册 canonical
-    WindowManager.fromThread(child, reg); // 共享同一表项
+    setSessionObject(parent, { id: "obj_x", class: FILE_CLASS, data: { v: 1 } });
 
-    expect(wC.object).toBe(wP.object); // 同一引用（非各窗副本）
-    expect(getSessionObjectTable(parent).size).toBe(1); // 一 objectId 一 instance
+    // 父子取到同一份表（挂根），故子窗也解析到父登记的实例（一 objectId 一 instance）。
+    expect(getSessionObjectTable(child)).toBe(getSessionObjectTable(parent));
+    expect(getSessionObject(child, "obj_x")).toBe(getSessionObject(parent, "obj_x"));
+    expect(getSessionObjectTable(parent).size).toBe(1);
   });
 
-  test("live-ref：经一窗改 object.data，另一窗即见（同一引用）", () => {
-    const reg = createObjectRegistry();
-    const wP = refWin("obj_y", "obj_y", { n: 1 });
-    const wC = refWin("obj_y", "obj_y", { n: 1 });
+  test("live-ref：经一窗改 object data，另一窗（同 objectId）即见（解析到同一实例）", () => {
+    const wP = refWin("obj_y");
+    const wC = refWin("obj_y");
     const parent = mkThread("t_p", [wP]);
     const child = mkThread("t_c", [wC], parent);
-    WindowManager.fromThread(parent, reg);
-    WindowManager.fromThread(child, reg);
+    setSessionObject(parent, { id: "obj_y", class: FILE_CLASS, data: { n: 1 } });
 
-    (wP.object.data as { n: number }).n = 42;
-    expect((wC.object.data as { n: number }).n).toBe(42);
+    const tableP = getSessionObjectTable(parent);
+    const tableC = getSessionObjectTable(child);
+    (objectDataOf(wP, tableP) as { n: number }).n = 42;
+    expect((objectDataOf(wC, tableC) as { n: number }).n).toBe(42);
   });
 
   test("不同 objectId 不误共享", () => {
-    const reg = createObjectRegistry();
-    const wA = refWin("obj_a", "obj_a", { k: "a" });
-    const wB = refWin("obj_b", "obj_b", { k: "b" });
+    const wA = refWin("obj_a");
+    const wB = refWin("obj_b");
     const t = mkThread("t", [wA, wB]);
-    WindowManager.fromThread(t, reg);
+    setSessionObject(t, { id: "obj_a", class: FILE_CLASS, data: { k: "a" } });
+    setSessionObject(t, { id: "obj_b", class: FILE_CLASS, data: { k: "b" } });
 
-    expect(wA.object).not.toBe(wB.object);
-    expect(getSessionObjectTable(t).size).toBe(2);
+    const table = getSessionObjectTable(t);
+    expect(getSessionObject(t, "obj_a")).not.toBe(getSessionObject(t, "obj_b"));
+    expect(objectDataOf(wA, table)).not.toBe(objectDataOf(wB, table));
+    expect(table.size).toBe(2);
   });
 
-  test("evict 移表项（杜绝悬空共享引用，核心 10）", () => {
-    const wA = refWin("obj_z", "obj_z", {});
+  test("evict 移表项（杜绝悬空引用，核心 10）", () => {
+    const wA = refWin("obj_z");
     const t = mkThread("t", [wA]);
-    getSessionObjectTable(t).set("obj_z", wA.object);
+    setSessionObject(t, { id: "obj_z", class: FILE_CLASS, data: {} });
     expect(getSessionObjectTable(t).size).toBe(1);
 
     evictObjectFromTable(t, "obj_z");
     expect(getSessionObjectTable(t).size).toBe(0);
+    expect(getSessionObject(t, "obj_z")).toBeUndefined();
   });
 
-  test("objectKeyOf：独立对象用 objectRef.objectId、无 ref 门面窗回落 id", () => {
-    expect(objectKeyOf(refWin("w1", "obj_1", {}))).toBe("obj_1");
-    const facade = {
-      id: "agent_a",
+  test("materializeWindow：data 入表、返回纯 ref（窗不持 data）", () => {
+    const t = mkThread("t", []);
+    const w = materializeWindow(t, {
+      id: "obj_m",
+      class: FILE_CLASS,
+      data: { hello: "world" },
       title: "t",
       status: "open",
       createdAt: 0,
-      object: { class: "agent_a", data: {} },
-    } as OocObjectInstance;
-    expect(objectKeyOf(facade)).toBe("agent_a");
+    });
+    // 返回的窗是纯 ref：不含 data 字段。
+    expect((w as unknown as Record<string, unknown>).data).toBeUndefined();
+    expect(w.id).toBe("obj_m");
+    expect(w.class).toBe(FILE_CLASS);
+    // data 进了对象表，经 objectDataOf 解析得到。
+    expect(objectDataOf<{ hello: string }>(w, getSessionObjectTable(t))).toEqual({
+      hello: "world",
+    });
   });
 });

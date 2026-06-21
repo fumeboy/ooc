@@ -30,6 +30,12 @@ import { readThread, writeThread, threadFile } from "@ooc/builtins/agent/thread/
 import type { FlowObjectRef, ThreadPersistenceRef } from "../common";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import {
+  getSessionObjectTable,
+  materializeWindow,
+} from "@ooc/core/runtime/session-object-table.js";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import type { TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { makeThread } from "../../__tests__/make-thread";
@@ -37,29 +43,35 @@ import { makeThread } from "../../__tests__/make-thread";
 import "@ooc/core/runtime/register-builtins";
 
 /**
- * 造一个**持久化形态**的会话窗实例（inst.class=thread，会话状态进 inst.data）。
- * 与 delivery 期望的扁平 TalkWindowView DTO 区分：后者另由 viewOf 还原。
+ * 造一个**持久化形态**的会话窗（B→A：窗=ref / data 入 session 对象表）。
+ * 经 materializeWindow 把会话状态（target）写进 thread 的对象表、返回纯 ref；
+ * 与 delivery 期望的扁平 TalkWindowView DTO 区分：后者另由 viewOf 经表还原。
  */
 function makeThreadWindow(
+  thread: ThreadContext,
   id: string,
   target: string,
 ): ContextWindow {
-  return {
+  return materializeWindow(thread, {
     id,
-    parentObjectId: "root",
+    class: THREAD_CLASS_ID,
+    data: { target },
+    parentWindowId: "root",
     title: target,
     status: "open",
     createdAt: Date.now(),
-    object: { class: THREAD_CLASS_ID, data: { target } },
-  } as unknown as ContextWindow;
+  });
 }
 
-/** 把持久化会话窗实例还原成 delivery 期望的扁平 TalkWindowView。 */
-function viewOf(win: ContextWindow): TalkWindowView {
-  const data = (win.object.data ?? {}) as { target?: string; targetThreadId?: string };
+/** 把持久化会话窗 ref 还原成 delivery 期望的扁平 TalkWindowView（data 经 session 对象表解析）。 */
+function viewOf(win: ContextWindow, thread: ThreadContext): TalkWindowView {
+  const data = (objectDataOf(win, getSessionObjectTable(thread)) ?? {}) as {
+    target?: string;
+    targetThreadId?: string;
+  };
   return {
     id: win.id,
-    class: win.object.class,
+    class: win.class,
     target: data.target ?? "",
     targetThreadId: data.targetThreadId,
   };
@@ -86,14 +98,16 @@ describe("thread-context bypass reload regression", () => {
     };
     await createFlowObject(persistence);
     const thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
+    // B→A：inline 窗 data（todo content/status）进 session 对象表，窗本身只是纯 ref。
     thread.contextWindows = [
-      {
+      materializeWindow(thread, {
         id: "todo_keep",
+        class: "agent/todo",
+        data: { content: "body", status: "open" },
         title: "builtin todo",
         status: "open",
         createdAt: 1,
-        object: { class: "agent/todo", data: { content: "body", status: "open" } },
-      } as never,
+      }),
     ];
     await writeThread(thread);
 
@@ -119,18 +133,18 @@ describe("thread-context bypass reload regression", () => {
     await createFlowObject(callerPersist);
 
     const talkWindowId = "talk_to_callee";
-    const talkWindow = makeThreadWindow(talkWindowId, "agent_callee");
     const callerThread = makeThread({
       id: "root",
       persistence: callerPersist,
       skipCreatorWindow: true,
     });
+    const talkWindow = makeThreadWindow(callerThread, talkWindowId, "agent_callee");
     callerThread.contextWindows = [talkWindow];
 
     // deliverTalkMessage 内部：createFlowObject(callee) + init 注入 builtin 窗 +
     // writeThread(callerThread) & writeThread(calleeThread)（单点刷 thread-context.json）。
     const result = await deliverTalkMessage({
-      caller: { thread: callerThread, talkWindow: viewOf(talkWindow) },
+      caller: { thread: callerThread, talkWindow: viewOf(talkWindow, callerThread) },
       content: "hello callee",
       source: "user",
     });
@@ -162,8 +176,8 @@ describe("thread-context bypass reload regression", () => {
     await createFlowObject(userPersist);
 
     const talkWindowId = "talk_user_to_agent";
-    const talkWindow = makeThreadWindow(talkWindowId, "agent_t");
     const userThread = makeThread({ id: "root", persistence: userPersist, skipCreatorWindow: true });
+    const talkWindow = makeThreadWindow(userThread, talkWindowId, "agent_t");
     userThread.contextWindows = [...(userThread.contextWindows ?? []), talkWindow];
     await writeThread(userThread);
 

@@ -11,7 +11,7 @@ import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/
 import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
 import { resolveStoneIdentityRef } from "@ooc/core/persistable";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import { dispatchVisibleServerMethod } from "../_shared/visible-server-dispatch";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
@@ -25,6 +25,11 @@ import {
   classOf,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
+import {
+  getSessionObjectTable,
+  getSessionObject,
+  materializeWindow,
+} from "@ooc/core/runtime/session-object-table.js";
 import type { TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
 import {
   SUPER_SESSION_ID,
@@ -49,37 +54,43 @@ import { join } from "node:path";
 const USER_OBJECT_ID = "user";
 
 /**
- * 在 user.root 上建一个指向 target 的 peer talk_window（Wave 4：OocObjectInstance 实例 + TalkData）。
+ * 在 user.root 上建一个指向 target 的 peer talk_window（Wave 4：OocObjectRef 实例 + TalkData）。
  *
  * 返回：
- * - instance：挂进 thread.contextWindows 的 OocObjectInstance（元信息 + data=TalkData）。
+ * - instance：挂进 thread.contextWindows 的 OocObjectRef（元信息 + data=TalkData）。
  * - view    ：传给 deliverTalkMessage 的扁平 TalkWindowView 视图（delivery 只读 id/target/targetThreadId，
  *             并回填 targetThreadId——回填后同步回 instance.data；creator 窗身份由 id 派生）。
  */
 function buildUserTalkWindow(
   target: string,
   title: string,
-): { id: string; instance: OocObjectInstance; view: TalkWindowView } {
+  thread: ThreadContext,
+): { id: string; instance: OocObjectRef; view: TalkWindowView } {
   const id = generateWindowId("talk");
   const data: TalkData = { target };
-  const instance: OocObjectInstance = {
+  // 会话窗注册 class = `_builtin/thread`（唯一会话载体注册 class）；other-view 投影 class=talk 由 thread
+  // readable 渲染期算。B→A：data 入 session 对象表、窗只持 ref（materializeWindow 一处搞定）。
+  const instance = materializeWindow(thread, {
     id,
-    parentObjectId: ROOT_WINDOW_ID,
+    class: THREAD_CLASS_ID,
+    data,
+    parentWindowId: ROOT_WINDOW_ID,
     title,
     status: "open",
     createdAt: Date.now(),
-    // 会话窗注册 class = `_builtin/thread`（唯一会话载体注册 class）；other-view 投影 class=talk
-    // 由 thread readable 渲染期算，不写 object.class。
-    object: { class: THREAD_CLASS_ID, data },
-  };
+  });
   const view = { id, class: THREAD_CLASS_ID, target } as TalkWindowView;
   return { id, instance, view };
 }
 
-/** 把扁平 TalkWindowView 视图（peer 派送可能回填 targetThreadId）的字段同步回实例 data。 */
-function syncTalkViewToInstance(instance: OocObjectInstance, view: TalkWindowView): void {
-  const data = instance.object.data as TalkData;
-  if (view.targetThreadId) data.targetThreadId = view.targetThreadId;
+/** 把扁平 TalkWindowView 视图（peer 派送可能回填 targetThreadId）的字段同步回对象表中的 data。 */
+function syncTalkViewToInstance(
+  instance: OocObjectRef,
+  view: TalkWindowView,
+  thread: ThreadContext,
+): void {
+  const data = getSessionObject(thread, instance.id)?.data as TalkData | undefined;
+  if (data && view.targetThreadId) data.targetThreadId = view.targetThreadId;
 }
 
 /**
@@ -138,12 +149,16 @@ function appendInboxMessage(thread: ThreadContext, text: string, replyToWindowId
  *
  * 历史：移除 IssueWindow strip 分支（issue 看板已整体下线）。
  */
-function stripVolatileForHash(payload: { contextWindows?: OocObjectInstance[] }) {
+function stripVolatileForHash(
+  payload: { contextWindows?: OocObjectRef[] },
+  thread: ThreadContext,
+) {
   if (!payload.contextWindows) return payload;
+  const table = getSessionObjectTable(thread);
   return {
     ...payload,
     contextWindows: payload.contextWindows.map((window) => {
-      const source = (objectDataOf(window) as { source?: string } | undefined)?.source;
+      const source = (objectDataOf(window, table) as { source?: string } | undefined)?.source;
       if (isKnowledgeClass(classOf(window)) && source !== undefined && source !== "explicit") {
         const { id: _id, createdAt: _createdAt, ...rest } = window;
         return rest;
@@ -167,13 +182,15 @@ function stripVolatileForHash(payload: { contextWindows?: OocObjectInstance[] })
  * - windowId      ← talk_window.id 自身
  */
 function extractTalkPeers(
-  windows: OocObjectInstance[] | undefined,
+  windows: OocObjectRef[] | undefined,
+  thread: ThreadContext,
 ): ListThreadsItem["talkPeers"] {
   const peers: ListThreadsItem["talkPeers"] = [];
+  const table = getSessionObjectTable(thread);
   for (const window of windows ?? []) {
     if (!isTalkLikeClass(classOf(window))) continue;
-    // Wave 4：会话业务字段（target / targetThreadId）落 inst.data（=TalkData）。
-    const data = (objectDataOf(window) ?? {}) as { target?: string; targetThreadId?: string };
+    // 会话业务字段（target / targetThreadId）落对象表中该窗的 data（=TalkData）。
+    const data = (objectDataOf(window, table) ?? {}) as { target?: string; targetThreadId?: string };
     peers.push({
       targetObjectId: data.target ?? "",
       targetThreadId: data.targetThreadId,
@@ -233,7 +250,7 @@ async function buildListThreadsItem(args: {
     creatorThreadId: thread.creatorThreadId,
     creatorObjectId: thread.creatorObjectId,
     childThreadIds: thread.childThreadIds ?? [],
-    talkPeers: extractTalkPeers(thread.contextWindows),
+    talkPeers: extractTalkPeers(thread.contextWindows, thread),
     ...(isSuperFlow ? { isSuperFlow: true } : {}),
   };
 }
@@ -420,9 +437,9 @@ export function createFlowsService(deps: {
           persistence: userPersistence,
         };
       }
-      // user→target peer 会话窗（Wave 4：OocObjectInstance 实例 + TalkData）。
+      // user→target peer 会话窗（Wave 4：OocObjectRef 实例 + TalkData）。
       const { id: talkWindowId, instance: talkInstance, view: talkView } =
-        buildUserTalkWindow(targetObjectId, targetObjectId);
+        buildUserTalkWindow(targetObjectId, targetObjectId, userThread);
       userThread.contextWindows = [...(userThread.contextWindows ?? []), talkInstance];
 
       // 3) 派送 — talk-delivery 内部会在 target 下创建 callee thread 并写双方消息
@@ -431,7 +448,7 @@ export function createFlowsService(deps: {
         content: initialMessage,
         source: "user",
       });
-      syncTalkViewToInstance(talkInstance, talkView);
+      syncTalkViewToInstance(talkInstance, talkView, userThread);
 
       // 4) callee 入队
       const job = deps.jobManager.createRunThreadJob({
@@ -507,11 +524,11 @@ export function createFlowsService(deps: {
       // 幂等：已经有指向同 target 的非 creator talk_window 时复用它（Wave 4：读 inst.data）。
       const existing = (userThread.contextWindows ?? []).find((inst) => {
         if (!isTalkLikeClass(classOf(inst))) return false;
-        const d = (objectDataOf(inst) ?? {}) as TalkData;
+        const d = (objectDataOf(inst, getSessionObjectTable(userThread)) ?? {}) as TalkData;
         return !isSelfThreadWindow(inst.id) && d.target === target;
       });
       if (existing) {
-        const existingData = objectDataOf(existing) as TalkData;
+        const existingData = objectDataOf(existing, getSessionObjectTable(userThread)) as TalkData;
         const existingView = {
           id: existing.id,
           class: "talk",
@@ -537,7 +554,7 @@ export function createFlowsService(deps: {
           content: initialMessage,
           source: "user",
         });
-        syncTalkViewToInstance(existing, existingView);
+        syncTalkViewToInstance(existing, existingView, userThread);
         const job = deps.jobManager.createRunThreadJob({
           sessionId,
           objectId: delivered.calleeObjectId,
@@ -553,9 +570,9 @@ export function createFlowsService(deps: {
         };
       }
 
-      // user→target peer 会话窗（Wave 4：OocObjectInstance 实例 + TalkData）。
+      // user→target peer 会话窗（Wave 4：OocObjectRef 实例 + TalkData）。
       const { id: talkWindowId, instance: talkInstance, view: talkView } =
-        buildUserTalkWindow(target, target);
+        buildUserTalkWindow(target, target, userThread);
       userThread.contextWindows = [...(userThread.contextWindows ?? []), talkInstance];
 
       // initialMessage 缺省：仅持久化 talk_window；提供时走 deliverTalkMessage（同 seedSession）
@@ -576,7 +593,7 @@ export function createFlowsService(deps: {
         content: initialMessage,
         source: "user",
       });
-      syncTalkViewToInstance(talkInstance, talkView);
+      syncTalkViewToInstance(talkInstance, talkView, userThread);
       const job = deps.jobManager.createRunThreadJob({
         sessionId,
         objectId: delivered.calleeObjectId,
@@ -773,9 +790,14 @@ export function createFlowsService(deps: {
         events: (thread.events ?? []).filter(
           (e) => !(e.category === "llm_interaction" && e.kind === "call_started"),
         ),
-        contextWindows: thread.contextWindows ?? [],
+        // B→A：窗内存里只持 ref（不含 data，data 在 session 对象表）。前端无对象表，故在此 API 边界
+        // 预 hydrate——把每个窗的 data 从对象表取回平铺挂上（前端 ContextWindow 形态 = 平铺 class+data）。
+        contextWindows: (thread.contextWindows ?? []).map((w) => ({
+          ...w,
+          data: objectDataOf(w, getSessionObjectTable(thread)),
+        })),
       };
-      return { ...payload, hash: hashJson(stripVolatileForHash(payload)) };
+      return { ...payload, hash: hashJson(stripVolatileForHash(payload, thread)) };
     },
     /**
      * 控制面"用户回复"通道。
@@ -814,7 +836,7 @@ export function createFlowsService(deps: {
           { sessionId },
         );
       }
-      // Wave 4：会话窗是 OocObjectInstance，业务字段在 inst.data（=TalkData）。
+      // Wave 4：会话窗是 OocObjectRef，业务字段在 inst.data（=TalkData）。
       const talkWindows = (userThread.contextWindows ?? []).filter((inst) => {
         if (!isTalkLikeClass(classOf(inst))) return false;
         return !isSelfThreadWindow(inst.id);
@@ -829,7 +851,7 @@ export function createFlowsService(deps: {
           { sessionId, targetWindowId },
         );
       }
-      const targetData = objectDataOf(targetInstance) as TalkData;
+      const targetData = objectDataOf(targetInstance, getSessionObjectTable(userThread)) as TalkData;
       const targetView = {
         id: targetInstance.id,
         class: "talk",
@@ -842,7 +864,7 @@ export function createFlowsService(deps: {
         content: text,
         source: "user",
       });
-      syncTalkViewToInstance(targetInstance, targetView);
+      syncTalkViewToInstance(targetInstance, targetView, userThread);
 
       const job = deps.jobManager.createRunThreadJob({
         sessionId,

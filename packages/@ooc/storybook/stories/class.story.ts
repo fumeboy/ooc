@@ -14,6 +14,11 @@ import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry";
 import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
+import {
+  materializeWindow,
+  getSessionObjectTable,
+} from "@ooc/core/runtime/session-object-table.js";
+import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import { mkServer, postJson, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult, type TcResult } from "../_harness/types";
 
@@ -121,7 +126,7 @@ export async function runControlPlane(): Promise<StoryResult> {
         persistence: { baseDir, sessionId: "sb-comp", objectId: "supervisor", threadId: "root" }, contextWindows: [] };
       await injectMemberWindowsIfObjectThread(thread);
       const memberClasses = new Set(
-        thread.contextWindows.filter((w: any) => w.win?.isMemberWindow === true).map((w: any) => w.object.class),
+        thread.contextWindows.filter((w: any) => w.win?.isMemberWindow === true).map((w: any) => w.class),
       );
       const expected = [
         "_builtin/filesystem", "_builtin/terminal", "_builtin/interpreter",
@@ -138,14 +143,19 @@ export async function runControlPlane(): Promise<StoryResult> {
     {
       const thread: any = { id: "root", status: "running",
         persistence: { baseDir, sessionId: "sb-comp", objectId: "supervisor", threadId: "root" },
-        contextWindows: [{ id: "filesystem", parentObjectId: "root",
-          title: "member: filesystem", status: "open", createdAt: Date.now(),
-          object: { class: "filesystem", data: {} },
-          win: { transient: true, isMemberWindow: true } }] };
+        contextWindows: [] };
+      // B→A：filesystem member 窗=ref / data 入 session 对象表（materializeWindow 一处搞定）。
+      thread.contextWindows = [
+        materializeWindow(thread, {
+          id: "filesystem", class: "filesystem", data: {},
+          parentWindowId: "root", title: "member: filesystem", status: "open", createdAt: Date.now(),
+          win: { transient: true, isMemberWindow: true },
+        }),
+      ];
       const mgr = WindowManager.fromThread(thread, builtinRegistry);
       await mgr.execObjectMethod("filesystem", "grep", { pattern: "version", path: baseDir }, thread);
-      const search = mgr.list().find((w) => w.object.class === "_builtin/filesystem/search") as any;
-      const data = search?.object.data;
+      const search = mgr.list().find((w) => w.class === "_builtin/filesystem/search") as any;
+      const data = search ? (objectDataOf(search, getSessionObjectTable(thread)) as any) : undefined;
       const routed = !!data && data.kind === "grep" && (data.matches?.length ?? 0) > 0;
       rec.ok("TC-COMP-04", "组合机制命门：exec(filesystem, grep) 经成员方法真跑出 grep 命中（search.data.kind=grep, matches>0）",
         routed, `search=${data ? `kind=${data.kind} matches=${data.matches?.length}` : "none"}`);

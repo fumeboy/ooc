@@ -13,7 +13,8 @@
  */
 import type { ThreadContext } from "../thinkable/context.js";
 import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../_shared/types/context-window.js";
-import type { OocObjectInstance } from "../runtime/ooc-class.js";
+import { getSessionObjectTable } from "../runtime/session-object-table.js";
+import type { OocObjectRef } from "../runtime/ooc-class.js";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import { objectDir, type FlowObjectRef, type ThreadPersistenceRef } from "./common.js";
 import type { PersistableContext } from "./contract.js";
@@ -35,7 +36,7 @@ export function threadPersistRef(thread: ThreadContext): ThreadPersistenceRef | 
 /** 构造指向某实例自身 flow object 的 FlowObjectRef（objectId=instance.id）。 */
 export function runtimeObjectRef(
   thread: ThreadContext,
-  instance: OocObjectInstance,
+  instance: OocObjectRef,
 ): FlowObjectRef | undefined {
   if (!thread.persistence) return undefined;
   return {
@@ -60,7 +61,7 @@ export function persistableCtx(ref: FlowObjectRef): PersistableContext {
  * 它们由确定性重建、无独立 data.json；落盘只会变成死 _ref 刷屏，写盘端统一剔除。
  * 约定标记：`win.transient === true`（init.ts 注入时设）。
  */
-export function isTransientInstance(instance: OocObjectInstance): boolean {
+export function isTransientInstance(instance: OocObjectRef): boolean {
   return (instance.win as { transient?: unknown } | undefined)?.transient === true;
 }
 
@@ -72,7 +73,7 @@ export function isTransientInstance(instance: OocObjectInstance): boolean {
 export async function saveObjectData(
   registry: ObjectRegistry,
   thread: ThreadContext,
-  instance: OocObjectInstance,
+  instance: OocObjectRef,
 ): Promise<void> {
   if (instance.id === ROOT_WINDOW_ID) return;
   if (isTransientInstance(instance)) return;
@@ -88,13 +89,14 @@ export async function saveObjectData(
     );
   }
   const custom = registry.resolvePersistable(classOf(instance));
+  const table = getSessionObjectTable(thread);
   try {
     if (custom?.save) {
-      await custom.save(persistableCtx(ref), objectDataOf(instance));
+      await custom.save(persistableCtx(ref), objectDataOf(instance, table));
     } else {
       await writeRuntimeObjectData(
         ref,
-        objectDataOf(instance) as Record<string, unknown>,
+        objectDataOf(instance, table) as Record<string, unknown>,
       );
     }
   } catch (e) {

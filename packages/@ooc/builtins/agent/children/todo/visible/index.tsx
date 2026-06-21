@@ -1,6 +1,5 @@
 import type { Data } from "../types.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
-import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class";
 import React from "react";
 
 /**
@@ -17,10 +16,10 @@ export default function TodoWindowDetail({
   window,
   callMethod,
 }: {
-  window: OocObjectInstance<Data>;
+  window: OocObjectRef & { data: Data };
   callMethod?: (method: string, args?: object) => Promise<unknown>;
 }) {
-  const data = objectDataOf(window);
+  const data = window.data;
   // 本地乐观态：先用实例 data 初值，callMethod 成功后用返回的 data 覆盖（无需整页刷新）。
   const [content, setContent] = React.useState(data.content);
   const [status, setStatus] = React.useState<Data["status"]>(data.status);

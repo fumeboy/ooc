@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "../persistable/common";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage } from "../thinkable/llm/types";
 import type { ProcessEvent, ThreadContext, ThreadMessage } from "../thinkable/context";
-import type { OocObjectInstance } from "../runtime/ooc-class.js";
+import type { OocObjectRef } from "../runtime/ooc-class.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { WindowSnapshotEntry } from "@ooc/core/observable/window-hash";
@@ -17,7 +17,7 @@ import type { WindowSnapshotEntry } from "@ooc/core/observable/window-hash";
 export interface ContextSnapshot {
   id: string;
   status?: string;
-  contextWindows: OocObjectInstance[];
+  contextWindows: OocObjectRef[];
   inbox?: ThreadMessage[];
   outbox?: ThreadMessage[];
   events?: ProcessEvent[];
@@ -46,7 +46,7 @@ export function captureContextSnapshot(
   // （投影类解析改由 readable computeProjectionClass 一处收口，不再在快照层旁路 enrich）。
   _registry: ObjectRegistry = builtinRegistry,
 ): ContextSnapshot {
-  // contextWindows 已是 OocObjectInstance[]，直接进快照（投影态/元信息字段都在实例内）。
+  // contextWindows 已是 OocObjectRef[]，直接进快照（投影态/元信息字段都在实例内）。
   const contextWindows = thread.contextWindows ?? [];
   return {
     id: thread.id,

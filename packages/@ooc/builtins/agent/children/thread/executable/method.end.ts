@@ -14,12 +14,13 @@ import type {
 } from "@ooc/core/executable/contract.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { hasCreatorChannel, objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import type { Data } from "../types.js";
 
 /**
  * creator（self-view）窗的归一化视图。
  *
- * Wave 4 对象模型：contextWindows 元素是 `OocObjectInstance`（元信息 + data 分离）。
+ * Wave 4 对象模型：contextWindows 元素是 `OocObjectRef`（元信息 + data 分离）。
  * 会话窗状态（target / targetThreadId / isForkWindow）落 `inst.data`（=TalkData），`id` 落元信息。
  * 本视图把两侧拍平给 end 的 auto-reply / 持久化通知用。
  */
@@ -31,13 +32,15 @@ type CreatorWindow = {
 };
 
 function findCreatorWindow(ctx: ExecutableContext): CreatorWindow | undefined {
-  const list = ctx.thread?.contextWindows ?? [];
+  if (!ctx.thread) return undefined;
+  const list = ctx.thread.contextWindows ?? [];
+  const table = getSessionObjectTable(ctx.thread);
   for (const inst of list) {
     // 本 thread 的过程窗（self-view）每 thread 唯一，身份编码在 id（id=`w_creator_<thread.id>`）。
     // auto-reply 只对**有上游 creator 通道**的过程窗（hasCreatorChannel：data 带 target/isForkWindow）；
     // self-driven root 的空通道过程窗 → 返回 undefined → end 忽略 result（既有降级）。
-    if (!hasCreatorChannel(inst)) continue;
-    const data = (objectDataOf(inst) ?? {}) as {
+    if (!hasCreatorChannel(inst, table)) continue;
+    const data = (objectDataOf(inst, table) ?? {}) as {
       target?: string;
       targetThreadId?: string;
       isForkWindow?: boolean;

@@ -9,7 +9,7 @@
  * - resume：reject 后 new_feat_branch(同 intent) 幂等重绑 feat 分支再 create_pr_and_invite_reviewers
  *
  * Wave 4 对象模型：pr 是注册 class `_builtin/agent/pr`（归一 id `agent/pr`）；
- * 窗实例是 `OocObjectInstance<PrData>`（元信息 + 业务字段落 inst.data）。readable 经
+ * 窗实例是 `OocObjectRef<PrData>`（元信息 + 业务字段落 inst.data）。readable 经
  * `Class.readable.readable(ctx, self=Data, win)` 返回 `{class, content}`；object method 经
  * `Class.executable.methods` 的三参 `exec(ctx, self=Data, args)`。沉淀两 method
  * （new_feat_branch / create_pr_and_invite_reviewers）归位到 thread class（reflect_request 投影窗 surface）。
@@ -28,7 +28,12 @@ import { readPrIssue } from "../persistable/pr-issue.js";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
+import {
+  materializeWindow,
+  getSessionObjectTable,
+} from "@ooc/core/runtime/session-object-table.js";
+import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import type { ReadableContext } from "@ooc/core/readable/contract.js";
 import type { ExecutableContext } from "@ooc/core/executable/contract.js";
 import {
@@ -112,16 +117,22 @@ function reviewerThread(baseDir: string, reviewerObjectId: string, threadId: str
   };
 }
 
-/** 构造一个 pr 窗实例（OocObjectInstance<PrData>）。 */
-function prInstance(issueId: number, data: PrData, title: string): OocObjectInstance<PrData> {
-  return {
+/** 构造一个 pr 窗（OocObjectRef）+ 把对象登记进 session 对象表（data 在表，窗不持 data）。 */
+function prInstance(
+  thread: ThreadContext,
+  issueId: number,
+  data: PrData,
+  title: string,
+): OocObjectRef {
+  return materializeWindow(thread, {
     id: prWindowId(issueId),
-    parentObjectId: "root",
+    parentWindowId: "root",
     title,
     status: "open",
     createdAt: Date.now(),
-    object: { class: "pr", data },
-  };
+    class: "pr",
+    data,
+  });
 }
 
 /** 取 pr 注册 class（readable + executable）。 */
@@ -159,7 +170,7 @@ describe("pr 渲染", () => {
 
     const data: PrData = { issueId, reviewerObjectId: "supervisor", authorObjectId: "foo" };
     const thread = reviewerThread(baseDir, "supervisor", "t1");
-    thread.contextWindows = [prInstance(issueId, data, "Tighten foo self")];
+    thread.contextWindows = [prInstance(thread, issueId, data, "Tighten foo self")];
     const xml = await renderPr(baseDir, thread, data);
 
     expect(xml).toContain("Tighten foo self"); // intent
@@ -271,8 +282,8 @@ describe("deliverPrWindowToReviewers（投递）", () => {
       const t = await readThread({ baseDir, sessionId: "super", objectId: reviewer }, tid);
       expect(t).toBeDefined();
       const win = t!.contextWindows?.find((w) => w.id === prWindowId(issueId));
-      expect(win?.object.class).toBe(PR_CLASS_ID);
-      const winData = (win!.object.data ?? {}) as PrData;
+      expect(win?.class).toBe(PR_CLASS_ID);
+      const winData = (objectDataOf(win!, getSessionObjectTable(t!)) ?? {}) as PrData;
       expect(winData.issueId).toBe(issueId);
       expect(winData.reviewerObjectId).toBe(reviewer);
       expect(t!.events.some((e) => e.kind === "inbox_message_arrived")).toBe(true);
@@ -288,7 +299,7 @@ describe("deliverPrWindowToReviewers（投递）", () => {
     await deliverPrWindowToReviewers({ baseDir, issueId, reviewers, authorObjectId: "foo", title: "x" });
     const tid = prReviewThreadId("supervisor", issueId);
     const t = await readThread({ baseDir, sessionId: "super", objectId: "supervisor" }, tid);
-    const prWins = (t!.contextWindows ?? []).filter((w) => w.object.class === PR_CLASS_ID);
+    const prWins = (t!.contextWindows ?? []).filter((w) => w.class === PR_CLASS_ID);
     expect(prWins.length).toBe(1);
   });
 });

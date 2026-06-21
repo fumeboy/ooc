@@ -19,6 +19,7 @@
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
 import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../../_shared/types/context-window.js";
+import { getSessionObjectTable } from "../../runtime/session-object-table.js";
 import { builtinRegistry, type ObjectRegistry } from "../../runtime/object-registry.js";
 import { WindowManager } from "../../runtime/window-manager.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
@@ -124,7 +125,7 @@ export async function handleExecTool(
       if (methodEntry.route) {
         const routeResult = await methodEntry.route(
           { thread, object: { id: target.id, class: targetClass }, runtime: mgr, args: nestedArgs },
-          objectDataOf(target),
+          objectDataOf(target, getSessionObjectTable(thread)),
           nestedArgs,
         );
         if (!routeResult?.quickSubmit) {

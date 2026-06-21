@@ -9,6 +9,8 @@ import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { sayMethod } from "@ooc/builtins/agent/thread/executable/session-methods.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
+import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
@@ -59,7 +61,10 @@ describe("thread.say (归位到 thread class)", () => {
 
     const childId = parent.childThreadIds![0]!;
     const forkInstance = mgr.get(forkId)!;
-    expect((forkInstance.object.data as { isForkWindow?: boolean }).isForkWindow).toBe(true);
+    const forkData = objectDataOf(forkInstance, getSessionObjectTable(parent)) as {
+      isForkWindow?: boolean;
+    };
+    expect(forkData.isForkWindow).toBe(true);
 
     // 在 fork 子窗上调 thread.say（dispatch 三参：ctx, self=inst.object.data, args）。
     const out = await mgr.execObjectMethod(forkId, "say", { msg: "继续处理 WARN" }, parent);

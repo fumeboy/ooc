@@ -26,9 +26,9 @@ import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { SUPER_SESSION_ID, PR_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
+import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
 import type { Data as PrData } from "./types.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 
 /** pr_window 的稳定 id：同一 reviewer 看同一 PR 复用同一 window（幂等更新，不堆叠）。 */
 export function prWindowId(issueId: number): string {
@@ -108,27 +108,25 @@ export async function deliverPrWindowToReviewers(
     }
 
     const windowId = prWindowId(issueId);
-    // Wave 4 对象模型：对象身份（class + 业务 data）收进 inst.object，窗视角态
-    // （id/title/status/createdAt/parentObjectId）留实例顶层。
-    // pr 业务字段（issueId/reviewerObjectId/authorObjectId/authorThreadId）落 object.data（=PrData）。
-    const prInstance: OocObjectInstance<PrData> = {
+    // 对象/窗拆分：窗 = OocObjectRef（视角态在顶层）；对象身份（class + 业务 data）入 session
+    // 对象表。materializeWindow 一处登记对象 + 返回纯 ref。pr 业务字段
+    // （issueId/reviewerObjectId/authorObjectId/authorThreadId）落 PrData。
+    const prInstance = materializeWindow(thread, {
       id: windowId,
-      parentObjectId: ROOT_WINDOW_ID,
+      parentWindowId: ROOT_WINDOW_ID,
       title,
       status: "open",
       createdAt: Date.now(),
-      object: {
-        // 注册 class id（非投影名 "pr"）——否则 createFlowObject/hydrate 解析不到 class，
-        // pr 窗过不了持久化 round-trip、reload 后被 drop（pr readable 才把它投影成 "pr"）。
-        class: PR_CLASS_ID,
-        data: {
-          issueId,
-          reviewerObjectId,
-          authorObjectId,
-          ...(authorThreadId ? { authorThreadId } : {}),
-        },
-      },
-    };
+      // 注册 class id（非投影名 "pr"）——否则 createFlowObject/hydrate 解析不到 class，
+      // pr 窗过不了持久化 round-trip、reload 后被 drop（pr readable 才把它投影成 "pr"）。
+      class: PR_CLASS_ID,
+      data: {
+        issueId,
+        reviewerObjectId,
+        authorObjectId,
+        ...(authorThreadId ? { authorThreadId } : {}),
+      } satisfies PrData,
+    });
 
     const windows = (thread.contextWindows ?? []).filter((w) => w.id !== windowId);
     thread.contextWindows = [...windows, prInstance];

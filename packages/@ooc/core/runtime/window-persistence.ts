@@ -12,7 +12,7 @@
  * 持 manager 的 **live `instances` Map** 引用，snapshot 时取最新全量；IO 失败 fail-soft（不阻塞 think loop）。
  */
 import type { ThreadContext } from "../thinkable/context.js";
-import type { OocObjectInstance } from "./ooc-class.js";
+import type { OocObjectRef } from "./ooc-class.js";
 import type { ObjectRegistry } from "./object-registry.js";
 import { saveObjectData } from "../persistable/object-data.js";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
@@ -22,7 +22,7 @@ export class WindowPersistence {
   constructor(
     private readonly registry: ObjectRegistry,
     /** live 引用 manager 的实例表；snapshot 时取最新全量。 */
-    private readonly instances: Map<string, OocObjectInstance>,
+    private readonly instances: Map<string, OocObjectRef>,
   ) {}
 
   /**

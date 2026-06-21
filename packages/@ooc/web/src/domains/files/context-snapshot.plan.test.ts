@@ -10,7 +10,7 @@
  * - 因此对 buildContextTree(snapshot) 验证 node.badge / summary / charCount /
  *   data.window 字段保留即等价于验证 ContextSnapshotViewer 能正确渲染。
  *
- * 窗形态对齐 Wave-4 OocObjectInstance 实例：业务字段（plan 的 title / status /
+ * 窗形态对齐 Wave-4 OocObjectRef 实例：业务字段（plan 的 title / status /
  * description / steps / parentPlanWindowId / parentStepId）下沉 `.data`，前端按
  * `.class` narrow 后读 `.data.xxx`。
  *

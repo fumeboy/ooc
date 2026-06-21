@@ -6,7 +6,9 @@
  */
 import type { ThreadContext } from "../thinkable/context";
 import type { ThreadPersistenceRef } from "../persistable/common";
+import type { OocObjectRef } from "../runtime/ooc-class";
 import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
+import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 
 export interface MakeThreadOpts {
   id?: string;
@@ -52,9 +54,26 @@ export function makeThread(opts: MakeThreadOpts = {}): ThreadContext {
     creatorObjectId: opts.creatorObjectId,
     inbox: opts.inbox,
     outbox: opts.outbox,
-    contextWindows: opts.extraWindows ? [...opts.extraWindows] : [],
+    contextWindows: [],
     persistence: opts.persistence,
   };
+  // B→A：归一化 extraWindows——带旧形态 `.object={class,data}` 的 cast-hidden 窗，把 data 登记进
+  // session 对象表、窗归一化为纯 ref（id/class/视角态）；已是 ref（无 .object）的原样保留。
+  if (opts.extraWindows) {
+    thread.contextWindows = opts.extraWindows.map((w) => {
+      const legacy = w as unknown as { id: string; object?: { class: string; data: unknown } };
+      if (legacy.object) {
+        setSessionObject(thread, {
+          id: legacy.id,
+          class: legacy.object.class,
+          data: legacy.object.data,
+        });
+        const { object: _object, ...view } = legacy;
+        return { ...(view as object), class: legacy.object.class } as OocObjectRef;
+      }
+      return w;
+    });
+  }
   if (!opts.skipCreatorWindow) {
     // 兼容老单元测试默认行为：注入一个指向 placeholder parent 的 creator talk_window。
     // 产品端 initContextWindows 现在要求"真有 creator info"才注入（避免 phantom），

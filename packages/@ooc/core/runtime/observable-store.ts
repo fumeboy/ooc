@@ -23,6 +23,7 @@ import {
   writeLoopDebugOutput,
 } from "../observable/debug-file.js";
 import { buildWindowsSnapshot } from "../observable/window-hash.js";
+import { getSessionObjectTable } from "./session-object-table.js";
 
 /** 一轮 LLM 观测的运行时句柄。 */
 export interface LlmLoopHandle {
@@ -294,6 +295,7 @@ export class ObservableStore {
       const snapshotWindows = thread._renderedWindows ?? thread.contextWindows ?? [];
       const windowsSnapshot = await buildWindowsSnapshot(
         snapshotWindows,
+        getSessionObjectTable(thread),
         previousSnapshot,
       );
       await writeLoopDebugMeta(thread.persistence, handle.loopIndex, {

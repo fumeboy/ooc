@@ -13,8 +13,8 @@ import {
 import {
   threadWindowIdOf,
   ROOT_WINDOW_ID,
-  type OocObjectInstance,
 } from "@ooc/core/_shared/types/context-window.js";
+import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
@@ -39,14 +39,6 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
     // Wave4 会话窗：stored class = THREAD_CLASS_ID，target 落 inst.data；creator 窗身份编码在
     // id（threadWindowIdOf）里——不再存 isCreatorWindow flag，wait 按 isSelfThreadWindow(id) 识别。
     const creatorTalkId = threadWindowIdOf("root");
-    const creatorTalk: OocObjectInstance<TalkData> = {
-      id: creatorTalkId,
-      parentObjectId: ROOT_WINDOW_ID,
-      title: "creator",
-      status: "open",
-      createdAt: Date.now(),
-      object: { class: THREAD_CLASS_ID, data: { target: "user" } },
-    };
     const { inbox, events } = bootstrapInboxFromPrompt(
       [
         `请直接调用 wait tool 等待 creator (creator talk_window id 为 "${creatorTalkId}")，`,
@@ -59,11 +51,23 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
       status: "running",
       inbox,
       events,
-      contextWindows: [creatorTalk],
+      contextWindows: [],
       creatorObjectId: "user",
       creatorThreadId: "root",
       persistence: { ...flow, threadId: "root" },
     };
+    // creator 会话窗 = ref + object（target 落 data）入 session 对象表（materializeWindow 一处搞定）。
+    root.contextWindows = [
+      materializeWindow(root, {
+        id: creatorTalkId,
+        class: THREAD_CLASS_ID,
+        data: { target: "user" } satisfies TalkData,
+        parentWindowId: ROOT_WINDOW_ID,
+        title: "creator",
+        status: "open",
+        createdAt: Date.now(),
+      }),
+    ];
 
     await runScheduler(root, llm(), { maxTicks: 5 });
 

@@ -8,18 +8,22 @@ import { stat } from "node:fs/promises";
 import type { ServerConfig } from "../bootstrap/config";
 import type { RuntimeJob } from "./types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import type { OocObjectRef, OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import { SUPER_SESSION_ID, isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 
 /**
  * talk 对象的会话视图字段（target / targetThreadId）。
  *
- * Wave 4：contextWindows 元素是 `OocObjectInstance`（元信息 + data + win 分离）；talk 的会话业务
- * 字段落 `inst.data`（=TalkData）。本 helper 从 data 读出 target / targetThreadId。
+ * Wave 4：contextWindows 元素是 `OocObjectRef`（元信息 + data + win 分离）；talk 的会话业务
+ * 字段落 `inst.data`（=TalkData），经 session 对象表按 ref.id 解析。
  */
-function talkView(inst: OocObjectInstance): { target?: string; targetThreadId?: string } {
-  const data = (objectDataOf(inst) ?? {}) as { target?: string; targetThreadId?: string };
+function talkView(
+  inst: OocObjectRef,
+  table: Map<string, OocObjectInstance>,
+): { target?: string; targetThreadId?: string } {
+  const data = (objectDataOf(inst, table) ?? {}) as { target?: string; targetThreadId?: string };
   return { target: data.target, targetThreadId: data.targetThreadId };
 }
 import { resumePausedThread } from "./resume";
@@ -266,16 +270,17 @@ async function syncCrossObjectCalleeEnds(
   callerSessionId: string,
 ): Promise<void> {
   if (!caller.persistence) return;
+  const table = getSessionObjectTable(caller);
   const talkWindows = (caller.contextWindows ?? []).filter(
-    // talk 会话窗：class==="talk" 且有 targetThreadId（指向对端 thread）。字段经 talkView 兼读
-    // 实例顶层 / inst.data（talk 迁移在途）。
-    (w) => classOf(w) === "talk" && Boolean(talkView(w).targetThreadId),
+    // talk 会话窗：class==="talk" 且有 targetThreadId（指向对端 thread）。字段经 talkView
+    // 经 session 对象表解析 inst.data。
+    (w) => classOf(w) === "talk" && Boolean(talkView(w, table).targetThreadId),
   );
   if (talkWindows.length === 0) return;
 
   let mutated = false;
   for (const w of talkWindows) {
-    const view = talkView(w);
+    const view = talkView(w, table);
     // super alias 是自指目标:派送到 caller 自身在 super session 下的 thread。
     // 这里的 callee 解析必须与 talk-delivery.ts 严格一致 — 否则 readThread 会
     // 读错路径(在 sessions/super/objects/super/ 找不到任何东西)。

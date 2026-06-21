@@ -8,7 +8,7 @@
  * persistable。
  */
 
-import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { OocObjectRef, OocObjectInstance } from "../../runtime/ooc-class.js";
 
 // ─────────────────────────── flow / stone 引用类型 ───────────────────────────
 
@@ -466,10 +466,10 @@ export type ThreadContext = {
   outbox?: ThreadMessage[];
   /**
    * 当前线程持有的 object 实例（Wave 4：元素类型从旧平铺 `ContextWindow` 改为
-   * `OocObjectInstance` —— 身份元信息 + 业务 data + 投影态 win 分离）。**复用字段名**
+   * `OocObjectRef` —— 身份元信息 + 业务 data + 投影态 win 分离）。**复用字段名**
    * `contextWindows` 以最小破坏。访问方式：业务数据 `.data`、投影态 `.win`、元信息 `.id/.class/...`。
    */
-  contextWindows: OocObjectInstance[];
+  contextWindows: OocObjectRef[];
   /**
    * thread-local 共享数据；program_window 的 ts/js exec 之间通过这里传值
    * （program_window 的"跨 exec 数据传递"）。当前仅占位、不读不写。
@@ -526,14 +526,14 @@ export type ThreadContext = {
    * protocol knowledge look "未激活" in the debug snapshot). Runtime-only; never
    * persisted. Undefined falls back to thread.contextWindows.
    */
-  _renderedWindows?: OocObjectInstance[];
+  _renderedWindows?: OocObjectRef[];
   /**
-   * session 对象表（B→A）：`objectId → 唯一一个持 data 的对象实例`，挂内存线程树**根** thread。
-   * ContextWindow 是对它的引用——`window.object` 解析为指向表项的共享引用。Runtime-only；never
-   * persisted（磁盘真相在各 object 的 data.json / inline thread-context）；随 job 执行而在、随根
-   * thread GC 而释放。owner/解析见 `runtime/session-object-table.ts`。
+   * session 对象表（B→A）：`objectId → 唯一一个持 data 的 OocObjectInstance`，挂内存线程树**根** thread。
+   * context window（OocObjectRef）是对它的引用、不持 data。Runtime-only；never persisted（磁盘真相在
+   * 各 object 的 data.json / inline thread-context）；随 job 执行而在、随根 thread GC 而释放。
+   * owner/解析见 `runtime/session-object-table.ts`。
    */
-  _objectTable?: Map<string, OocObjectInstance["object"]>;
+  _objectTable?: Map<string, OocObjectInstance>;
   /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
   persistence?: ThreadPersistenceRef;
 };

@@ -25,8 +25,9 @@
  */
 
 import type { ThreadContext } from "../context";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
+import type { OocObjectRef, OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 
@@ -206,18 +207,19 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
 
     case "method": {
       const list = thread.contextWindows ?? [];
+      const table = getSessionObjectTable(thread);
       // 先做一次按 id 的 parent 索引，避免 O(n²)；通常 windows 量级小，O(n) 也无妨。
-      const byId = new Map<string, OocObjectInstance>();
+      const byId = new Map<string, OocObjectRef>();
       for (const w of list) byId.set(w.id, w);
 
       for (const w of list) {
         if (classOf(w) !== "method_exec") continue;
-        // method_exec 业务字段（method）落 inst.data。
-        const method = (objectDataOf(w) as { method?: string } | undefined)?.method;
+        // method_exec 业务字段（method）落 object 实例 data（经 session 对象表解析）。
+        const method = (objectDataOf(w, table) as { method?: string } | undefined)?.method;
         if (method !== trigger.method) continue;
         // form 必须 open 才视为"该 method 当前活跃"——success/failed 不算
         if (!isOpen(w)) continue;
-        const parentType = parentTypeOf(w, byId);
+        const parentType = parentTypeOf(w, byId, table);
         // 单跳 parentClass 匹配（与方法解析同语义）：trigger.objectType 命中 parent 自身
         // 或其单一父类。例：agency(talk/end) 跑在 agent 的 self 窗（class=objectId，ooc.class=_builtin/agent），
         // 其单一父类 = _builtin/agent → `method::_builtin/agent::talk` 命中；create_object 跑在
@@ -232,10 +234,11 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       // open method_exec form 的 route 算出的 intents 落在 data.intentPaths——执行推进到哪、
       // 意图就到哪，知识随之激活（与 method case 同源于 contextWindows，不读独立缓存）。
       const list = thread.contextWindows ?? [];
+      const table = getSessionObjectTable(thread);
       for (const w of list) {
         if (classOf(w) !== "method_exec") continue;
         if (!isOpen(w)) continue;
-        const intents = (objectDataOf(w) as { intentPaths?: string[] } | undefined)?.intentPaths;
+        const intents = (objectDataOf(w, table) as { intentPaths?: string[] } | undefined)?.intentPaths;
         if (!intents) continue;
         for (const name of intents) {
           if (matchesIntentName(name, trigger.intentName)) return true;
@@ -253,19 +256,20 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
  * - `status === "active"` (root / skill_index / custom 等常驻型 object)
  * - status 缺省 (向后兼容)
  */
-function isOpen(w: OocObjectInstance): boolean {
+function isOpen(w: OocObjectRef): boolean {
   return w.status === "open" || w.status === "active" || w.status === undefined;
 }
 
 /** form 的目标 window type；目标 === "root" 或 missing 时视为 "root"。 */
 function parentTypeOf(
-  form: OocObjectInstance,
-  byId: Map<string, OocObjectInstance>,
+  form: OocObjectRef,
+  byId: Map<string, OocObjectRef>,
+  table: Map<string, OocObjectInstance>,
 ): string {
   // form 的目标对象落在 data.targetObjectId（填表式渐进执行；form 恒 top-level，不设 envelope
-  // parentObjectId 以免目标窗被 budget 裁掉时跟着消失）；envelope parentObjectId 作兜底。
+  // parentWindowId 以免目标窗被 budget 裁掉时跟着消失）；envelope parentWindowId 作兜底。
   const pid =
-    (objectDataOf(form) as { targetObjectId?: string } | undefined)?.targetObjectId ?? form.parentObjectId;
+    (objectDataOf(form, table) as { targetObjectId?: string } | undefined)?.targetObjectId ?? form.parentWindowId;
   if (!pid || pid === "root") return "root";
   const parent = byId.get(pid);
   return parent ? classOf(parent) : "root";

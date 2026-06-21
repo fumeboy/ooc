@@ -3,6 +3,7 @@ import { computeActivations } from "../activator";
 import type { ActivatesOn, KnowledgeDoc, KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import type { ThreadContext } from "../../context";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 import { KNOWLEDGE_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 
 function doc(
@@ -25,32 +26,42 @@ function indexOf(...docs: KnowledgeDoc[]): KnowledgeIndex {
 }
 
 /**
- * 构造 method_exec object 实例的辅助（Wave4 对象实例形态）；activator 内部走 evaluateTrigger，
- * 读 `w.class === "method_exec"` + `w.data.method` + `w.parentObjectId`。
- * `method` / `parentObjectId` 经命名参数传入，落进 `.data` / 元信息。
+ * B→A split：fixture 窗是对象引用（OocObjectRef，不持 data）；业务 data 经 session 对象表
+ * 按 id 解析。`WinSpec` 把窗视角态 + 要登记进表的 data 一起携带；`thread()` 建表时登记。
+ */
+interface WinSpec {
+  ref: ContextWindow;
+  data: Record<string, unknown>;
+}
+
+/**
+ * 构造 method_exec object 实例的辅助（B→A 对象引用形态）；activator 内部走 evaluateTrigger，
+ * 读 `w.class === "method_exec"` + 表里 `data.method` + `w.parentWindowId`。
+ * `method` / `parentWindowId` 经命名参数传入，落进对象表 `.data` / 窗元信息。
  */
 function form(
-  overrides: { id?: string; method?: string; parentObjectId?: string; status?: ContextWindow["status"] } = {},
-): ContextWindow {
-  const { id = "f", method = "x", parentObjectId = "root", status = "open" } = overrides;
+  overrides: { id?: string; method?: string; parentWindowId?: string; status?: ContextWindow["status"] } = {},
+): WinSpec {
+  const { id = "f", method = "x", parentWindowId = "root", status = "open" } = overrides;
   return {
-    id,
-    parentObjectId,
-    title: "x",
-    status,
-    createdAt: 0,
-    object: { class: "method_exec", data: { method } },
+    ref: { id, class: "method_exec", parentWindowId, title: "x", status, createdAt: 0 },
+    data: { method },
   };
 }
 
-function thread(overrides: Partial<ThreadContext>): ThreadContext {
-  return {
+function thread(overrides: Partial<ThreadContext> & { windows?: WinSpec[] }): ThreadContext {
+  const { windows, ...rest } = overrides;
+  const t: ThreadContext = {
     id: "t",
     status: "running",
     events: [],
-    contextWindows: [],
-    ...overrides,
+    contextWindows: (windows ?? []).map((w) => w.ref),
+    ...rest,
   };
+  for (const w of windows ?? []) {
+    setSessionObject(t, { id: w.ref.id, class: w.ref.class, data: w.data });
+  }
+  return t;
 }
 
 describe("computeActivations (trigger map)", () => {
@@ -65,7 +76,7 @@ describe("computeActivations (trigger map)", () => {
   test("method trigger matches when form on root with same method exists → full", () => {
     const index = indexOf(doc("a", "A", { "method::root::program": "show_content" }));
     const out = computeActivations(
-      thread({ contextWindows: [form({ method: "program" })] }),
+      thread({ windows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toHaveLength(1);
@@ -76,7 +87,7 @@ describe("computeActivations (trigger map)", () => {
   test("method trigger matches → show_description level renders as summary", () => {
     const index = indexOf(doc("a", "A", { "method::root::program": "show_description" }));
     const out = computeActivations(
-      thread({ contextWindows: [form({ method: "program" })] }),
+      thread({ windows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toHaveLength(1);
@@ -94,7 +105,7 @@ describe("computeActivations (trigger map)", () => {
     // 既有 root window（隐式由 contextWindows 中含 root window 模拟，但这里没显式塞 root window）
     // 让 program method trigger 命中即可
     const out = computeActivations(
-      thread({ contextWindows: [form({ method: "program" })] }),
+      thread({ windows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toHaveLength(1);
@@ -103,16 +114,12 @@ describe("computeActivations (trigger map)", () => {
 
   test("window trigger matches any open window of that type", () => {
     const index = indexOf(doc("a", "A", { "window::talk": "show_content" }));
-    const talkWindow: ContextWindow = {
-      id: "w_talk",
-      parentObjectId: "root",
-      title: "talk",
-      status: "open",
-      createdAt: 0,
-      object: { class: "talk", data: { target: "alice" } },
+    const talkWindow: WinSpec = {
+      ref: { id: "w_talk", class: "talk", parentWindowId: "root", title: "talk", status: "open", createdAt: 0 },
+      data: { target: "alice" },
     };
     const out = computeActivations(
-      thread({ contextWindows: [talkWindow] }),
+      thread({ windows: [talkWindow] }),
       index,
     );
     expect(out).toHaveLength(1);
@@ -143,26 +150,22 @@ describe("computeActivations (trigger map)", () => {
   test("method trigger requires matching parent window type", () => {
     // method::talk::say should match form { method: "say", parent.class === "talk" }
     const index = indexOf(doc("a", "A", { "method::talk::say": "show_content" }));
-    const talkWindow: ContextWindow = {
-      id: "w_talk",
-      parentObjectId: "root",
-      title: "talk",
-      status: "open",
-      createdAt: 0,
-      object: { class: "talk", data: { target: "alice" } },
+    const talkWindow: WinSpec = {
+      ref: { id: "w_talk", class: "talk", parentWindowId: "root", title: "talk", status: "open", createdAt: 0 },
+      data: { target: "alice" },
     };
-    const sayForm = form({ id: "f_say", method: "say", parentObjectId: "w_talk" });
+    const sayForm = form({ id: "f_say", method: "say", parentWindowId: "w_talk" });
 
     const out = computeActivations(
-      thread({ contextWindows: [talkWindow, sayForm] }),
+      thread({ windows: [talkWindow, sayForm] }),
       index,
     );
     expect(out).toHaveLength(1);
 
     // Same say form but parent is root → no match
-    const sayOnRoot = form({ id: "f_say_root", method: "say", parentObjectId: "root" });
+    const sayOnRoot = form({ id: "f_say_root", method: "say", parentWindowId: "root" });
     const out2 = computeActivations(
-      thread({ contextWindows: [sayOnRoot] }),
+      thread({ windows: [sayOnRoot] }),
       index,
     );
     expect(out2).toEqual([]);
@@ -171,7 +174,7 @@ describe("computeActivations (trigger map)", () => {
   test("doc without activates_on never auto-activates", () => {
     const index = indexOf(doc("a", "A", undefined));
     const out = computeActivations(
-      thread({ contextWindows: [form({ method: "program" })] }),
+      thread({ windows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toEqual([]);
@@ -180,7 +183,7 @@ describe("computeActivations (trigger map)", () => {
   test("non-matching triggers produce no result", () => {
     const index = indexOf(doc("a", "A", { "method::root::talk": "show_content" }));
     const out = computeActivations(
-      thread({ contextWindows: [form({ method: "program" })] }),
+      thread({ windows: [form({ method: "program" })] }),
       index,
     );
     expect(out).toEqual([]);
@@ -192,7 +195,7 @@ describe("computeActivations (trigger map)", () => {
       docs.push(doc(`k${i}`, `desc ${i}`, { "method::root::program": "show_content" }));
     }
     const out = computeActivations(
-      thread({ contextWindows: [form({ method: "program" })] }),
+      thread({ windows: [form({ method: "program" })] }),
       indexOf(...docs),
     );
     expect(out.length).toBe(20);
@@ -213,7 +216,7 @@ describe("computeActivations (trigger map)", () => {
         } as unknown as ActivatesOn),
       );
       const out = computeActivations(
-        thread({ contextWindows: [form({ method: "program" })] }),
+        thread({ windows: [form({ method: "program" })] }),
         index,
       );
       expect(out).toHaveLength(1);
@@ -226,16 +229,12 @@ describe("computeActivations (trigger map)", () => {
 
   test("explicit knowledge_window forces full regardless of activates_on", () => {
     const index = indexOf(doc("a", "A", undefined));
-    const knWindow: ContextWindow = {
-      id: "kn_w_1",
-      parentObjectId: "root",
-      title: "a",
-      status: "open",
-      createdAt: 0,
-      object: { class: KNOWLEDGE_CLASS_ID, data: { path: "a", source: "explicit", body: "doc body" } },
+    const knWindow: WinSpec = {
+      ref: { id: "kn_w_1", class: KNOWLEDGE_CLASS_ID, parentWindowId: "root", title: "a", status: "open", createdAt: 0 },
+      data: { path: "a", source: "explicit", body: "doc body" },
     };
     const out = computeActivations(
-      thread({ contextWindows: [knWindow] }),
+      thread({ windows: [knWindow] }),
       index,
     );
     expect(out).toHaveLength(1);
