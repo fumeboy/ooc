@@ -2,7 +2,7 @@
 
 > 设计 spec（docs/ 工作稿）。日期 2026-06-21。
 > 设计权威最终回流 `.ooc-world-meta/.../children/object/self.md`（对象模型）+ `children/thinkable/knowledge/thread.md`（thread 的 close/cancel）——见 §9。
-> 状态：核心方向已敲定 → 过 4-lens 对抗 review（§10 修订一）→ 用户细化轮（§10 修订二：canceled 状态 / 删 close 逻辑 / construct 标记不可关窗）。**本稿只设计，不实现。** 开放点已清：D1（failed 同 done/canceled 排除）用户 2026-06-21 确认 yes；R5（object self.md 生命周期核心项）已落草案待 review。
+> 状态：核心方向已敲定 → 过 4-lens 对抗 review（§10 修订一）→ 用户细化轮（§10 修订二：canceled 状态 / 删 close 逻辑 / construct 标记不可关窗）。**本稿只设计，不实现。** 开放点全清（2026-06-21）：D1=yes（failed 同 done/canceled 排除）；R5 object self.md 核心 10 经用户 review 通过、push ooc-0（93baf7c）。**设计阶段完结，待执行**。
 
 ## 1. 背景与问题
 
@@ -158,4 +158,4 @@ v1 unactive **只对 fork 子线程**派发（§3.1 只认 fork）。**不**对 
 - **`unactive` 返回 `{ delete?: boolean }`**：`delete:true` → 把 object 彻底从 session 移除（含持久化文件）；缺省=只停用、磁盘留存。删除 refcount-0-gated + 对象自决 → 「无 destruct」精确化为「无独立 destruct 钩子 / 无强制销毁；删除是 unactive 的可选自决」。
 - **dispatch honor delete**：`dispatchUnactiveIfZero` 据返回值删持久化 + 移除内存实例（§3.3 step 4）。**v1 无 builtin 用 delete**（thread 返回 `{}` 保留为 canceled）；经合成测试 class 验证、非死槽。
 - **D1 确认**：failed 同 done/canceled 排除（用户 yes）。
-- **R5 落字**：object self.md 核心 10 草案已写入（含 `{delete?}` 语义），待 review。
+- **R5 定稿**：object self.md 核心 10 经用户 review 通过、push ooc-0（93baf7c）；核心 1-10 经用户逐条敲定。

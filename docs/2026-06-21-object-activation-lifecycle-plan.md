@@ -404,10 +404,10 @@ Expected: 0 FAIL。
 - [ ] **Step 2：close.ts:8-9** 头注：改指向 class `unactive` 钩子（refcount 归 0 触发）+ `closable` 标记。
 - [ ] **Step 3：commit**（对象树仓单独 commit + push ooc-0）
 
-### Task 6.2：object self.md 生命周期核心项（草案已落，待 review）
+### Task 6.2：object self.md 生命周期核心项 ✅ 已定稿
 
-- [x] **Step 1：落核心 10 草案**（2026-06-21 已写入 `children/object/self.md` 核心区，标「新增待 review 后定字」）：「对象有生命周期：construct 诞生 → active/unactive 按引用计数停启 → 无 destruct；context window 即引用；close 移除一个引用；construct 可标结构窗不可关。」
-- [ ] **Step 2：用户 review 通过后定字** → 去掉「待 review」标记 → 对象树 commit + push ooc-0（**当前未 commit/push，待 review**）。
+- [x] **Step 1：落核心 10**（`children/object/self.md`，含 construct/active/unactive + context window=引用 + `{delete?}` + close=移引用 + thread construct 标结构窗不可关）。
+- [x] **Step 2：用户 review 通过（2026-06-21）→ 定稿 → 对象树 commit + push ooc-0（93baf7c）。** 核心 1-10 经用户逐条敲定。
 
 ### Task 6.3：相邻权威对账 + 退役扫描
 
@@ -428,5 +428,5 @@ Expected: 0 FAIL。
 
 ## 已知未决（交回用户）
 - **D1**：已确认 yes（2026-06-21）——`failed` 同 `done`/`canceled` 排除，`ACTIVE_STATUS={running,waiting,paused}`（1.2）。
-- **R5**：object self.md 已落核心 10 草案（待用户 review；review 通过后随对象树 commit+push ooc-0）。
+- **R5**：✅ 已定稿——object self.md 核心 10 经用户 review 通过、push ooc-0（93baf7c）。无剩余待用户项。
 - **phase-2**：session 盘扫 / 成员对象 unactive / peer 跨对象 canceled（合 context.md core-11）/ active 派发 / `PersistableModule.delete?`（自定义持久化布局的删除；v1 删 objectDir 路径）/ thread-target 的 delete（childThreads 内存移除；v1 thread 不 delete）。
