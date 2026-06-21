@@ -40,6 +40,7 @@ import type {
 } from "../executable/contract.js";
 import type { ReadableContext } from "../readable/contract.js";
 import { referencedObjectId, dispatchActiveIfFirst } from "./object-lifecycle.js";
+import { shareObjectIntoTable } from "./session-object-table.js";
 
 /** 可选的持久化回调（persist leaf 在构造时挂接；缺省 no-op，使墙内自洽）。 */
 export interface WindowManagerHooks {
@@ -90,6 +91,8 @@ export class WindowManager implements RuntimeHandle {
     mgr.threadRef = thread;
     for (const inst of thread.contextWindows ?? []) {
       mgr.instances.set(inst.id, inst);
+      // B→A：把窗的 object 收敛到 session 对象表的单一实例（同 objectId 多窗共享同一引用）。
+      shareObjectIntoTable(thread, inst);
     }
     return mgr;
   }
@@ -158,6 +161,8 @@ export class WindowManager implements RuntimeHandle {
       instance.objectRef = { objectId: id, class: classId };
     }
     this.instances.set(id, instance);
+    // B→A：新实例登记进 session 对象表（成为该 objectId 的 canonical 单一实例）。
+    if (this.threadRef) shareObjectIntoTable(this.threadRef, instance);
     await this.hooks.reportContextEdit?.();
     // active 生命周期：新窗若引用某对象且其 session refcount 0→1，派发该对象 class 的 active 钩子。
     // 先把新窗同步进 threadRef.contextWindows（countSessionReferences 读它），再派发。

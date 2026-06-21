@@ -15,6 +15,7 @@ import type { LifecycleContext } from "../executable/contract.js";
 import { isSelfThreadWindow, objectDataOf, classOf } from "../_shared/types/context-window.js";
 import { isTalkLikeClass } from "../_shared/types/constants.js";
 import { objectDir, type FlowObjectRef } from "../persistable/common.js";
+import { evictObjectFromTable } from "./session-object-table.js";
 import { rm } from "node:fs/promises";
 
 /** refcount 活动态：退出态 done/failed/canceled 排除（spec §2.2/§3.2，D1 confirmed）。 */
@@ -156,4 +157,6 @@ async function removeObjectFromSession(
   ctxThread.contextWindows = (ctxThread.contextWindows ?? []).filter(
     (w) => referencedObjectId(w) !== targetId,
   );
+  // B→A：末-ref-evict —— 从 session 对象表删表项，杜绝残窗解析到悬空共享引用（核心 10「绝不留悬空引用」）。
+  evictObjectFromTable(ctxThread, targetId);
 }

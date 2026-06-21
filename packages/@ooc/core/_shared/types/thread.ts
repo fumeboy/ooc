@@ -527,6 +527,13 @@ export type ThreadContext = {
    * persisted. Undefined falls back to thread.contextWindows.
    */
   _renderedWindows?: OocObjectInstance[];
+  /**
+   * session 对象表（B→A）：`objectId → 唯一一个持 data 的对象实例`，挂内存线程树**根** thread。
+   * ContextWindow 是对它的引用——`window.object` 解析为指向表项的共享引用。Runtime-only；never
+   * persisted（磁盘真相在各 object 的 data.json / inline thread-context）；随 job 执行而在、随根
+   * thread GC 而释放。owner/解析见 `runtime/session-object-table.ts`。
+   */
+  _objectTable?: Map<string, OocObjectInstance["object"]>;
   /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
   persistence?: ThreadPersistenceRef;
 };
