@@ -1,4 +1,7 @@
 import { test, expect } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import "@ooc/core/runtime/register-builtins.js"; // 全量 boot（example 不在 register-builtins，下方直接装 Class）
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { Class as ExampleClass } from "@ooc/builtins/example/index.js";
@@ -37,6 +40,28 @@ test("example construct 产出初始 Data，bump 累加业务数据（self.bumpC
   // bump object method：可改 self（Data）。
   await objMethod("bump")!.exec({ object: { id: "x", class: "example" }, args: {} } as never, data, {});
   expect(data.bumpCount).toBe(1);
+});
+
+test("example persistable 维度：自定义 save/load round-trip 到人类可读 example.md（非默认 data.json）", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ooc-example-persist-"));
+  try {
+    const ctx = { dir } as never; // PersistableContext 只用到 dir
+    const persist = ExampleClass.persistable!;
+    const data: Data = { message: "line0\nline1", bumpCount: 2 }; // 多行 message 考验 parse
+    await persist.save!(ctx, data);
+
+    // 落的是人类可读的 example.md、非默认 JSON data.json。
+    const txt = await readFile(join(dir, "example.md"), "utf8");
+    expect(txt).toContain("bumpCount: 2");
+    expect(txt).toContain("line0\nline1");
+    expect(txt).not.toContain("{"); // 不是 JSON
+
+    // round-trip：load 自己 parse 回来，与原 data 等值（含多行 message）。
+    const loaded = await persist.load!(ctx);
+    expect(loaded).toEqual(data);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("example readable 渲染 bump_count + viewport 切片后的 message", () => {

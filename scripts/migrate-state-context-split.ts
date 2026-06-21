@@ -27,8 +27,9 @@
  *
  * Idempotent — re-runs find nothing left to do.
  *
- * Server bootstrap calls `runMigration({ worldDir, dryRun })` at startup; see
- * packages/@ooc/core/app/server/index.ts.
+ * One-shot CLI tool — NOT wired into server bootstrap; run manually when an old
+ * state.json-layout world needs migrating. `runMigration` is exported as a library
+ * entry only for callers that choose to invoke it programmatically.
  */
 
 import { readdir, readFile, rm, stat, writeFile, mkdir } from "node:fs/promises";
@@ -248,7 +249,7 @@ async function migrateSession(
   }
 }
 
-/** Library entry — call from server bootstrap. */
+/** Library entry — invoke programmatically or via this script's CLI (not auto-run at bootstrap). */
 export async function runMigration(opts: RunOpts): Promise<MigrationStats> {
   const flowsDir = join(opts.worldDir, "flows");
   const dryRun = !!opts.dryRun;
