@@ -82,6 +82,23 @@ export interface RefWindow<Win = unknown> extends WindowView<Win> {
 /** 拆分后 context window 的目标形态（P1 起切换；P0 未启用，故另名、暂不替换 ContextWindow）。 */
 export type ContextWindowSplit = InlineWindow | RefWindow;
 
+// ─────────────────── object 解析 accessor（P2：读者经此取 object data/class，而非直读窗）───────────────────
+// 目的：把「从窗取被引对象的 data/class」收敛到一处，让 P3 切 union（inline→object.data /
+// ref→objectCache 解析）只改这两个函数体、而非 ~37 个读者站点。**P2 阶段过渡实现**：当前
+// ContextWindow=OocObjectInstance、data/class 仍在窗上，故先原样返回；P3 切 union 时更新函数体。
+// 读者迁移规则：读「被引用对象的业务数据/注册 class」→ 用本 accessor；读「窗自身视角态」
+// （status/title/win/closable/id）→ 仍直读窗（那是 window 侧、不迁）。
+
+/** 取一个 context window 所引用对象的业务 data（inline 窗=内联 object；ref 窗=P3 起经 objectCache 解析）。 */
+export function objectDataOf<Data = unknown>(w: OocObjectInstance<Data>): Data {
+  return w.data;
+}
+
+/** 取一个 context window 所引用对象的**注册 class**（非投影 class；投影 class 渲染期算）。 */
+export function classOf(w: OocObjectInstance): string {
+  return w.class;
+}
+
 // ─────────────────────────── per-class Data / Win re-exports ──────────────────
 // 需要按 class narrow 的调用方：读 inst.class 后把 inst.data 断言成对应 Data。
 // 这些是 class 的纯业务数据（不含元信息/不含旧平铺别名）。
