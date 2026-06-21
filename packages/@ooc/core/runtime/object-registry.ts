@@ -210,12 +210,11 @@ export class ObjectRegistry {
 
   /**
    * 解析单个 window method（按名，沿继承链首个命中；查所有 window class 声明）。
-   * class 自有声明未命中时回退**默认 window method 表**（compress/expand 等通用能力，
-   * class 同名声明优先可 override）。
+   * **无通用默认表**：class 未声明即返 undefined（compress v2：compress/resize 是协议、各 class 自实现）。
    */
   resolveWindowMethod(classId: string, name: string): WindowMethod | undefined {
     // compress v2：无通用默认窗方法表——window method 只来自 class 自己 readable.window[] 声明
-    // （compress/resize 是协议，class 自实现：thread 窗自声明 compress/resize、内容窗声明 displayResize）。
+    // （compress/resize 是协议，各 class 各自实现：thread 窗自声明 compress/resize、内容窗各自实现 resize）。
     for (const cid of this.selfThenChain(classId)) {
       for (const decl of this.store.get(cid)?.readable?.window ?? []) {
         const found = decl.window_methods.find((wm) => wm.name === name);

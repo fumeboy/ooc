@@ -7,14 +7,32 @@
  * history 渲染 + viewport window method 与 terminal_process 同构，复用 _shared/process-readable。
  */
 
-import type { ReadableContext, ReadableModule } from "@ooc/core/readable/contract.js";
+import type { ReadableContext, ReadableModule, WindowMethod } from "@ooc/core/readable/contract.js";
 import {
   renderProcessHistory,
   makeSetHistoryWindowMethod,
   type ProcessWin,
 } from "@ooc/builtins/_shared/executable/process-readable.js";
 import type { Data } from "../types.js";
-import { displayResize } from "@ooc/core/readable/display-resize.js";
+
+/**
+ * window method：调本解释器窗展示档位 compressLevel（compress v2 resize 协议，本 class 自实现）。
+ * 0=全文 / 1=缩略 / 2=仅句柄——读出侧 xml.ts:projectByCompressLevel 据此投影输出详略。
+ */
+const resizeMethod: WindowMethod<Data, ProcessWin> = {
+  name: "resize",
+  description: "调本解释器窗展示档位 level：0=全输出，1=缩略，2=仅句柄。",
+  schema: {
+    args: {
+      level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
+    },
+  },
+  exec: (_ctx: ReadableContext, _self: Data, before: ProcessWin, args: Record<string, unknown>): ProcessWin => {
+    const raw = (args as { level?: number }).level;
+    const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
+    return { ...before, compressLevel: level };
+  },
+};
 
 const readable: ReadableModule<Data, ProcessWin> = {
   readable: (_ctx: ReadableContext, self: Data, win: ProcessWin) => ({
@@ -25,7 +43,7 @@ const readable: ReadableModule<Data, ProcessWin> = {
     {
       class: "interpreter_process",
       object_methods: ["exec", "close"],
-      window_methods: [makeSetHistoryWindowMethod("interpreter_process"), displayResize],
+      window_methods: [makeSetHistoryWindowMethod("interpreter_process"), resizeMethod],
     },
   ],
 };

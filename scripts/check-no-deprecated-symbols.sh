@@ -69,6 +69,11 @@ declare -a FORBIDDEN_PATTERNS=(
   "DEFAULT_WINDOW_METHODS"
   "threadExpand"
   "\\bfoldEvents\\b"
+  # expand 窗方法已退役（resize 替代）：禁 agent-facing affordance 串 `method=expand`（\\b 不命中 expand_step 等）。
+  "method=expand\\b"
+  "method=\\\"expand\\\""
+  # displayResize 共享实现已删（2026-06-21）：各内容窗各自实现 resize、无共享默认 const。
+  "displayResize"
   # —— 对象生命周期重构（2026-06-21）：dead destruct 槽复用为 active?/unactive?（refcount 0↔1）。
   #    退役符号防回潮（注：thread close 方法虽退役，但 closeMethod 是众 builtin 的通用局部名、
   #    不可作精确禁；其退役由 fork-unactive/tools 测试 + 设计文档守）：

@@ -95,12 +95,18 @@ const readable: ReadableModule<Data, ThreadWin> = {
     },
     // other-view：与对端 peer/sub 的对话（含父侧 fork 子窗）；可关（关窗经 close 原语、非 method——
     // 关 fork 子窗触发 thread.unactive 切 canceled + 级联）。
+    // **不挂 compress/resize**（Case E 裁决，2026-06-21）：summarizer-fold 是自我视角能力——折自己那条
+    // append-only 主历史（thread.events，单写者、index 稳）。talk transcript 是 filterTalkMessages 跨双流
+    // createdAt 重排的**派生视图**（index 不稳、且 harvest 从不写 talk 窗）。talk 压缩走 window-overflow +
+    // transcriptViewport（set_transcript_window 末 N/区间）+ inbox/outbox 持久可拉回，不 fold。
     {
       class: "talk",
       object_methods: ["say"],
-      window_methods: [setTranscriptWindowMethod, threadCompress, threadResize],
+      window_methods: [setTranscriptWindowMethod],
     },
     // self-view super：反思自视（恒在通道，同样不 surface close）；会话 method + 2 个 reflectable 沉淀 method。
+    // **保留 compress/resize**：reflect_request 是 self-view（isSelfThreadWindow）、折 thread.events（events
+    // 坐标、index 稳），summarizer-fold 与 self-view thread 同命、完全适用。
     {
       class: "reflect_request",
       object_methods: [

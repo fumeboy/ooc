@@ -25,7 +25,6 @@ import {
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { asTuple } from "@ooc/builtins/_shared/executable/utils.js";
 import type { Data } from "../types.js";
-import { displayResize } from "@ooc/core/readable/display-resize.js";
 
 const MAX_FILE_WINDOW_BYTES = 32768;
 
@@ -34,6 +33,8 @@ export interface FileWin {
   viewport: Viewport;
   lines?: [number, number];
   columns?: [number, number];
+  /** compress v2：展示档位（本窗 resize 设；renderer projectByCompressLevel 据此投影详略）。 */
+  compressLevel?: 0 | 1 | 2;
 }
 
 function sliceByLinesColumns(
@@ -97,6 +98,26 @@ const setRangeMethod: WindowMethod<Data, FileWin> = {
   },
 };
 
+/**
+ * window method：调本文件窗展示档位 compressLevel（compress v2 resize 协议）。
+ * 各内容窗 class 各自实现自己的 resize（无共享默认实现）——读出侧 xml.ts:projectByCompressLevel
+ * 据 compressLevel 投影：0 全文 / 1 缩略 / 2 仅句柄（折成路径标题）。
+ */
+const resizeMethod: WindowMethod<Data, FileWin> = {
+  name: "resize",
+  description: "调本文件窗展示档位 level：0=全文，1=缩略，2=仅路径句柄。",
+  schema: {
+    args: {
+      level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
+    },
+  },
+  exec: (_ctx: ReadableContext, _self: Data, before: FileWin, args: Record<string, unknown>): FileWin => {
+    const raw = (args as { level?: number }).level;
+    const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
+    return { ...before, compressLevel: level };
+  },
+};
+
 const readable: ReadableModule<Data, FileWin> = {
   readable: async (_ctx: ReadableContext, self: Data, win: FileWin) => {
     const viewport: Viewport = win?.viewport ?? DEFAULT_VIEWPORT;
@@ -137,7 +158,7 @@ const readable: ReadableModule<Data, FileWin> = {
     {
       class: "file",
       object_methods: ["reload", "edit", "close"],
-      window_methods: [setViewportMethod, setRangeMethod, displayResize],
+      window_methods: [setViewportMethod, setRangeMethod, resizeMethod],
     },
   ],
 };

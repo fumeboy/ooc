@@ -21,7 +21,6 @@ import {
 } from "@ooc/core/_shared/utils/viewport.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { Data } from "../types.js";
-import { displayResize } from "@ooc/core/readable/display-resize.js";
 
 /** search window 的默认 results viewport：末 50 条 match。 */
 export const DEFAULT_RESULTS_VIEWPORT: TranscriptViewport = Object.freeze({
@@ -31,6 +30,8 @@ export const DEFAULT_RESULTS_VIEWPORT: TranscriptViewport = Object.freeze({
 /** search 的**投影态**（与 Data 分离）：matches 渲染视口（末 N 条 / 固定区间）。 */
 export interface SearchWin {
   resultsViewport?: TranscriptViewport;
+  /** compress v2：展示档位（本窗 resize 设；renderer projectByCompressLevel 据此投影详略）。 */
+  compressLevel?: 0 | 1 | 2;
 }
 
 /**
@@ -103,6 +104,25 @@ const setResultsWindowMethod: WindowMethod<Data, SearchWin> = {
   },
 };
 
+/**
+ * window method：调本搜索窗展示档位 compressLevel（compress v2 resize 协议，本 class 自实现）。
+ * 0=全文 / 1=缩略 / 2=仅句柄——读出侧 xml.ts:projectByCompressLevel 据此投影 matches 详略。
+ */
+const resizeMethod: WindowMethod<Data, SearchWin> = {
+  name: "resize",
+  description: "调本搜索窗展示档位 level：0=全部匹配，1=缩略，2=仅句柄。",
+  schema: {
+    args: {
+      level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
+    },
+  },
+  exec: (_ctx: ReadableContext, _self: Data, before: SearchWin, args: Record<string, unknown>): SearchWin => {
+    const raw = (args as { level?: number }).level;
+    const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
+    return { ...before, compressLevel: level };
+  },
+};
+
 const readable: ReadableModule<Data, SearchWin> = {
   readable: (_ctx: ReadableContext, self: Data, win: SearchWin) => {
     const children: XmlNode[] = [
@@ -163,7 +183,7 @@ const readable: ReadableModule<Data, SearchWin> = {
     {
       class: "search",
       object_methods: ["open_match", "close"],
-      window_methods: [setResultsWindowMethod, displayResize],
+      window_methods: [setResultsWindowMethod, resizeMethod],
     },
   ],
 };
