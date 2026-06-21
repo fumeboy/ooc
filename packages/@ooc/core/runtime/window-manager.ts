@@ -152,6 +152,12 @@ export class WindowManager implements RuntimeHandle {
       createdAt: Date.now(),
       data,
     };
+    // object/context-window 拆分 P1：独立对象窗（非 inline 持久化）自描述为对某 object 的引用——
+    // 设 objectRef 让 referencedObjectId 直接解析；独立对象现 id===objectId（1:1）。
+    // inline 类（thread 自有窗 / talk / todo）不设，object 仍内联在 data。
+    if (!this.registry.isInlinePersisted(classId)) {
+      instance.objectRef = { objectId: id, class: classId };
+    }
     this.instances.set(id, instance);
     await this.hooks.reportContextEdit?.();
     // active 生命周期：新窗若引用某对象且其 session refcount 0→1，派发该对象 class 的 active 钩子。

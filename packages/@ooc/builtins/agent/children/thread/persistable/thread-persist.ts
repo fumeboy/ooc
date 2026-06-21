@@ -160,6 +160,12 @@ async function hydrateContextWindows(
         data = await readRuntimeObjectData(dataRef).catch(() => undefined);
       }
     }
+    // object/context-window 拆分 P1：非 inline（原 `_ref` entry）重建的独立对象窗自描述为引用——
+    // 设 objectRef 让 referencedObjectId 直接解析（refObjectId 优先、回落 env.id；现 1:1）。
+    // inline 整窗（state 即 context）不设，object 仍内联在 data。
+    const isInline = registry.isInlinePersisted(env.class);
+    const refObjectId =
+      (entry as { refObjectId?: string }).refObjectId ?? env.id;
     instances.push({
       id: env.id,
       class: env.class,
@@ -169,6 +175,7 @@ async function hydrateContextWindows(
       createdAt: env.createdAt ?? Date.now(),
       data: data ?? {},
       win: env.win,
+      ...(isInline ? {} : { objectRef: { objectId: refObjectId, class: env.class } }),
     });
   }
   return instances;

@@ -21,14 +21,18 @@ import { rm } from "node:fs/promises";
 const ACTIVE_STATUS = new Set(["running", "waiting", "paused"]);
 
 /**
- * 窗 → 它引用、且生命周期由本窗持有的对象 id。v1 仅 fork（其余 undefined）。
+ * 窗 → 它引用、且生命周期由本窗持有的对象 id。双读：
  *
- * 内存 `OocObjectInstance` **无** `_ref`/`refObjectId`（那只活在磁盘 thread-context.json entry，
- * hydrate 时丢弃）。故 v1 只解析 fork 子线程窗：talk-like class + isForkWindow + targetThreadId
- * 且非自己的 self 门面窗（self/creator 窗自引用不计数，spec §2.1）。peer 跨对象 / 独立成员 /
- * root 一律返回 undefined（v1 不派发，spec §3.1/§3.4）。
+ * 1. **独立对象窗**（object/context-window 拆分 P1）：携带 `objectRef`（自描述为引用）→ 直接返回
+ *    `objectRef.objectId`。这是 lifecycle phase-2「referencedObjectId 扩到 member 窗」的合并——独立
+ *    成员/对象窗（file/knowledge/… 各自落 state.json）现被纳入计数解析。
+ * 2. **fork 子线程窗**（无 objectRef）：talk-like class + isForkWindow + targetThreadId 且非自己的
+ *    self 门面窗（self/creator 窗自引用不计数，spec §2.1）→ 返回 targetThreadId。
+ *
+ * peer 跨对象 / self / root（既无 objectRef 又非 fork）一律 undefined（不派发，spec §3.1/§3.4）。
  */
 export function referencedObjectId(w: OocObjectInstance): string | undefined {
+  if (w.objectRef) return w.objectRef.objectId;
   if (isTalkLikeClass(w.class)) {
     const d = (w.data ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
     if (d.isForkWindow && d.targetThreadId && !isSelfThreadWindow(w.id)) {

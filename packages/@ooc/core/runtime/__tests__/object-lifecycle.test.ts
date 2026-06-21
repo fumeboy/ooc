@@ -69,16 +69,19 @@ describe("referencedObjectId (fork-only)", () => {
     expect(referencedObjectId(w)).toBeUndefined();
   });
 
-  test("非 talk-like class（file 等）→ undefined", () => {
+  test("独立成员窗（filesystem，带 objectRef）→ 该对象 id（P1 phase-2 合并）", () => {
+    // P1 起独立对象窗自描述为引用（objectRef）；referencedObjectId 双读直接返回 objectRef.objectId。
+    // 这是 lifecycle phase-2「referencedObjectId 扩到 member 窗」的合并——独立成员/对象窗纳入计数解析。
     const w = {
       id: "w_file",
       class: "_builtin/filesystem/file",
       title: "",
       status: "open",
       createdAt: 0,
-      data: { isForkWindow: true, targetThreadId: "x" },
+      data: {},
+      objectRef: { objectId: "w_file", class: "_builtin/filesystem/file" },
     } as OocObjectInstance;
-    expect(referencedObjectId(w)).toBeUndefined();
+    expect(referencedObjectId(w)).toBe("w_file");
   });
 
   test("缺 targetThreadId 的 fork 窗 → undefined", () => {
