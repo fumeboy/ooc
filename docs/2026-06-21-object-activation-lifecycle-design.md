@@ -2,7 +2,7 @@
 
 > 设计 spec（docs/ 工作稿）。日期 2026-06-21。
 > 设计权威最终回流 `.ooc-world-meta/.../children/object/self.md`（对象模型）+ `children/thinkable/knowledge/thread.md`（thread 的 close/cancel）——见 §9。
-> 状态：核心方向已敲定 → 过 4-lens 对抗 review（§10 修订一）→ 用户细化轮（§10 修订二：canceled 状态 / 删 close 逻辑 / construct 标记不可关窗）。**本稿只设计，不实现。** 剩一个低风险确认点（§7 D1：failed 是否同 done 排除）。
+> 状态：核心方向已敲定 → 过 4-lens 对抗 review（§10 修订一）→ 用户细化轮（§10 修订二：canceled 状态 / 删 close 逻辑 / construct 标记不可关窗）。**本稿只设计，不实现。** 开放点已清：D1（failed 同 done/canceled 排除）用户 2026-06-21 确认 yes；R5（object self.md 生命周期核心项）已落草案待 review。
 
 ## 1. 背景与问题
 
@@ -112,7 +112,7 @@ v1 unactive **只对 fork 子线程**派发（§3.1 只认 fork）。**不**对 
 
 ## 7. 风险与待确认点
 
-- **D1（待用户确认，低风险）**：`failed` 线程是否同 `done`/`canceled` 排除出 refcount？默认**排除**（终态）。
+- **D1（已确认 yes，2026-06-21）**：`failed` 线程同 `done`/`canceled` **排除**出 refcount（三者皆终态）。`ACTIVE_STATUS = {running, waiting, paused}`。
 - **R-canceled（新增 surface）**：`canceled` 是新终态，consumer 面要扫全：`ThreadStatus` 枚举（`thread.ts:398`）、UI status union（`flows/model.ts:71`）、worker 跨对象 end 同步（`worker.ts:298` 现判 `!=="done" && !=="failed"`，须补 canceled）、scheduler 不调度 canceled、thread-query 活动扫描（`thread-query.ts:37` 仅列 running/waiting，天然排除）。统一「canceled 同 done/failed 当终态/不可运行」。
 - **R-fork-self-exclusion**：子线程自己的 self 窗（`isSelfThreadWindow`）不计数（§2.1），故运行中的 fork 子线程在父关 fork 窗后 refcount 归 0。**characterization test 锁死**（删 closeMethod 前先加当前行为测试）。
 - **R-cascade 有界**：级联 DFS 用 per-call visited 集去重，防环；不用模块级 mutable（对抗 review P1-5）。

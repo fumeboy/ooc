@@ -373,10 +373,10 @@ Expected: 0 FAIL。
 - [ ] **Step 2：close.ts:8-9** 头注：改指向 class `unactive` 钩子（refcount 归 0 触发）+ `closable` 标记。
 - [ ] **Step 3：commit**（对象树仓单独 commit + push ooc-0）
 
-### Task 6.2：object self.md 生命周期核心项（**待用户听写**）
+### Task 6.2：object self.md 生命周期核心项（草案已落，待 review）
 
-- [ ] **Step 1：拟稿**（放 §四待议区，不落核心区）：「对象生命周期 = construct（一次）/ active / unactive（按 context window 引用计数 0↔1，可选）；无 destruct；构造可标结构窗不可关。」
-- [ ] **Step 2：标待听写**（核心 9 条听写锁定）。
+- [x] **Step 1：落核心 10 草案**（2026-06-21 已写入 `children/object/self.md` 核心区，标「新增待 review 后定字」）：「对象有生命周期：construct 诞生 → active/unactive 按引用计数停启 → 无 destruct；context window 即引用；close 移除一个引用；construct 可标结构窗不可关。」
+- [ ] **Step 2：用户 review 通过后定字** → 去掉「待 review」标记 → 对象树 commit + push ooc-0（**当前未 commit/push，待 review**）。
 
 ### Task 6.3：相邻权威对账 + 退役扫描
 
@@ -396,6 +396,6 @@ Expected: 0 FAIL。
 **类型一致：** `ObjectLifecycleHook.exec(ctx:LifecycleContext)`（0.1）↔ `active?/unactive?`（0.2）↔ `resolveActive/resolveUnactive`（0.4）↔ `dispatchUnactiveIfZero` 调 `hook.exec({thread,targetId,...})`（1.3）↔ thread `unactive.exec(ctx)`→`cancelSubtree(ctx.thread,ctx.targetId)`（3.2）—— 一致。`ThreadStatus` 含 canceled（0.3）↔ `ACTIVE_STATUS` 排除（1.2）↔ `TERMINAL` 含（3.2）↔ consumer（Phase 4）一致。`OocObjectInstance.closable`（0.2）↔ init 标记（3.1）↔ close 守卫（2.1）一致。**无 `_ref`/diskScan/inFlight/THREAD_CLASS_ID 分支/active dispatch。**
 
 ## 已知未决（交回用户）
-- **D1**：`failed` 是否同 `done`/`canceled` 排除（默认排除，1.2 `ACTIVE_STATUS`）。
-- **R5**：object self.md 生命周期核心项定字（6.2，须听写）。
+- **D1**：已确认 yes（2026-06-21）——`failed` 同 `done`/`canceled` 排除，`ACTIVE_STATUS={running,waiting,paused}`（1.2）。
+- **R5**：object self.md 已落核心 10 草案（待用户 review；review 通过后随对象树 commit+push ooc-0）。
 - **phase-2**：session 盘扫 / 成员对象 unactive / peer 跨对象 canceled（合 context.md core-11）/ active 派发。
