@@ -23,7 +23,7 @@ import {
   type ReactNode,
 } from "react";
 import type { ContextWindow } from "../../context-snapshot";
-import { BUILTIN_VISIBLE } from "./builtin-visible-registry";
+import { BUILTIN_VISIBLE, type WindowVisibleComp } from "./builtin-visible-registry";
 import { endpoints } from "../../../../transport/endpoints";
 import { requestJson } from "../../../../transport/http";
 import { usePeerReadable } from "../../../objects";
@@ -49,9 +49,27 @@ export function resolveWindowVisibleKind(
   return { kind: "dynamic", objectId: window.class, scope: "stone", sessionId };
 }
 
-type WindowComp = ComponentType<{ window: ContextWindow }>;
+// window 视觉组件 props 契约与 builtin 注册表一致（含可选 flow-scope callMethod）。
+type WindowComp = WindowVisibleComp;
 
 const dynamicCache = new Map<string, WindowComp>();
+
+/**
+ * 为某个 window 合成 flow-scope callMethod：POST /api/flows/<sid>/<window.id>/call_method。
+ * window.id == 该 object 实例 id（与 storybook visible TC-VIS-06 的 oid 同源）。
+ * 返回已解包的 method result.data（与 ObjectClientRenderer.callMethodFor 行为一致）。
+ */
+function makeWindowCallMethod(sessionId: string, objectId: string) {
+  return async (method: string, args: object = {}) => {
+    const url = endpoints.flowCallMethod(sessionId, objectId);
+    const response = await requestJson<{ message?: string; data?: unknown; err?: string }>(url, {
+      method: "POST",
+      body: JSON.stringify({ method, args }),
+    });
+    if (response.err) throw new Error(response.err ?? `method '${method}' failed`);
+    return response.data ?? response.message;
+  };
+}
 
 /**
  * 无 visible 时的回退：展示该 object/window 的 **readable 文本**（对外呈现文本，
@@ -163,9 +181,13 @@ export function WindowVisible({
 }) {
   const kind = resolveWindowVisibleKind(window, sessionId);
 
+  // flow scope（有 sessionId）才注入 callMethod；window.id = object 实例 id。
+  const callMethod =
+    sessionId && window.id ? makeWindowCallMethod(sessionId, window.id) : undefined;
+
   if (kind.kind === "static") {
     const C = BUILTIN_VISIBLE[kind.key]!;
-    return <C window={window} />;
+    return <C window={window} callMethod={callMethod} />;
   }
 
   // 无 visible 时优先回退 readable 文本（对外呈现），readable 也没有再退 JSON。
@@ -189,7 +211,7 @@ export function WindowVisible({
   return (
     <WindowVisibleErrorBoundary fallback={<Fallback window={window} />}>
       <Suspense fallback={<div className="llm-input-empty">加载 visible…</div>}>
-        <C window={window} />
+        <C window={window} callMethod={callMethod} />
       </Suspense>
     </WindowVisibleErrorBoundary>
   );

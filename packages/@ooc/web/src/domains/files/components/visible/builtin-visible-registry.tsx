@@ -32,27 +32,37 @@ import DoWindowDetail from "./DoWindowDetail";
 import TalkWindowDetail from "./TalkWindowDetail";
 
 /**
- * builtin window type → 视觉组件。组件约定 `({ window }) => JSX`。
+ * builtin window 视觉组件 props 契约。`callMethod` 仅 flow scope（有 sessionId）注入——
+ * 让组件经 HTTP /call_method 调 visible/server 改 object data（如 todo set_content）；
+ * 无注入时组件优雅降级为只读。多数 builtin 只读、忽略 callMethod，类型上统一可选承接。
+ */
+export type WindowVisibleComp = ComponentType<{
+  window: ContextWindow;
+  callMethod?: (method: string, args?: object) => Promise<unknown>;
+}>;
+
+/**
+ * builtin window type → 视觉组件。组件约定 `({ window, callMethod? }) => JSX`。
  *
  * builtin `visible/index` 组件签名是 `{ window: OocObjectInstance<Data, Win> }`（信封 + data + win）；
  * web `ContextWindow` 是同形镜像，但各 class 的 `data` 形态精确到具体 class，与组件期望的具体 `Data`
- * 不互相 assignable，故经 `unknown` 统一收口为 `ComponentType<{ window: ContextWindow }>`。
+ * 不互相 assignable，故经 `unknown` 统一收口为 `WindowVisibleComp`。
  */
-export const BUILTIN_VISIBLE: Record<string, ComponentType<{ window: ContextWindow }>> = {
-  file: FileWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  knowledge: KnowledgeWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  todo: TodoWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  search: SearchWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  skill_index: SkillIndexWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  plan: PlanWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  terminal_process: TerminalProcessWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  interpreter_process: InterpreterProcessWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  method_exec: MethodExecWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
-  feishu_chat: FeishuChatWindowDetail,
-  feishu_doc: FeishuDocWindowDetail,
-  do: DoWindowDetail,
+export const BUILTIN_VISIBLE: Record<string, WindowVisibleComp> = {
+  file: FileWindowDetail as unknown as WindowVisibleComp,
+  knowledge: KnowledgeWindowDetail as unknown as WindowVisibleComp,
+  todo: TodoWindowDetail as unknown as WindowVisibleComp,
+  search: SearchWindowDetail as unknown as WindowVisibleComp,
+  skill_index: SkillIndexWindowDetail as unknown as WindowVisibleComp,
+  plan: PlanWindowDetail as unknown as WindowVisibleComp,
+  terminal_process: TerminalProcessWindowDetail as unknown as WindowVisibleComp,
+  interpreter_process: InterpreterProcessWindowDetail as unknown as WindowVisibleComp,
+  method_exec: MethodExecWindowDetail as unknown as WindowVisibleComp,
+  feishu_chat: FeishuChatWindowDetail as unknown as WindowVisibleComp,
+  feishu_doc: FeishuDocWindowDetail as unknown as WindowVisibleComp,
+  do: DoWindowDetail as unknown as WindowVisibleComp,
   // 会话窗三 class 同形（H2）：talk other-view + thread/reflect_request self-view 共用 TalkWindowDetail。
-  talk: TalkWindowDetail,
-  thread: TalkWindowDetail,
-  reflect_request: TalkWindowDetail,
+  talk: TalkWindowDetail as unknown as WindowVisibleComp,
+  thread: TalkWindowDetail as unknown as WindowVisibleComp,
+  reflect_request: TalkWindowDetail as unknown as WindowVisibleComp,
 };

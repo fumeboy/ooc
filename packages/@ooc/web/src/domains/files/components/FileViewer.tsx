@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { FileContent } from "../model";
 import { formatFileContent } from "../formatter";
 import { EmptyState } from "../../../shared/ui/EmptyState";
@@ -73,7 +73,11 @@ export function FileViewer({
   editable?: boolean;
   saving?: boolean;
   onChange?: (content: string) => void;
-  onSave?: () => void;
+  /**
+   * 保存回调。返回 Promise 时，resolve 视为保存成功 → FileViewer 自动退出编辑态回只读预览；
+   * reject（如 409 未确认覆盖被用户取消）则保留编辑态，让用户重试或取消。
+   */
+  onSave?: () => void | Promise<void>;
   thread?: ThreadContext;
   selfObjectId?: string;
   onUserReply?: (text: string) => Promise<void>;
@@ -86,6 +90,25 @@ export function FileViewer({
   // 必须 hooks 在条件分支前。snapshot 只随 thread ref 变化而变化；ref 稳定时
   // ContextSnapshotViewer 内部的 useMemo / useEffect 不会被重置 → 选中态/展开态保留。
   const snapshot = useMemo(() => (thread ? threadToSnapshot(thread) : undefined), [thread]);
+  // `editable` 表示"此文件白名单允许编辑"（self.md / readable.md / executable/index.ts /
+  // visible/index.tsx / knowledge/<name>.md）。默认仍走只读富预览 + 一个「编辑」入口；
+  // 点开后才进 CodeMirror 编辑态。这样既不破坏只读用法，也让编辑是显式动作。
+  const [editing, setEditing] = useState(false);
+  // 进入编辑态当作"内容即编辑器值"——只有当真正 editing 时才把渲染分支让给 CodeMirror。
+  const inEdit = editable && editing;
+  // 只读富预览底部的「编辑」入口；仅白名单可编辑文件渲染。点开进 CodeMirror 编辑态。
+  const editEntry = editable ? (
+    <button className="btn" onClick={() => setEditing(true)}>编辑</button>
+  ) : null;
+  // 保存：await onSave；成功 resolve 才退出编辑态（失败/取消保留，便于重试）。
+  const handleSave = async () => {
+    try {
+      await onSave?.();
+      setEditing(false);
+    } catch {
+      // 保留编辑态——错误（含 409 覆盖未确认）由上层 patch 到 error，用户可重试或取消。
+    }
+  };
   if (!file) {
     // H-2: URL 路径明确指定了文件 (`/files/<path>`) 但 fetch 失败 → 不是"没选文件",
     // 是"文件不存在 / 不在 world 内"。优先呈现错误,避免与"未选文件"的占位混淆。
@@ -102,11 +125,11 @@ export function FileViewer({
     }
     return <EmptyState title="Select a file" detail="Choose a file from the tree to preview its text content." />;
   }
-  if (!editable && isLlmInputJsonPath(file.path)) {
+  if (!inEdit && isLlmInputJsonPath(file.path)) {
     return <LLMInputJsonViewer file={file} />;
   }
-  // 只读模式下按扩展名 dispatch 专用 viewer。editable 模式（knowledge 写入）仍用 CodeMirror。
-  if (!editable) {
+  // 只读 / 编辑-eligible 但未进编辑态时按扩展名 dispatch 专用 viewer；真正 editing 才用 CodeMirror。
+  if (!inEdit) {
     // Object visible entry (stones/*/visible/index.tsx or legacy client/index.tsx) —
     // render the actual React component with a 已渲染/源码 toggle, exactly like
     // /stones/<id> shortcut does. This is what makes [[ui file-link]] → visible
@@ -129,6 +152,7 @@ export function FileViewer({
           <div className="file-viewer-footer">
             <span className="pill">{file.size}B</span>
             <span className="pill">markdown</span>
+            {editEntry}
           </div>
         </div>
       );
@@ -177,16 +201,23 @@ export function FileViewer({
   return (
     <div className="file-viewer">
       <CodeMirror
-        className={`code-editor ${editable ? "is-editable" : "is-readonly"}`}
+        className={`code-editor ${inEdit ? "is-editable" : "is-readonly"}`}
         value={formatted.content}
-        editable={editable}
+        editable={inEdit}
         extensions={extensionsFor(file.path)}
         basicSetup={{ lineNumbers: true, foldGutter: true }}
         onChange={(value) => onChange?.(value)}
       />
       <div className="file-viewer-footer">
         <span className="pill">{file.size}B</span>
-        {editable && <button className="btn" disabled={saving} onClick={onSave}>{saving ? "Saving..." : "Save"}</button>}
+        {inEdit ? (
+          <>
+            <button className="btn primary" disabled={saving} onClick={handleSave}>{saving ? "Saving..." : "保存"}</button>
+            <button className="btn" disabled={saving} onClick={() => setEditing(false)}>取消</button>
+          </>
+        ) : (
+          editEntry
+        )}
       </div>
     </div>
   );

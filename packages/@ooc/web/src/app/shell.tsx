@@ -5,7 +5,7 @@ import { fetchFile, fetchTree, type FileTreeNode, type TreeScope } from "../doma
 import { fetchFlows, flowTitle, pauseFlowSession, resumeFlowSession, type FlowSession } from "../domains/flows";
 import { fetchSelfFirstLine } from "../domains/objects";
 import { createSessionWithObject } from "../domains/sessions";
-import { createKnowledgeDirectory, createKnowledgeFile, createStone, fetchStones, updateKnowledgeFile } from "../domains/stones";
+import { createKnowledgeDirectory, createKnowledgeFile, createStone, fetchStones, putStoneFile, updateKnowledgeFile } from "../domains/stones";
 import { messageFromError } from "../transport/errors";
 import { AppLayout } from "./layout/AppLayout";
 import { MainPanel } from "./layout/MainPanel";
@@ -18,7 +18,7 @@ import {
 import { Sidebar } from "./layout/Sidebar";
 import { ThreadHeader } from "./layout/ThreadHeader";
 import { initialState, type AppState, type SessionThread } from "./state";
-import { deriveClientPath } from "../domains/clients/client-path";
+import { deriveClientPath, editableStoneFileTarget } from "../domains/clients/client-path";
 import { scopeOf, toPath, useRouteState, type RouteState } from "./routing";
 import { recordVisit } from "./nav-history";
 
@@ -184,12 +184,20 @@ export function AppShell() {
     let cancelled = false;
     if (route.kind !== "file") {
       // 离开 file 视图 → 清缓存
-      patch({ activeFile: undefined, activeStoneObjectId: undefined, activeKnowledgePath: undefined, fileDirty: false });
+      patch({ activeFile: undefined, activeStoneObjectId: undefined, activeKnowledgePath: undefined, activeStoneFileRelPath: undefined, fileDirty: false });
       return;
     }
     const path = route.path;
-    const editable = knowledgeTarget(path);
-    patch({ activeFile: undefined, activeStoneObjectId: editable?.objectId, activeKnowledgePath: editable?.path, fileDirty: false });
+    // 两类可编辑来源互斥：knowledge（pool 入口）vs stone 源文件（版本化 putStoneFile）。
+    const knowledge = knowledgeTarget(path);
+    const stoneFile = knowledge ? undefined : editableStoneFileTarget(path);
+    patch({
+      activeFile: undefined,
+      activeStoneObjectId: knowledge?.objectId ?? stoneFile?.objectId,
+      activeKnowledgePath: knowledge?.path,
+      activeStoneFileRelPath: stoneFile?.relPath,
+      fileDirty: false,
+    });
     fetchFile(path)
       .then((f) => { if (!cancelled) patch({ activeFile: f }); })
       .catch((e) => { if (!cancelled) patch({ error: messageFromError(e) }); });
@@ -410,15 +418,41 @@ export function AppShell() {
     }
   }
 
+  /**
+   * 保存当前可编辑文件。
+   *
+   * 两条路径：knowledge（pool 入口 updateKnowledgeFile）/ stone 源文件（版本化 putStoneFile）。
+   * stone 源文件命中 409 覆盖护栏时，弹 confirm；用户确认则带 confirmOverwrite 重试，
+   * 取消则 throw 让 FileViewer 保留编辑态。失败一律 throw（不静默吞），由 FileViewer 不退出编辑态。
+   */
   async function handleSaveFile() {
-    if (!state.activeFile || !state.activeStoneObjectId || !state.activeKnowledgePath) return;
+    if (!state.activeFile || !state.activeStoneObjectId) return;
+    const content = state.activeFile.content;
+    const objectId = state.activeStoneObjectId;
     patch({ savingFile: true, error: undefined });
     try {
-      await updateKnowledgeFile({ objectId: state.activeStoneObjectId, path: state.activeKnowledgePath, content: state.activeFile.content });
+      if (state.activeStoneFileRelPath) {
+        let res = await putStoneFile({ objectId, path: state.activeStoneFileRelPath, content });
+        if (res.status === "overwrite-required") {
+          const ok = window.confirm(`${res.message}\n\n该文件已有内容，保存会覆盖。确认覆盖？`);
+          if (!ok) {
+            patch({ savingFile: false });
+            throw new Error("已取消覆盖");
+          }
+          res = await putStoneFile({ objectId, path: state.activeStoneFileRelPath, content, confirmOverwrite: true });
+          if (res.status !== "ok") throw new Error("覆盖确认后仍未保存成功");
+        }
+      } else if (state.activeKnowledgePath) {
+        await updateKnowledgeFile({ objectId, path: state.activeKnowledgePath, content });
+      } else {
+        patch({ savingFile: false });
+        return;
+      }
       patch({ savingFile: false, fileDirty: false });
       await refreshBasics(scope);
     } catch (error) {
       patch({ error: messageFromError(error), savingFile: false });
+      throw error; // 让 FileViewer 保留编辑态，便于重试 / 取消
     }
   }
 
@@ -466,7 +500,7 @@ export function AppShell() {
       sidebarOpen={sidebarOpen}
       onCloseSidebar={() => setSidebarOpen(false)}
       sidebar={<Sidebar scope={scope} flows={state.flows} tree={state.tree} activePath={activePath} activeSessionId={activeSessionId} activeSessionTitle={(() => { const f = state.flows.find((flow) => flow.sessionId === activeSessionId); return f ? flowTitle(f) : activeSessionId; })()} scopeQuery={location.search} showSessions={showSessions} onToggleSessions={() => setShowSessions((prev) => !prev)} onShowWelcome={handleShowWelcome} onScope={handleScope} onNode={handleNode} onSession={handleSession} onCreateStone={() => setStoneModalOpen(true)} onCreateKnowledge={(node) => { const target = knowledgeDirectoryTarget(node); if (target) setKnowledgeModal(target); }} />}
-      main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && state.activeKnowledgePath)} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />}
+      main={<MainPanel route={route} isWelcome={isWelcome} stones={state.stones} onCreateSession={handleCreate} file={state.activeFile} path={activePath} error={state.error} loading={state.loading} editableFile={Boolean(state.activeStoneObjectId && (state.activeKnowledgePath || state.activeStoneFileRelPath))} savingFile={state.savingFile} onFileChange={(content) => state.activeFile && patch({ activeFile: { ...state.activeFile, content, size: content.length }, fileDirty: true })} onFileSave={handleSaveFile} thread={state.thread} selfObjectId={activeObjectId} onUserReply={handleSend} onRefresh={refreshActiveView} threadHeader={activeObjectId ? <ThreadHeader objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} sessionThreads={state.sessionThreads} onSelectThread={handleSelectThread} /> : undefined} knownSessionIds={knownSessionIds} flowsReady={state.flowsHash !== undefined} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onToggleSidebar={() => setSidebarOpen((prev) => !prev)} />}
       right={activeSessionId && activeObjectId && activeThreadId && !(activeObjectId === "user" && activeThreadId === "root") ? <RightPanel sessionId={activeSessionId} objectId={activeObjectId} threadId={activeThreadId} thread={state.thread} paused={isSessionPaused} pauseBusy={pauseBusy} onSend={handleSend} onTogglePause={handleToggleSessionPause} layoutMode={layoutMode} onToggleLayoutMode={toggleLayoutMode} onShowContextWindows={handleShowContextWindows} /> : undefined}
     >
       <CreateStoneModal open={stoneModalOpen} draft={stoneDraft} onDraft={setStoneDraft} onClose={() => setStoneModalOpen(false)} onSubmit={handleCreateStone} />

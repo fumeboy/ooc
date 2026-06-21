@@ -8,6 +8,12 @@ export const endpoints = {
   stoneKnowledgeDirectories: (objectId: string) => `/api/pools/${encodeURIComponent(objectId)}/knowledge/directories`,
   stoneKnowledgeFiles: (objectId: string) => `/api/pools/${encodeURIComponent(objectId)}/knowledge/files`,
   /**
+   * A1：版本化写入一个 stone 源文件（self.md / readable.md / executable/index.ts /
+   * visible/index.tsx / knowledge/<name>.md）。body {path, content}；覆盖须带 header
+   * `X-Overwrite-Confirm: true`，否则 backend 抛 OVERWRITE_REQUIRES_CONFIRM(409)。
+   */
+  stoneFile: (objectId: string) => `/api/stones/${encodeURIComponent(objectId)}/file`,
+  /**
    * frontend 不假设 backend client/index.tsx 路径，通过本 endpoint 拿权威 absPath / fsUrl。
    * stone：scope=stone；flow：scope=flow，需带 sessionId + page query。
    */

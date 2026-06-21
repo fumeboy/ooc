@@ -61,6 +61,36 @@ export function isClientEntryPath(path: string): boolean {
 }
 
 /**
+ * A1 可编辑 stone 源文件白名单（与 backend assertEditableStonePath / EDITABLE_STONE_EXACT 对齐）。
+ * 仅这几个精确路径走版本化 PUT /api/stones/:id/file。knowledge/<name>.md 走独立 pool 入口。
+ */
+const EDITABLE_STONE_RELPATHS = new Set([
+  "self.md",
+  "readable.md",
+  "executable/index.ts",
+  "visible/index.tsx",
+]);
+
+/**
+ * 从 world-relative 文件路径解析出 (objectId, stone 相对路径)，当且仅当它是白名单可编辑
+ * stone 源文件时返回。支持 flat（`stones/<id>/self.md`）与 versioning
+ * （`stones/<branch>/objects/<id>/self.md`）两种 layout。
+ */
+export function editableStoneFileTarget(
+  path: string,
+): { objectId: string; relPath: string } | undefined {
+  const flat = /^stones\/([^/]+)\/(.+)$/.exec(path);
+  const versioned = /^stones\/[^/]+\/objects\/([^/]+)\/(.+)$/.exec(path);
+  // versioning layout 优先（其 group2 已剥掉 objects/<id> 前缀）；否则 flat。
+  const m = versioned ?? flat;
+  if (!m) return undefined;
+  const objectId = m[1]!;
+  const relPath = m[2]!;
+  if (!EDITABLE_STONE_RELPATHS.has(relPath)) return undefined;
+  return { objectId, relPath };
+}
+
+/**
  * 从 ClientTarget 反向推导 world-relative 路径。
  * 用 canonical flat layout + visible/ (新路径)，保证 shell.tsx shortcut → 长路径
  * 推导和 toPath shortcut 方向一致。

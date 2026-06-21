@@ -16,6 +16,12 @@ export type AppState = {
   activeFile?: FileContent;
   activeStoneObjectId?: string;
   activeKnowledgePath?: string;
+  /**
+   * A1：当前文件是白名单 stone 源文件（self.md / readable.md / executable/index.ts /
+   * visible/index.tsx）时，存其 stone 相对路径；save 走版本化 putStoneFile。与
+   * activeKnowledgePath（走 pool 入口）互斥。
+   */
+  activeStoneFileRelPath?: string;
   fileDirty: boolean;
   savingFile: boolean;
   activeSessionId?: string;
