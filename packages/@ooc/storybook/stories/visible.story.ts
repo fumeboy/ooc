@@ -101,6 +101,9 @@ export async function runControlPlane(): Promise<StoryResult> {
     // stone 根 index.ts 的 `export const Class.visibleServer`（VisibleServerModule）装配，
     // method 三参 `(ctx, self, args)`、返回 ObjectMethodResult `{ data }`。
     // call_method 经 registry.resolveVisibleServer 取方法（退役 executable 的 for_ui_access）。
+    // callMethod 走 flow scope（stone scope 不调 object 程序——运行时/data 编辑归 flow session）：
+    // 先建 stone 身份（含 visible/index.tsx + visibleServer Class），再在 flow session 下实例化该 object，
+    // 经 flows /call_method 调 greet。client-source-url 仍由 stone scope 暴露组件入口。
     {
       const id = "ui_loop";
       await postJson(app, "/api/stones", { objectId: id });
@@ -109,9 +112,12 @@ export async function runControlPlane(): Promise<StoryResult> {
       writeStoneFile(baseDir, id, "index.ts",
         `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";\nexport const Class: OocClass = { visibleServer: { methods: [{ name: "greet", description: "greet", exec: (ctx, self, args) => ({ data: { hello: args.name } }) }] } };`);
       await sleep(300);
+      const sid = "vis-loop";
+      await createFlowSession(baseDir, sid);
+      await createFlowObject({ baseDir, sessionId: sid, objectId: id });
       const urlResp = await getJson(app, `/api/objects/stone/${id}/client-source-url`);
-      const callResp = await postJson(app, `/api/stones/${id}/call_method`, { method: "greet", args: { name: "ooc" } });
-      rec.ok("TC-VIS-05", "UI↔行为闭环：visible 组件存在 + callMethod 端点调通 visible/server",
+      const callResp = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "greet", args: { name: "ooc" } });
+      rec.ok("TC-VIS-05", "UI↔行为闭环：visible 组件存在 + flow callMethod 端点调通 visible/server",
         urlResp.status === 200 && callResp.json?.data?.hello === "ooc",
         `urlOk=${urlResp.status}, call=${JSON.stringify(callResp.json?.data)}`);
     }

@@ -3,6 +3,7 @@
  * Object 为自己写 executable/server 方法，运行时热更。
  */
 import { setTimeout as sleep } from "node:timers/promises";
+import { createFlowSession, createFlowObject } from "@ooc/core/persistable";
 import { postJson, putJson, getJson, writeStoneFile } from "../_harness/control-plane";
 import { story, check, type Story } from "../_harness/story";
 
@@ -33,20 +34,24 @@ export const L7_STORIES: Story[] = [
   story({
     id: "L7-UI-METHOD-HOTRELOAD",
     layer: "programmable",
-    expectation: "改 visible/server 方法后 /call_method 反映新逻辑",
-    design: "programmable（Wave4）：visible/server 方法热更后 HTTP 调用走新实现。server-loader 热更（index.ts mtime）+ api.call-method + resolveVisibleServer",
+    expectation: "改 visible/server 方法后 flow /call_method 反映新逻辑",
+    design: "programmable（Wave4）：visible/server 方法热更后 HTTP 调用走新实现（flow scope；stone scope 不调 object 程序）。server-loader 热更（index.ts mtime）+ flows/api.call-method + resolveVisibleServer",
     run: async ({ app, baseDir }) => {
       const id = "prog_ui";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "index.ts",
         `export const Class = { visibleServer: { methods: [{ name: "f", description: "f", exec: () => ({ data: { v: 1 } }) }] } };`);
       await sleep(350);
-      let r = await postJson(app, `/api/stones/${id}/call_method`, { method: "f", args: {} });
+      // call_method 走 flow scope（运行时/data 编辑归 flow session）。
+      const sid = "l7-prog-ui";
+      await createFlowSession(baseDir, sid);
+      await createFlowObject({ baseDir, sessionId: sid, objectId: id });
+      let r = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "f", args: {} });
       check(JSON.stringify(r.json?.data) === JSON.stringify({ v: 1 }), `v1 data=${JSON.stringify(r.json?.data)}`);
       writeStoneFile(baseDir, id, "index.ts",
         `export const Class = { visibleServer: { methods: [{ name: "f", description: "f", exec: () => ({ data: { v: 2 } }) }] } };`);
       await sleep(350);
-      r = await postJson(app, `/api/stones/${id}/call_method`, { method: "f", args: {} });
+      r = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "f", args: {} });
       check(JSON.stringify(r.json?.data) === JSON.stringify({ v: 2 }), `热更后 data=${JSON.stringify(r.json?.data)}`);
     },
   }),

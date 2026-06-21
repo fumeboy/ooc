@@ -58,7 +58,7 @@ async function main() {
   // 通过 POST /api/flows/:sid/talk-windows 追加一个 sb_demo 主动发的消息——不行，那个只从 user→target。
   // 换方式：直接用 deliverTalkMessage 反方向投递（sb_demo as source, user as target）。
   // 但 HTTP 侧没有这个 API。直接写磁盘：通过 backend 跑一段 ad-hoc 代码。
-  // 最简单：直接用 backend 的 POST /api/stones/:id/call_method 跑一个"发送回复"的方法。
+  // 最简单：直接用 backend 的 flow scope POST /api/flows/:sid/:id/call_method 跑一个"发送回复"的方法。
   // sb_demo 没这个方法——我们直接用文件系统追加到双方 thread。
 
   // 先找到 sb_demo 和 user 的 thread 路径

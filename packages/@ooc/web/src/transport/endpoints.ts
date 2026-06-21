@@ -62,9 +62,6 @@ export const endpoints = {
    */
   runtimeDecidePermission: (sessionId: string, objectId: string, threadId: string) =>
     `/api/runtime/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/threads/${encodeURIComponent(threadId)}/permission`,
-  /** Stone 级 visible/server 方法调用入口（call_method）。 */
-  stoneCallMethod: (objectId: string) =>
-    `/api/stones/${encodeURIComponent(objectId)}/call_method`,
   /** Flow object 级 visible/server 方法调用入口（call_method）。 */
   flowCallMethod: (sessionId: string, objectId: string) =>
     `/api/flows/${encodeURIComponent(sessionId)}/${encodeURIComponent(objectId)}/call_method`,

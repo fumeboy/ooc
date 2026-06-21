@@ -81,12 +81,13 @@ async function resolveClientSource(target: ClientTarget): Promise<ClientSourceRe
   }
 }
 
-function callMethodFor(target: ClientTarget) {
+/**
+ * stone scope 是只读身份展示（stone scope 不调 object 程序——运行时/data 编辑归 flow session）。
+ * 仅 flow scope 注入 callMethod（经 flows `/call_method` → visible/server dispatch）。
+ */
+function callMethodFor(target: Extract<ClientTarget, { scope: "flow" }>) {
   return async (method: string, args: object = {}) => {
-    const url =
-      target.scope === "stone"
-        ? endpoints.stoneCallMethod(target.objectId)
-        : endpoints.flowCallMethod(target.sessionId, target.objectId);
+    const url = endpoints.flowCallMethod(target.sessionId, target.objectId);
     const body = JSON.stringify({ method, args });
     // 废 ui_methods 维度后，call_method 响应即标准 method result（ObjectMethodResult）：
     // 结构化数据走 data、消息文本走 message，err 非空即失败。
@@ -164,13 +165,12 @@ export function ObjectClientRenderer({
   extraProps,
 }: ObjectClientRendererProps) {
   const componentProps = useMemo<ClientComponentProps>(() => {
-    const base: ClientComponentProps = {
-      ...extraProps,
-      callMethod: callMethodFor(target),
-    };
+    const base: ClientComponentProps = { ...extraProps };
     if (target.scope === "stone") {
+      // stone scope = 只读身份展示，不注入 callMethod。
       base.objectName = target.objectId;
     } else {
+      base.callMethod = callMethodFor(target);
       base.sessionId = target.sessionId;
       base.objectName = target.objectId;
     }

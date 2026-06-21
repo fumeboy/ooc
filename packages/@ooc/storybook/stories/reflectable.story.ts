@@ -8,12 +8,23 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { stoneDir as realStoneDir } from "@ooc/core/persistable";
+import { stoneDir as realStoneDir, createFlowSession, createFlowObject } from "@ooc/core/persistable";
 import { mkServer, postJson, putJson, getJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
 const CONFIRM = { "X-Overwrite-Confirm": "true" };
 const HOT = 350;
+
+/**
+ * visible/server 方法经 HTTP 调用走 **flow scope** /call_method（stone scope 不调 object 程序——
+ * 运行时/data 编辑归 flow session）。把已建好的 stone 身份在 flow session 下实例化，返回 sid。
+ */
+async function instantiateInFlow(baseDir: string, id: string): Promise<string> {
+  const sid = `refl-${id}`;
+  await createFlowSession(baseDir, sid);
+  await createFlowObject({ baseDir, sessionId: sid, objectId: id });
+  return sid;
+}
 
 /**
  * Wave4 对象模型：world 对象的人类侧服务端 API = stone 根 `index.ts` 一处 `export const Class`
@@ -43,8 +54,10 @@ export async function runControlPlane(): Promise<StoryResult> {
       `{ name: "readSelf", description: "readSelf", exec: (ctx) => ({ data: require("node:fs").readFileSync(require("node:path").join(ctx.baseDir, "stones", "main", "objects", ctx.object.id, "self.md"), "utf8") }) }`,
     ));
     await sleep(HOT);
+    // call_method 走 flow scope（stone scope 不调 object 程序——运行时/data 编辑归 flow session）。
+    const sid = await instantiateInFlow(baseDir, id);
     {
-      const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "readSelf" });
+      const r = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "readSelf" });
       rec.eq("TC-REFL-01", "Object 经 self.dir 读自己的 self.md（自观察）", r.json?.data, selfContent);
     }
 
@@ -80,7 +93,7 @@ export async function runControlPlane(): Promise<StoryResult> {
         `{ name: "evolve", description: "evolve", exec: () => ({ data: "I changed myself!" }) }`,
       ));
       await sleep(HOT);
-      const c = await postJson(app, `/api/stones/${id}/call_method`, { method: "evolve" });
+      const c = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "evolve" });
       rec.ok("TC-REFL-04", "改 visible/server Class（自修改行为）热更生效",
         c.json?.data === "I changed myself!",
         `data=${JSON.stringify(c.json?.data)}`);
@@ -105,14 +118,15 @@ export async function runControlPlane(): Promise<StoryResult> {
         `{ name: "version", description: "version", exec: () => ({ data: "v1" }) }`,
       ));
       await sleep(HOT);
-      const r1 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "version" });
+      const sid2 = await instantiateInFlow(baseDir, id2);
+      const r1 = await postJson(app, `/api/flows/${sid2}/${id2}/call_method`, { method: "version" });
       writeStoneFile(baseDir, id2, "index.ts", classSource(
         `{ name: "version", description: "version", exec: () => ({ data: "v2" }) },` +
         `{ name: "hello", description: "hello", exec: () => ({ data: "world" }) }`,
       ));
       await sleep(HOT);
-      const r2 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "version" });
-      const r3 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "hello" });
+      const r2 = await postJson(app, `/api/flows/${sid2}/${id2}/call_method`, { method: "version" });
+      const r3 = await postJson(app, `/api/flows/${sid2}/${id2}/call_method`, { method: "hello" });
       rec.ok("TC-REFL-06", "自修改行为闭环：改 visible/server Class 新方法热更生效",
         r1.json?.data === "v1" && r2.json?.data === "v2" && r3.json?.data === "world",
         `v1=${r1.json?.data}, v2=${r2.json?.data}, hello=${r3.json?.data}`);

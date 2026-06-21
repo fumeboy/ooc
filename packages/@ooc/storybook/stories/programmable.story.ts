@@ -8,6 +8,7 @@
  *（按 index.ts mtime）立即生效。规格见 programmable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { setTimeout as sleep } from "node:timers/promises";
+import { createFlowSession, createFlowObject } from "@ooc/core/persistable";
 import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
 import { seedTask, waitJob, processTrace, getStoneSelfWithRetry, threadLlmInfraFailed, calledMethodOk } from "../_harness/agent-native";
 import { rollupTier, type StoryResult } from "../_harness/types";
@@ -22,6 +23,17 @@ const E = (methods: string) => `export const Class = { executable: { methods: ${
 /** dev hot-reload（fs.watch）失效有 debounce —— 改 index.ts 源码后等其生效再调用。 */
 const HOT = 350;
 
+/**
+ * visible/server 方法经 HTTP 调用走 **flow scope** /call_method（stone scope 不调 object 程序——
+ * 运行时/data 编辑归 flow session）。把已写好 Class 的 stone 身份在 flow session 下实例化，返回 sid。
+ */
+async function instantiateInFlow(baseDir: string, id: string): Promise<string> {
+  const sid = `prog-${id}`;
+  await createFlowSession(baseDir, sid);
+  await createFlowObject({ baseDir, sessionId: sid, objectId: id });
+  return sid;
+}
+
 export async function runControlPlane(): Promise<StoryResult> {
   const rec = new StoryRecorder();
   const srv = await mkServer();
@@ -33,7 +45,8 @@ export async function runControlPlane(): Promise<StoryResult> {
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "index.ts",
         M(`[{ name: "echo", description: "echo", exec: (_ctx, _self, args) => ({ data: { youSaid: args.text } }) }]`));
-      const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "echo", args: { text: "hello" } });
+      const sid = await instantiateInFlow(baseDir, id);
+      const r = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "echo", args: { text: "hello" } });
       rec.eq("TC-PROG-01", "visible/server 方法经 HTTP 调用，data 通道返回正确值", r.json?.data, { youSaid: "hello" });
     }
 
@@ -43,7 +56,8 @@ export async function runControlPlane(): Promise<StoryResult> {
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "index.ts",
         M(`[{ name: "shape", description: "shape", exec: (_ctx, _self, args) => ({ data: { items: [args.a, args.b], count: 2 } }) }]`));
-      const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "shape", args: { a: 1, b: 2 } });
+      const sid = await instantiateInFlow(baseDir, id);
+      const r = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "shape", args: { a: 1, b: 2 } });
       rec.eq("TC-PROG-02", "visible/server 方法经 data 通道返回嵌套结构化数据", r.json?.data, { items: [1, 2], count: 2 });
     }
 
@@ -69,12 +83,13 @@ export async function runControlPlane(): Promise<StoryResult> {
       writeStoneFile(baseDir, id, "index.ts",
         M(`[{ name: "ping", description: "ping", exec: () => ({ data: "v1" }) }]`));
       await sleep(HOT);
-      const r1 = await postJson(app, `/api/stones/${id}/call_method`, { method: "ping" });
+      const sid = await instantiateInFlow(baseDir, id);
+      const r1 = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "ping" });
       writeStoneFile(baseDir, id, "index.ts",
         M(`[{ name: "ping", description: "ping", exec: () => ({ data: "v2" }) }, { name: "pong", description: "pong", exec: () => ({ data: "pong" }) }]`));
       await sleep(HOT);
-      const r2 = await postJson(app, `/api/stones/${id}/call_method`, { method: "ping" });
-      const r3 = await postJson(app, `/api/stones/${id}/call_method`, { method: "pong" });
+      const r2 = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "ping" });
+      const r3 = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "pong" });
       const ok = r1.json?.data === "v1" && r2.json?.data === "v2" && r3.json?.data === "pong";
       rec.ok("TC-PROG-04", "热更新：改 visibleServer 后已有方法变更、新增方法立即生效", ok,
         `ping(v1)=${r1.json?.data}, ping(v2)=${r2.json?.data}, pong=${r3.json?.data}`);

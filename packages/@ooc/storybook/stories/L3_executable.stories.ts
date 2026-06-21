@@ -8,6 +8,7 @@
  * getObjectDefinition + resolveMethod + lookupConstructor + 多级 parentClass 链 + root 回退。
  */
 import { setTimeout as sleep } from "node:timers/promises";
+import { createFlowSession, createFlowObject } from "@ooc/core/persistable";
 import { postJson, writeStoneFile } from "../_harness/control-plane";
 import { story, check, type Story } from "../_harness/story";
 
@@ -128,8 +129,8 @@ export const L3_STORIES: Story[] = [
   story({
     id: "L3-UI-METHOD-CALL",
     layer: "executable",
-    expectation: "Object 的 visible/server 方法经 HTTP /call_method 执行并 data 通道返回结果",
-    design: "visible/server：visible/server 方法是 Object 暴露给人类侧 UI 的方法（经 HTTP）。modules/stones/api.call-method.ts + registry.resolveVisibleServer",
+    expectation: "Object 的 visible/server 方法经 HTTP flow /call_method 执行并 data 通道返回结果",
+    design: "visible/server：visible/server 方法是 Object 暴露给人类侧 UI 的方法（经 flow HTTP；stone scope 不调 object 程序）。modules/flows/api.call-method.ts + registry.resolveVisibleServer",
     run: async ({ app, baseDir }) => {
       const id = "calc_obj";
       await postJson(app, "/api/stones", { objectId: id });
@@ -140,7 +141,11 @@ export const L3_STORIES: Story[] = [
              exec: (_ctx, _self, args) => ({ data: { sum: args.x + args.y } }) },
          ] } };`);
       await sleep(350);
-      const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "add", args: { x: 2, y: 3 } });
+      // call_method 走 flow scope（运行时/data 编辑归 flow session）。
+      const sid = "l3-calc";
+      await createFlowSession(baseDir, sid);
+      await createFlowObject({ baseDir, sessionId: sid, objectId: id });
+      const r = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "add", args: { x: 2, y: 3 } });
       check(JSON.stringify(r.json?.data) === JSON.stringify({ sum: 5 }), `data=${JSON.stringify(r.json?.data)}`);
     },
   }),

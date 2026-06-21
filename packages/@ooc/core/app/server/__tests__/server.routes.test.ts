@@ -122,30 +122,8 @@ describe("app server routes", () => {
     expect(body.created).toBe(true);
   });
 
-  test("POST /api/stones/:id/call_method returns 404 for missing method", async () => {
-    const app = await makeApp();
-    // 先创建一个 stone（不写任何 visible/server 方法）
-    await app.handle(
-      new Request("http://localhost/api/stones", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ objectId: "stone-no-methods" }),
-      })
-    );
-    const response = await app.handle(
-      new Request("http://localhost/api/stones/stone-no-methods/call_method", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ method: "ghost", args: {} }),
-      })
-    );
-    const body = await response.json();
-
-    expect(response.status).toBe(404);
-    expect(body.error.code).toBe("METHOD_NOT_FOUND");
-    expect(body.error.message).toContain("ghost");
-    expect(body.error.details.objectId).toBe("stone-no-methods");
-  });
+  // 注：stone scope /call_method 已删除（stone scope 不调 object 程序——运行时/data
+  // 编辑归 flow session）。call_method 仅 flow scope 保留，404 用例见下。
 
   test("POST /api/flows/:sid/:id/call_method returns 404 for missing method", async () => {
     const app = await makeApp();

@@ -8,6 +8,7 @@
  * 规格见 executable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { setTimeout as sleep } from "node:timers/promises";
+import { createFlowSession, createFlowObject } from "@ooc/core/persistable";
 import { mkServer, postJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
@@ -29,7 +30,11 @@ export async function runControlPlane(): Promise<StoryResult> {
              exec: (_ctx, _self, args) => ({ data: { sum: args.x + args.y } }) },
          ] } };`);
       await sleep(350);
-      const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "add", args: { x: 2, y: 3 } });
+      // call_method 走 flow scope（stone scope 不调 object 程序——运行时/data 编辑归 flow session）。
+      const sid = "exec-calc";
+      await createFlowSession(baseDir, sid);
+      await createFlowObject({ baseDir, sessionId: sid, objectId: id });
+      const r = await postJson(app, `/api/flows/${sid}/${id}/call_method`, { method: "add", args: { x: 2, y: 3 } });
       rec.eq("TC-EXEC-01", "visible/server 方法经 HTTP 执行并 data 通道返回结果", r.json?.data, { sum: 5 });
     }
 
