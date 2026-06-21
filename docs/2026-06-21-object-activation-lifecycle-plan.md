@@ -39,14 +39,18 @@ export interface LifecycleContext extends ConstructorContext {
   /** refcount 跨 0↔1 的对象 id（钩子 body 据此定位自己要操作的对象）。 */
   targetId: string;
 }
+/** unactive 返回值：delete:true → core 把 object 彻底从 session 移除（含持久化文件）；缺省=只停用。 */
+export interface UnactiveResult { delete?: boolean }
+
 /**
  * 对象生命周期钩子（active/unactive 共用）—— 与 construct 对称、按 refcount 0↔1 触发。
  * 与 construct 签名不同：作用于既有对象、不产 Data；body 经 ctx（thread + targetId）自解析目标。
- * 皆可选。无 destruct —— OOC object 是持久身份，unactive 只释放运行时资源、磁盘身份留存。
+ * 皆可选。无独立 destruct —— OOC object 默认持久身份；unactive 可经返回 {delete:true} 自决彻底删除
+ * （refcount-0-gated，故无悬空引用）。仅 unactive 路径 honor delete；active 返回值忽略。
  */
 export interface ObjectLifecycleHook {
   description: string;
-  exec: (ctx: LifecycleContext) => void | Promise<void>;
+  exec: (ctx: LifecycleContext) => void | UnactiveResult | Promise<void | UnactiveResult>;
 }
 ```
 
@@ -212,20 +216,47 @@ test("class 无 unactive → fast-path no-op", async () => {
   const reg = createObjectRegistry(); const p: any = { id: "t", status: "running", contextWindows: [], childThreads: {} };
   await dispatchUnactiveIfZero(p, "filesystem", "_builtin/filesystem", reg); expect(true).toBe(true);
 });
+test("unactive 返回 {delete:true} → 删 objectDir + 移除内存窗（合成 class，临时 world）", async () => {
+  // 用临时 baseDir 建 objectDir 落个文件；合成 class 的 unactive 返回 {delete:true}。
+  // 断言：dispatch 后 objectDir 已不存在，且 ctxThread.contextWindows 不再含引用 targetId 的窗。
+  const reg = createObjectRegistry();
+  reg.register("_test/gc", { unactive: { description: "", exec: () => ({ delete: true }) } } as any);
+  // （fixture：mkdir objectDir({baseDir,sessionId,objectId:"o_gc"}) + 写 state.json）
+  const p: any = { id: "t", status: "running", persistence: { baseDir: TMP, sessionId: "s1" }, contextWindows: [], childThreads: {} };
+  await dispatchUnactiveIfZero(p, "o_gc", "_test/gc", reg);
+  // expect(existsSync(objectDir({baseDir:TMP,sessionId:"s1",objectId:"o_gc"}))).toBe(false);
+});
 ```
+
+> 该测试让 delete 路径**有真实被测者**（合成 `_test/gc` class），非死槽——v1 无 builtin 返回 delete（thread 返回 `{}`）。
 
 - [ ] **Step 2：FAIL。Step 3：实现**（泛型——无 thread import、无 THREAD_CLASS_ID）
 
 ```ts
 import type { ObjectRegistry } from "./object-registry.js";
 import type { LifecycleContext } from "../executable/contract.js";
+import { objectDir, type FlowObjectRef } from "../persistable/common.js";
+import { rm } from "node:fs/promises";
 /** close 移窗后：targetId 的 session refcount 归零且 class 声明 unactive → 单次派发，body 自解析（含级联）。 */
 export async function dispatchUnactiveIfZero(ctxThread: ThreadContext, targetId: string, targetClass: string, registry: ObjectRegistry): Promise<void> {
   const hook = registry.resolveUnactive(targetClass);
   if (!hook) return;                                            // fast-path：无 body → 不算 refcount
   if (countSessionReferences(ctxThread, targetId) > 0) return;
   const ctx: LifecycleContext = { thread: ctxThread, runtime: undefined as any, args: {}, targetId };
-  await hook.exec(ctx);
+  const r = await hook.exec(ctx);
+  if (r && (r as { delete?: boolean }).delete === true) await removeObjectFromSession(ctxThread, targetId, registry);
+}
+
+/** delete:true → 彻底从 session 移除 targetId：删持久化（自定义 persistable.delete? 优先，否则 objectDir 路径）+ 移除内存实例。 */
+async function removeObjectFromSession(ctxThread: ThreadContext, targetId: string, registry: ObjectRegistry): Promise<void> {
+  const p = ctxThread.persistence;
+  if (!p) return;
+  const ref: FlowObjectRef = { baseDir: p.baseDir, sessionId: p.sessionId, objectId: targetId };
+  // 自定义 persistable 经其 delete? 自理（v1 暂无；phase-2 加 PersistableModule.delete?）；缺省删 objectDir。
+  await rm(objectDir(ref), { recursive: true, force: true });
+  // 内存：从持有处移除（v1 合成测试 = 顶层 ctxThread.contextWindows 过滤；thread-target 的 childThreads
+  // 删除推 phase-2——thread 不返回 delete，故 v1 不需要）。
+  ctxThread.contextWindows = (ctxThread.contextWindows ?? []).filter((w) => referencedObjectId(w as any) !== targetId);
 }
 ```
 
@@ -305,7 +336,7 @@ const unactive: ObjectLifecycleHook = {
 export const Class: OocClass<Data> = { construct: talkConstructor, executable, readable, persistable, unactive };
 ```
 
-> 持久化沿用既有线程 save（worker tick；旧 archiveForkChild 也只置 status）。级联在 thread builtin（policy），core dispatcher 保持单次泛型。
+> `thread.unactive` 返回 **void（= 不 delete）**——canceled 线程保留在盘上（同 done/failed，refinement-1），不删持久化。`{delete:true}` 是给将来需要彻底 GC 的对象类型用的（v1 无）。持久化沿用既有线程 save（worker tick；旧 archiveForkChild 也只置 status）。级联在 thread builtin（policy），core dispatcher 保持单次泛型。
 
 - [ ] **Step 2：commit** `feat(thread): Class.unactive = cancel 子线程 + 级联子树（canceled）`
 
@@ -393,9 +424,9 @@ Expected: 0 FAIL。
 
 **占位扫描：** 无 TBD/TODO。「待定」= 6.2 object self.md（须听写）+「实现期核」标注（selfThenChain 名/sibling close grep/canceled consumer 全扫/fixture 适配）——故意要求核验真实代码。
 
-**类型一致：** `ObjectLifecycleHook.exec(ctx:LifecycleContext)`（0.1）↔ `active?/unactive?`（0.2）↔ `resolveActive/resolveUnactive`（0.4）↔ `dispatchUnactiveIfZero` 调 `hook.exec({thread,targetId,...})`（1.3）↔ thread `unactive.exec(ctx)`→`cancelSubtree(ctx.thread,ctx.targetId)`（3.2）—— 一致。`ThreadStatus` 含 canceled（0.3）↔ `ACTIVE_STATUS` 排除（1.2）↔ `TERMINAL` 含（3.2）↔ consumer（Phase 4）一致。`OocObjectInstance.closable`（0.2）↔ init 标记（3.1）↔ close 守卫（2.1）一致。**无 `_ref`/diskScan/inFlight/THREAD_CLASS_ID 分支/active dispatch。**
+**类型一致：** `ObjectLifecycleHook.exec(ctx:LifecycleContext) => void|UnactiveResult`（0.1）↔ `active?/unactive?`（0.2）↔ `resolveActive/resolveUnactive`（0.4）↔ `dispatchUnactiveIfZero` 调 `hook.exec(...)` 并据 `r.delete` 调 `removeObjectFromSession`（1.3）↔ thread `unactive.exec(ctx)`→`cancelSubtree`（返回 void=不 delete，3.2）—— 一致。`UnactiveResult{delete?}`（0.1）↔ dispatch honor（1.3）↔ thread 不用（3.2）。`ThreadStatus` 含 canceled（0.3）↔ `ACTIVE_STATUS` 排除（1.2）↔ `TERMINAL` 含（3.2）↔ consumer（Phase 4）一致。`OocObjectInstance.closable`（0.2）↔ init 标记（3.1）↔ close 守卫（2.1）一致。**无 `_ref`/diskScan/inFlight/THREAD_CLASS_ID 分支/active dispatch。**
 
 ## 已知未决（交回用户）
 - **D1**：已确认 yes（2026-06-21）——`failed` 同 `done`/`canceled` 排除，`ACTIVE_STATUS={running,waiting,paused}`（1.2）。
 - **R5**：object self.md 已落核心 10 草案（待用户 review；review 通过后随对象树 commit+push ooc-0）。
-- **phase-2**：session 盘扫 / 成员对象 unactive / peer 跨对象 canceled（合 context.md core-11）/ active 派发。
+- **phase-2**：session 盘扫 / 成员对象 unactive / peer 跨对象 canceled（合 context.md core-11）/ active 派发 / `PersistableModule.delete?`（自定义持久化布局的删除；v1 删 objectDir 路径）/ thread-target 的 delete（childThreads 内存移除；v1 thread 不 delete）。
