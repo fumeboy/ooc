@@ -152,3 +152,35 @@ export const threadExpand: WindowMethod<unknown, ThreadCompressWin> = {
     };
   },
 };
+
+interface ThreadResizeWin {
+  autoCompressLevel?: 0 | 1 | 2;
+}
+
+/**
+ * compress v2 —— thread 窗 `resize`：设**自动压缩档位** `autoCompressLevel`（0 不主动 / 1 适度 / 2 激进）。
+ * thread 窗自视渲句柄、无展示档位（compressLevel 不用），故 resize 在 thread 窗调的是「自动压缩灵敏度」：
+ * 未总结 transcript 超该档对应阈值（autoCompressThreshold）时，框架自动 fork 一条子线程生成摘要、折叠早期过程。
+ * 纯设态（window method 契约：只动 win、零副作用）；实际 fork 由 thinkloop framework hook 据此档位触发。
+ */
+export const threadResize: WindowMethod<unknown, ThreadResizeWin> = {
+  name: "resize",
+  description:
+    "调本 thread 窗的自动压缩档位 level：0=不主动压缩，1=适度，2=激进（越高越早自动折叠早期历史）。" +
+    "超阈值时框架 fork 子线程生成摘要、折叠早期过程，不丢原文。",
+  schema: {
+    args: {
+      level: {
+        type: "number",
+        required: true,
+        enum: [0, 1, 2],
+        description: "自动压缩档位：0 不主动 / 1 适度 / 2 激进",
+      },
+    },
+  },
+  exec: (_ctx, _self, before_win, args) => {
+    const raw = (args as { level?: number } | undefined)?.level;
+    const lvl = clampLevel(typeof raw === "number" ? raw : 0);
+    return { ...before_win, autoCompressLevel: lvl };
+  },
+};

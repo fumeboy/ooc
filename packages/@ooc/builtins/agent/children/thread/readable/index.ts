@@ -28,7 +28,7 @@ import {
   hasAnyTranscriptViewportField,
 } from "@ooc/core/_shared/utils/viewport.js";
 import { renderTranscriptOrHandle } from "./conversation-render.js";
-import { threadCompress, threadExpand } from "./compress-events.js";
+import { threadCompress, threadExpand, threadResize } from "./compress-events.js";
 import {
   filterTalkMessages,
   renderHead,
@@ -91,13 +91,13 @@ const readable: ReadableModule<Data, ThreadWin> = {
     {
       class: "thread",
       object_methods: ["say"],
-      window_methods: [setTranscriptWindowMethod, threadCompress, threadExpand],
+      window_methods: [setTranscriptWindowMethod, threadCompress, threadExpand, threadResize],
     },
     // other-view：与对端 peer/sub 的对话（含父侧 fork 子窗）；可关。
     {
       class: "talk",
       object_methods: ["say", "close"],
-      window_methods: [setTranscriptWindowMethod, threadCompress, threadExpand],
+      window_methods: [setTranscriptWindowMethod, threadCompress, threadExpand, threadResize],
     },
     // self-view super：反思自视（恒在通道，同样不 surface close）；会话 method + 2 个 reflectable 沉淀 method。
     {
@@ -107,7 +107,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
         "new_feat_branch",
         "create_pr_and_invite_reviewers",
       ],
-      window_methods: [setTranscriptWindowMethod, threadCompress, threadExpand],
+      window_methods: [setTranscriptWindowMethod, threadCompress, threadExpand, threadResize],
     },
   ],
 };
