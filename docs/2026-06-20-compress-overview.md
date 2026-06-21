@@ -1,8 +1,9 @@
 # OOC context compress —— 完整总览（背景 / 原因 / 当前状态 / 解决思路）
 
 **性质**：compress 这条线的入口总览，串起背景、动因、设计决策、落地现状与剩余路径。
-**设计权威**：对象树 `.ooc-world-meta/.../children/thinkable/knowledge/compress.md`（timeless 设计单一权威）；本文是面向开发者的**叙事 + 状态 + 决策依据**，不重复 compress.md 的设计细节。
-**关联 Issue（分阶段细节）**：`2026-06-20-compress-window-method-revival.md`（windows scope）/ `2026-06-20-events-compress-design.md`（events scope）/ `2026-06-20-transcript-into-budget-issue.md`（预算 + 应急兜底）。`2026-05-25-context-compression-design.md` 是被取代的旧方向（compress-as-primitive）。
+**设计权威**：对象树 `.ooc-world-meta/.../children/thinkable/knowledge/compress.md`（timeless 设计单一权威，已是 **v2**）；本文是面向开发者的**叙事 + 状态 + 决策依据**，不重复 compress.md 的设计细节。
+**当前形态 = compress v2（resize/compress 协议 + fork-summarizer，2026-06-21）**：设计 spec `2026-06-21-compress-v2-resize-protocol-design.md`。它把 compress 从「框架塞的通用 window method（两 scope + expand + 默认表）」升级为**协议**（class 自实现、无默认）、摘要改 **summarizer fork** 生成、应急改 **force-wait + clamp floor**。本文 §三/§四 以 v2 为准；§一/§二 的背景与早期决策保留为历史脉络（被 v2 取代处就地标注）。
+**关联 Issue（历史脉络，方法面已被 v2 取代）**：`2026-06-21-compress-v2-resize-protocol-design.md`（**v2 权威 spec**）；`2026-06-20-compress-caseA-thread-window-{convergence,plan}.md`（Case A 载体收敛，v2 前置、仍有效）；`2026-06-20-compress-window-method-revival.md` / `2026-06-20-events-compress-design.md`（v1 windows/events scope，方法面已退役）/ `2026-06-20-transcript-into-budget-issue.md`（预算纳入，仍有效）。`2026-05-25-context-compression-design.md` 是更早被取代的方向（compress-as-primitive）。
 
 ---
 
@@ -50,7 +51,7 @@ compress 长期是"写进退役注释、无人兑现"的承诺。`windows` scope
 
 4. **不要贸然把载体挪到 creator 窗**。`self-driven root` thread（如顶层 supervisor）**没有 creator 窗**、只有 self 门面窗；挪过去会回退这类 thread 的折叠能力。self 门面窗是当前唯一普适载体。载体收敛须随 thread-as-object 弧整体做。
 
-5. **应急兜底用瞬态钳制、不用框架代调 compress 持久折叠**。与窗 overflow 同模型（per-round、瞬态、不持久化）→ 不违 `budget.ts` "预算不自动推进档位"；不 mutate 持久态（守"写入自由、agent 主导持久 compress"）；tool-pair 天然安全。
+5. **应急兜底用瞬态钳制、不用框架代调 compress 持久折叠**（v1 决策；v2 已**重定位**为 clamp floor）。与窗 overflow 同模型（per-round、瞬态、不持久化）→ 不违 `budget.ts` "预算不自动推进档位"；tool-pair 天然安全。→ **v2 修订**：clamp 保留但降为 **force-wait 之下的最后兜底**（优雅路径=超 hard 且有在途 compress 时 force-wait 等 summarizer fork 折完；clamp 仅在 force-wait 等不及——无在途/fork 失败超时——时保不崩）。**摘要由 summarizer fork 生成、非 agent 自写**（见 §四 v2）。
 
 ---
 
@@ -58,47 +59,44 @@ compress 长期是"写进退役注释、无人兑现"的承诺。`windows` scope
 
 | 环节 | 内容 | commit |
 |---|---|---|
-| events compress | `win.summarizedRanges` 通用 window method（compress/expand 按 `scope` 分流）+ 读出投影 + 真 LLM 实证 | `48b285c5` |
 | 裁决回流 | `context.md` 3.7 迁移映射补载体现状→归宿 | `929e4b5`(ooc-0) |
 | transcript 纳预算 | 估算口径统一、计入 soft-warning（core10 另一半的"预算账"半） | `9376ffd8` |
-| 应急兜底 | transcript 越 hard 瞬态钳制（保留后缀、tool-pair 安全） | `53c9d502` |
-| 设计权威 | 对象树 `compress.md`（四段结构） | `c7f6358`(ooc-0) |
+| 设计权威 | 对象树 `compress.md`（四段结构，已重写为 v2） | `c7f6358`(ooc-0) + v2 回流 |
 | Case B 修复 | events 折叠投影**吸附到 tool-pair 安全边界**，防孤儿 tool 块崩 think | `503c933e` + `1e6e0fc`(ooc-0) |
-| **Case A 载体收敛** | 折叠态从 self 门面窗收敛到**自己视角 thread 窗**（无 creator 窗概念：一条 thread 一个 thread 窗、creator 对话是其上游通道）；谓词拆 `isSelfThreadWindow`/`hasCreatorChannel`；events-compress 能力归属 thread class；删持久化后门 + 冷启动丢窗洞；跨 job reload e2e gate + 真 LLM 实证 | `feat/context-window-axiom`（Task1-7） |
+| Case A 载体收敛 | 折叠态从 self 门面窗收敛到**自己视角 thread 窗**（无 creator 窗概念：一条 thread 一个 thread 窗、creator 对话是其上游通道）；谓词拆 `isSelfThreadWindow`/`hasCreatorChannel`；删持久化后门 + 冷启动丢窗洞；跨 job reload e2e gate + 真 LLM 实证 | `feat/context-window-axiom`（Task1-7） |
+| **compress v2（resize/compress 协议）** | compress 升为**协议**（class 自实现、无通用默认表）：`resize` 设档位（替代 expand）+ `compress` 无参意图；删 `default-window-methods`/`expand`/`scope`；内容窗 opt-in `displayResize` | `36b429eb` + `3e37149a` |
+| **compress v2（fork-summarizer + 兜底）** | 摘要由 **summarizer fork** 生成（单轮、无工具、harvest 记 `summarizedRanges`）；**auto-trigger**（未总结 transcript 超 `autoCompressLevel` 阈值 → 自动折）；**force-wait + clamp floor**（超 hard 等在途 fork / 失败时 clamp 保底）；测试待修 + 退潮 | `0d135fb2` 等 |
 
-**能力面**：两 scope（windows 档位 / events 历史折叠）、可逆、视角独立、`keepTail` + `{fromIdx,toIdx}` 两种粒度、**三层防溢出**（agent 主动 compress → soft warning 提示 → emergency 钳制兜底）、tool-pair 安全。折叠态挂自己视角 thread 窗（inline 天然持久化、含 self-driven root）。
+**能力面（v2）**：`resize`（设档位：内容窗 compressLevel 展示详略 / thread 窗 autoCompressLevel 自动压缩阈值）+ `compress`（无参意图 → 框架 fork summarizer 折早期历史）；协议化（class 自实现、无默认）；摘要 fork 生成；视角独立、可持久；**三层防溢出**（agent 主动 compress / auto-trigger 阈值 → force-wait 等在途 fork → clamp floor 兜底）；tool-pair 安全；折叠态挂自己视角 thread 窗（inline 天然持久化、含 self-driven root）。
 
-**测试**：storybook `L2-COMPRESS-EVENTS`（Tier A 控制面 gate；events-compress 经 thread class 解析 + 错窗边界）+ `context.test.ts`（buildInputItems 端到端：折叠/视角隔离/可逆/预算/应急钳制/Case B，折叠态挂 thread 窗）+ `transcript-clamp.test.ts`（钳制/floor/sanitize）+ `context-compression-p0f-events.test.ts`（**跨 job reload 活 gate**：creator-having + self-driven root + 可逆）+ `real-compress.test.ts`（真 LLM 经 thread 窗 window_id 自压缩，gate `RUN_REAL_COMPRESS_TEST=1`，已实跑 pass）。`bun run verify` 全绿（721 pass）+ storybook gate 绿（64 pass）。
+**测试（v2）**：storybook `L2-RESIZE-DISPLAY`（内容窗 displayResize + no-default）+ `L2-COMPRESS-V2`（compress=intent/resize=autoCompressLevel + 阈值映射 + projectSummarizedRanges）+ `compress-v2.test.ts`（autoCompressThreshold/shouldAutoCompress/harvestSummarizerForks done/running/failed/orphan）+ `real-compress-v2.test.ts`（真 LLM：spawnSummarizerFork → 单轮 think → harvest 记段，gate `RUN_REAL_COMPRESS_TEST=1`，已实跑 pass）+ `context-compression-p0f-events.test.ts`（**跨 job reload 载体 gate**：summarizedRanges + inFlightCompress 直写持久；creator-having + self-driven root + in-flight）+ `transcript-clamp.test.ts`（clamp floor/sanitize）。`bun run verify` 全绿 + storybook gate 绿（64 pass）。
 
-**过渡债已清（2026-06-20）**：原 self 视角折叠态停在 self 门面窗（决策 2.2.3）的语义混 + 写盘后门 + 冷启动丢窗洞——已随 Case A 载体收敛全部消除（折叠态挂 inline 持久化的 thread 窗、后门删、builtin 类冷启动恒注册）。
+**过渡债已清**：v1 的 self 门面窗折叠载体（语义混 + 写盘后门 + 冷启动丢窗洞）随 Case A 消除；v1 的两 scope/expand/默认表/agent 自写摘要随 v2 退役（见 `compress.md` §3.8 迁移映射）。
 
 ---
 
-## 四、解决思路
+## 四、解决思路（v2）
 
-### 4.1 已兑现的设计（机制层闭环）
+### 4.1 v2 机制（已落地闭环）
 
-- **一个 method、两 scope、统一语义**：`exec(method="compress", args={scope})`，windows 改 `compressLevel`、events 改 `summarizedRanges`；`expand` 是逆。稳定原语恒 3 个（exec/close/wait），compress 非原语。
-- **折叠 = 读出侧投影**：`projectSummarizedRanges` 把落在某 range 内的连续渲染单元折成一条 agent 自写的 summary，段外原样；不动 events 序列、可逆。
-- **预算三层防溢出**：transcript 计入预算账（core10）→ 超 soft 报 `<context_budget_warning>`（含 transcript 占比、指向 compress）→ 超 hard 瞬态钳制（保留最近、tool-pair 安全、插可见 marker）。
-- **tool-pair 安全**：provider 层不 sanitize 孤儿 tool_use/tool_result（会被 LLM 拒），故 events 折叠投影前**吸附区段到完整配对边界**（`snapRangesToToolPairs`）、钳制对后缀 sanitize 孤儿 output。
+- **compress 是协议，不是框架默认**：`resize`（设档位，替代 expand 升降合一为滑杆）+ `compress`（无参折叠意图）两个 window method，各 class 在 readable 自声明、无通用默认表（`resolveWindowMethod` 无回退）。内容窗 opt-in `displayResize` 设 compressLevel；thread 窗 `threadResize` 设 autoCompressLevel、`threadCompress` 置 compressIntent。稳定原语恒 3 个（exec/close/wait），compress/resize 非原语。
+- **window method 纯函数、副作用走 framework hook**：方法只置态/意图（spawn fork 不进 window method）；thinkable 框架 hook 见 compressIntent / 超阈值即 spawn summarizer fork。
+- **摘要由 summarizer fork 生成**（镜像 Claude Code full-compact Fork Agent）：`spawnSummarizerFork` 复用 execFork，seed 早期 transcript 段 + 「直接输出摘要正文、无工具」，单轮 think 出摘要即 done；`harvestSummarizerForks`（scheduler 每 tick 顶部）读 `child.endSummary` → `win.summarizedRanges += {fromIdx,toIdx,summary}` → 清 inFlight → 唤醒 parent。summarizer fork 标 `isSummarizer`、不进 parent 会话（`emitChildEndNotifications` 跳过）。
+- **auto-trigger（阈值驱动）**：每轮 think 估算未总结 transcript token；`compressIntent` 或 `transcriptTokens > threshold(autoCompressLevel)` 且无在途 → spawn fork 折早期段。**transcript-gated**（只看 transcript、不看 windows，避免 windows 主导超限时 livelock）。
+- **force-wait + clamp floor（超 hard 兜底）**：超 hard 且有在途 compress → parent 进 waiting 等 fork 折完（无损）；force-wait 等不及（无在途/fork failed/orphan）→ clamp floor 对 transcript per-round 瞬态钳制（保后缀、tool-pair 安全、插可见 marker）保不崩。harvest 端 failed→关本窗自动压缩防 livelock、orphan→清 inFlight 解死锁。
+- **tool-pair 安全**：provider 层不 sanitize 孤儿 tool_use/tool_result，故 events 折叠投影前**吸附区段到完整配对边界**（`snapRangesToToolPairs`）、clamp 对后缀 sanitize 孤儿 output。
 
-### 4.2 Case A 载体收敛（已落，2026-06-20）
+### 4.2 Case A 载体收敛（v2 前置，已落 2026-06-20）
 
-**自视折叠载体已从 self 门面窗收敛到"自己视角 thread 窗"**（`context.md` 核 9/10、`compress.md` Case A）。设计敲定走**统一模型**：无独立"creator 窗"概念——一条 thread 恰好一个 **thread 窗（过程）**，creator 对话是它内建的上游通道（self-driven root 通道为空）。落地清单全兑现：
-
-- 每条 thread（含 **self-driven root**）始终注入自己视角 thread 窗（`init.ts`：creator 通道 data 条件化）；
-- 身份门面（self.md）+ agency（object methods）**留 self 门面窗**（POV-keyed `xml.ts`，exec 默认目标不变）——「自己」与「过程」各归各窗；
-- 谓词拆 `isSelfThreadWindow`（自视检测，含 root）/ `hasCreatorChannel`（有上游，gate wait/end/protocol/say）——读侧折叠源 + 写侧 exec 命中同一 thread 窗；
-- **写侧能力归属**：events-compress 移入 thread class、universal 只留 windows scope（错窗 scope=events 抛错指向 thread 窗）；
-- transcript 内容由 thread 窗承载（core10"归属"半 + 已落"预算账"半合璧）；
-- 折叠态挂 thread 窗 win（THREAD_CLASS_ID inline 天然持久化）→ self 门面窗持久化后门删、冷启动丢窗洞消失；
-- **跨 job（scheduler_yielded → reload）活 e2e gate**（重写 `context-compression-p0f-events.test.ts`，退役 `_foldedBy` 路径；creator-having + self-driven root + 可逆）+ 真 LLM 实证（经 thread 窗 window_id 自压缩）。
-
-设计/计划：`docs/2026-06-20-compress-caseA-thread-window-{convergence,plan}.md`。
+**自视折叠载体已从 self 门面窗收敛到"自己视角 thread 窗"**（`context.md` 核 9/10、`compress.md` Case A）。统一模型：无独立"creator 窗"概念——一条 thread 恰好一个 **thread 窗（过程）**，creator 对话是它内建的上游通道（self-driven root 通道为空）。要点：每条 thread（含 self-driven root）始终注入自己视角 thread 窗；身份门面（self.md）+ agency 留 self 门面窗；谓词拆 `isSelfThreadWindow`/`hasCreatorChannel`；折叠态挂 thread 窗 win（THREAD_CLASS_ID inline 天然持久化）→ 后门删、冷启动丢窗洞消失。设计/计划：`docs/2026-06-20-compress-caseA-thread-window-{convergence,plan}.md`。
 
 ### 4.3 不做 / 边界
 
 - 不把 compress 重新做成 tool 原语（旧 2026-05-25 方向，已弃）。
-- 不让框架自动推进持久压缩态（auto 兜底只做 per-round 瞬态钳制）。
-- 不引入 runtime 另起 summarization call（events summary 由 agent 自写）。
+- 不设通用默认 resize/compress 实现——协议由各 class 自实现（不声明=不可压缩）。
+- 不让 agent 手写 events 摘要——摘要由 summarizer fork 生成（v1 的 agent 自写已退役）。
+- 不删 clamp floor——它是 force-wait 之下的同步保底（fork 失败/超时仍保不崩）；删 clamp 推迟到 force-wait 生产实证后单独决策。
+
+### 4.4 剩余开放项
+
+- **talk 窗 compress 精度/走向**（`compress.md` Case E）：talk 窗 compressLevel 真有展示意义 + summarizedRanges 折 messages 段；首版优先 self-view thread 窗主路，talk 窗 compress 走 fork-summarize over messages 还是显式段、坐标用 messages 数算总长——实现期定，不挡主路。

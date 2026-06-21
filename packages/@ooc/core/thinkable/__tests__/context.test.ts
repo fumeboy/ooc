@@ -929,8 +929,8 @@ describe("transcript 纳入 budget（core10 另一半）", () => {
     const transcript = Number(m![2]);
     expect(transcript).toBeGreaterThan(100000); // 仅 transcript 即越 soft
     expect(current).toBeGreaterThanOrEqual(transcript);
-    // 指向正确杠杆：transcript 不能 close、只能 compress(scope=events)。
-    expect(warn).toContain('scope:"events"');
+    // 指向正确杠杆：transcript 不能 close、只能 compress（v2 无参意图）。
+    expect(warn).toContain('exec(method="compress")');
   });
 
   it("应急兜底：current 越 hard → transcript 本轮被钳、插 marker、thread.events 不动", async () => {
@@ -951,7 +951,7 @@ describe("transcript 纳入 budget（core10 另一半）", () => {
         (i as { content: string }).content.includes("[context_change:context_clamped]"),
     );
     expect(marker).toBeDefined();
-    expect((marker as { content: string }).content).toContain('scope:"events"');
+    expect((marker as { content: string }).content).toContain('exec(method="compress")');
 
     // 本轮 transcript 被钳短：assistant 文本项 < 100（最早被省略）。
     const texts = out.input.filter((i) => i.type === "message" && i.role === "assistant");

@@ -83,6 +83,15 @@ declare -a FORBIDDEN_PATTERNS=(
   'kind="lent_out"'
   '"lent_out"'
   "sharing.*lent_out"
+  # —— compress v2（resize/compress 协议，2026-06-21）退役 v1 方法面 ——
+  # 终态：compress 是协议（class 自实现、无默认）；resize 设档位（替代 expand）+ compress 无参意图；
+  # 摘要由 summarizer fork 生成。下列 v1 表述当 live 教即 drift（迁移表用 退役/→ 标记豁免）。
+  "scope=events"
+  "scope=windows"
+  "scope=auto"
+  "threadExpand"
+  "compress\\(scope"
+  "compress.*两 scope"
 )
 
 # 退役标记词：命中行含其一 = 合法的「退役说明」，放行。
