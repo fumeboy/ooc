@@ -109,12 +109,25 @@ export interface WorldFixture {
   }): void;
   /** 给 stone 写根 index.ts；Class.visibleServer.methods 里的方法通过 callMethod（HTTP）调到。 */
   writeStoneServer(objectId: string, code: string): void;
+  /** 给 stone 写任意相对文件（如 self.md）；自动 mkdir。A1 用来 seed 初始 self.md 内容。 */
+  writeStoneFile(objectId: string, relPath: string, content: string): void;
   /** 在 stones 目录下创建一个空 stone（.stone.json + 必要骨架）。 */
   createStone(objectId: string): void;
+  /**
+   * A2 flow scope：在 flow session 下建一个标准 flow object（写 .session.json + .flow.json）。
+   * 可选 `class` 指向 object registry 已注册的 class（如 `_builtin/agent/todo`），让该 object
+   * 继承 visibleServer 方法（callMethod 经 flows /call_method dispatch 调到）。
+   * 不经 thread / LLM —— 纯 HTTP/文件直建。
+   */
+  createFlowObject(sessionId: string, objectId: string, className?: string): void;
   /** spawn backend + Vite；test.use 之后调一次。 */
   startStack(): Promise<void>;
   /** 拼 object-client.html?... URL。 */
   previewUrl(query: PreviewQuery): string;
+  /** Vite web 根 URL（A1 走完整 shell：`${webUrl()}/files/<path>`）。startStack() 后可用。 */
+  webUrl(): string;
+  /** backend 根 URL（A1/A2 经 HTTP 直读核验：`${backendUrl()}/api/...`）。startStack() 后可用。 */
+  backendUrl(): string;
 }
 
 interface InternalState {
@@ -140,7 +153,7 @@ export const test = base.extend<{ world: WorldFixture }>({
     // 因此 createStone/writeStoneClient/writeStoneServer 只入队闭包，等 startStack() boot
     // 完 backend（端口可连=ensureStoneRepo 已完成）后再真写盘。
     // flows/ 不在 stone repo 内，不受影响，但同样延迟以保持单一写盘时机。
-    const pendingSeeds: Array<() => void> = [];
+    const pendingSeeds: Array<() => void | Promise<void>> = [];
 
     const fixture: WorldFixture = {
       baseDir,
@@ -194,6 +207,47 @@ export const test = base.extend<{ world: WorldFixture }>({
           writeFileSync(join(dir, "index.ts"), code, "utf8");
         });
       },
+      writeStoneFile(objectId, relPath, content) {
+        pendingSeeds.push(() => {
+          const dir = join(baseDir, "stones", "main", "objects", ...nestedObjectPath(objectId));
+          const abs = join(dir, relPath);
+          mkdirSync(join(abs, ".."), { recursive: true });
+          writeFileSync(abs, content, "utf8");
+        });
+      },
+      createFlowObject(sessionId, objectId, className) {
+        pendingSeeds.push(() => {
+          // 标准 flow object：直写 .session.json（session 元数据）+ .flow.json（带 class）。
+          //
+          // 不用 persistable.createFlowObject（它对 builtinRegistry 做 class 存在性校验）——
+          // 该 registry 仅在 buildServer 进程内被实例化填充；本 fixture 跑在 Playwright 测试
+          // 进程里，registry 是空的，校验会误判 class 不存在。直写文件即可：负责解析 class 的是
+          // backend 进程（call_method 时按其自身已填充的 registry 沿继承链找 visibleServer）。
+          const sessDir = join(baseDir, "flows", sessionId);
+          mkdirSync(sessDir, { recursive: true });
+          writeFileSync(
+            join(sessDir, ".session.json"),
+            JSON.stringify({ type: "flow-session", sessionId, title: sessionId }, null, 2),
+            "utf8",
+          );
+          const objDir = join(sessDir, "objects", ...nestedObjectPath(objectId));
+          mkdirSync(objDir, { recursive: true });
+          writeFileSync(
+            join(objDir, ".flow.json"),
+            JSON.stringify(
+              {
+                type: "flow-object",
+                sessionId,
+                objectId,
+                ...(className !== undefined ? { class: className } : {}),
+              },
+              null,
+              2,
+            ),
+            "utf8",
+          );
+        });
+      },
       async startStack() {
         const repoRoot = resolve(process.cwd());
         const backendPort = pickPort();
@@ -218,7 +272,7 @@ export const test = base.extend<{ world: WorldFixture }>({
         // backend boot 完成 → ensureStoneRepo 已建好 worktree；此刻才真写 seed 文件，
         // 避免被启动期 checkout 抹掉。vite 随后启动，OOC_WORLD_DIR 指向同一 baseDir，
         // /@fs 能读到这些文件。
-        for (const seed of pendingSeeds) seed();
+        for (const seed of pendingSeeds) await seed();
 
         const webPort = pickPort();
         const web = spawn(
@@ -238,6 +292,14 @@ export const test = base.extend<{ world: WorldFixture }>({
         const webURL = `http://127.0.0.1:${webPort}`;
         await waitForPort("127.0.0.1", webPort, 30_000);
         state.web = { proc: web, port: webPort, url: webURL };
+      },
+      webUrl() {
+        if (!state.web) throw new Error("startStack() before webUrl()");
+        return state.web.url;
+      },
+      backendUrl() {
+        if (!state.backend) throw new Error("startStack() before backendUrl()");
+        return state.backend.baseURL;
       },
       previewUrl(query) {
         if (!state.web) throw new Error("startStack() before previewUrl()");

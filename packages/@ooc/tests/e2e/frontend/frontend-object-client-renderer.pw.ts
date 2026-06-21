@@ -3,7 +3,8 @@
  *
  * 覆盖完成判据 1-6（除 2/3/4 真 LLM 路径外）：
  * - FC1: 没写 client (stone scope) → StoneFallback 名片 (Identity / About / Entry points)
- * - FC2: 写了正常的 stone client → 渲染按钮，callMethod 命中 visible/server 方法 data 显示
+ * - FC2: 写了正常的 stone client → 渲染只读内容，**callMethod prop 不存在**（stone scope 只读，
+ *        不注入 callMethod）。callMethod 端到端验证移到 A2 flow spec（frontend-flow-visible-edit）。
  * - FC3: 写了会抛错的 client → 红色错误块带堆栈，且不发任何 talk 请求
  * - FC4: 写了语法错误的 client → 红色加载错误块 (stone scope 改为 StoneFallback + error 折叠)
  * - FC5: 写了 flow page → 渲染并能拿到 sessionId
@@ -23,33 +24,22 @@ test.describe("Object Client Renderer e2e", () => {
     await expect(page.getByTestId("entry-start-thread")).toBeVisible();
   });
 
-  test("FC2 正常 stone client + callMethod → ping/pong 回显", async ({ page, world }) => {
-    world.createStone("pingpong");
-    world.writeStoneServer(
-      "pingpong",
-      `export const Class = { visibleServer: { methods: [
-        {
-          name: "ping",
-          description: "echoes back",
-          exec: async (_ctx, _self, args) => ({ data: { pong: args.value ?? "default" } }),
-        },
-      ] } };`,
-    );
+  test("FC2 stone client 只读：渲染内容 + callMethod prop 不存在", async ({ page, world }) => {
+    // stone-scope 原则：stone client 是只读身份展示，ObjectClientRenderer 不注入
+    // callMethod（运行时/data 编辑归 flow session）。这里写一个只读 stone client，
+    // 自检 props 里 typeof callMethod === "undefined" 并把按钮降级为 disabled，
+    // 断言它正常渲染只读内容、按钮降级、且无 console 错误（不因 callMethod undefined 崩）。
+    world.createStone("readonlyview");
     world.writeStoneClient(
-      "pingpong",
-      `import { useState } from "react";
-export default function View({ callMethod }) {
-  const [result, setResult] = useState(null);
+      "readonlyview",
+      `export default function View({ callMethod, objectName }) {
+  const hasCallMethod = typeof callMethod === "function";
   return (
     <div>
-      <button
-        data-testid="ping-btn"
-        onClick={async () => {
-          const r = await callMethod("ping", { value: "hi" });
-          setResult(JSON.stringify(r));
-        }}
-      >ping</button>
-      <div data-testid="result">{result}</div>
+      <div data-testid="object-name">{objectName}</div>
+      <div data-testid="readonly-body">read-only stone identity</div>
+      <div data-testid="has-call-method">{String(hasCallMethod)}</div>
+      <button data-testid="degraded-btn" disabled={!hasCallMethod}>action</button>
     </div>
   );
 }`,
@@ -58,14 +48,19 @@ export default function View({ callMethod }) {
     await world.startStack();
     const consoleLog = collectConsoleErrors(page);
 
-    await page.goto(world.previewUrl({ scope: "stone", objectId: "pingpong" }));
-    await expect(page.getByTestId("ping-btn")).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId("ping-btn").click();
-    await expect(page.getByTestId("result")).toHaveText('{"pong":"hi"}', {
-      timeout: 10_000,
+    await page.goto(world.previewUrl({ scope: "stone", objectId: "readonlyview" }));
+    // 只读内容正常渲染
+    await expect(page.getByTestId("readonly-body")).toHaveText("read-only stone identity", {
+      timeout: 15_000,
     });
+    // renderer 把 objectName 透传给 stone client
+    await expect(page.getByTestId("object-name")).toHaveText("readonlyview");
+    // 关键断言：stone scope 不注入 callMethod
+    await expect(page.getByTestId("has-call-method")).toHaveText("false");
+    // 按钮按只读语义降级（disabled），不依赖 callMethod
+    await expect(page.getByTestId("degraded-btn")).toBeDisabled();
 
-    // 不应触发 console 错误
+    // callMethod undefined 不应导致任何 console 错误
     expect(consoleLog.errors).toEqual([]);
   });
 
