@@ -50,7 +50,6 @@ export type { TalkData, TalkWin, TalkWindowView } from "@ooc/builtins/agent/thre
 export type { Data as PrData } from "@ooc/builtins/agent/pr/types.js";
 export type { Data as TerminalProcessData } from "@ooc/builtins/terminal/terminal_process/types.js";
 export type { Data as InterpreterProcessData } from "@ooc/builtins/interpreter/interpreter_process/types.js";
-export type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";
 export type { Data as FileData } from "@ooc/builtins/filesystem/file/types.js";
 export type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 export type { Data as SearchData, SearchMatch } from "@ooc/builtins/filesystem/search/types.js";

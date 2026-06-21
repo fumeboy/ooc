@@ -1,21 +1,8 @@
 /**
- * 进程执行记录 —— terminal_process / interpreter_process 共用的 history 条目与格式化。
- *
- * terminal_process（bash）与 interpreter_process（ts/js）都把每次 exec 包成一条 ProcessExecRecord
- * 追加进自己的 history。两者结构一致（语言不同、运行时不同），故记录类型与输出格式化收在 _shared。
+ * interpreter_process 的 ts/js 执行结果与格式化 —— 把 sandbox executor 的产物包成单一输出串。
  */
 
-/** 单条进程执行记录。 */
-export interface ProcessExecRecord {
-  execId: string;
-  language: "shell" | "ts" | "js";
-  code?: string;
-  output: string;
-  ok: boolean;
-  startedAt: number;
-}
-
-/** ts/js 用户代码的执行结果。 */
+/** ts/js 用户代码的执行结果（sandbox executor 的返回形态）。 */
 export interface InterpreterExecutionResult {
   /** 是否成功完成（无异常）。 */
   success: boolean;
@@ -34,16 +21,6 @@ export function truncateOutput(text: string): string {
   if (bytes.length <= MAX_OUTPUT_BYTES) return text;
   const head = new TextDecoder().decode(bytes.slice(0, MAX_OUTPUT_BYTES));
   return `${head}...[truncated, original ${bytes.length} bytes]`;
-}
-
-/** 把 bash 进程的 stdout/stderr/exitCode 格式化为单一字符串。 */
-export function formatShellResult(code: string, stdout: string, stderr: string, exitCode: number): string {
-  const firstLine = code.split("\n")[0]?.trim() ?? "";
-  const lines = [`$ ${firstLine}`];
-  if (stdout) lines.push("[stdout]", truncateOutput(stdout));
-  if (stderr) lines.push("[stderr]", truncateOutput(stderr));
-  lines.push(exitCode === 124 ? "[timeout 30s]" : `[exit ${exitCode}]`);
-  return lines.join("\n");
 }
 
 /** 把 ts/js executor 的结果统一格式化为单一字符串。 */
@@ -72,7 +49,6 @@ export function isOkResult(result: string): boolean {
   const head = result.slice(0, 256);
   return !(
     head.startsWith("[process-error]") ||
-    head.startsWith("[terminal_process") ||
     head.startsWith("[interpreter_process") ||
     head.includes("缺少") ||
     head.includes("失败") ||

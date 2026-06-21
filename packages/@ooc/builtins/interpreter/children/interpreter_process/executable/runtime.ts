@@ -7,12 +7,8 @@
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
 import { deriveStoneFromThread } from "@ooc/core/persistable/index.js";
-import {
-  type ProcessExecRecord,
-  generateExecId,
-  isOkResult,
-  formatInterpreterResult,
-} from "@ooc/builtins/_shared/executable/process-record.js";
+import type { ProcessExecRecord } from "../types.js";
+import { generateExecId, isOkResult, formatInterpreterResult } from "./exec-record.js";
 import { createInterpreterSelf } from "./self.js";
 import { executeUserCode } from "./sandbox/executor.js";
 

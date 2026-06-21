@@ -5,11 +5,8 @@
  * 把输出包成 ProcessExecRecord。
  */
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
-import {
-  type ProcessExecRecord,
-  generateExecId,
-  isOkResult,
-} from "@ooc/builtins/_shared/executable/process-record.js";
+import type { ProcessExecRecord } from "../types.js";
+import { generateExecId, isOkResult } from "./exec-record.js";
 import { runBashScript, buildBashEnv } from "./shell.js";
 
 /** 执行一次 bash exec，返回 ProcessExecRecord。 */

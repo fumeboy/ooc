@@ -1,6 +1,6 @@
 import { resolveStoneIdentityDir } from "@ooc/core/persistable/index.js";
 import type { FlowObjectRef } from "@ooc/core/persistable/index.js";
-import { formatShellResult } from "@ooc/builtins/_shared/executable/process-record.js";
+import { formatShellResult } from "./exec-record.js";
 
 /**
  * 跑一段 bash 脚本（独立子进程）。

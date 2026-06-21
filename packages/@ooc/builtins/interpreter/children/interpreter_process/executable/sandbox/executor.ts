@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createCapturingConsole } from "./console";
 import { wrapUserCode } from "./wrap";
-import type { InterpreterExecutionResult } from "@ooc/builtins/_shared/executable/process-record.js";
+import type { InterpreterExecutionResult } from "../exec-record.js";
 
 let counter = 0;
 

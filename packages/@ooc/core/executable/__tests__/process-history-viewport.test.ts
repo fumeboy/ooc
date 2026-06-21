@@ -19,17 +19,17 @@ import { serializeXml, xmlElement, type XmlNode } from "@ooc/core/_shared/types/
 import {
   DEFAULT_HISTORY_VIEWPORT,
   renderProcessHistory,
-  makeSetHistoryWindowMethod,
+  setHistoryWindowMethod,
   type ProcessWin,
-} from "@ooc/builtins/_shared/executable/process-readable.js";
-import type { ProcessExecRecord } from "@ooc/builtins/_shared/executable/process-record.js";
+} from "@ooc/builtins/terminal/terminal_process/readable/history.js";
+import type { ProcessExecRecord } from "@ooc/builtins/terminal/terminal_process/types.js";
 import terminalProcessReadable from "@ooc/builtins/terminal/terminal_process/readable/index.js";
 import { Class as TerminalProcessClass } from "@ooc/builtins/terminal/terminal_process";
 import type { Data as TerminalProcessData } from "@ooc/builtins/terminal/terminal_process";
 import { makeThread } from "../../__tests__/make-thread.js";
 
 const NOW = 1_700_000_000_000;
-const setHistoryWindow = makeSetHistoryWindowMethod("terminal_process");
+const setHistoryWindow = setHistoryWindowMethod;
 
 function makeHistory(n: number): ProcessExecRecord[] {
   return Array.from({ length: n }, (_, i) => ({
