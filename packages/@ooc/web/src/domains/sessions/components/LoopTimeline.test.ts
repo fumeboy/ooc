@@ -108,18 +108,18 @@ describe("classifyLoopEvent — type-dispatch 表", () => {
     expect(spec?.tooltip).toContain("write_file");
   });
 
-  it("Case 4b: context_compressed (reason=user-compress) → blue + 'user-compress' tooltip", () => {
+  it("Case 4b: context_compressed (reason=auto-summarized) → gray fold chip", () => {
     const evt: LoopEvent = {
       category: "context_change",
       kind: "context_compressed",
-      reason: "user-compress",
-      windowIds: ["w_1", "w_2"],
+      reason: "auto-summarized",
+      levelChange: "auto-fold",
     };
     const spec = classifyLoopEvent(evt);
     expect(spec).toBeDefined();
-    expect(spec?.color).toBe("blue");
-    expect(spec?.icon).toBe("🗜️");
-    expect(spec?.tooltip).toContain("user-compress");
+    expect(spec?.color).toBe("gray");
+    expect(spec?.icon).toBe("🍂");
+    expect(spec?.label).toBe("fold");
   });
 
   it("permission_ask (decided.approve) → green + 'approved' label", () => {
@@ -171,27 +171,29 @@ describe("classifyLoopEvent — type-dispatch 表", () => {
     expect(spec?.label).toContain("fail");
   });
 
-  it("context_compressed (idle-fold) → gray with 'idle-fold' label", () => {
+  it("context_compressed (auto-summarized) → gray fold chip", () => {
     const evt: LoopEvent = {
       category: "context_change",
       kind: "context_compressed",
-      reason: "idle-fold",
-      windowIds: ["w_1"],
+      reason: "auto-summarized",
+      levelChange: "auto-fold",
     };
     const spec = classifyLoopEvent(evt);
     expect(spec?.color).toBe("gray");
     expect(spec?.icon).toBe("🍂");
   });
 
-  it("context_compressed (emergency-guard-*) → orange", () => {
+  it("context_compressed (summarizer-fork-failed) → orange fold-fail chip", () => {
     const evt: LoopEvent = {
       category: "context_change",
       kind: "context_compressed",
-      reason: "emergency-guard-context-overflow",
-      windowIds: [],
+      reason: "summarizer-fork-failed; auto-compress 已关闭，可 resize 重开",
+      levelChange: "auto-fold-failed",
     };
     const spec = classifyLoopEvent(evt);
     expect(spec?.color).toBe("orange");
+    expect(spec?.icon).toBe("⚠️");
+    expect(spec?.label).toBe("fold fail");
   });
 });
 
@@ -218,7 +220,7 @@ describe("isKeyEvent — 噪音过滤", () => {
 
   it("关键事件全部命中 isKeyEvent", () => {
     const keys: LoopEvent[] = [
-      { category: "context_change", kind: "context_compressed", reason: "user-compress" } as LoopEvent,
+      { category: "context_change", kind: "context_compressed", reason: "auto-summarized" } as LoopEvent,
       { category: "permission", kind: "permission_ask", method: "x" } as LoopEvent,
       { category: "permission", kind: "permission_denied", method: "x", reason: "y" } as LoopEvent,
       { category: "tool_runtime", kind: "function_call_output", toolName: "exec", ok: false } as LoopEvent,
@@ -237,8 +239,8 @@ describe("R0c integration scenarios", () => {
       {
         category: "context_change",
         kind: "context_compressed",
-        reason: "user-compress",
-        windowIds: ["w_1"],
+        reason: "auto-summarized",
+        levelChange: "auto-fold",
       } as LoopEvent,
       // noise event 应被 filter out (在 LoopTimeline 渲染时调 filter(isKeyEvent))
       { category: "llm_interaction", kind: "text" } as unknown as LoopEvent,
@@ -251,8 +253,8 @@ describe("R0c integration scenarios", () => {
     // 第一关键 event = yellow (pending permission ask)
     const spec1 = classifyLoopEvent(keyOnly[0]);
     expect(spec1?.color).toBe("yellow");
-    // 第二关键 event = blue (user-compress)
+    // 第二关键 event = gray (auto-summarized fold)
     const spec2 = classifyLoopEvent(keyOnly[1]);
-    expect(spec2?.color).toBe("blue");
+    expect(spec2?.color).toBe("gray");
   });
 });

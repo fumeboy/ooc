@@ -35,8 +35,8 @@ describe("R0d-1: planBadgeClickAction — badge 单击意图分发", () => {
     const evt: LoopEvent = {
       category: "context_change",
       kind: "context_compressed",
-      reason: "user-compress",
-      windowIds: ["w_1"],
+      reason: "auto-summarized",
+      levelChange: "auto-fold",
     };
     const action = planBadgeClickAction(evt);
     expect(action.type).toBe("scroll");
@@ -233,8 +233,8 @@ describe("R0d-6: loopEventAnchorId 优先级", () => {
     const evt: LoopEvent = {
       category: "context_change",
       kind: "context_compressed",
-      reason: "idle-fold",
-      windowIds: [],
+      reason: "auto-summarized",
+      levelChange: "auto-fold",
     };
     expect(loopEventAnchorId(evt, 7, 2)).toBe("loop-event-loop7-2");
   });
