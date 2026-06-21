@@ -148,6 +148,8 @@ export function initContextWindows(
     title: opts.initialTaskTitle,
     status: "open",
     createdAt: Date.now(),
+    // 结构窗：thread 与 creator 的恒在通道（construct 期标）→ close 原语拒关（spec §5）。
+    closable: false,
     data: threadData,
     // 过程窗每轮 init 幂等重注入（transient：不单独落 state.json 死 _ref）；transcriptViewport / summarizedRanges
     // 投影态进 win。注：transient 不影响 inline 持久化——THREAD_CLASS_ID inline 类整窗落 thread-context.json，
@@ -188,6 +190,8 @@ function injectSelfWindowIfObjectThread(thread: ThreadContext): void {
     title: objectId,
     status: "open",
     createdAt: Date.now(),
+    // 结构窗：object 的自我门面（恒在通道，construct 期标）→ close 原语拒关（spec §5）。
+    closable: false,
     data: {},
     // self 门面窗每次 init 幂等重注入、无独立 state.json → win.transient 标记为不持久化，
     // 否则 thread-context.json 落死 _ref，reload 刷屏 `references missing object <id>`。

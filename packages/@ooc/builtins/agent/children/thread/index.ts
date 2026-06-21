@@ -22,6 +22,7 @@ import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
 import type {
   ConstructorContext,
   ObjectConstructor,
+  ObjectLifecycleHook,
 } from "@ooc/core/executable/contract.js";
 import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import { stat } from "node:fs/promises";
@@ -30,7 +31,15 @@ import { stoneDir, resolveStoneIdentityRef } from "@ooc/core/persistable/index.j
 import { SUPER_ALIAS_TARGET } from "@ooc/core/_shared/types/constants.js";
 import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
-import { makeMessage, appendInbox } from "@ooc/builtins/agent/thread/executable/talk-fork.js";
+import {
+  makeMessage,
+  appendInbox,
+  findChild,
+} from "@ooc/builtins/agent/thread/executable/talk-fork.js";
+import {
+  referencedObjectId,
+  countSessionReferences,
+} from "@ooc/core/runtime/object-lifecycle.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import persistable from "./persistable/index.js";
@@ -180,11 +189,52 @@ const talkConstructor: ObjectConstructor<Data> = {
   },
 };
 
+// ─────────────────────────── unactive（生命周期：refcount 归 0 触发）───────────────────────────
+
+/** 退出态（不计入 refcount、不再级联进入）。与 core ACTIVE_STATUS 互补（spec §2.2）。 */
+const TERMINAL = new Set(["done", "failed", "canceled"]);
+
+/**
+ * 把 targetId 定位的（fork 子）线程切到 canceled，并级联停用其「现在归 0」的子树。
+ *
+ * canceled 同 done/failed 退出 refcount → 子线程一旦 canceled，其持有的窗不再计数 →
+ * 只被该子线程引用的孙线程 refcount 也归 0 → 递归 cancel。有界 DFS、per-call visited 去重防环。
+ * 级联是 thread builtin policy；core dispatcher 保持单次泛型（spec §3.3）。
+ */
+function cancelSubtree(scope: ThreadContext, targetId: string, visited: Set<string>): void {
+  if (visited.has(targetId)) return;
+  const t = findChild(scope, targetId);
+  if (!t || TERMINAL.has(t.status)) return;
+  t.status = "canceled"; // 停用 = 切终态 canceled（身份留存、不 delete，spec §2.2）
+  visited.add(targetId);
+  for (const w of t.contextWindows ?? []) {
+    const child = referencedObjectId(w);
+    if (child && !visited.has(child) && countSessionReferences(t, child) === 0) {
+      cancelSubtree(t, child, visited);
+    }
+  }
+}
+
+/**
+ * thread.unactive —— 被解引用的（fork 子）线程 refcount 归 0 时由 close 原语经
+ * dispatchUnactiveIfZero 单次派发。把该子线程切 canceled 并级联停用现已归零的子树。
+ * 返回 void（= 不 delete）：canceled 线程保留在盘上（同 done/failed）；持久化沿用既有线程 save。
+ */
+const unactive: ObjectLifecycleHook = {
+  description:
+    "Cancel the dereferenced (fork) thread and its now-unreferenced subtree. Identity persists (no delete).",
+  exec: (ctx) => {
+    if (!ctx.thread) return;
+    cancelSubtree(ctx.thread, ctx.targetId, new Set<string>());
+  },
+};
+
 export const Class: OocClass<Data> = {
   construct: talkConstructor,
   executable,
   readable,
   persistable,
+  unactive,
 };
 
 export type { Data } from "./types.js";
