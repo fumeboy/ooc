@@ -103,6 +103,34 @@ export async function dispatchUnactiveIfZero(
 }
 
 /**
+ * open/instantiate 加窗后：被引用对象 targetId 的 session refcount 由 0 变 1（刚加的窗 = 第一个
+ * 外部引用）且其 class 声明 active → 单次泛型派发 active 钩子（与 unactive 对称、construct 之后
+ * 首次激活也触发，spec §2）。
+ *
+ * v1 seam = `WindowManager.instantiate`（fork 窗在此诞生，是 referencedObjectId v1 唯一解析的窗）。
+ * **扩展点**：phase-2 把 referencedObjectId 扩到 member/peer 窗时，init 注入路径
+ * （initContextWindows / injectMember/PeerWindows，不经 instantiate）也须补本调用，否则对
+ * init 注入的引用永不 fire active。active 不消费返回值（{delete} 仅 unactive honor）。
+ */
+export async function dispatchActiveIfFirst(
+  ctxThread: ThreadContext,
+  targetId: string,
+  targetClass: string,
+  registry: ObjectRegistry,
+): Promise<void> {
+  const hook = registry.resolveActive(targetClass);
+  if (!hook) return; // fast-path：无 active body → 不算 refcount（零成本）
+  if (countSessionReferences(ctxThread, targetId) !== 1) return; // 刚加的窗 = 第 1 个引用 ⇒ 0→1
+  const ctx: LifecycleContext = {
+    thread: ctxThread,
+    runtime: undefined,
+    args: {},
+    targetId,
+  };
+  await hook.exec(ctx);
+}
+
+/**
  * delete:true → 彻底从 session 移除 targetId：删持久化（缺省删 objectDir 路径；自定义 persistable
  * 布局的删除推 phase-2 经 `PersistableModule.delete?`）+ 从内存持有处移除（v1 = 顶层
  * ctxThread.contextWindows 过滤掉引用 targetId 的窗；thread-target 的 childThreads 内存移除推

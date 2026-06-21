@@ -39,6 +39,7 @@ import type {
   RuntimeHandle,
 } from "../executable/contract.js";
 import type { ReadableContext } from "../readable/contract.js";
+import { referencedObjectId, dispatchActiveIfFirst } from "./object-lifecycle.js";
 
 /** 可选的持久化回调（persist leaf 在构造时挂接；缺省 no-op，使墙内自洽）。 */
 export interface WindowManagerHooks {
@@ -153,6 +154,16 @@ export class WindowManager implements RuntimeHandle {
     };
     this.instances.set(id, instance);
     await this.hooks.reportContextEdit?.();
+    // active 生命周期：新窗若引用某对象且其 session refcount 0→1，派发该对象 class 的 active 钩子。
+    // 先把新窗同步进 threadRef.contextWindows（countSessionReferences 读它），再派发。
+    // v1：referencedObjectId 仅解析 fork 窗 → 仅 fork 触发；thread 无 active body → fast-path no-op。
+    if (this.threadRef) {
+      this.threadRef.contextWindows = this.toData();
+      const target = referencedObjectId(instance);
+      if (target) {
+        await dispatchActiveIfFirst(this.threadRef, target, instance.class, this.registry);
+      }
+    }
     return id;
   }
 

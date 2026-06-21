@@ -10,6 +10,7 @@ import {
   referencedObjectId,
   countSessionReferences,
   dispatchUnactiveIfZero,
+  dispatchActiveIfFirst,
 } from "../object-lifecycle";
 import { threadWindowIdOf } from "../../_shared/types/context-window";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants";
@@ -214,5 +215,37 @@ describe("dispatchUnactiveIfZero (单次泛型, fast-path)", () => {
     const p = thr("t_np", "canceled", [forkWin("w_ref", "o_x")]);
     await dispatchUnactiveIfZero(p, "o_x", "_test/gc2", reg);
     expect(p.contextWindows.some((w) => referencedObjectId(w) === "o_x")).toBe(false);
+  });
+});
+
+// ─────────────────────── active dispatch (0→1, fast-path) ───────────────────────
+describe("dispatchActiveIfFirst (0→1, fast-path)", () => {
+  test("refcount 1（首个引用窗）+ class 有 active → 钩子被调（经 ctx.targetId）", async () => {
+    const reg = createObjectRegistry();
+    let got = "";
+    reg.register(THREAD_CLASS_ID, {
+      active: { description: "", exec: (ctx) => { got = ctx.targetId; } },
+    });
+    const p = thr("t_p", "running", [forkWin("w_f", "t_c")]); // 一个引用 t_c 的 fork 窗 → refcount 1
+    await dispatchActiveIfFirst(p, "t_c", THREAD_CLASS_ID, reg);
+    expect(got).toBe("t_c");
+  });
+
+  test("refcount 2（已被多窗引用，非 0→1）→ 钩子不被调", async () => {
+    const reg = createObjectRegistry();
+    let called = false;
+    reg.register(THREAD_CLASS_ID, {
+      active: { description: "", exec: () => { called = true; } },
+    });
+    const p = thr("t_p", "running", [forkWin("w1", "t_c"), forkWin("w2", "t_c")]); // refcount 2
+    await dispatchActiveIfFirst(p, "t_c", THREAD_CLASS_ID, reg);
+    expect(called).toBe(false);
+  });
+
+  test("class 无 active → fast-path no-op（不算 refcount、不 throw）", async () => {
+    const reg = createObjectRegistry();
+    const p = thr("t_p", "running", [forkWin("w_f", "t_c")]);
+    await dispatchActiveIfFirst(p, "t_c", "_builtin/filesystem", reg);
+    expect(true).toBe(true);
   });
 });

@@ -43,6 +43,7 @@ import {
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import persistable from "./persistable/index.js";
+import { writeThread } from "./persistable/thread-json.js";
 import type { Data } from "./types.js";
 
 const TALK_CONSTRUCTOR_TIP = `talk 开启一个持续会话 talk_window。
@@ -200,32 +201,39 @@ const TERMINAL = new Set(["done", "failed", "canceled"]);
  * canceled 同 done/failed 退出 refcount → 子线程一旦 canceled，其持有的窗不再计数 →
  * 只被该子线程引用的孙线程 refcount 也归 0 → 递归 cancel。有界 DFS、per-call visited 去重防环。
  * 级联是 thread builtin policy；core dispatcher 保持单次泛型（spec §3.3）。
+ *
+ * **每个被 cancel 的节点立即 writeThread 自身持久化**：fork 子线程跑过 ≥1 tick 后有独立
+ * thread.json（scheduler 写为 running）；只在内存切 canceled 而不刷盘，bootstrap 的
+ * `enqueueRunningThreadsAtBootstrap`（扫盘上 running/waiting）会把 canceled 子当 orphan 复活。
+ * 故对带自身 persistence ref 的每个 canceled 节点即时 writeThread（reload 不复活）。
  */
-function cancelSubtree(scope: ThreadContext, targetId: string, visited: Set<string>): void {
+async function cancelSubtree(scope: ThreadContext, targetId: string, visited: Set<string>): Promise<void> {
   if (visited.has(targetId)) return;
   const t = findChild(scope, targetId);
   if (!t || TERMINAL.has(t.status)) return;
   t.status = "canceled"; // 停用 = 切终态 canceled（身份留存、不 delete，spec §2.2）
   visited.add(targetId);
+  if (t.persistence) await writeThread(t); // 刷盘 canceled，防 bootstrap 按盘上 running 复活
   for (const w of t.contextWindows ?? []) {
     const child = referencedObjectId(w);
     if (child && !visited.has(child) && countSessionReferences(t, child) === 0) {
-      cancelSubtree(t, child, visited);
+      await cancelSubtree(t, child, visited);
     }
   }
 }
 
 /**
  * thread.unactive —— 被解引用的（fork 子）线程 refcount 归 0 时由 close 原语经
- * dispatchUnactiveIfZero 单次派发。把该子线程切 canceled 并级联停用现已归零的子树。
- * 返回 void（= 不 delete）：canceled 线程保留在盘上（同 done/failed）；持久化沿用既有线程 save。
+ * dispatchUnactiveIfZero 单次派发。把该子线程切 canceled 并级联停用现已归零的子树，
+ * 并刷盘每个 canceled 节点（防 reload 复活）。返回 void（= 不 delete）：canceled 线程保留在盘上
+ * （同 done/failed），父侧另由 scheduler.emitChildEndNotifications 发 child-end marker 通知/唤醒。
  */
 const unactive: ObjectLifecycleHook = {
   description:
-    "Cancel the dereferenced (fork) thread and its now-unreferenced subtree. Identity persists (no delete).",
-  exec: (ctx) => {
+    "Cancel the dereferenced (fork) thread and its now-unreferenced subtree; persist canceled state. Identity persists (no delete).",
+  exec: async (ctx) => {
     if (!ctx.thread) return;
-    cancelSubtree(ctx.thread, ctx.targetId, new Set<string>());
+    await cancelSubtree(ctx.thread, ctx.targetId, new Set<string>());
   },
 };
 

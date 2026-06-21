@@ -10,6 +10,7 @@ import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { handleCloseTool } from "@ooc/core/executable/tools/close.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
+import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
@@ -80,5 +81,28 @@ describe("thread.unactive（关 fork 窗 → 子线程 canceled，经 close 原�
     await handleCloseTool(parent, { window_id: forkId, reason: "整棵弃" }, builtinRegistry);
     expect(child.status).toBe("canceled");
     expect(grand.status).toBe("canceled"); // 级联：child canceled → 其窗不计数 → 孙归 0 → canceled
+  });
+
+  it("跨 reload：canceled fork 子刷盘 → readThread 仍 canceled（不被 bootstrap 复活）", async () => {
+    const SELF = "carol";
+    const baseDir = await tmpBase();
+    const persistence: ThreadPersistenceRef = { baseDir, sessionId: "s", objectId: SELF, threadId: "t_p" };
+    const parent = makeThread({ id: "t_p", objectId: SELF, persistence });
+
+    const mgr = WindowManager.fromThread(parent, builtinRegistry);
+    const forkId = await mgr.instantiate(THREAD_CLASS_ID, { target: SELF, msg: "子" });
+    parent.contextWindows = mgr.toData();
+    const childId = parent.childThreadIds![0]!;
+    const child = parent.childThreads![childId]!;
+
+    // 模拟子线程跑过 ≥1 tick：其独立 thread.json 落盘为 running（修复前 cancel 不会改它）。
+    await writeThread(child);
+    // 关 fork 窗 → cancelSubtree 把 child 切 canceled 并即时刷盘。
+    await handleCloseTool(parent, { window_id: forkId, reason: "弃" }, builtinRegistry);
+    expect(child.status).toBe("canceled");
+
+    // reload：从盘读回 child → 仍 canceled（修复前会读到 running → 被 bootstrap 当 orphan 复活）。
+    const reloaded = await readThread({ baseDir, sessionId: "s", objectId: SELF }, childId);
+    expect(reloaded?.status).toBe("canceled");
   });
 });
