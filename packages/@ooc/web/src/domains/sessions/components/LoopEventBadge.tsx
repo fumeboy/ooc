@@ -3,7 +3,7 @@
  *
  * - 严格 type-dispatch 风格: 新增 event 类型时只加 case, 不动调用方。
  * - 非关键事件 (普通 text / reasoning / 普通 tool_use 等) 不进 badge — 减噪音原则。
- * - 颜色与 tooltip 必须有信息密度: tooltip 含触发原因 / windowIds / decided 时间等,
+ * - 颜色与 tooltip 必须有信息密度: tooltip 含触发原因 / decided 时间等,
  *   让悬停就能判断"这条 chip 代表了什么", 不用展开 loop 全文。
  *
  * 单测见 LoopTimeline.test.ts (整张 timeline 用例覆盖关键 event 高亮断言)。
@@ -22,11 +22,9 @@ import type { ReactNode } from "react";
 export interface LoopEvent {
   category?: string;
   kind?: string;
-  /** context_compressed */
-  windowIds?: string[];
+  /** context_compressed（compress v2：fold 恒 self-view transcript，无 windowIds/scope 维度）。 */
   levelChange?: string;
   reason?: string;
-  scope?: string;
   /** permission_ask / permission_denied */
   method?: string;
   argsSummary?: string;
@@ -56,59 +54,29 @@ export interface LoopEventBadgeSpec {
 export function classifyLoopEvent(event: LoopEvent): LoopEventBadgeSpec | undefined {
   if (!event || typeof event !== "object") return undefined;
 
-  // context_compressed: reason 决定颜色 + icon
+  // context_compressed (compress v2): summarizer-fork harvest 产物。
+  // v2 reason 词表恒为两种（scheduler.ts harvestSummarizerForks）：
+  //   - auto-summarized（levelChange=auto-fold）：fork 成功摘要早期 transcript → 折叠
+  //   - summarizer-fork-failed…（levelChange=auto-fold-failed）：fork 失败、自动压缩已关
+  // （talk-fold 不建——Case E 裁定 summarizer-fold 是自我视角能力——故折叠恒是 self-view transcript，
+  //  windowIds 恒空、无 v1 的 user-compress/expand/idle-fold/emergency-guard 等档位。）
   if (event.category === "context_change" && event.kind === "context_compressed") {
     const reason = (event.reason ?? "").toString();
-    const windowIds = Array.isArray(event.windowIds) ? event.windowIds : [];
-    const wSummary = windowIds.length === 0
-      ? "no windows"
-      : windowIds.length <= 2
-        ? windowIds.join(", ")
-        : `${windowIds.slice(0, 2).join(", ")} +${windowIds.length - 2} more`;
+    const levelChange = (event.levelChange ?? "").toString();
 
-    if (reason === "user-compress") {
-      return {
-        icon: "🗜️",
-        color: "blue",
-        tooltip: `user-compress: ${wSummary}`,
-        label: "compress",
-      };
-    }
-    if (reason === "user-expand") {
-      return {
-        icon: "↩️",
-        color: "green",
-        tooltip: `expand: ${windowIds.join(", ") || "(no windows)"}`,
-        label: "expand",
-      };
-    }
-    if (reason.startsWith("emergency-guard")) {
+    if (reason.startsWith("summarizer-fork-failed") || levelChange === "auto-fold-failed") {
       return {
         icon: "⚠️",
         color: "orange",
-        tooltip: `emergency guard: ${reason}`,
-        label: "guard",
+        tooltip: `compress failed: ${reason || "summarizer fork failed"}`,
+        label: "fold fail",
       };
     }
-    if (
-      reason === "idle-fold" ||
-      reason === "age-fold" ||
-      reason === "double-fold" ||
-      reason === "cascade-fold"
-    ) {
-      return {
-        icon: "🍂",
-        color: "gray",
-        tooltip: `${reason}: ${windowIds.length} window${windowIds.length === 1 ? "" : "s"} folded`,
-        label: reason,
-      };
-    }
-    // unknown reason — still surface as a generic compressed chip
     return {
       icon: "🍂",
       color: "gray",
-      tooltip: `context_compressed: ${reason || "(no reason)"} · ${wSummary}`,
-      label: "compress",
+      tooltip: `transcript folded (summarizer): ${reason || levelChange || "auto-summarized"}`,
+      label: "fold",
     };
   }
 

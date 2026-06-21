@@ -15,9 +15,11 @@ import {
 import type { WindowMethod, ReadableContext } from "@ooc/core/readable/contract.js";
 import type { Data, ProcessExecRecord } from "../types.js";
 
-/** interpreter_process 窗的投影态（与 Data 分离）：history 视口。 */
+/** interpreter_process 窗的投影态（与 Data 分离）：history 视口 + 展示档位。 */
 export interface ProcessWin {
   historyViewport?: TranscriptViewport;
+  /** compress v2：展示档位（本 class 自实现的 resize 设；renderer projectByCompressLevel 投影）。 */
+  compressLevel?: 0 | 1 | 2;
 }
 
 /** 默认 history viewport：末 10 次 exec。 */

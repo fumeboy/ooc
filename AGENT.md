@@ -41,7 +41,7 @@ ooc-philosophy / ooc-glossary / engineering-harness / testing-strategy / authori
 2. 再 supervisor `knowledge/engineering-harness.md` 看你所在的角色与协作模式。
 3. 接到具体任务后，去对应维度对象 `children/<dim>/`（self.md 核心设计 + knowledge）。
 
-## 系统设计调整工作流（issue → review → 裁决）
+## 系统设计调整工作流（issue → review → 裁决 → 验收）
 
 任何**系统设计调整**（维度核心 / 对象模型 / 交叉契约 / builtin 设计的增删改、退役某符号/概念）都走这条流程——它是「涨潮必退潮」的退潮闸门。权威规范见 supervisor `knowledge/design-workflow.md`；设计元素注册表见 `knowledge/index.md`（A–E 区每个 `##` 元素 = 一个设计元素）。
 
@@ -51,8 +51,9 @@ ooc-philosophy / ooc-glossary / engineering-harness / testing-strategy / authori
 2. **review fan-out**：并发派 sub agent——**每个受影响设计元素各派一个 reviewer**（以「我是这个元素的主人」视角审改动对该元素的契约影响、补具体评论）＋ **一个完整性批评官**（扫 index.md 全清单 + self.md，专问"还漏了哪个未被列为受影响、却会被波及的元素"，并查内部自洽 / 与 source 一致 / 术语漂移 / 设计-实施越界）。reviewer **不自己 commit、不直接改文件**，只回评论给 Supervisor 汇总。
 3. **汇总裁决 + 一致性回流**：Supervisor 汇总各 reviewer + 完整性批评官意见记进 issue → 裁决跨维度冲突与待决点 → 落地（改 self.md〔面向实施〕/ index.md〔面向设计〕/ 代码）→ **强制成对回流**（改一处必同步另一处；退役某符号/概念时全树〔index.md + 各 self.md + builtin md〕引用一并清理）→ issue 标 `landed`。
    - **涉及源代码变更**（`packages/@ooc/`）的 issue 不在主工作区直接改，而是为该 issue 在源码仓根 `.worktree/<slug>` 新建 git worktree 分支隔离开发（多 issue 并行互不污染），开发完按常规合入、在 issue「裁决」段记录该分支；纯设计文档调整无需 worktree。
+4. **落地验收 review**：`landed` 是落地者的自我断言（动手与宣布完成是同一人），须独立核对——并发派 sub agent 对照 issue 核**实际落地的文档/代码是否如约改造**（不是重审设计对不对，那是步骤 2）：文档验收（提案 + 受影响元素逐条是否真改、成对回流是否漏一边）/ 代码验收（实现是否真在代码里、质量门是否绿）/ 退潮验收（退役符号全树清干净，接 `check:doc-drift`、`check-no-deprecated-symbols`）/ 漂移验收（有无引入提案外偏差）。验收 reviewer 不自己补，缺口回 Supervisor 补落地（issue 维持 `landed`），直到无缺口 → issue 标 `verified`。验收发现的实质设计问题另起新 issue，不在本轮夹带。
 
-要点：index.md（面向设计）与各 self.md（面向实施）是**同一设计的两个投影**，靠步骤 3 的成对回流防漂移；脱离此流程的零散设计改动是漂移之源。
+要点：index.md（面向设计）与各 self.md（面向实施）是**同一设计的两个投影**，靠步骤 3 的成对回流 + 步骤 4 的验收兜底防漂移；脱离此流程的零散设计改动是漂移之源。
 
 ## 你的工作模式（当前 interim runtime）
 

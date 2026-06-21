@@ -245,9 +245,9 @@ function collectNodeText(nodes: XmlNode[]): string {
 }
 
 /**
- * 按窗的 `compressLevel` 投影内容详略 —— compress/expand 的**读出侧**（此前 renderer 完全不消费 compressLevel）。
+ * 按窗的 `compressLevel` 投影内容详略 —— `resize` 的**读出侧**（compress v2：resize 设档位，无 expand）。
  * - 0 / undefined：原样全文
- * - 1：缩略——拍平为截断文本（{@link COMPRESS_LEVEL1_MAX_CHARS}）+ 展开提示；未超限则原样
+ * - 1：缩略——拍平为截断文本（{@link COMPRESS_LEVEL1_MAX_CHARS}）+ 还原提示；未超限则原样
  * - 2：仅句柄——丢弃内容，只留折叠占位（title 在调用侧已 push）
  */
 export function projectByCompressLevel(nodes: XmlNode[], level: 0 | 1 | 2 | undefined): XmlNode[] {
@@ -255,7 +255,7 @@ export function projectByCompressLevel(nodes: XmlNode[], level: 0 | 1 | 2 | unde
   if (level >= 2) {
     return [
       xmlElement("compressed", { level: "2" }, [
-        xmlText("(窗已折叠为句柄；exec(method=expand) 展开)"),
+        xmlText("(窗已折叠为句柄；exec(method=resize, level=0) 还原全文)"),
       ]),
     ];
   }
@@ -263,7 +263,7 @@ export function projectByCompressLevel(nodes: XmlNode[], level: 0 | 1 | 2 | unde
   if (text.length <= COMPRESS_LEVEL1_MAX_CHARS) return nodes;
   return [
     xmlElement("compressed", { level: "1" }, [
-      xmlText(text.slice(0, COMPRESS_LEVEL1_MAX_CHARS) + " …（已缩略；exec(method=expand) 展开）"),
+      xmlText(text.slice(0, COMPRESS_LEVEL1_MAX_CHARS) + " …（已缩略；exec(method=resize, level=0) 还原全文）"),
     ]),
   ];
 }
@@ -357,7 +357,7 @@ async function renderWindowNode(
 ): Promise<XmlNode> {
   const children: XmlNode[] = [xmlElement("title", {}, [xmlText(inst.title)])];
 
-  // compress/expand 读出侧：按本窗 compressLevel 投影内容详略（title 已先 push，仅折叠 content）。
+  // resize 读出侧：按本窗 compressLevel 投影内容详略（title 已先 push，仅折叠 content）。
   const compressLevel = (inst.win as { compressLevel?: 0 | 1 | 2 } | undefined)?.compressLevel;
   children.push(...projectByCompressLevel(projectionContentNodes(projection.content), compressLevel));
 
