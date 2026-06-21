@@ -11,7 +11,7 @@ import {
 import { readSelf, writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
-import type { ExecutableContext } from "@ooc/core/executable/contract";
+import type { VisibleServerContext } from "@ooc/core/_shared/types/visible-server.js";
 import { normalizeMethodResult } from "@ooc/core/executable/contract.js";
 import type { StoneRegistry } from "@ooc/core/runtime/stone-registry";
 import { parseKnowledgeFile, parseActivatesOn } from "@ooc/core/thinkable/knowledge";
@@ -358,23 +358,26 @@ export function createStonesService({
           { objectId, method }
         );
       }
-      // HTTP call_method 只暴露标了 for_ui_access 的 object method（人类/client 侧专路）。
-      const methods = registered ? registry.resolveObjectMethods(objectId) : [];
-      const entry = methods.find((m) => m.name === method);
-      if (!entry || entry.for_ui_access !== true) {
+      // HTTP call_method 走 **visible/server** dispatch（人类侧）。A2 v1 stone scope 无 session/flow ref——
+      // 无 reportDataEdit 注入（无副作用落盘通道；stone scope data 落点延后）。无 visible/server 方法 → METHOD_NOT_FOUND。
+      const mod = registered ? registry.resolveVisibleServer(objectId) : undefined;
+      const entry = mod?.methods.find((m) => m.name === method);
+      if (!entry) {
         throw new AppServerError(
           "METHOD_NOT_FOUND",
-          `method '${method}' not found or not for_ui_access on stone '${objectId}'`,
-          { objectId, method, available: methods.filter((m) => m.for_ui_access === true).map((m) => m.name) }
+          `visible/server method '${method}' not found on stone '${objectId}'`,
+          { objectId, method, available: (mod?.methods ?? []).map((m) => m.name) }
         );
       }
       try {
-        // HTTP 入口无 thread/runtime；注入 self.dir（stone 身份目录）让 for_ui_access 方法
-        // 能读写自己 stone 文件（reflectable）。响应即规范化 method result（ObjectMethodResult）——前端从 data
-        // 取结构化数据、result 取消息文本。
-        const ctx: ExecutableContext = { object: { id: objectId, class: objectId }, args };
-        const self = { dir: dir(objectId) } as never;
-        return normalizeMethodResult(await entry.exec(ctx, self, args));
+        // stone scope 无 flow session：reportDataEdit 缺省（暂只支持无副作用/纯查询）。
+        const ctx: VisibleServerContext = {
+          baseDir,
+          session: { baseDir, sessionId: "" },
+          object: { id: objectId, class: objectId },
+          args,
+        };
+        return normalizeMethodResult(await entry.exec(ctx, {} as never, args) as never);
       } catch (error) {
         throw new AppServerError(
           "INTERNAL_ERROR",

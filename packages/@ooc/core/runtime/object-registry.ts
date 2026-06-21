@@ -21,8 +21,6 @@
  * 不再存储——它们是 Wave 4 之后 re-home 的，不为兼容保留。
  */
 import type { RegisteredClass } from "../_shared/types/registry.js";
-import { filterMethodsByVisibility } from "../_shared/types/registry.js";
-import type { MethodVisibilityContext } from "../_shared/types/registry.js";
 import type { OocClass } from "./ooc-class.js";
 import type {
   ObjectConstructor,
@@ -35,9 +33,9 @@ import type {
   ReadableModule,
 } from "../readable/contract.js";
 import type { PersistableModule } from "../persistable/contract.js";
+import type { VisibleServerModule } from "../_shared/types/visible-server.js";
 
-export type { RegisteredClass, MethodVisibilityContext };
-export { filterMethodsByVisibility };
+export type { RegisteredClass };
 
 /**
  * class id 归一：strip `_builtin/` 前缀，使带/不带前缀命中同一键。
@@ -120,6 +118,7 @@ export class ObjectRegistry {
       executable: cls.executable ?? existing?.executable,
       readable: cls.readable ?? existing?.readable,
       persistable: cls.persistable ?? existing?.persistable,
+      visibleServer: cls.visibleServer ?? existing?.visibleServer,
       parentClass: nextParentClass,
     });
   }
@@ -242,6 +241,15 @@ export class ObjectRegistry {
     return undefined;
   }
 
+  /** 解析 visibleServer 模块（沿继承链首个声明 visibleServer 的 class；无则 HTTP 控制面无可调方法）。 */
+  resolveVisibleServer(classId: string): VisibleServerModule | undefined {
+    for (const cid of this.selfThenChain(classId)) {
+      const v = this.store.get(cid)?.visibleServer;
+      if (v) return v;
+    }
+    return undefined;
+  }
+
   /**
    * 解析某个投影 window class 的声明（object_methods 引用 + window_methods）。
    * readable 把对象投影成 window 后，dispatch / 渲染据此知道该窗展示哪些 method。
@@ -290,6 +298,7 @@ export class ObjectRegistry {
           executable: def.executable ?? existing.executable,
           readable: def.readable ?? existing.readable,
           persistable: def.persistable ?? existing.persistable,
+          visibleServer: def.visibleServer ?? existing.visibleServer,
           parentClass:
             def.parentClass !== undefined ? def.parentClass : existing.parentClass,
         });

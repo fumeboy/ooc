@@ -107,7 +107,6 @@ export interface ConstructorContext {
  * - name        : 方法名（dispatch 入口；同 class 内 object/window method 不可重名）
  * - description : LLM 面向的方法描述（必填）
  * - schema      : 可选参数 schema（结构化渲染 + fail-soft 校验）
- * - for_ui_access: 是否可经前端 HTTP API（visible UI）请求（见 object-model 核心 6）
  * - public      : 是否对 peer object 可见可调
  * - for_reflectable: 是否仅在 super flow（反思 session）下 surface
  * - exec        : (ctx, self, args) → 结果（`ObjectMethodResult`{message?/data?/err?}，或裸 string = sugar for {message}，或 void/undefined）；**可改 self、可副作用**
@@ -116,7 +115,6 @@ export interface ObjectMethod<Data = any, Args = any> {
   name: string;
   description: string;
   schema?: MethodCallSchema;
-  for_ui_access?: boolean;
   public?: boolean;
   for_reflectable?: boolean;
   /** 权限谓词：调用前按 args 算 `allow` / `ask` / `deny`（缺省 allow）；判定归 observable 的 permission 模型。 */
