@@ -13,15 +13,19 @@ import type { OocObjectInstance } from "../ooc-class.js";
  * 不变量，任一被结构改动打破即红。
  */
 
-const inst = (over: Partial<OocObjectInstance>): OocObjectInstance => ({
-  id: "w",
-  class: "x",
-  title: "t",
-  status: "open",
-  createdAt: 0,
-  data: {},
-  ...over,
-});
+const inst = (
+  over: Partial<Omit<OocObjectInstance, "object">> & { class?: string; data?: unknown },
+): OocObjectInstance => {
+  const { class: cls, data, ...rest } = over;
+  return {
+    id: "w",
+    title: "t",
+    status: "open",
+    createdAt: 0,
+    object: { class: cls ?? "x", data: data ?? {} },
+    ...rest,
+  };
+};
 
 describe("split-invariant 1: refcount（P1 必保——拆分后 referencedObjectId 双读 objectRef 不得改变计数语义）", () => {
   test("fork 窗在 → count 1；移除该窗 → count 0", () => {

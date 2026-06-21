@@ -134,7 +134,7 @@ describe.skipIf(!shouldRunBackendE2E)("[e2e backend] S1 rename-symbol-via-edit",
         // eslint-disable-next-line no-console
         console.error("[e2e debug] callee.outbox:", JSON.stringify(callee?.outbox ?? [], null, 2));
         // eslint-disable-next-line no-console
-        console.error("[e2e debug] callee.contextWindows.types:", (callee?.contextWindows ?? []).map((w) => `${w.class}#${w.id}@${w.status}`));
+        console.error("[e2e debug] callee.contextWindows.types:", (callee?.contextWindows ?? []).map((w) => `${w.object.class}#${w.id}@${w.status}`));
       }
       expect(result.tier).not.toBe("Bad");
     },

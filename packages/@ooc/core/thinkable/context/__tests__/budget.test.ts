@@ -20,12 +20,11 @@ const bm = new BudgetManager();
 function mkWindow(over: { id: string; title: string }): ContextWindow {
   return {
     id: over.id,
-    class: "_builtin/knowledge_base/knowledge",
     parentObjectId: "root",
     title: over.title,
     status: "open",
     createdAt: Date.now(),
-    data: {},
+    object: { class: "_builtin/knowledge_base/knowledge", data: {} },
   };
 }
 

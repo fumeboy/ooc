@@ -35,12 +35,11 @@ function form(
   const { id = "f", method = "x", parentObjectId = "root", status = "open" } = overrides;
   return {
     id,
-    class: "method_exec",
     parentObjectId,
     title: "x",
     status,
     createdAt: 0,
-    data: { method },
+    object: { class: "method_exec", data: { method } },
   };
 }
 
@@ -106,12 +105,11 @@ describe("computeActivations (trigger map)", () => {
     const index = indexOf(doc("a", "A", { "window::talk": "show_content" }));
     const talkWindow: ContextWindow = {
       id: "w_talk",
-      class: "talk",
       parentObjectId: "root",
       title: "talk",
       status: "open",
       createdAt: 0,
-      data: { target: "alice" },
+      object: { class: "talk", data: { target: "alice" } },
     };
     const out = computeActivations(
       thread({ contextWindows: [talkWindow] }),
@@ -147,12 +145,11 @@ describe("computeActivations (trigger map)", () => {
     const index = indexOf(doc("a", "A", { "method::talk::say": "show_content" }));
     const talkWindow: ContextWindow = {
       id: "w_talk",
-      class: "talk",
       parentObjectId: "root",
       title: "talk",
       status: "open",
       createdAt: 0,
-      data: { target: "alice" },
+      object: { class: "talk", data: { target: "alice" } },
     };
     const sayForm = form({ id: "f_say", method: "say", parentObjectId: "w_talk" });
 
@@ -231,12 +228,11 @@ describe("computeActivations (trigger map)", () => {
     const index = indexOf(doc("a", "A", undefined));
     const knWindow: ContextWindow = {
       id: "kn_w_1",
-      class: KNOWLEDGE_CLASS_ID,
       parentObjectId: "root",
       title: "a",
       status: "open",
       createdAt: 0,
-      data: { path: "a", source: "explicit", body: "doc body" },
+      object: { class: KNOWLEDGE_CLASS_ID, data: { path: "a", source: "explicit", body: "doc body" } },
     };
     const out = computeActivations(
       thread({ contextWindows: [knWindow] }),

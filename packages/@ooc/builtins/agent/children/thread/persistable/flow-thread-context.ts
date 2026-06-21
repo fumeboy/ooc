@@ -22,18 +22,40 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "@ooc/core/persistable/common.js";
 import { enqueueSessionWrite } from "@ooc/core/runtime/serial-queue.js";
-import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import type { WindowStatus } from "@ooc/core/_shared/types/context-window.js";
+
+/**
+ * thread-context.json 中一条 inline contextWindow 的**磁盘形态**（平铺：class/data 在 entry 顶层）。
+ *
+ * 内存里 OocObjectInstance 把对象身份收进 `.object={class,data}` 子对象，但磁盘格式保持平铺历史形态
+ * （`class`/`data` 仍在 entry 顶层）——内存 `.object.class` ↔ 盘上 `class`、`.object.data` ↔ 盘上 `data`。
+ * 会话窗 class=`_builtin/thread`（真实注册 class）照常 inline；talk/reflect_request 投影 class 是 POV
+ * 派生值、不在实例里，渲染期由 thread readable 内 computeProjectionClass 动态算（context.md 核心 2/8/9），
+ * 故磁盘也不存它。
+ */
+export interface InlineThreadContextEntry {
+  id: string;
+  class: string;
+  data: unknown;
+  parentObjectId?: string;
+  title: string;
+  status: WindowStatus;
+  createdAt: number;
+  win?: unknown;
+  closable?: boolean;
+  objectRef?: { objectId: string; class: string };
+}
 
 /**
  * thread-context.json 中一条 contextWindow 的形态：
- *   - 内置特性：完整 inline ContextWindow（含全部业务字段 + 真实 inst.class）
- *     · 会话窗 inst.class=`_builtin/thread`（真实注册 class）照常 inline；talk/reflect_request
- *       投影 class 是 POV 派生值、不在 inst 里，渲染期由 thread readable 内 computeProjectionClass
+ *   - 内置特性：完整 inline entry（平铺 class/data + 全部窗视角态字段）。
+ *     · 会话窗 class=`_builtin/thread`（真实注册 class）照常 inline；talk/reflect_request
+ *       投影 class 是 POV 派生值、不在实例里，渲染期由 thread readable 内 computeProjectionClass
  *       动态算（context.md 核心 2/8/9），故磁盘也不存它。
  *   - 独立 flow object：只放轻量 ref，hydrate 时另读 `<refObjectId>/data.json`
  */
 export type ThreadContextEntry =
-  | ContextWindow
+  | InlineThreadContextEntry
   | { id: string; class: string; _ref: true; refObjectId: string };
 
 /** Thread context 文件 schema —— `{objectDir}/threads/{threadId}/thread-context.json` 的内容。 */

@@ -59,9 +59,9 @@ describe("thread.say (归位到 thread class)", () => {
 
     const childId = parent.childThreadIds![0]!;
     const forkInstance = mgr.get(forkId)!;
-    expect((forkInstance.data as { isForkWindow?: boolean }).isForkWindow).toBe(true);
+    expect((forkInstance.object.data as { isForkWindow?: boolean }).isForkWindow).toBe(true);
 
-    // 在 fork 子窗上调 thread.say（dispatch 三参：ctx, self=inst.data, args）。
+    // 在 fork 子窗上调 thread.say（dispatch 三参：ctx, self=inst.object.data, args）。
     const out = await mgr.execObjectMethod(forkId, "say", { msg: "继续处理 WARN" }, parent);
     expect(out).toContain("已发送给 fork 对端");
 

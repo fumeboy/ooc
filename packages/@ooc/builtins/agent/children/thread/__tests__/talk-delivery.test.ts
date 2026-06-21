@@ -38,10 +38,10 @@ import type { TalkData, TalkWindowView } from "@ooc/builtins/agent/thread/types.
 
 /** 把会话窗实例还原成 delivery 期望的扁平 TalkWindowView（id/class + TalkData 扁平）。 */
 function asTalkWindowView(inst: OocObjectInstance): TalkWindowView {
-  const data = (inst.data ?? {}) as TalkData;
+  const data = (inst.object.data ?? {}) as TalkData;
   return {
     id: inst.id,
-    class: inst.class,
+    class: inst.object.class,
     target: data.target,
     targetThreadId: data.targetThreadId,
     isForkWindow: data.isForkWindow,
@@ -81,12 +81,11 @@ async function setupCaller(opts: {
   const talkWindowId = generateWindowId("talk");
   const talkInstance: OocObjectInstance<TalkData> = {
     id: talkWindowId,
-    class: THREAD_CLASS_ID,
     parentObjectId: ROOT_WINDOW_ID,
     title: `talk-${opts.target}`,
     status: "open",
     createdAt: Date.now(),
-    data: { target: opts.target },
+    object: { class: THREAD_CLASS_ID, data: { target: opts.target } },
   };
   thread.contextWindows = [...thread.contextWindows, talkInstance];
   await writeThread(thread);
@@ -263,8 +262,8 @@ describe("talk-delivery target='super' alias", () => {
       const creator = superAlice.contextWindows.find((w) => isSelfThreadWindow(w.id));
       expect(creator).toBeDefined();
       // 投影 class 不持久化——存储的元信息 class 一律 THREAD_CLASS_ID；会话字段在 data。
-      expect(creator!.class).toBe(THREAD_CLASS_ID);
-      const creatorData = (creator!.data ?? {}) as TalkData;
+      expect(creator!.object.class).toBe(THREAD_CLASS_ID);
+      const creatorData = (creator!.object.data ?? {}) as TalkData;
       expect(creatorData.target).toBe("alice");
       expect(creatorData.targetThreadId).toBe("root");
       await writeThread(superAlice);

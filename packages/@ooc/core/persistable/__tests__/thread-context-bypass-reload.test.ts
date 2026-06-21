@@ -46,21 +46,20 @@ function makeThreadWindow(
 ): ContextWindow {
   return {
     id,
-    class: THREAD_CLASS_ID,
     parentObjectId: "root",
     title: target,
     status: "open",
     createdAt: Date.now(),
-    data: { target },
+    object: { class: THREAD_CLASS_ID, data: { target } },
   } as unknown as ContextWindow;
 }
 
 /** 把持久化会话窗实例还原成 delivery 期望的扁平 TalkWindowView。 */
 function viewOf(win: ContextWindow): TalkWindowView {
-  const data = (win as { data?: { target?: string; targetThreadId?: string } }).data ?? {};
+  const data = (win.object.data ?? {}) as { target?: string; targetThreadId?: string };
   return {
     id: win.id,
-    class: win.class,
+    class: win.object.class,
     target: data.target ?? "",
     targetThreadId: data.targetThreadId,
   };
@@ -90,11 +89,10 @@ describe("thread-context bypass reload regression", () => {
     thread.contextWindows = [
       {
         id: "todo_keep",
-        class: "agent/todo",
         title: "builtin todo",
         status: "open",
         createdAt: 1,
-        data: { content: "body", status: "open" },
+        object: { class: "agent/todo", data: { content: "body", status: "open" } },
       } as never,
     ];
     await writeThread(thread);

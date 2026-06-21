@@ -61,11 +61,11 @@ describe("single object runtime", () => {
       contextWindows: [
         {
           id: "agent",
-          class: "_builtin/agent",
           parentWindowId: "root",
           title: "agent",
           status: "open",
           createdAt: Date.now(),
+          object: { class: "_builtin/agent", data: {} },
           isMemberWindow: true,
         } as unknown as ContextWindow,
       ],
@@ -115,10 +115,10 @@ describe("single object runtime", () => {
     // plan 升格为 plan_window；旧 thread.plan 字段已废弃。Wave4：实例 inst.class = 注册 class id
     // `_builtin/agent/plan`（instantiate 写入），业务字段（description）落 inst.data。
     const rootPlanWindow = (root.contextWindows as ContextWindow[]).find(
-      (w) => w.class === "_builtin/agent/plan",
+      (w) => w.object.class === "_builtin/agent/plan",
     );
-    expect(rootPlanWindow?.class).toBe("_builtin/agent/plan");
-    expect((rootPlanWindow?.data as { description?: string } | undefined)?.description).toBe(
+    expect(rootPlanWindow?.object.class).toBe("_builtin/agent/plan");
+    expect((rootPlanWindow?.object.data as { description?: string } | undefined)?.description).toBe(
       "完成单 object 最小闭环",
     );
     // 退役 thread.json.contextWindows：plan 是独立 flow object，落 thread-context.json 的
@@ -127,9 +127,9 @@ describe("single object runtime", () => {
     expect(savedThread.contextWindows).toBeUndefined();
     const reloaded = await readThread(ref, "root");
     const savedPlanWindow = (reloaded?.contextWindows ?? []).find(
-      (w) => w.class === "_builtin/agent/plan",
-    ) as { class: string; data?: { description?: string } } | undefined;
-    expect(savedPlanWindow?.data?.description).toBe("完成单 object 最小闭环");
+      (w) => w.object.class === "_builtin/agent/plan",
+    ) as { object: { class: string; data?: { description?: string } } } | undefined;
+    expect(savedPlanWindow?.object.data?.description).toBe("完成单 object 最小闭环");
     expect(
       savedThread.events.some(
         (event: { category: string; kind: string }) =>

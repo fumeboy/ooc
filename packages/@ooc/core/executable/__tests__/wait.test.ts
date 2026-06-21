@@ -27,18 +27,17 @@ function makeTalkInstance(
 ): OocObjectInstance {
   return {
     id,
-    class: THREAD_CLASS_ID,
     parentObjectId: ROOT_WINDOW_ID,
     title: typeof data.target === "string" ? (data.target as string) : "talk",
     status,
     createdAt: Date.now(),
-    data,
+    object: { class: THREAD_CLASS_ID, data },
   };
 }
 
 function findCreatorTalkWindow(thread: ThreadContext): OocObjectInstance {
   const found = thread.contextWindows.find(
-    (w) => w.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
+    (w) => w.object.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
   );
   if (!found) throw new Error("test setup: expected creator 会话窗");
   return found;
@@ -74,12 +73,11 @@ describe("wait tool — explicit IO dependency", () => {
     const thread = makeThread();
     const fw: OocObjectInstance = {
       id: generateWindowId("file"),
-      class: "file",
       parentObjectId: ROOT_WINDOW_ID,
       title: "README.md",
       status: "open",
       createdAt: Date.now(),
-      data: { path: "/tmp/README.md" },
+      object: { class: "file", data: { path: "/tmp/README.md" } },
     };
     thread.contextWindows = [...thread.contextWindows, fw];
     const out = await callWaitAsync(thread, { on: fw.id });

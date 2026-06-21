@@ -22,12 +22,11 @@ const persistenceOf = (threadId = "t_root"): ThreadPersistenceRef => ({
  */
 const AGENT_WIN = {
   id: "agent",
-  class: "_builtin/agent",
   title: "agent",
   status: "open",
   createdAt: Date.now(),
-  data: {},
   // class="_builtin/agent" 是继承类、非 ContextWindow union discriminant → 经 unknown 转。
+  object: { class: "_builtin/agent", data: {} },
 } as unknown as ContextWindow;
 
 /**
@@ -74,11 +73,11 @@ describe("executable tools (object model)", () => {
     expect(parsed.executed).toBe(true);
 
     // form 机制已废：不再产生 method_exec 窗，而是直接造一个 plan 对象（class 归一为 plan）。
-    expect((thread.contextWindows as ContextWindow[]).some((w) => w.class === "method_exec")).toBe(false);
-    const planWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "_builtin/agent/plan");
+    expect((thread.contextWindows as ContextWindow[]).some((w) => w.object.class === "method_exec")).toBe(false);
+    const planWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.object.class === "_builtin/agent/plan");
     expect(planWindow).toBeDefined();
     // args.plan 落入 plan 对象 Data.description。
-    expect((planWindow!.data as { description?: string }).description).toBe("先 reshape，再迁移测试");
+    expect((planWindow!.object.data as { description?: string }).description).toBe("先 reshape，再迁移测试");
   });
 
   it("exec 失败：method 未注册在目标窗上时返回结构化 ok:false（fail-loud，不静默）", async () => {
@@ -101,7 +100,7 @@ describe("executable tools (object model)", () => {
     // close 原语 honor 之、拒关报错（取代旧 Wave-4「关任何窗」+ 已退役的 onClose 拒绝 hook）。
     const thread = makeThread({ persistence: persistenceOf() });
     const creator = (thread.contextWindows as ContextWindow[]).find(
-      (w) => w.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
+      (w) => w.object.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
     );
     expect(creator).toBeDefined();
     expect(creator!.closable).toBe(false);
@@ -147,7 +146,7 @@ describe("executable tools (object model)", () => {
   it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait + waitingOn", async () => {
     const thread = makeThread({ inbox: [] });
     const creator = (thread.contextWindows as ContextWindow[]).find(
-      (w) => w.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
+      (w) => w.object.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
     );
     expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {

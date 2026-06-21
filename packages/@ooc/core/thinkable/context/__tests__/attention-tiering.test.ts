@@ -12,13 +12,15 @@ import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 // Wave4 会话窗：stored class=_builtin/agent/thread；creator 身份编码在 id（w_creator_<threadId>）；
 // target / isForkWindow / targetThreadId 落 inst.data（talk-render 读 self.* = inst.data）。
 const CREATOR_WIN = {
-  id: "w_creator_t", class: "_builtin/agent/thread",
-  status: "open", createdAt: 1, title: "creator", data: { target: "user" },
+  id: "w_creator_t",
+  status: "open", createdAt: 1, title: "creator",
+  object: { class: "_builtin/agent/thread", data: { target: "user" } },
 } as unknown as ContextWindow;
 
 const PEER_WIN = {
-  id: "w_peer", class: "_builtin/agent/thread",
-  status: "open", createdAt: 1, title: "peer bob", data: { target: "bob" },
+  id: "w_peer",
+  status: "open", createdAt: 1, title: "peer bob",
+  object: { class: "_builtin/agent/thread", data: { target: "bob" } },
 } as unknown as ContextWindow;
 
 const CREATOR_FULL = "CREATOR_MESSAGE_FULL_TEXT_xyz";
@@ -73,9 +75,9 @@ describe("会话内容 attention 分层", () => {
     // fork 子线程视角：它的 creator 窗是 fork 子窗（id=w_creator_<本thread.id>），
     // data.target=self object、data.targetThreadId=parent thread、data.isForkWindow=true。
     const FORK_CREATOR = {
-      id: "w_creator_t_child", class: "_builtin/agent/thread",
+      id: "w_creator_t_child",
       status: "open", createdAt: 1, title: "creator fork",
-      data: { target: "agent", targetThreadId: "t_parent", isForkWindow: true },
+      object: { class: "_builtin/agent/thread", data: { target: "agent", targetThreadId: "t_parent", isForkWindow: true } },
     } as unknown as ContextWindow;
     const PARENT_FULL = "PARENT_INSTRUCTION_FULL_TEXT_xyz";
     const thread = makeThread({

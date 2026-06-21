@@ -44,6 +44,7 @@ import {
   ROOT_WINDOW_ID,
   isNonPersistedWindow,
   classOf,
+  objectDataOf,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
@@ -76,7 +77,14 @@ function buildEntries(
     // 旧"带 summarizedRanges 就 inline 落 self 门面窗"后门已删——events 折叠态现挂**自己视角 thread 窗**
     // （THREAD_CLASS_ID inline 类整窗落盘、folds 随之跨 reload 存活；builtin 类 hydrate 恒注册、无冷启动丢窗洞）。
     if (registry.isInlinePersisted(classOf(window))) {
-      entries.push(window as ContextWindow);
+      // 磁盘格式平铺：内存 `.object.{class,data}` → 盘上顶层 `class`/`data`（历史形态不变）；
+      // 其余窗视角态字段（id/title/status/createdAt/parentObjectId/win/closable/objectRef）原样保留。
+      const { object: _object, ...view } = window;
+      entries.push({
+        ...view,
+        class: classOf(window),
+        data: objectDataOf(window),
+      });
     } else {
       entries.push({
         id: window.id,
@@ -167,14 +175,14 @@ async function hydrateContextWindows(
     const isInline = registry.isInlinePersisted(env.class);
     const refObjectId =
       (entry as { refObjectId?: string }).refObjectId ?? env.id;
+    // 盘上平铺 `env.class`/`data` → 内存收进 `.object={class,data}`（窗视角态字段留在顶层）。
     instances.push({
       id: env.id,
-      class: env.class,
       parentObjectId: env.parentObjectId,
       title: env.title ?? env.id,
       status: env.status ?? "open",
       createdAt: env.createdAt ?? Date.now(),
-      data: data ?? {},
+      object: { class: env.class, data: data ?? {} },
       win: env.win,
       ...(isInline ? {} : { objectRef: { objectId: refObjectId, class: env.class } }),
     });

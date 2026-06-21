@@ -28,12 +28,11 @@ export function makeKnowledgeWindow(
 ): OocObjectInstance<KnowledgeData> {
   return {
     id: nextSyntheticId(),
-    // 注册 class id（非投影名 "knowledge"）——使 resolveReadable 命中 knowledge readable。
-    class: KNOWLEDGE_CLASS_ID,
     parentObjectId: ROOT_WINDOW_ID,
     title: path,
     status: "open",
     createdAt: Date.now(),
-    data: { path, source, body, ...extra },
+    // 注册 class id（非投影名 "knowledge"）——使 resolveReadable 命中 knowledge readable。
+    object: { class: KNOWLEDGE_CLASS_ID, data: { path, source, body, ...extra } },
   };
 }

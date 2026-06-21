@@ -35,12 +35,11 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
   function talkWin(id: string, target: string, createdAt = 100): any {
     return {
       id,
-      class: "_builtin/agent/thread",
       parentObjectId: "root",
       title: `talk to ${target}`,
       status: "open",
       createdAt,
-      data: { target, conversationId: `conv_${id}` },
+      object: { class: "_builtin/agent/thread", data: { target, conversationId: `conv_${id}` } },
     };
   }
 
@@ -60,7 +59,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     const thread = makePeerThread("agent_self", [talkWin("w_talk_1", "agent_peer1")]);
     const result = await derivePeerObjectWindows(thread);
     expect(result.length).toBe(1);
-    expect(result[0]!.class).toBe("agent_peer1" as any);
+    expect(result[0]!.object.class).toBe("agent_peer1" as any);
     expect(result[0]!.id).toBe("agent_peer1");
   });
 
@@ -74,7 +73,7 @@ describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
     const thread = makePeerThread("agent_self", [talkWin("w_talk_user", "user")]);
     const result = await derivePeerObjectWindows(thread);
     expect(result.map((w) => w.id)).toContain("user");
-    expect(result.find((w) => w.id === "user")?.class).toBe("user" as any);
+    expect(result.find((w) => w.id === "user")?.object.class).toBe("user" as any);
   });
 
   it("derives peer objects from sibling stones (default visibility)", async () => {

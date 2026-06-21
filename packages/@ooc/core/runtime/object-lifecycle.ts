@@ -25,7 +25,7 @@ const ACTIVE_STATUS = new Set(["running", "waiting", "paused"]);
  *
  * 1. **独立对象窗**（object/context-window 拆分 P1）：携带 `objectRef`（自描述为引用）→ 直接返回
  *    `objectRef.objectId`。这是 lifecycle phase-2「referencedObjectId 扩到 member 窗」的合并——独立
- *    成员/对象窗（file/knowledge/… 各自落 state.json）现被纳入计数解析。
+ *    成员/对象窗（file/knowledge/… 各自落 data.json）现被纳入计数解析。
  * 2. **fork 子线程窗**（无 objectRef）：talk-like class + isForkWindow + targetThreadId 且非自己的
  *    self 门面窗（self/creator 窗自引用不计数，spec §2.1）→ 返回 targetThreadId。
  *

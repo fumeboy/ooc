@@ -98,7 +98,7 @@ describe.skipIf(!shouldRun)("compress v2 —— 真实 LLM auto fork-summarize",
       };
     expect((win().inFlightCompress as { forkThreadId?: string })?.forkThreadId).toBe(forkId);
     // 父侧 summarizer fork 窗已移除（不污染窗列表）。
-    expect(thread.contextWindows!.some((w) => (w.data as { targetThreadId?: string })?.targetThreadId === forkId)).toBe(false);
+    expect(thread.contextWindows!.some((w) => (w.object.data as { targetThreadId?: string })?.targetThreadId === forkId)).toBe(false);
     // child 在 childThreads（直接驱动它跑一轮，隔离机制：不经 runScheduler 避免唤醒后 parent 空跑）。
     const forkChild = thread.childThreads![forkId!]!;
     expect(forkChild).toBeDefined();

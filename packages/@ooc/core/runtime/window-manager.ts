@@ -9,8 +9,8 @@
  *     → 包成 `OocObjectInstance`（runtime 分配 id/title/status/createdAt）→ push 进
  *     thread.contextWindows → 返回新 id；construct 失败 throw（不建实例）。
  *   - close(objectId) = 从 thread 移除该实例。
- * - object method dispatch（三参）：`exec(ctx, self=instance.data, args)`。
- * - window method dispatch（四参）：`exec(ctx, self=instance.data, before_win=instance.win, args)`
+ * - object method dispatch（三参）：`exec(ctx, self=instance.object.data, args)`。
+ * - window method dispatch（四参）：`exec(ctx, self=instance.object.data, before_win=instance.win, args)`
  *   → 把返回的新 win 不可变 upsert 回 instance.win。
  *
  * **不负责**（Wave 4 后由各 leaf 模块 re-home）：
@@ -146,11 +146,10 @@ export class WindowManager implements RuntimeHandle {
         : classId;
     const instance: OocObjectInstance = {
       id,
-      class: classId,
       title,
       status: "open",
       createdAt: Date.now(),
-      data,
+      object: { class: classId, data },
     };
     // object/context-window 拆分 P1：独立对象窗（非 inline 持久化）自描述为对某 object 的引用——
     // 设 objectRef 让 referencedObjectId 直接解析；独立对象现 id===objectId（1:1）。
@@ -167,7 +166,7 @@ export class WindowManager implements RuntimeHandle {
       this.threadRef.contextWindows = this.toData();
       const target = referencedObjectId(instance);
       if (target) {
-        await dispatchActiveIfFirst(this.threadRef, target, instance.class, this.registry);
+        await dispatchActiveIfFirst(this.threadRef, target, instance.object.class, this.registry);
       }
     }
     return id;
@@ -216,15 +215,15 @@ export class WindowManager implements RuntimeHandle {
   ): Promise<ObjectMethodIntents | undefined> {
     const instance = this.instances.get(targetObjectId);
     if (!instance) return undefined;
-    const method = this.registry.resolveObjectMethod(instance.class, methodName);
+    const method = this.registry.resolveObjectMethod(instance.object.class, methodName);
     if (!method?.route) return undefined;
     const ctx: ExecutableContext = {
       thread: this.threadRef,
-      object: { id: instance.id, class: instance.class },
+      object: { id: instance.id, class: instance.object.class },
       runtime: this,
       args,
     };
-    return method.route(ctx, instance.data, args);
+    return method.route(ctx, instance.object.data, args);
   }
 
   /** 关闭/卸载一个对象实例（从 thread 移除）。 */
@@ -242,7 +241,7 @@ export class WindowManager implements RuntimeHandle {
   // ── object method dispatch（三参）──
 
   /**
-   * 执行一个 object method：`exec(ctx, self=instance.data, args)`。
+   * 执行一个 object method：`exec(ctx, self=instance.object.data, args)`。
    *
    * - ctx 组装为 ExecutableContext{ thread, object:{id,class}, runtime:this, args,
    *   reportDataEdit, reportContextEdit }。
@@ -256,22 +255,22 @@ export class WindowManager implements RuntimeHandle {
     thread: ThreadContext,
   ): Promise<string | undefined> {
     const instance = this.requireInstance(objectId);
-    const method = this.registry.resolveObjectMethod(instance.class, methodName);
+    const method = this.registry.resolveObjectMethod(instance.object.class, methodName);
     if (!method) {
       throw new Error(
-        `execObjectMethod: object method "${methodName}" not registered on class "${instance.class}" (id=${objectId})`,
+        `execObjectMethod: object method "${methodName}" not registered on class "${instance.object.class}" (id=${objectId})`,
       );
     }
     const ctx: ExecutableContext = {
       thread,
-      object: { id: instance.id, class: instance.class },
+      object: { id: instance.id, class: instance.object.class },
       runtime: this,
       args,
       reportDataEdit: () => this.hooks.reportDataEdit?.(objectId) ?? Promise.resolve(),
       reportContextEdit: () => this.hooks.reportContextEdit?.() ?? Promise.resolve(),
     };
-    const result = await method.exec(ctx, instance.data, args);
-    // method 可能就地改了 instance.data（self 即 instance.data 引用）；刷盘。
+    const result = await method.exec(ctx, instance.object.data, args);
+    // method 可能就地改了 instance.object.data（self 即 instance.object.data 引用）；刷盘。
     await this.hooks.reportDataEdit?.(objectId);
     // exec 返回形态规范化（ObjectMethodResult / 裸 string / void）→ 取面向 LLM 的结果文本。
     const r = normalizeMethodResult(result);
@@ -281,7 +280,7 @@ export class WindowManager implements RuntimeHandle {
   // ── window method dispatch（四参）──
 
   /**
-   * 执行一个 window method：`exec(ctx, self=instance.data, before_win=instance.win, args)=>新 win`。
+   * 执行一个 window method：`exec(ctx, self=instance.object.data, before_win=instance.win, args)=>新 win`。
    *
    * - ctx 组装为 ReadableContext{ thread, object:{id,class} }（读侧；不携带改业务数据能力）。
    * - 把返回的新 win 不可变 upsert 回 instance.win（spread 新实例对象，不原地改）。
@@ -294,17 +293,17 @@ export class WindowManager implements RuntimeHandle {
     thread: ThreadContext,
   ): Promise<unknown> {
     const instance = this.requireInstance(objectId);
-    const method = this.registry.resolveWindowMethod(instance.class, methodName);
+    const method = this.registry.resolveWindowMethod(instance.object.class, methodName);
     if (!method) {
       throw new Error(
-        `execWindowMethod: window method "${methodName}" not registered on class "${instance.class}" (id=${objectId})`,
+        `execWindowMethod: window method "${methodName}" not registered on class "${instance.object.class}" (id=${objectId})`,
       );
     }
     const ctx: ReadableContext = {
       thread,
-      object: { id: instance.id, class: instance.class },
+      object: { id: instance.id, class: instance.object.class },
     };
-    const nextWin = await method.exec(ctx, instance.data, instance.win, args);
+    const nextWin = await method.exec(ctx, instance.object.data, instance.win, args);
     // 不可变 upsert：spread 新实例对象写回 win。
     this.instances.set(objectId, { ...instance, win: nextWin });
     await this.hooks.reportContextEdit?.();

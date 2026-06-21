@@ -142,14 +142,13 @@ export function initContextWindows(
         };
   const threadWindow: OocObjectInstance = {
     id: threadWindowId,
-    class: THREAD_CLASS_ID,
     parentObjectId: ROOT_WINDOW_ID,
     title: opts.initialTaskTitle,
     status: "open",
     createdAt: Date.now(),
     // 结构窗：thread 与 creator 的恒在通道（construct 期标）→ close 原语拒关（spec §5）。
     closable: false,
-    data: threadData,
+    object: { class: THREAD_CLASS_ID, data: threadData },
     // 过程窗每轮 init 幂等重注入（transient：不单独落 data.json 死 _ref）。transcriptViewport
     // 不在此预填——thread 的 readable 投影时惰性兜底默认（conversation-render `?? DEFAULT_TRANSCRIPT_VIEWPORT`），
     // core 不硬编码 thread 的投影默认。注：transient 不影响 inline 持久化——THREAD_CLASS_ID inline 类整窗落
@@ -185,14 +184,13 @@ function injectSelfWindowIfObjectThread(thread: ThreadContext): void {
 
   const selfWindow: OocObjectInstance = {
     id,
-    class: objectId,
     parentObjectId: ROOT_WINDOW_ID,
     title: objectId,
     status: "open",
     createdAt: Date.now(),
     // 结构窗：object 的自我门面（恒在通道，construct 期标）→ close 原语拒关（spec §5）。
     closable: false,
-    data: {},
+    object: { class: objectId, data: {} },
     // self 门面窗每次 init 幂等重注入、无独立 data.json → win.transient 标记为不持久化，
     // 否则 thread-context.json 落死 _ref，reload 刷屏 `references missing object <id>`。
     win: { transient: true, isSelfWindow: true },
@@ -250,12 +248,11 @@ export async function injectPeerWindowsIfObjectThread(thread: ThreadContext): Pr
     if (existingIds.has(peerId)) continue;
     newInstances.push({
       id: peerId,
-      class: peerId,
       parentObjectId: ROOT_WINDOW_ID,
       title: `peer: ${peerId}`,
       status: "open",
       createdAt: now,
-      data: {},
+      object: { class: peerId, data: {} },
       // peer 窗每轮幂等重注入（discover 派生）→ 非持久化。
       win: { transient: true },
     });
@@ -369,12 +366,11 @@ export async function injectMemberWindowsIfObjectThread(thread: ThreadContext): 
     if (existingIds.has(memberType)) continue;
     newInstances.push({
       id: memberType,
-      class: memberType,
       parentObjectId: ROOT_WINDOW_ID,
       title: `member: ${memberType}`,
       status: "open",
       createdAt: now,
-      data: {},
+      object: { class: memberType, data: {} },
       win: { transient: true, isMemberWindow: true },
     });
   }

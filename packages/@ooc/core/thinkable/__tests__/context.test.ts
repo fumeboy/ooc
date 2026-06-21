@@ -48,19 +48,21 @@ function execForm(overrides: {
   const method = overrides.method ?? "program";
   return {
     id: overrides.id ?? "f_x",
-    class: "method_exec",
     parentObjectId: ROOT_WINDOW_ID,
     title: overrides.title ?? "form",
     status: overrides.status ?? "open",
     createdAt: overrides.createdAt ?? 1,
-    data: {
-      method,
-      description: "form description",
-      accumulatedArgs: overrides.accumulatedArgs ?? {},
-      intentPaths: overrides.intentPaths ?? [method],
-      loadedKnowledgePaths: [],
-      status: overrides.status ?? "open",
-      result: overrides.result,
+    object: {
+      class: "method_exec",
+      data: {
+        method,
+        description: "form description",
+        accumulatedArgs: overrides.accumulatedArgs ?? {},
+        intentPaths: overrides.intentPaths ?? [method],
+        loadedKnowledgePaths: [],
+        status: overrides.status ?? "open",
+        result: overrides.result,
+      },
     },
   };
 }
@@ -185,22 +187,20 @@ describe("buildContext (ContextWindow model)", () => {
         // resolveInboxWindowId 的 fork 判据读窗实例 data.isForkWindow / data.targetThreadId。
         {
           id: "w_fork_other",
-          class: "_builtin/agent/thread",
           parentObjectId: ROOT_WINDOW_ID,
           title: "non-creator",
           status: "open",
           createdAt: 1,
-          data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true },
+          object: { class: "_builtin/agent/thread", data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true } },
         },
         // creator fork 窗应被优先选中（creator 身份编码在 id=w_creator_<本thread.id>）。
         {
           id: "w_creator_t_child",
-          class: "_builtin/agent/thread",
           parentObjectId: ROOT_WINDOW_ID,
           title: "creator",
           status: "open",
           createdAt: 1,
-          data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true },
+          object: { class: "_builtin/agent/thread", data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true } },
         },
       ] as ContextWindow[],
     });
@@ -299,11 +299,11 @@ describe("buildContext (ContextWindow model)", () => {
     const planId = `${thread.id}_plan`;
     thread.contextWindows.push({
       id: planId,
-      class: "_builtin/agent/plan", // 注册 class id；readable 投影成 class="plan"
       title: "Plan",
       status: "active",
       createdAt: 0,
-      data: { title: "Plan", description: "先处理 inbox", steps: [] },
+      // 注册 class id；readable 投影成 class="plan"
+      object: { class: "_builtin/agent/plan", data: { title: "Plan", description: "先处理 inbox", steps: [] } },
     } as ContextWindow);
     const messages = await buildContext(thread);
     expect(messages).toHaveLength(1);
@@ -341,10 +341,10 @@ describe("buildContext (ContextWindow model)", () => {
     const thread: ThreadContext = makeThread({ id: "t_peer" });
     thread.contextWindows.push({
       id: "w_peer_expert",
-      class: "expert", // 未注册的 peer stone 类型
       title: "expert (peer)",
       status: "open",
       createdAt: 0,
+      object: { class: "expert", data: {} }, // 未注册的 peer stone 类型
     } as unknown as ContextWindow);
     // 修复前此处抛 'getObjectDefinition: object type "expert" not registered'
     const messages = await buildContext(thread);
@@ -362,14 +362,13 @@ describe("buildContext (ContextWindow model)", () => {
       id: "t_todo",
       extraWindows: [
         {
-          // Wave4：实例 inst.class = 注册 class id（_builtin/agent/todo）；readable 投影成 class="todo"。
+          // Wave4：实例注册 class id（_builtin/agent/todo）；readable 投影成 class="todo"。
           id: "w_todo_1",
-          class: "_builtin/agent/todo",
           parentObjectId: ROOT_WINDOW_ID,
           title: "记一笔",
           status: "open",
           createdAt: 1,
-          data: { content: "记得加单测", activatesOn: ["program.shell"] },
+          object: { class: "_builtin/agent/todo", data: { content: "记得加单测", activatesOn: ["program.shell"] } },
         },
       ] as ContextWindow[],
     });
@@ -388,9 +387,9 @@ describe("buildContext (ContextWindow model)", () => {
       id: "t_dup",
       extraWindows: [
         // 实例 inst.class = 注册 class id（_builtin/knowledge_base/knowledge）；readable 投影成 class="knowledge"。
-        { id: "k1", class: "_builtin/knowledge_base/knowledge", parentObjectId: ROOT_WINDOW_ID, title: "k1", status: "open", createdAt: 1, data: { path: "a", source: "explicit", body: "A" } },
-        { id: "k2", class: "_builtin/knowledge_base/knowledge", parentObjectId: ROOT_WINDOW_ID, title: "k2", status: "open", createdAt: 1, data: { path: "b", source: "explicit", body: "B" } },
-        { id: "k3", class: "_builtin/knowledge_base/knowledge", parentObjectId: ROOT_WINDOW_ID, title: "k3", status: "open", createdAt: 1, data: { path: "c", source: "explicit", body: "C" } },
+        { id: "k1", parentObjectId: ROOT_WINDOW_ID, title: "k1", status: "open", createdAt: 1, object: { class: "_builtin/knowledge_base/knowledge", data: { path: "a", source: "explicit", body: "A" } } },
+        { id: "k2", parentObjectId: ROOT_WINDOW_ID, title: "k2", status: "open", createdAt: 1, object: { class: "_builtin/knowledge_base/knowledge", data: { path: "b", source: "explicit", body: "B" } } },
+        { id: "k3", parentObjectId: ROOT_WINDOW_ID, title: "k3", status: "open", createdAt: 1, object: { class: "_builtin/knowledge_base/knowledge", data: { path: "c", source: "explicit", body: "C" } } },
       ] as ContextWindow[],
     });
     const messages = await buildContext(thread);
@@ -433,12 +432,11 @@ describe("buildContext (ContextWindow model)", () => {
       extraWindows: [
         {
           id: "w_fork_child",
-          class: "_builtin/agent/thread",
           parentObjectId: ROOT_WINDOW_ID,
           title: "对子线程",
           status: "open",
           createdAt: 1,
-          data: { target: "alice", targetThreadId: "t_child", isForkWindow: true },
+          object: { class: "_builtin/agent/thread", data: { target: "alice", targetThreadId: "t_child", isForkWindow: true } },
         },
       ] as ContextWindow[],
     });
@@ -723,12 +721,11 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   function makeThreadWindow(threadId: string): ContextWindow & { win: Record<string, unknown> } {
     return {
       id: threadWindowIdOf(threadId),
-      class: THREAD_CLASS_ID,
       parentObjectId: ROOT_WINDOW_ID,
       title: "thread",
       status: "open",
       createdAt: 1,
-      data: {},
+      object: { class: THREAD_CLASS_ID, data: {} },
       win: { transient: true },
     } as ContextWindow & { win: Record<string, unknown> };
   }

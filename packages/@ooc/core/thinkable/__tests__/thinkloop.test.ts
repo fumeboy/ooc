@@ -253,13 +253,13 @@ describe("think", () => {
       contextWindows: [
         {
           id: "agent",
-          class: "_builtin/agent/thread",
           parentWindowId: "root",
           title: "thread",
           status: "open",
           createdAt: Date.now(),
           isMemberWindow: true,
           // class 是继承/注册 class id、非 ContextWindow union 的 discriminant 字面量 → 经 unknown 转。
+          object: { class: "_builtin/agent/thread", data: {} },
         } as unknown as ContextWindow,
       ]
     };
@@ -293,11 +293,11 @@ describe("think", () => {
     // 直建 todo_window（form 机制 Wave4 已废，args 给齐直接 instantiate）。Wave4：实例 inst.class
     // = 注册 class id `_builtin/agent/todo`，业务字段（content）落 inst.data。
     const todoWindows = (thread.contextWindows as ContextWindow[]).filter(
-      (w) => w.class === "_builtin/agent/todo",
+      (w) => w.object.class === "_builtin/agent/todo",
     );
     expect(todoWindows).toHaveLength(1);
-    expect((todoWindows[0]?.data as { content?: string } | undefined)?.content).toBe("补充 thinkloop 集成测试");
-    const lingeringForms = thread.contextWindows.filter((w) => w.class === "method_exec");
+    expect((todoWindows[0]?.object.data as { content?: string } | undefined)?.content).toBe("补充 thinkloop 集成测试");
+    const lingeringForms = thread.contextWindows.filter((w) => w.object.class === "method_exec");
     expect(lingeringForms).toHaveLength(0);
   });
 

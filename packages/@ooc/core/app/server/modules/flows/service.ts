@@ -64,14 +64,13 @@ function buildUserTalkWindow(
   const data: TalkData = { target };
   const instance: OocObjectInstance = {
     id,
-    // 会话窗 inst.class = `_builtin/thread`（唯一会话载体注册 class）；other-view 投影 class=talk
-    // 由 thread readable 渲染期算，不写 inst.class。
-    class: THREAD_CLASS_ID,
     parentObjectId: ROOT_WINDOW_ID,
     title,
     status: "open",
     createdAt: Date.now(),
-    data,
+    // 会话窗注册 class = `_builtin/thread`（唯一会话载体注册 class）；other-view 投影 class=talk
+    // 由 thread readable 渲染期算，不写 object.class。
+    object: { class: THREAD_CLASS_ID, data },
   };
   const view = { id, class: THREAD_CLASS_ID, target } as TalkWindowView;
   return { id, instance, view };
@@ -79,7 +78,7 @@ function buildUserTalkWindow(
 
 /** 把扁平 TalkWindowView 视图（peer 派送可能回填 targetThreadId）的字段同步回实例 data。 */
 function syncTalkViewToInstance(instance: OocObjectInstance, view: TalkWindowView): void {
-  const data = instance.data as TalkData;
+  const data = instance.object.data as TalkData;
   if (view.targetThreadId) data.targetThreadId = view.targetThreadId;
 }
 

@@ -41,12 +41,11 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
     const creatorTalkId = threadWindowIdOf("root");
     const creatorTalk: OocObjectInstance<TalkData> = {
       id: creatorTalkId,
-      class: THREAD_CLASS_ID,
       parentObjectId: ROOT_WINDOW_ID,
       title: "creator",
       status: "open",
       createdAt: Date.now(),
-      data: { target: "user" },
+      object: { class: THREAD_CLASS_ID, data: { target: "user" } },
     };
     const { inbox, events } = bootstrapInboxFromPrompt(
       [

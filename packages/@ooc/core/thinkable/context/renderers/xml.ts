@@ -301,7 +301,7 @@ export async function resolveProjection(
     if (load && ref) {
       try {
         const loaded = await load(persistableCtx(ref));
-        if (loaded) inst = { ...inst, data: loaded };
+        if (loaded) inst = { ...inst, object: { ...inst.object, data: loaded } };
       } catch {
         // hydrate 失败 fail-soft：data 仍为空，Step1 readable 渲空身份。
       }

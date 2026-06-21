@@ -100,12 +100,11 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
     const talkWindowId = generateWindowId("talk");
     const superTalkWindow: OocObjectInstance<TalkData> = {
       id: talkWindowId,
-      class: THREAD_CLASS_ID,
       parentObjectId: ROOT_WINDOW_ID,
       title: "ask self for reflection",
       status: "open",
       createdAt: Date.now(),
-      data: { target: "super" },
+      object: { class: THREAD_CLASS_ID, data: { target: "super" } },
     };
     aliceRoot.contextWindows = [...aliceRoot.contextWindows, superTalkWindow];
     await writeThread(aliceRoot);
@@ -118,8 +117,8 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
     //    误判的字串——hasReflectable 必须只在 U3 的注入路径生效时才通过。
     const superTalkView: TalkWindowView = {
       id: superTalkWindow.id,
-      class: superTalkWindow.class,
-      ...superTalkWindow.data,
+      class: superTalkWindow.object.class,
+      ...superTalkWindow.object.data,
     };
     const delivered = await deliverTalkMessage({
       caller: { thread: aliceRoot, talkWindow: superTalkView },

@@ -215,19 +215,17 @@ describe("observable persistable debug files", () => {
       contextWindows: [
         {
           id: "w_file_a",
-          class: FILE_CLASS_ID,
           title: "src/a.ts",
           status: "open",
           createdAt: 1,
-          data: { path: "src/a.ts" },
+          object: { class: FILE_CLASS_ID, data: { path: "src/a.ts" } },
         } as never,
         {
           id: "w_file_b",
-          class: FILE_CLASS_ID,
           title: "src/b.ts",
           status: "open",
           createdAt: 2,
-          data: { path: "src/b.ts" },
+          object: { class: FILE_CLASS_ID, data: { path: "src/b.ts" } },
         } as never,
       ],
       persistence: { ...flowRef, threadId: "root" }
@@ -298,11 +296,10 @@ describe("observable persistable debug files", () => {
       contextWindows: [
         {
           id: "w_file_tracked",
-          class: FILE_CLASS_ID,
           title: "tracked.ts",
           status: "open",
           createdAt: 1,
-          data: { path: filePath },
+          object: { class: FILE_CLASS_ID, data: { path: filePath } },
         } as never,
       ],
       persistence: { ...flowRef, threadId: "root" }

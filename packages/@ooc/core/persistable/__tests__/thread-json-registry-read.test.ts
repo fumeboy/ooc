@@ -57,11 +57,10 @@ describe("readThread — thread-context.json 单一权威读路径", () => {
     thread.contextWindows = [
       {
         id: "todo_legacy",
-        class: "agent/todo",
         title: "builtin todo",
         status: "open",
         createdAt: 1,
-        data: { content: "persisted via thread-context.json", status: "open" },
+        object: { class: "agent/todo", data: { content: "persisted via thread-context.json", status: "open" } },
       } as never,
     ];
     await writeThread(thread);

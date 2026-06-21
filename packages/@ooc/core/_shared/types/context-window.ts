@@ -82,21 +82,21 @@ export interface RefWindow<Win = unknown> extends WindowView<Win> {
 /** 拆分后 context window 的目标形态（P1 起切换；P0 未启用，故另名、暂不替换 ContextWindow）。 */
 export type ContextWindowSplit = InlineWindow | RefWindow;
 
-// ─────────────────── object 解析 accessor（P2：读者经此取 object data/class，而非直读窗）───────────────────
+// ─────────────────── object 解析 accessor（读者经此取 object data/class，而非直读窗）───────────────────
 // 目的：把「从窗取被引对象的 data/class」收敛到一处，让 P3 切 union（inline→object.data /
-// ref→objectCache 解析）只改这两个函数体、而非 ~37 个读者站点。**P2 阶段过渡实现**：当前
-// ContextWindow=OocObjectInstance、data/class 仍在窗上，故先原样返回；P3 切 union 时更新函数体。
+// ref→objectCache 解析）只改这两个函数体、而非 ~37 个读者站点。当前对象身份已收进 `.object`
+// 子对象（OocObjectInstance.object = { class, data }），故经此取值；P3 切 union 时更新函数体。
 // 读者迁移规则：读「被引用对象的业务数据/注册 class」→ 用本 accessor；读「窗自身视角态」
 // （status/title/win/closable/id）→ 仍直读窗（那是 window 侧、不迁）。
 
 /** 取一个 context window 所引用对象的业务 data（inline 窗=内联 object；ref 窗=P3 起经 objectCache 解析）。 */
 export function objectDataOf<Data = unknown>(w: OocObjectInstance<Data>): Data {
-  return w.data;
+  return w.object.data;
 }
 
 /** 取一个 context window 所引用对象的**注册 class**（非投影 class；投影 class 渲染期算）。 */
 export function classOf(w: OocObjectInstance): string {
-  return w.class;
+  return w.object.class;
 }
 
 // ─────────────────────────── per-class Data / Win re-exports ──────────────────
@@ -167,9 +167,9 @@ export function isSelfThreadWindow(id: string): boolean {
  * self-driven root 的 thread 窗：是过程窗但**无上游** → 此谓词为假 → 不触发任何 creator affordance
  * （say 菜单 / wait IO 源 / end auto-reply / creator-reply 协议知识都 gate 在此）。
  */
-export function hasCreatorChannel(w: { id: string; data?: unknown }): boolean {
+export function hasCreatorChannel(w: OocObjectInstance): boolean {
   if (!isSelfThreadWindow(w.id)) return false;
-  const d = (w.data ?? {}) as { target?: string; isForkWindow?: boolean };
+  const d = (objectDataOf(w) ?? {}) as { target?: string; isForkWindow?: boolean };
   return d.target != null || d.isForkWindow === true;
 }
 

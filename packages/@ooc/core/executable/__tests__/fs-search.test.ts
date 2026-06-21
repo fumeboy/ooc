@@ -127,11 +127,13 @@ describe("U1: search readable projection + close", () => {
     const thread = makeThread({ id: "t_close_search" });
     const sw: OocObjectInstance = {
       id: "w_search_to_close",
-      class: "search",
       title: "close me",
       status: "open",
       createdAt: Date.now(),
-      data: { kind: "glob", query: "*", matches: [], truncated: false } satisfies SearchData,
+      object: {
+        class: "search",
+        data: { kind: "glob", query: "*", matches: [], truncated: false } satisfies SearchData,
+      },
     };
     thread.contextWindows = [...thread.contextWindows, sw];
     const mgr = WindowManager.fromThread(thread, builtinRegistry);

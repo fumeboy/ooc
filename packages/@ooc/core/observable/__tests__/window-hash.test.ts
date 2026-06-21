@@ -54,12 +54,11 @@ function makeFileWindow(
   const { path = "src/foo.ts", compressLevel, parentObjectId, ...envelope } = overrides;
   return {
     id: "w_file_test",
-    class: FILE_CLASS_ID,
     title: "src/foo.ts",
     status: "open",
     createdAt: 1700000000000,
     parentObjectId,
-    data: { path },
+    object: { class: FILE_CLASS_ID, data: { path } },
     // 投影态 win：无压缩档位时 win={}（与 stripVolatileWindow 剥 compressLevel=0 后的产物一致，
     // 保证「compressLevel=0 与 undefined 同 hash」不变量）。
     win: compressLevel === undefined ? {} : { compressLevel },
@@ -84,8 +83,8 @@ describe("computeWindowContentHash — determinism & stability", () => {
 
   it("field insertion order change → same hash (sortedKeys)", () => {
     // 同字段、不同 key 插入顺序（Wave4：业务字段进 data，元信息字段在顶层）
-    const a = { id: "w1", class: FILE_CLASS_ID, title: "t", status: "open", createdAt: 1, data: { path: "p" } } as unknown as ContextWindow;
-    const b = { data: { path: "p" }, createdAt: 1, status: "open", title: "t", class: FILE_CLASS_ID, id: "w1" } as unknown as ContextWindow;
+    const a = { id: "w1", title: "t", status: "open", createdAt: 1, object: { class: FILE_CLASS_ID, data: { path: "p" } } } as unknown as ContextWindow;
+    const b = { object: { data: { path: "p" }, class: FILE_CLASS_ID }, createdAt: 1, status: "open", title: "t", id: "w1" } as unknown as ContextWindow;
     expect(computeWindowContentHash(a)).toBe(computeWindowContentHash(b));
   });
 
@@ -200,11 +199,10 @@ describe("buildWindowsSnapshot — fileDiff", () => {
   it("non-file window has no fileDiff", async () => {
     const root = {
       id: "root",
-      class: "root",
       title: "root",
       status: "active",
       createdAt: 1,
-      data: {},
+      object: { class: "root", data: {} },
     } as ContextWindow;
     const snap = await buildWindowsSnapshot([root]);
     expect(snap[0]!.fileDiff).toBeUndefined();

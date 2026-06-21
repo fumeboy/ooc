@@ -116,12 +116,11 @@ function reviewerThread(baseDir: string, reviewerObjectId: string, threadId: str
 function prInstance(issueId: number, data: PrData, title: string): OocObjectInstance<PrData> {
   return {
     id: prWindowId(issueId),
-    class: "pr",
     parentObjectId: "root",
     title,
     status: "open",
     createdAt: Date.now(),
-    data,
+    object: { class: "pr", data },
   };
 }
 
@@ -272,8 +271,8 @@ describe("deliverPrWindowToReviewers（投递）", () => {
       const t = await readThread({ baseDir, sessionId: "super", objectId: reviewer }, tid);
       expect(t).toBeDefined();
       const win = t!.contextWindows?.find((w) => w.id === prWindowId(issueId));
-      expect(win?.class).toBe(PR_CLASS_ID);
-      const winData = (win!.data ?? {}) as PrData;
+      expect(win?.object.class).toBe(PR_CLASS_ID);
+      const winData = (win!.object.data ?? {}) as PrData;
       expect(winData.issueId).toBe(issueId);
       expect(winData.reviewerObjectId).toBe(reviewer);
       expect(t!.events.some((e) => e.kind === "inbox_message_arrived")).toBe(true);
@@ -289,7 +288,7 @@ describe("deliverPrWindowToReviewers（投递）", () => {
     await deliverPrWindowToReviewers({ baseDir, issueId, reviewers, authorObjectId: "foo", title: "x" });
     const tid = prReviewThreadId("supervisor", issueId);
     const t = await readThread({ baseDir, sessionId: "super", objectId: "supervisor" }, tid);
-    const prWins = (t!.contextWindows ?? []).filter((w) => w.class === PR_CLASS_ID);
+    const prWins = (t!.contextWindows ?? []).filter((w) => w.object.class === PR_CLASS_ID);
     expect(prWins.length).toBe(1);
   });
 });

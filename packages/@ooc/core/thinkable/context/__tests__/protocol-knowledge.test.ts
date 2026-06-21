@@ -15,33 +15,42 @@ import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import { threadWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID, isKnowledgeClass } from "@ooc/core/_shared/types/constants.js";
 
-function paths(windows: { class: string; data?: { path?: string } }[]): string[] {
+function paths(windows: ContextWindow[]): string[] {
   // 合成 knowledge 窗 stored class = KNOWLEDGE_CLASS_ID（裸名 "knowledge" 是 readable 投影名）。
-  return windows.filter((w) => isKnowledgeClass(w.class)).map((w) => w.data?.path ?? "");
+  return windows
+    .filter((w) => isKnowledgeClass(w.object.class))
+    .map((w) => (w.object.data as { path?: string }).path ?? "");
 }
+
+/** 取 knowledge 窗的业务 data（在 inst.object.data；split 后嵌套）。 */
+const kdata = (w: ContextWindow | undefined) =>
+  (w?.object.data ?? {}) as {
+    path?: string;
+    presentation?: string;
+    body?: string;
+    source?: string;
+  };
 
 // agency（end）跑在 agent 的 self 窗上（class=_builtin/agent），end form 挂在它上面。
 // end-reflection 的 activates_on 键 `method::_builtin/agent::end` 经父类匹配命中
 // （form.parentObjectId → self 窗 class=_builtin/agent → trigger.objectType=_builtin/agent）。
 const AGENT_SELF_WIN: ContextWindow = {
   id: "self_agent",
-  class: "_builtin/agent",
   parentObjectId: "root",
   title: "self",
   status: "open",
   createdAt: 1,
-  data: {},
+  object: { class: "_builtin/agent", data: {} },
 };
 
 function makeEndForm(): ContextWindow {
   return {
     id: "f_end",
-    class: "method_exec",
     parentObjectId: "self_agent",
     title: "end",
     status: "open",
     createdAt: 1,
-    data: { method: "end" },
+    object: { class: "method_exec", data: { method: "end" } },
   };
 }
 
@@ -79,15 +88,15 @@ describe("root builtin knowledge activation", () => {
       persistence: { baseDir: "/tmp/test", sessionId: "web-test", objectId: "alice", threadId: "t_noform" },
     });
     const findEnd = (out: Awaited<ReturnType<typeof buildProtocolKnowledgeWindows>>) =>
-      out.find((w) => w.data?.path === "end-reflection");
+      out.find((w) => kdata(w).path === "end-reflection");
     // 开 end form：升格 full content（body 非空）。
     const withEndWin = findEnd(await buildProtocolKnowledgeWindows(withEnd));
-    expect(withEndWin?.data?.presentation).toBe("full");
-    expect(withEndWin?.data?.body).not.toBe("");
+    expect(kdata(withEndWin).presentation).toBe("full");
+    expect(kdata(withEndWin).body).not.toBe("");
     // 无 form：仅 summary（hint），body 空、不铺开全文。
     const noFormWin = findEnd(await buildProtocolKnowledgeWindows(noForm));
-    expect(noFormWin?.data?.presentation).toBe("summary");
-    expect(noFormWin?.data?.body).toBe("");
+    expect(kdata(noFormWin).presentation).toBe("summary");
+    expect(kdata(noFormWin).body).toBe("");
   });
 
   it("per-type 知识按 object::<type> 激活、不串台（plan/search/feishu_chat/feishu_doc）", async () => {
@@ -101,7 +110,7 @@ describe("root builtin knowledge activation", () => {
       const withWin = makeThread({
         id: `t_`,
         extraWindows: [
-          { id: `w_`, class: c.class, parentObjectId: "root", title: c.class, status: "open", createdAt: 1, data: {} } as ContextWindow,
+          { id: `w_`, parentObjectId: "root", title: c.class, status: "open", createdAt: 1, object: { class: c.class, data: {} } } as ContextWindow,
         ],
       });
       const p = paths(await buildProtocolKnowledgeWindows(withWin));
@@ -113,9 +122,9 @@ describe("root builtin knowledge activation", () => {
 
   it("注入的 window source=protocol", async () => {
     const out = await buildProtocolKnowledgeWindows(makeThread({ id: "t_src" }));
-    const core = out.find((w) => w.data?.path === "interaction-core");
+    const core = out.find((w) => kdata(w).path === "interaction-core");
     expect(core).toBeDefined();
-    expect(core?.data?.source).toBe("protocol");
+    expect(kdata(core).source).toBe("protocol");
   });
 });
 
@@ -127,10 +136,10 @@ describe("root builtin knowledge content（砍机制留协议后的关键协议�
         persistence: { baseDir: "/tmp/test", sessionId: "super", objectId: "alice", threadId: "t_super2" },
       }),
     );
-    const sf = out.find((w) => w.data?.path === "super-flow");
-    expect(sf?.data?.body).toContain("frontmatter");
-    expect(sf?.data?.body).toContain("activates_on");
-    expect(sf?.data?.body).toContain("create_pr_and_invite_reviewers");
+    const sf = out.find((w) => kdata(w).path === "super-flow");
+    expect(kdata(sf).body).toContain("frontmatter");
+    expect(kdata(sf).body).toContain("activates_on");
+    expect(kdata(sf).body).toContain("create_pr_and_invite_reviewers");
   });
 
   // creator-reply 协议按 creator 窗 data.isForkWindow 区分 fork（父线程）/ peer（对端 thread）措辞。
@@ -144,14 +153,16 @@ describe("root builtin knowledge content（砍机制留协议后的关键协议�
       extraWindows: [
         {
           id: creatorId,
-          class: THREAD_CLASS_ID,
           parentObjectId: "root",
           title: "creator",
           status: "open",
           createdAt: 1,
-          data: isFork
-            ? { target: "self", targetThreadId: "t_up", isForkWindow: true }
-            : { target: "alice", targetThreadId: "t_up" },
+          object: {
+            class: THREAD_CLASS_ID,
+            data: isFork
+              ? { target: "self", targetThreadId: "t_up", isForkWindow: true }
+              : { target: "alice", targetThreadId: "t_up" },
+          },
         } as ContextWindow,
       ],
     });
@@ -159,16 +170,16 @@ describe("root builtin knowledge content（砍机制留协议后的关键协议�
 
   it("creator-reply: fork 窗 → 父线程 / fork 子线程窗 措辞", async () => {
     const out = await buildProtocolKnowledgeWindows(makeCreatorReplyThread(true));
-    const cr = out.find((w) => (w.data?.path ?? "").includes("creator-reply"));
-    expect(cr?.data?.body).toContain("父线程");
-    expect(cr?.data?.body).toContain("fork 子线程窗");
+    const cr = out.find((w) => (kdata(w).path ?? "").includes("creator-reply"));
+    expect(kdata(cr).body).toContain("父线程");
+    expect(kdata(cr).body).toContain("fork 子线程窗");
   });
 
   it("creator-reply: peer 窗 → 对端 thread / peer 会话窗 措辞", async () => {
     const out = await buildProtocolKnowledgeWindows(makeCreatorReplyThread(false));
-    const cr = out.find((w) => (w.data?.path ?? "").includes("creator-reply"));
-    expect(cr?.data?.body).toContain("对端 thread");
-    expect(cr?.data?.body).toContain("peer 会话窗");
+    const cr = out.find((w) => (kdata(w).path ?? "").includes("creator-reply"));
+    expect(kdata(cr).body).toContain("对端 thread");
+    expect(kdata(cr).body).toContain("peer 会话窗");
   });
 
   it("end-reflection 含 super 沉淀引导且是 hint 非 gate", async () => {
@@ -179,11 +190,11 @@ describe("root builtin knowledge content（砍机制留协议后的关键协议�
         extraWindows: [AGENT_SELF_WIN, makeEndForm()],
       }),
     );
-    const er = out.find((w) => w.data?.path === "end-reflection");
-    expect(er?.data?.body).toContain("super");
+    const er = out.find((w) => kdata(w).path === "end-reflection");
+    expect(kdata(er).body).toContain("super");
     // end-reflection 引导「长期记忆走 super flow」（具体 memory 路径细节在 super-flow.md，
     // 不在 end hint 里铺开）。
-    expect(er?.data?.body).toContain("长期记忆");
-    expect(er?.data?.body).toContain("hint");
+    expect(kdata(er).body).toContain("长期记忆");
+    expect(kdata(er).body).toContain("hint");
   });
 });

@@ -202,12 +202,11 @@ export async function derivePeerObjectWindows(
 
     out.push({
       id: peerId,
-      class: peerId,
       parentObjectId: "root",
       title,
       status: "open",
       createdAt,
-      data: {},
+      object: { class: peerId, data: {} },
     });
   }
 

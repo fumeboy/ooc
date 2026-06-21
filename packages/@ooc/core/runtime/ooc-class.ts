@@ -70,27 +70,26 @@ export interface OocPackageMeta {
 }
 
 /**
- * runtime 持有的 object **实例** —— 把「身份元信息 + 业务 Data + 投影态」三者显式分离
- * （object-model 核心 1/4）。取代旧的「BaseContextWindow 平铺业务字段」单体结构。
+ * runtime 持有的 object **实例** —— 把「对象身份 + 窗视角态」显式分离（object-model 核心 1/4）。
+ * 取代旧的「BaseContextWindow 平铺业务字段」单体结构。
  *
- * - 元信息字段（id / class / title / status / createdAt / parentObjectId…）由 runtime 管理
- * - data : 业务数据（该 class 的 types.ts `Data`；object method 经 `self` 入参读写）
- * - win  : 投影态（window method 读写、readable 读；与 data 分离持久化）
+ * - object : 对象身份（class 注册类 + 业务 data；object method 经 `self` 入参读写 data），与窗视角态分离
+ * - 窗视角态（id / title / status / createdAt / parentObjectId / win / closable / objectRef）由 runtime 管理
+ * - win  : 投影态（window method 读写、readable 读；与 object data 分离持久化）
  */
 export interface OocObjectInstance<Data = unknown, Win = unknown> {
   id: string;
-  class: string;
   parentObjectId?: string;
   title: string;
   status: WindowStatus;
   createdAt: number;
-  data: Data;
+  object: { class: string; data: Data };
   win?: Win;
   /** 结构窗保护：construct 标 false → close 原语拒关（缺省 undefined = 可关）。spec §5。 */
   closable?: boolean;
   /**
    * **独立对象窗的引用标记**（object/context-window 拆分 P1，additive optional）。
-   * 非 inline 持久化的窗（各自落 state.json、经 `_ref` 持久）携带它，自描述为对某 object 的引用——
+   * 非 inline 持久化的窗（各自落 data.json、经 `_ref` 持久）携带它，自描述为对某 object 的引用——
    * `referencedObjectId` 据此直接解析（lifecycle phase-2「referencedObjectId 扩到 member 窗」的合并）。
    * inline 窗（thread 自有窗 / talk / todo，isInlinePersisted）**不设**，object 仍内联在 data。
    * 独立对象现 id===objectId（1:1）。

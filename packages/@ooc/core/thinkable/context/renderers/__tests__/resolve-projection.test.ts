@@ -30,15 +30,20 @@ describe("resolveProjection 默认投影视角分流", () => {
     await rm(baseDir, { recursive: true, force: true });
   });
 
-  const instOf = (id: string, overrides: Partial<OocObjectInstance> = {}): OocObjectInstance => ({
-    id,
-    class: id,
-    title: id,
-    status: "open",
-    createdAt: 0,
-    data: {},
-    ...overrides,
-  });
+  const instOf = (
+    id: string,
+    overrides: Partial<Omit<OocObjectInstance, "object">> & { class?: string; data?: unknown } = {},
+  ): OocObjectInstance => {
+    const { class: cls, data, ...rest } = overrides;
+    return {
+      id,
+      title: id,
+      status: "open",
+      createdAt: 0,
+      object: { class: cls ?? id, data: data ?? {} },
+      ...rest,
+    };
+  };
 
   /** thread 的 self objectId = viewer（决定 self/peer 视角）。 */
   const threadViewedBy = (viewer: string) =>

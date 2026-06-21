@@ -24,11 +24,10 @@ import type { ThreadContext } from "../../_shared/types/thread";
 const forkWin = (id: string, targetThreadId: string): OocObjectInstance =>
   ({
     id,
-    class: THREAD_CLASS_ID,
     title: "",
     status: "open",
     createdAt: 0,
-    data: { isForkWindow: true, targetThreadId },
+    object: { class: THREAD_CLASS_ID, data: { isForkWindow: true, targetThreadId } },
   }) as OocObjectInstance;
 
 const thr = (
@@ -60,11 +59,10 @@ describe("referencedObjectId (fork-only)", () => {
   test("peer 窗（无 isForkWindow）→ undefined", () => {
     const w = {
       id: "w_peer",
-      class: THREAD_CLASS_ID,
       title: "",
       status: "open",
       createdAt: 0,
-      data: { target: "alice", targetThreadId: "t_alice" },
+      object: { class: THREAD_CLASS_ID, data: { target: "alice", targetThreadId: "t_alice" } },
     } as OocObjectInstance;
     expect(referencedObjectId(w)).toBeUndefined();
   });
@@ -74,11 +72,10 @@ describe("referencedObjectId (fork-only)", () => {
     // 这是 lifecycle phase-2「referencedObjectId 扩到 member 窗」的合并——独立成员/对象窗纳入计数解析。
     const w = {
       id: "w_file",
-      class: "_builtin/filesystem/file",
       title: "",
       status: "open",
       createdAt: 0,
-      data: {},
+      object: { class: "_builtin/filesystem/file", data: {} },
       objectRef: { objectId: "w_file", class: "_builtin/filesystem/file" },
     } as OocObjectInstance;
     expect(referencedObjectId(w)).toBe("w_file");
@@ -87,11 +84,10 @@ describe("referencedObjectId (fork-only)", () => {
   test("缺 targetThreadId 的 fork 窗 → undefined", () => {
     const w = {
       id: "w_nf",
-      class: THREAD_CLASS_ID,
       title: "",
       status: "open",
       createdAt: 0,
-      data: { isForkWindow: true },
+      object: { class: THREAD_CLASS_ID, data: { isForkWindow: true } },
     } as OocObjectInstance;
     expect(referencedObjectId(w)).toBeUndefined();
   });

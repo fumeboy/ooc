@@ -34,12 +34,11 @@ const SELF_WINDOW_ID = "w_self_agent";
 function makeSelfAgentWindow(): OocObjectInstance {
   return {
     id: SELF_WINDOW_ID,
-    class: "_builtin/agent",
     parentObjectId: "root",
     title: "alice (self)",
     status: "open",
     createdAt: 1,
-    data: {},
+    object: { class: "_builtin/agent", data: {} },
   };
 }
 
@@ -49,18 +48,20 @@ function makeMethodExecWindow(
 ): OocObjectInstance {
   return {
     id: opts.id,
-    class: "method_exec",
     parentObjectId: SELF_WINDOW_ID,
     title: opts.method,
     status: "open",
     createdAt: 2,
-    data: {
-      method: opts.method,
-      description: "",
-      accumulatedArgs: {},
-      intentPaths: [opts.method],
-      loadedKnowledgePaths: [],
-      status: "open",
+    object: {
+      class: "method_exec",
+      data: {
+        method: opts.method,
+        description: "",
+        accumulatedArgs: {},
+        intentPaths: [opts.method],
+        loadedKnowledgePaths: [],
+        status: "open",
+      },
     },
   };
 }
@@ -98,9 +99,9 @@ function systemContent(input: Awaited<ReturnType<typeof buildInputItems>>): stri
  */
 function paths(windows: OocObjectInstance[]): string[] {
   return windows
-    .filter((w) => isKnowledgeClass(w.class))
-    .filter((w) => (w.data as { presentation?: string } | undefined)?.presentation === "full")
-    .map((w) => (w.data as { path?: string } | undefined)?.path ?? "");
+    .filter((w) => isKnowledgeClass(w.object.class))
+    .filter((w) => (w.object.data as { presentation?: string } | undefined)?.presentation === "full")
+    .map((w) => (w.object.data as { path?: string } | undefined)?.path ?? "");
 }
 
 describe("end-reflection-reminder thread-level integration", () => {

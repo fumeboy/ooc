@@ -108,22 +108,25 @@ export async function deliverPrWindowToReviewers(
     }
 
     const windowId = prWindowId(issueId);
-    // Wave 4 对象模型：元信息字段（id/class/title/status/createdAt/parentObjectId）落实例，
-    // pr 业务字段（issueId/reviewerObjectId/authorObjectId/authorThreadId）落 inst.data（=PrData）。
+    // Wave 4 对象模型：对象身份（class + 业务 data）收进 inst.object，窗视角态
+    // （id/title/status/createdAt/parentObjectId）留实例顶层。
+    // pr 业务字段（issueId/reviewerObjectId/authorObjectId/authorThreadId）落 object.data（=PrData）。
     const prInstance: OocObjectInstance<PrData> = {
       id: windowId,
-      // 注册 class id（非投影名 "pr"）——否则 createFlowObject/hydrate 解析不到 class，
-      // pr 窗过不了持久化 round-trip、reload 后被 drop（pr readable 才把它投影成 "pr"）。
-      class: PR_CLASS_ID,
       parentObjectId: ROOT_WINDOW_ID,
       title,
       status: "open",
       createdAt: Date.now(),
-      data: {
-        issueId,
-        reviewerObjectId,
-        authorObjectId,
-        ...(authorThreadId ? { authorThreadId } : {}),
+      object: {
+        // 注册 class id（非投影名 "pr"）——否则 createFlowObject/hydrate 解析不到 class，
+        // pr 窗过不了持久化 round-trip、reload 后被 drop（pr readable 才把它投影成 "pr"）。
+        class: PR_CLASS_ID,
+        data: {
+          issueId,
+          reviewerObjectId,
+          authorObjectId,
+          ...(authorThreadId ? { authorThreadId } : {}),
+        },
       },
     };
 
