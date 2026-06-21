@@ -391,7 +391,9 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       return;
     }
 
-    const tools = getAvailableTools(thread);
+    // compress v2：summarizer fork 不给工具——强制单轮纯文本摘要响应（无 tool call 诱惑），
+    // 首轮文本即被下方 isSummarizer 分支捕获为 endSummary。
+    const tools = thread.isSummarizer ? [] : getAvailableTools(thread);
 
     // 输入输出记录点挂到 observable。
     loopHandle = await beginLlmLoop(thread, llmInput.input, tools);
@@ -431,6 +433,16 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
         kind: "text",
         text: result.text
       });
+    }
+
+    // compress v2：summarizer fork **单轮即完成**（镜像 CC single-turn Fork Agent）——首轮 LLM 文本即摘要，
+    // 不进多轮 agent loop、不派发 tool、不依赖 agency-end。scheduler harvest 读 thread.endSummary 折入父窗
+    // summarizedRanges。无文本时置空摘要（harvest 兜底占位）。
+    if (thread.isSummarizer) {
+      thread.endSummary = (result.text ?? "").trim();
+      thread.status = "done";
+      await finishLlmLoop(thread, loopHandle, { result, status: "ok" });
+      return;
     }
 
     // tool call 先记录，再由 executable 顺序执行。
