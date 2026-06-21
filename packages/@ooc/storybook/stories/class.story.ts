@@ -134,7 +134,7 @@ export async function runControlPlane(): Promise<StoryResult> {
 
     // TC-COMP-04（机制命门）: exec(filesystem, grep) 经成员方法造出 search 对象。
     // grep object method 经 ctx.runtime.instantiate("_builtin/filesystem/search", …) 造子对象，
-    // 其 data 含 kind/matches（业务字段在 instance.data，信封字段 id/class/title 由 runtime 管理）。
+    // 其 data 含 kind/matches（业务字段在 instance.data，元信息字段 id/class/title 由 runtime 管理）。
     {
       const thread: any = { id: "root", status: "running",
         persistence: { baseDir, sessionId: "sb-comp", objectId: "supervisor", threadId: "root" },

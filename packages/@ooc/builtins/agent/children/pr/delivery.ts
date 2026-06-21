@@ -108,7 +108,7 @@ export async function deliverPrWindowToReviewers(
     }
 
     const windowId = prWindowId(issueId);
-    // Wave 4 对象模型：信封字段（id/class/title/status/createdAt/parentObjectId）落实例信封，
+    // Wave 4 对象模型：元信息字段（id/class/title/status/createdAt/parentObjectId）落实例，
     // pr 业务字段（issueId/reviewerObjectId/authorObjectId/authorThreadId）落 inst.data（=PrData）。
     const prInstance: OocObjectInstance<PrData> = {
       id: windowId,

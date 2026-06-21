@@ -6,7 +6,7 @@
  *
  * object method **可改 object data、可产生副作用**（区别于 readable 维度的 window method，
  * 后者只动展示投影态、不碰业务数据）。统一签名 `(ctx, self, args)`：
- *   - ctx  : ExecutableContext —— 运行时环境（thread / 对象身份信封 / runtime 句柄）
+ *   - ctx  : ExecutableContext —— 运行时环境（thread / 对象身份元信息 / runtime 句柄）
  *   - self : Data —— 对象自身**业务数据**（由该 class 的 `types.ts` 定义；方法直接读写其字段）
  *   - args : 调用参数
  *
@@ -73,7 +73,7 @@ export interface RuntimeHandle {
 export interface ExecutableContext {
   /** 当前执行该 method 的 thread（method 跑在某 thread 的 thinkloop 内时存在）。 */
   thread?: ThreadContext;
-  /** 接收者对象的身份信封（id / class）。业务数据经 self 入参，**不**在此。 */
+  /** 接收者对象的身份元信息（id / class）。业务数据经 self 入参，**不**在此。 */
   object: { id: string; class: string };
   /** runtime 句柄 —— 实例化子对象 / 关窗等需 runtime 协助的副作用。 */
   runtime?: RuntimeHandle;
@@ -89,7 +89,7 @@ export interface ExecutableContext {
 }
 
 /**
- * constructor 的执行上下文 —— 实例尚未存在，故**无 `object`**（id/class 由 runtime 在包信封时分配）。
+ * constructor 的执行上下文 —— 实例尚未存在，故**无 `object`**（id/class 由 runtime 在打包成实例时分配）。
  * trivial 的 class（如 note/example）忽略 ctx；需要 thread/worktree/spawn 等前置的 class（file/search/
  * *_process）从此取运行时环境。
  */
@@ -152,7 +152,7 @@ export interface ObjectMethodResult {
  * 把 method exec 的返回形态规范化为 `ObjectMethodResult`（method 的统一结果形状）。
  *
  * exec 三态返回（`ObjectMethodResult | string | void`）由 runtime（WindowManager）/ HTTP `call_method`
- * 经此收口为**单一 result 形状**——method outcome 即 method result，不再有独立的 outcome 信封类型：
+ * 经此收口为**单一 result 形状**——method outcome 即 method result，不再有独立的 outcome 包装类型：
  * - void / undefined → `{}`
  * - 裸 string（sugar）→ `{ message }`
  * - 已是 `ObjectMethodResult` → 原样
@@ -168,7 +168,7 @@ export function normalizeMethodResult(
 /**
  * 非单例 class 的 **constructor**（object-model 核心 3）。
  *
- * `exec(ctx, args)` 产出**新实例的初始 Data**（不是窗；runtime 据此把 Data 包成对象信封）。
+ * `exec(ctx, args)` 产出**新实例的初始 Data**（不是窗；runtime 据此把 Data 包成对象实例）。
  * 构造前置的副作用（写盘 / worktree / spawn 进程 / 校验存在性…）在 exec 体内经 ctx 行使；
  * 失败 throw（runtime 捕获、不建窗）。单例 class 无 constructor —— 其唯一规范实例的数据来自
  * persistable / self.md / 缺省空。

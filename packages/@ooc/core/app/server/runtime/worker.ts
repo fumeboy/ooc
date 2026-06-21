@@ -14,7 +14,7 @@ import { SUPER_SESSION_ID, isSuperSessionId } from "@ooc/core/_shared/types/cons
 /**
  * talk 对象的会话视图字段（target / targetThreadId）。
  *
- * Wave 4：contextWindows 元素是 `OocObjectInstance`（信封 + data + win 分离）；talk 的会话业务
+ * Wave 4：contextWindows 元素是 `OocObjectInstance`（元信息 + data + win 分离）；talk 的会话业务
  * 字段落 `inst.data`（=TalkData）。本 helper 从 data 读出 target / targetThreadId。
  */
 function talkView(inst: OocObjectInstance): { target?: string; targetThreadId?: string } {
@@ -267,7 +267,7 @@ async function syncCrossObjectCalleeEnds(
   if (!caller.persistence) return;
   const talkWindows = (caller.contextWindows ?? []).filter(
     // talk 会话窗：class==="talk" 且有 targetThreadId（指向对端 thread）。字段经 talkView 兼读
-    // 实例信封顶层 / inst.data（talk 迁移在途）。
+    // 实例顶层 / inst.data（talk 迁移在途）。
     (w) => w.class === "talk" && Boolean(talkView(w).targetThreadId),
   );
   if (talkWindows.length === 0) return;

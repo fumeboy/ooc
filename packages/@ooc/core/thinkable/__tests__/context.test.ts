@@ -355,7 +355,7 @@ describe("buildContext (ContextWindow model)", () => {
 
   // 删除（退役机制）：「method_exec form 四态机 + status=failed 时渲 <result>」是已废的 form
   // 机制本身。Wave4 form 机制整体退役（method_exec_form Class 为空占位、无 readable、不再渲 <result>），
-  // method_exec 窗只剩信封 status，由 placeholder 投影。该 TC 测的 result-rendering 状态机已不存在。
+  // method_exec 窗只剩元信息 status，由 placeholder 投影。该 TC 测的 result-rendering 状态机已不存在。
 
   it("renders todo_window content + activates_on", async () => {
     const thread = makeThread({

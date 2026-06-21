@@ -20,7 +20,7 @@ export interface VisibleServerContext {
   baseDir: string;
   /** 目标 flow（A2 v1 仅 flow scope，必有）。 */
   session: { baseDir: string; sessionId: string };
-  /** 接收者对象的身份信封（id / class）。业务数据经 self 入参，**不**在此。 */
+  /** 接收者对象的身份元信息（id / class）。业务数据经 self 入参，**不**在此。 */
   object: { id: string; class: string };
   /** 改 object data 后报告 → dispatch 触发 persistable.save（eager 落盘）。 */
   reportDataEdit?: () => Promise<void>;

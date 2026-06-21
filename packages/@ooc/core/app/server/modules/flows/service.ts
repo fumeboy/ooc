@@ -47,10 +47,10 @@ import { join } from "node:path";
 const USER_OBJECT_ID = "user";
 
 /**
- * 在 user.root 上建一个指向 target 的 peer talk_window（Wave 4：OocObjectInstance 信封 + TalkData）。
+ * 在 user.root 上建一个指向 target 的 peer talk_window（Wave 4：OocObjectInstance 实例 + TalkData）。
  *
  * 返回：
- * - instance：挂进 thread.contextWindows 的 OocObjectInstance（信封 + data=TalkData）。
+ * - instance：挂进 thread.contextWindows 的 OocObjectInstance（元信息 + data=TalkData）。
  * - view    ：传给 deliverTalkMessage 的扁平 TalkWindowView 视图（delivery 只读 id/target/targetThreadId，
  *             并回填 targetThreadId——回填后同步回 instance.data；creator 窗身份由 id 派生）。
  */
@@ -419,7 +419,7 @@ export function createFlowsService(deps: {
           persistence: userPersistence,
         };
       }
-      // user→target peer 会话窗（Wave 4：OocObjectInstance 信封 + TalkData）。
+      // user→target peer 会话窗（Wave 4：OocObjectInstance 实例 + TalkData）。
       const { id: talkWindowId, instance: talkInstance, view: talkView } =
         buildUserTalkWindow(targetObjectId, targetObjectId);
       userThread.contextWindows = [...(userThread.contextWindows ?? []), talkInstance];
@@ -552,7 +552,7 @@ export function createFlowsService(deps: {
         };
       }
 
-      // user→target peer 会话窗（Wave 4：OocObjectInstance 信封 + TalkData）。
+      // user→target peer 会话窗（Wave 4：OocObjectInstance 实例 + TalkData）。
       const { id: talkWindowId, instance: talkInstance, view: talkView } =
         buildUserTalkWindow(target, target);
       userThread.contextWindows = [...(userThread.contextWindows ?? []), talkInstance];

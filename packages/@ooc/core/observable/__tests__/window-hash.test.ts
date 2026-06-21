@@ -33,7 +33,7 @@ import {
 } from "../window-hash";
 
 /**
- * Wave4 对象模型：file 窗 = OocObjectInstance 信封。业务字段 path 下沉 inst.data；
+ * Wave4 对象模型：file 窗 = OocObjectInstance 实例。业务字段 path 下沉 inst.data；
  * 投影态 compressLevel 进 inst.win；parentWindowId → inst.parentObjectId。
  * fileDiff 分支按 isFileClass(inst.class)（注册 id FILE_CLASS_ID）触发——stored class 是注册 id，
  * 裸名 "file" 只是 readable 投影名。
@@ -83,7 +83,7 @@ describe("computeWindowContentHash — determinism & stability", () => {
   });
 
   it("field insertion order change → same hash (sortedKeys)", () => {
-    // 同字段、不同 key 插入顺序（Wave4：业务字段进 data，信封字段在顶层）
+    // 同字段、不同 key 插入顺序（Wave4：业务字段进 data，元信息字段在顶层）
     const a = { id: "w1", class: FILE_CLASS_ID, title: "t", status: "open", createdAt: 1, data: { path: "p" } } as unknown as ContextWindow;
     const b = { data: { path: "p" }, createdAt: 1, status: "open", title: "t", class: FILE_CLASS_ID, id: "w1" } as unknown as ContextWindow;
     expect(computeWindowContentHash(a)).toBe(computeWindowContentHash(b));

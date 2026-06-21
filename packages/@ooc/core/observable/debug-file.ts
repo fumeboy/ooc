@@ -46,7 +46,7 @@ export function captureContextSnapshot(
   // （投影类解析改由 readable computeProjectionClass 一处收口，不再在快照层旁路 enrich）。
   _registry: ObjectRegistry = builtinRegistry,
 ): ContextSnapshot {
-  // contextWindows 已是 OocObjectInstance[]，直接进快照（投影态/信封字段都在实例内）。
+  // contextWindows 已是 OocObjectInstance[]，直接进快照（投影态/元信息字段都在实例内）。
   const contextWindows = thread.contextWindows ?? [];
   return {
     id: thread.id,

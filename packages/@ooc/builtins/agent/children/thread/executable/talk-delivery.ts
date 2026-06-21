@@ -252,7 +252,7 @@ function resolveCalleeReplyToWindowId(
   callerThreadId: string,
   callerObjectId: string,
 ): string {
-  // Wave 4：contextWindows 元素是 OocObjectInstance（信封 + data 分离）；会话业务字段
+  // Wave 4：contextWindows 元素是 OocObjectInstance（元信息 + data 分离）；会话业务字段
   // （target / targetThreadId）落 inst.data（=TalkData）。会话窗（talk + reflect_request
   // self-view）按 inst.class 识别，回信归位字段从 inst.data 读。
   const windows = (calleeThread.contextWindows ?? [])

@@ -12,8 +12,8 @@
  * self/other-view + thread session 算出，不持久化。
  * **ThreadWin**（inst.win）= 投影态：transcript 渲染窗口（window method `set_transcript_window` 读写）。
  *
- * 信封字段（id / class / title / status / createdAt / parentObjectId）由 runtime 管理
- * （`OocObjectInstance` 信封），不进 Data；thread 的过程数据（context/inbox/outbox/events/status）
+ * 元信息字段（id / class / title / status / createdAt / parentObjectId）由 runtime 管理
+ * （`OocObjectInstance` 实例），不进 Data；thread 的过程数据（context/inbox/outbox/events/status）
  * 落 thread.json / thread-context.json，由 runtime/persistence 管理，不冗余进本 Data。
  */
 export interface Data {
@@ -55,7 +55,7 @@ export type TalkData = Data;
 export type TalkWin = ThreadWin;
 
 /**
- * delivery 域内部的**扁平派送视图 DTO**（实例 id/class 信封 + TalkData 扁平）。
+ * delivery 域内部的**扁平派送视图 DTO**（实例 id/class 元信息 + TalkData 扁平）。
  * 非持久化结构——say / fork 派送时把 `OocObjectInstance<TalkData>` 还原成 delivery 期望的扁平面。
  */
 export interface TalkWindowView extends TalkData {

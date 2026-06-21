@@ -16,7 +16,7 @@ import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 const bm = new BudgetManager();
 
-/** 最小测试窗（OocObjectInstance 信封；allocate 只读 id/title，estimate 读整窗）。 */
+/** 最小测试窗（OocObjectInstance 实例；allocate 只读 id/title，estimate 读整窗）。 */
 function mkWindow(over: { id: string; title: string }): ContextWindow {
   return {
     id: over.id,

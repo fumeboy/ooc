@@ -20,7 +20,7 @@ import type { XmlNode } from "../_shared/types/xml.js";
 export interface ReadableContext {
   /** 正在「看」这个对象的 thread（视角来源；readable 可据此动态算 class）。 */
   thread?: ThreadContext;
-  /** 被投影对象的身份信封（id / class）。 */
+  /** 被投影对象的身份元信息（id / class）。 */
   object: { id: string; class: string };
   /** persistence 定位（readable 需读盘时用，如 file 读文件内容）。 */
   persistence?: { baseDir: string; sessionId?: string };

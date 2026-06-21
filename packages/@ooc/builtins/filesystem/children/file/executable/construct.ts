@@ -1,7 +1,7 @@
 /**
  * file —— constructor（open_file / write_file 两分支）+ 与 edit 共享的 worktree 落点解析。
  *
- * `construct.exec(ctx, args) => Data`（ConstructorContext，无 object 信封）：保留全部路径解析 /
+ * `construct.exec(ctx, args) => Data`（ConstructorContext，无 object 实例）：保留全部路径解析 /
  * worktree 版本化 / 写盘 / events 注入逻辑。失败 **throw**（runtime 捕获、不建窗），而非旧的
  * `{ ok:false, error }`。产出新实例初始 Data `{ path }`（path = 实际读写落点，含 worktree 重定向）。
  *

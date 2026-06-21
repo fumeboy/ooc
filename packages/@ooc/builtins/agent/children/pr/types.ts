@@ -1,7 +1,7 @@
 /**
  * pr —— reviewer 评审窗（reflectable 沉淀的 feat-branch PR）的 **object data**（types.ts = 纯 Data）。
  *
- * 只含业务字段；**不含**窗信封字段（id/class/title/status/createdAt）——那些由 runtime 管理。
+ * 只含业务字段；**不含**窗的元信息字段（id/class/title/status/createdAt）——那些由 runtime 管理。
  *
  * reflectable 沉淀（feat-branch PR 流程）：
  * super(foo) `create_pr_and_invite_reviewers` 开 PR 后，给每个 reviewer 的 super-session thread 投递一条
