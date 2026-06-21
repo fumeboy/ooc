@@ -55,3 +55,9 @@ docs/harness-reports/
 packages/@ooc/tests/test-results/
 playwright-report*/
 playwright-report.json
+
+# bun workspace in-tree alias 符号链接（install 生成，指向 children/<child>；勿 tracking）
+packages/@ooc/builtins/agent/method_exec_form
+packages/@ooc/builtins/filesystem/file
+packages/@ooc/builtins/filesystem/search
+packages/@ooc/builtins/terminal/terminal_process
