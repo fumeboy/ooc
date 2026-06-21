@@ -16,7 +16,7 @@ thread 是一个**普通 object**，持久化走 object-model 标准契约 `pers
 
 ## 数据归属原则（落地的地基）
 
-1. **context window = thread 对某对象的「视图」**：它只持**窗状态**（信封 + `win` 视图态 + 指向哪个对象的
+1. **context window = thread 对某对象的「视图」**：它只持**窗状态**（元信息 + `win` 视图态 + 指向哪个对象的
    **引用**），**不持被指对象的数据**。
 2. **thread 的消息（inbox/outbox）/ events / status = thread 这个对象自身的数据**，落在 thread 对象层；
    它们只在**渲染时**被投影进各窗（`talk-render.ts` 的 `filterTalkMessages` 按 windowId/replyToWindowId 归位），
@@ -68,7 +68,7 @@ interface Data {
 
 // thread 持久化 blob（≠ 上面的 Data）= thread 自身对象数据 + 它持有的窗状态
 //   { ...thread 自身数据(status/events/outbox/...), contextWindows: 窗状态entry[] }
-//   窗状态 entry = 信封 + win + 引用（inline class 整窗 / 独立对象 _ref）；被指对象数据各自落。
+//   窗状态 entry = 元信息 + win + 引用（inline class 整窗 / 独立对象 _ref）；被指对象数据各自落。
 //   inbox 走 per-message 目录（并发安全），渲染时投影进窗。
 
 // thread/persistable/index.ts —— 标准 save/load，删 container
