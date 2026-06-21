@@ -26,6 +26,7 @@
 
 import type { ThreadContext } from "../context";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
+import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import { SUPER_SESSION_ID } from "@ooc/core/_shared/types/constants.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 
@@ -187,7 +188,7 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       if (trigger.objectType === "root") return true;
       const list = thread.contextWindows ?? [];
       for (const w of list) {
-        if (w.class !== trigger.objectType) continue;
+        if (classOf(w) !== trigger.objectType) continue;
         if (isOpen(w)) return true;
       }
       return false;
@@ -210,9 +211,9 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       for (const w of list) byId.set(w.id, w);
 
       for (const w of list) {
-        if (w.class !== "method_exec") continue;
+        if (classOf(w) !== "method_exec") continue;
         // method_exec 业务字段（method）落 inst.data。
-        const method = (w.data as { method?: string } | undefined)?.method;
+        const method = (objectDataOf(w) as { method?: string } | undefined)?.method;
         if (method !== trigger.method) continue;
         // form 必须 open 才视为"该 method 当前活跃"——success/failed 不算
         if (!isOpen(w)) continue;
@@ -232,9 +233,9 @@ export function evaluateTrigger(trigger: Trigger, thread: ThreadContext): boolea
       // 意图就到哪，知识随之激活（与 method case 同源于 contextWindows，不读独立缓存）。
       const list = thread.contextWindows ?? [];
       for (const w of list) {
-        if (w.class !== "method_exec") continue;
+        if (classOf(w) !== "method_exec") continue;
         if (!isOpen(w)) continue;
-        const intents = (w.data as { intentPaths?: string[] } | undefined)?.intentPaths;
+        const intents = (objectDataOf(w) as { intentPaths?: string[] } | undefined)?.intentPaths;
         if (!intents) continue;
         for (const name of intents) {
           if (matchesIntentName(name, trigger.intentName)) return true;
@@ -264,10 +265,10 @@ function parentTypeOf(
   // form 的目标对象落在 data.targetObjectId（填表式渐进执行；form 恒 top-level，不设 envelope
   // parentObjectId 以免目标窗被 budget 裁掉时跟着消失）；envelope parentObjectId 作兜底。
   const pid =
-    (form.data as { targetObjectId?: string } | undefined)?.targetObjectId ?? form.parentObjectId;
+    (objectDataOf(form) as { targetObjectId?: string } | undefined)?.targetObjectId ?? form.parentObjectId;
   if (!pid || pid === "root") return "root";
   const parent = byId.get(pid);
-  return parent?.class ?? "root";
+  return parent ? classOf(parent) : "root";
 }
 
 /**

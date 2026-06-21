@@ -31,7 +31,7 @@
  */
 import type { ContextSnapshot } from "../snapshot.js";
 import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
-import { ROOT_WINDOW_ID } from "../../../_shared/types/context-window.js";
+import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../../../_shared/types/context-window.js";
 import {
   builtinRegistry,
   type ObjectRegistry,
@@ -285,7 +285,7 @@ export async function resolveProjection(
 ): Promise<ReadableProjection> {
   const readableCtx: ReadableContext = {
     thread,
-    object: { id: inst.id, class: inst.class },
+    object: { id: inst.id, class: classOf(inst) },
     persistence,
   };
 
@@ -294,9 +294,9 @@ export async function resolveProjection(
   // 只属 agent 实例，读取下沉为 persistable.load 经 registry 派发）。hydrate 后 Step1 的
   // agent readable 拿到 data.self 渲身份。无 persistence / 非 self 门面窗 / 已有 data → 跳过。
   const isSelfWindow = (inst.win as { isSelfWindow?: boolean } | undefined)?.isSelfWindow === true;
-  const dataEmpty = !inst.data || Object.keys(inst.data as Record<string, unknown>).length === 0;
+  const dataEmpty = !objectDataOf(inst) || Object.keys(objectDataOf(inst) as Record<string, unknown>).length === 0;
   if (isSelfWindow && dataEmpty && persistence) {
-    const load = registry.resolvePersistable(inst.class)?.load;
+    const load = registry.resolvePersistable(classOf(inst))?.load;
     const ref = runtimeObjectRef(thread, inst);
     if (load && ref) {
       try {
@@ -309,13 +309,13 @@ export async function resolveProjection(
   }
 
   // Step 1: Class.readable（沿继承链解析）
-  const mod = registry.resolveReadable(inst.class);
+  const mod = registry.resolveReadable(classOf(inst));
   if (mod) {
     try {
-      return await mod.readable(readableCtx, inst.data, inst.win);
+      return await mod.readable(readableCtx, objectDataOf(inst), inst.win);
     } catch (err) {
       return {
-        class: inst.class,
+        class: classOf(inst),
         content: [
           xmlElement("readable", { source: "error" }, [
             xmlText(`readable 投影失败：${(err as Error).message}`),
@@ -336,7 +336,7 @@ export async function resolveProjection(
       );
       const text = await readReadable(stoneRef);
       if (text && text.trim().length > 0) {
-        return { class: inst.class, content: text };
+        return { class: classOf(inst), content: text };
       }
     } catch {
       // continue to empty window
@@ -344,7 +344,7 @@ export async function resolveProjection(
   }
 
   // Step 3: 默认空 context window（class = inst.class）——对象无身份文件可渲，不输出 placeholder 文案。
-  return { class: inst.class, content: [] };
+  return { class: classOf(inst), content: [] };
 }
 
 // ─────────────────────────── window node rendering ───────────────────────────
@@ -439,7 +439,7 @@ export class XmlRenderer {
       threadChildren,
       renderWindowClassesNode(
         projected.map((p) => ({
-          ownerClass: p.inst.class,
+          ownerClass: classOf(p.inst),
           projectionClass: p.projection.class,
           // self 窗（实例 id = 本 thread 的 self objectId）：surface 对象全部自有 object method。
           isSelf: !!threadForRender.persistence?.objectId && p.inst.id === threadForRender.persistence.objectId,

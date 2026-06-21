@@ -7,6 +7,7 @@ import {
 } from "./activator.expr";
 import type { ActivationLevel, ActivationResult, KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import { isKnowledgeClass } from "@ooc/core/_shared/types/constants.js";
+import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 
 /** 激活集合上限，避免 context 爆炸。 */
 const MAX_RESULTS = 20;
@@ -30,9 +31,9 @@ export function computeActivations(
   // 收集显式打开的 knowledge_window 的 path（force-full）
   const forced = new Set<string>();
   for (const window of thread.contextWindows ?? []) {
-    if (isKnowledgeClass(window.class)) {
+    if (isKnowledgeClass(classOf(window))) {
       // knowledge 业务字段（path）落 inst.data。
-      const path = (window.data as { path?: string } | undefined)?.path;
+      const path = (objectDataOf(window) as { path?: string } | undefined)?.path;
       if (path) forced.add(path);
     }
   }

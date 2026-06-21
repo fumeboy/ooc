@@ -1,10 +1,11 @@
 import type { Data } from "../types.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
+import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import React from "react";
 
 /** Skill index window 详情面板:按 scope 分组（skills 读自实例 `data`）。 */
 export default function SkillIndexWindowDetail({ window }: { window: OocObjectInstance<Data> }) {
-  const skills = window.data.skills;
+  const skills = objectDataOf(window).skills;
   const groups: Array<{ scope: "object" | "workspace" | "external"; label: string; skills: typeof skills }> = [
     { scope: "object", label: "object", skills: skills.filter((s) => s.scope === "object") },
     { scope: "workspace", label: "workspace", skills: skills.filter((s) => (s.scope as string) === "workspace") },

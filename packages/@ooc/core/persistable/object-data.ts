@@ -12,7 +12,7 @@
  * 所有 IO 失败 fail-soft（observeWarn，不抛），写盘不阻塞 LLM think loop。
  */
 import type { ThreadContext } from "../thinkable/context.js";
-import { ROOT_WINDOW_ID } from "../_shared/types/context-window.js";
+import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../_shared/types/context-window.js";
 import type { OocObjectInstance } from "../runtime/ooc-class.js";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import { objectDir, type FlowObjectRef, type ThreadPersistenceRef } from "./common.js";
@@ -76,25 +76,25 @@ export async function saveObjectData(
 ): Promise<void> {
   if (instance.id === ROOT_WINDOW_ID) return;
   if (isTransientInstance(instance)) return;
-  if (registry.isInlinePersisted(instance.class)) return;
+  if (registry.isInlinePersisted(classOf(instance))) return;
   const ref = runtimeObjectRef(thread, instance);
   if (!ref) return;
   try {
-    await createFlowObject(ref, { class: instance.class });
+    await createFlowObject(ref, { class: classOf(instance) });
   } catch (e) {
     observeWarn(
       "object-data.createFlowObject",
       `[object-data] createFlowObject failed for ${instance.id}: ${(e as Error).message}`,
     );
   }
-  const custom = registry.resolvePersistable(instance.class);
+  const custom = registry.resolvePersistable(classOf(instance));
   try {
     if (custom?.save) {
-      await custom.save(persistableCtx(ref), instance.data);
+      await custom.save(persistableCtx(ref), objectDataOf(instance));
     } else {
       await writeRuntimeObjectData(
         ref,
-        instance.data as Record<string, unknown>,
+        objectDataOf(instance) as Record<string, unknown>,
       );
     }
   } catch (e) {

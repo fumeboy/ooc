@@ -18,7 +18,7 @@
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
-import { ROOT_WINDOW_ID } from "../../_shared/types/context-window.js";
+import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../../_shared/types/context-window.js";
 import { builtinRegistry, type ObjectRegistry } from "../../runtime/object-registry.js";
 import { WindowManager } from "../../runtime/window-manager.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
@@ -106,11 +106,12 @@ export async function handleExecTool(
   }
 
   // 派发：先 object method（改 data / 副作用），再 window method（展示投影态）。
-  const isObjectMethod = !!registry.resolveObjectMethod(target.class, method);
-  const isWindowMethod = !isObjectMethod && !!registry.resolveWindowMethod(target.class, method);
+  const targetClass = classOf(target);
+  const isObjectMethod = !!registry.resolveObjectMethod(targetClass, method);
+  const isWindowMethod = !isObjectMethod && !!registry.resolveWindowMethod(targetClass, method);
   if (!isObjectMethod && !isWindowMethod) {
     return errorOutput(
-      `exec 失败：method "${method}" 未注册在 window ${windowId}（class=${target.class}）上。`,
+      `exec 失败：method "${method}" 未注册在 window ${windowId}（class=${targetClass}）上。`,
     );
   }
 
@@ -119,11 +120,11 @@ export async function handleExecTool(
       // 填表式渐进式执行：method 声明了 route 时，route 在工具边界先跑——未返回 quickSubmit
       // 则建 method_exec form 入 context（不直执行），把 tip 回给 LLM 渐进补参数。
       // route 只在此边界消费；form.submit 走 runtime.callMethod 回到 execObjectMethod（route-free，不递归）。
-      const methodEntry = registry.resolveObjectMethod(target.class, method)!;
+      const methodEntry = registry.resolveObjectMethod(targetClass, method)!;
       if (methodEntry.route) {
         const routeResult = await methodEntry.route(
-          { thread, object: { id: target.id, class: target.class }, runtime: mgr, args: nestedArgs },
-          target.data,
+          { thread, object: { id: target.id, class: targetClass }, runtime: mgr, args: nestedArgs },
+          objectDataOf(target),
           nestedArgs,
         );
         if (!routeResult?.quickSubmit) {

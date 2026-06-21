@@ -7,7 +7,7 @@
  *   activates_on 对当前 thread 逐篇匹配，命中才注入——Object 只在相关交互面看到对应切片。
  * - **creator-reply 协议**：动态按 creator talk window 的 id 生成，不属于静态 builtin 知识。
  */
-import { hasCreatorChannel } from "@ooc/core/_shared/types/context-window.js";
+import { hasCreatorChannel, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
@@ -84,7 +84,7 @@ async function buildRootKnowledgeWindows(
  * Tells sub-thread LLM the only valid reply channel is creator talk_window.say.
  */
 function buildCreatorReplyKnowledge(window: OocObjectInstance): string {
-  const isFork = (window.data as { isForkWindow?: boolean } | undefined)?.isForkWindow === true;
+  const isFork = (objectDataOf(window) as { isForkWindow?: boolean } | undefined)?.isForkWindow === true;
   const upstream = isFork ? "父线程" : "caller object 的对端 thread";
   const delivery = isFork
     ? "这条消息走内存树寻址 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。"
@@ -92,7 +92,7 @@ function buildCreatorReplyKnowledge(window: OocObjectInstance): string {
   return [
     `# 子→父 reply 协议（你的 creator talk_window，${isFork ? "fork 子线程窗" : "peer 会话窗"}）`,
     "",
-    `你当前 thread 的 creator window 是 \`${window.id}\`（class=${window.class}，与创建者的恒在通道，不可被 close）。`,
+    `你当前 thread 的 creator window 是 \`${window.id}\`（class=${classOf(window)}，与创建者的恒在通道，不可被 close）。`,
     "",
     `**想把结果 / 回信带回${upstream}，唯一通道**：`,
     "",
@@ -128,7 +128,7 @@ export async function buildProtocolKnowledgeWindows(
   const seen = new Set<string>();
   for (const w of thread.contextWindows ?? []) {
     if (!hasCreatorChannel(w)) continue;
-    const path = `internal/windows/${w.class}/creator-reply/${w.id}`;
+    const path = `internal/windows/${classOf(w)}/creator-reply/${w.id}`;
     if (seen.has(path)) continue;
     seen.add(path);
     windows.push(makeKnowledgeWindow(path, buildCreatorReplyKnowledge(w), "protocol"));

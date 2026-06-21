@@ -6,6 +6,7 @@
  */
 import { isKnowledgeClass } from "../../_shared/types/constants.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import { objectDataOf, classOf } from "../../_shared/types/context-window.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ThreadContext } from "./index.js";
 import { computeActivations } from "../knowledge/activator.js";
@@ -25,8 +26,8 @@ export async function buildActivatorKnowledgeWindows(
 
   const explicitPaths = new Set(
     (thread.contextWindows ?? [])
-      .filter((w) => isKnowledgeClass(w.class) && (w.data as KnowledgeData | undefined)?.source === "explicit")
-      .map((w) => (w.data as KnowledgeData).path),
+      .filter((w) => isKnowledgeClass(classOf(w)) && (objectDataOf(w) as KnowledgeData | undefined)?.source === "explicit")
+      .map((w) => (objectDataOf(w) as KnowledgeData).path),
   );
 
   try {

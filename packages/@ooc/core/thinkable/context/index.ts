@@ -11,7 +11,7 @@ import { clampTranscriptToBudget } from "./transcript-clamp.js";
 import { XmlRenderer } from "./renderers/xml.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import { isTalkLikeClass } from "../../_shared/types/constants.js";
-import { isSelfThreadWindow } from "../../_shared/types/context-window.js";
+import { isSelfThreadWindow, objectDataOf, classOf } from "../../_shared/types/context-window.js";
 import {
   normalizeSummarizedRanges,
   projectSummarizedRanges,
@@ -65,8 +65,8 @@ function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage
   const fromThreadId = inboxMessage.fromThreadId;
   if (!fromThreadId) return undefined;
   const candidates = thread.contextWindows.filter((w) => {
-    if (!isTalkLikeClass(w.class)) return false;
-    const d = (w.data ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
+    if (!isTalkLikeClass(classOf(w))) return false;
+    const d = (objectDataOf(w) ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
     return d.isForkWindow === true && d.targetThreadId === fromThreadId;
   });
   if (candidates.length === 0) return undefined;
@@ -286,8 +286,8 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
  * is not a builtin Object id.
  */
 function isPeerWindow(w: OocObjectInstance): boolean {
-  if (w.id !== w.class) return false;
-  if (isBuiltinObjectId(w.class)) return false;
+  if (w.id !== classOf(w)) return false;
+  if (isBuiltinObjectId(classOf(w))) return false;
   return true;
 }
 

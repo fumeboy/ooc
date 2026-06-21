@@ -9,6 +9,7 @@ import type { ServerConfig } from "../bootstrap/config";
 import type { RuntimeJob } from "./types";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import { SUPER_SESSION_ID, isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
 
 /**
@@ -18,7 +19,7 @@ import { SUPER_SESSION_ID, isSuperSessionId } from "@ooc/core/_shared/types/cons
  * 字段落 `inst.data`（=TalkData）。本 helper 从 data 读出 target / targetThreadId。
  */
 function talkView(inst: OocObjectInstance): { target?: string; targetThreadId?: string } {
-  const data = (inst.data ?? {}) as { target?: string; targetThreadId?: string };
+  const data = (objectDataOf(inst) ?? {}) as { target?: string; targetThreadId?: string };
   return { target: data.target, targetThreadId: data.targetThreadId };
 }
 import { resumePausedThread } from "./resume";
@@ -268,7 +269,7 @@ async function syncCrossObjectCalleeEnds(
   const talkWindows = (caller.contextWindows ?? []).filter(
     // talk 会话窗：class==="talk" 且有 targetThreadId（指向对端 thread）。字段经 talkView 兼读
     // 实例顶层 / inst.data（talk 迁移在途）。
-    (w) => w.class === "talk" && Boolean(talkView(w).targetThreadId),
+    (w) => classOf(w) === "talk" && Boolean(talkView(w).targetThreadId),
   );
   if (talkWindows.length === 0) return;
 

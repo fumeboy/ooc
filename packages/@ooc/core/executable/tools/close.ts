@@ -18,6 +18,7 @@ import type { ThreadContext } from "../../thinkable/context.js";
 import { builtinRegistry, type ObjectRegistry } from "../../runtime/object-registry.js";
 import { WindowManager } from "../../runtime/window-manager.js";
 import { referencedObjectId, dispatchUnactiveIfZero } from "../../runtime/object-lifecycle.js";
+import { classOf } from "../../_shared/types/context-window.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 export const CLOSE_TOOL: LlmTool = {
@@ -67,7 +68,7 @@ export async function handleCloseTool(
 
   // 关后从 map 取不到实例 → 关前先捕获它引用的目标对象 id + 它的 class（派生派发所需）。
   const target = referencedObjectId(existing);
-  const targetClass = existing.class;
+  const targetClass = classOf(existing);
 
   await mgr.close(windowId);
   thread.contextWindows = mgr.toData(); // 先同步，refcount 才看得到「窗已移除」

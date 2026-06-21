@@ -24,6 +24,7 @@ import type { ObjectRegistry, RegisteredClass } from "../../runtime/object-regis
 import { builtinRegistry } from "../../runtime/object-registry.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { OocClass } from "../../runtime/ooc-class.js";
+import { objectDataOf, classOf } from "../../_shared/types/context-window.js";
 import type { ReadableContext, ReadableProjection } from "../../readable/contract.js";
 import { SUPER_ALIAS_TARGET, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
@@ -147,11 +148,11 @@ export async function derivePeerObjectWindows(
   // 自视图（creator 窗）的 target = 本 thread 的 creator object（cross-object callee 借此把它的 caller
   // 也带成 peer object window）；故按 isTalkLikeClass 认会话窗，而非只认 other-view "talk"。
   const talkWindows = (thread.contextWindows ?? []).filter((w) =>
-    isTalkLikeClass(w.class),
+    isTalkLikeClass(classOf(w)),
   );
   const peerEarliest = new Map<string, number>();
   for (const w of talkWindows) {
-    const target = (w.data as { target?: string } | undefined)?.target;
+    const target = (objectDataOf(w) as { target?: string } | undefined)?.target;
     if (!target) continue;
     if (target === SUPER_ALIAS_TARGET) continue;
     // user 不再特殊排除：talk 过的对端对象（含 user）统一作 peer object window 进 context。

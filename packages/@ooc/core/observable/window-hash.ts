@@ -15,6 +15,7 @@
 import { readFile } from "node:fs/promises";
 
 import type { FileData } from "@ooc/core/_shared/types/context-window.js";
+import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 import { isFileClass } from "@ooc/core/_shared/types/constants.js";
 
@@ -128,7 +129,7 @@ async function computeFileDiff(
   w: OocObjectInstance<FileData>,
   previousSnapshot: WindowSnapshotEntry[] | undefined,
 ): Promise<FileDiffData> {
-  const path = w.data.path;
+  const path = objectDataOf(w).path;
   const previousContent =
     previousSnapshot?.find((s) => s.id === w.id)?.fileDiff?.currentContent ?? "";
 
@@ -181,7 +182,7 @@ export async function buildWindowsSnapshot(
   for (const w of windows) {
     const entry: WindowSnapshotEntry = {
       id: w.id,
-      class: w.class,
+      class: classOf(w),
       contentHash: computeWindowContentHash(w),
     };
     if (w.parentObjectId) entry.parentWindowId = w.parentObjectId;
@@ -192,7 +193,7 @@ export async function buildWindowsSnapshot(
     }
     // file 实例的 stored class 是注册 id（FILE_CLASS_ID）；裸名 "file" 只是 readable 投影 class，
     // 真实管道里的 contextWindows 永远持注册 id，旧的 `w.class === "file"` 判定恒不命中 → fileDiff dead。
-    if (isFileClass(w.class)) {
+    if (isFileClass(classOf(w))) {
       entry.fileDiff = await computeFileDiff(w as unknown as OocObjectInstance<FileData>, previousSnapshot);
     }
     out.push(entry);

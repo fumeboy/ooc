@@ -12,7 +12,7 @@ import type { OocObjectInstance } from "./ooc-class.js";
 import type { ThreadContext } from "../_shared/types/thread.js";
 import type { ObjectRegistry } from "./object-registry.js";
 import type { LifecycleContext } from "../executable/contract.js";
-import { isSelfThreadWindow } from "../_shared/types/context-window.js";
+import { isSelfThreadWindow, objectDataOf, classOf } from "../_shared/types/context-window.js";
 import { isTalkLikeClass } from "../_shared/types/constants.js";
 import { objectDir, type FlowObjectRef } from "../persistable/common.js";
 import { rm } from "node:fs/promises";
@@ -33,8 +33,8 @@ const ACTIVE_STATUS = new Set(["running", "waiting", "paused"]);
  */
 export function referencedObjectId(w: OocObjectInstance): string | undefined {
   if (w.objectRef) return w.objectRef.objectId;
-  if (isTalkLikeClass(w.class)) {
-    const d = (w.data ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
+  if (isTalkLikeClass(classOf(w))) {
+    const d = (objectDataOf(w) ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
     if (d.isForkWindow && d.targetThreadId && !isSelfThreadWindow(w.id)) {
       return d.targetThreadId;
     }

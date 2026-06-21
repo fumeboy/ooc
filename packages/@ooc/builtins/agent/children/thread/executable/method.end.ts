@@ -13,7 +13,7 @@ import type {
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
-import { hasCreatorChannel } from "@ooc/core/_shared/types/context-window.js";
+import { hasCreatorChannel, objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import type { Data } from "../types.js";
 
 /**
@@ -37,7 +37,7 @@ function findCreatorWindow(ctx: ExecutableContext): CreatorWindow | undefined {
     // auto-reply 只对**有上游 creator 通道**的过程窗（hasCreatorChannel：data 带 target/isForkWindow）；
     // self-driven root 的空通道过程窗 → 返回 undefined → end 忽略 result（既有降级）。
     if (!hasCreatorChannel(inst)) continue;
-    const data = (inst.data ?? {}) as {
+    const data = (objectDataOf(inst) ?? {}) as {
       target?: string;
       targetThreadId?: string;
       isForkWindow?: boolean;

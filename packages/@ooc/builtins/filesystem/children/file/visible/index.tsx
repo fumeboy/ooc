@@ -1,6 +1,7 @@
 import type { Data } from "../types.js";
 import type { FileWin } from "../readable/index.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
+import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import React from "react";
 import { FileWindowContentView } from "@ooc/web/src/domains/files/components/FileWindowContentView";
 
@@ -15,7 +16,7 @@ export default function FileWindowDetail({ window }: { window: OocObjectInstance
       <div className="llm-input-attrs">
         <div className="llm-input-attr-row">
           <span className="llm-input-attr-key">path</span>
-          <span className="llm-input-attr-value">{window.data.path}</span>
+          <span className="llm-input-attr-value">{objectDataOf(window).path}</span>
         </div>
         {lines && (
           <div className="llm-input-attr-row">
@@ -30,7 +31,7 @@ export default function FileWindowDetail({ window }: { window: OocObjectInstance
           </div>
         )}
       </div>
-      <FileWindowContentView path={window.data.path} lines={lines} columns={columns} />
+      <FileWindowContentView path={objectDataOf(window).path} lines={lines} columns={columns} />
     </>
   );
 }

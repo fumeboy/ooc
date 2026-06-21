@@ -21,6 +21,8 @@ import {
   ROOT_WINDOW_ID,
   generateWindowId,
   isSelfThreadWindow,
+  objectDataOf,
+  classOf,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
 import type { TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
@@ -142,13 +144,13 @@ function stripVolatileForHash(payload: { contextWindows?: OocObjectInstance[] })
   return {
     ...payload,
     contextWindows: payload.contextWindows.map((window) => {
-      const source = (window.data as { source?: string } | undefined)?.source;
-      if (isKnowledgeClass(window.class) && source !== undefined && source !== "explicit") {
+      const source = (objectDataOf(window) as { source?: string } | undefined)?.source;
+      if (isKnowledgeClass(classOf(window)) && source !== undefined && source !== "explicit") {
         const { id: _id, createdAt: _createdAt, ...rest } = window;
         return rest;
       }
       // skill_index member window 也是每轮 derive 出来的非持久化 window;createdAt=Date.now() 每次都新。
-      if (window.class === "_builtin/agent/skill_index") {
+      if (classOf(window) === "_builtin/agent/skill_index") {
         const { createdAt: _createdAt, ...rest } = window;
         return rest;
       }
@@ -170,9 +172,9 @@ function extractTalkPeers(
 ): ListThreadsItem["talkPeers"] {
   const peers: ListThreadsItem["talkPeers"] = [];
   for (const window of windows ?? []) {
-    if (!isTalkLikeClass(window.class)) continue;
+    if (!isTalkLikeClass(classOf(window))) continue;
     // Wave 4：会话业务字段（target / targetThreadId）落 inst.data（=TalkData）。
-    const data = (window.data ?? {}) as { target?: string; targetThreadId?: string };
+    const data = (objectDataOf(window) ?? {}) as { target?: string; targetThreadId?: string };
     peers.push({
       targetObjectId: data.target ?? "",
       targetThreadId: data.targetThreadId,
@@ -505,12 +507,12 @@ export function createFlowsService(deps: {
 
       // 幂等：已经有指向同 target 的非 creator talk_window 时复用它（Wave 4：读 inst.data）。
       const existing = (userThread.contextWindows ?? []).find((inst) => {
-        if (!isTalkLikeClass(inst.class)) return false;
-        const d = (inst.data ?? {}) as TalkData;
+        if (!isTalkLikeClass(classOf(inst))) return false;
+        const d = (objectDataOf(inst) ?? {}) as TalkData;
         return !isSelfThreadWindow(inst.id) && d.target === target;
       });
       if (existing) {
-        const existingData = existing.data as TalkData;
+        const existingData = objectDataOf(existing) as TalkData;
         const existingView = {
           id: existing.id,
           class: "talk",
@@ -815,7 +817,7 @@ export function createFlowsService(deps: {
       }
       // Wave 4：会话窗是 OocObjectInstance，业务字段在 inst.data（=TalkData）。
       const talkWindows = (userThread.contextWindows ?? []).filter((inst) => {
-        if (!isTalkLikeClass(inst.class)) return false;
+        if (!isTalkLikeClass(classOf(inst))) return false;
         return !isSelfThreadWindow(inst.id);
       });
       const targetInstance = targetWindowId
@@ -828,7 +830,7 @@ export function createFlowsService(deps: {
           { sessionId, targetWindowId },
         );
       }
-      const targetData = targetInstance.data as TalkData;
+      const targetData = objectDataOf(targetInstance) as TalkData;
       const targetView = {
         id: targetInstance.id,
         class: "talk",

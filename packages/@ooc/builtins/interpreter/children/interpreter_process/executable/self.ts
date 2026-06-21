@@ -1,4 +1,5 @@
 import { stoneDir, type StoneObjectRef } from "@ooc/core/persistable/index.js";
+import { classOf } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
 
@@ -56,7 +57,7 @@ export function createInterpreterSelf(
     dir,
     async callMethod(windowId, command, args) {
       if (!runtime?.callMethod) {
-        const visible = thread.contextWindows.map((w) => `${w.id}(${w.class})`).join(", ") || "(无)";
+        const visible = thread.contextWindows.map((w) => `${w.id}(${classOf(w)})`).join(", ") || "(无)";
         throw new Error(
           `[interpreter_process] self.callMethod(${windowId}, ${command}) 不可用：` +
             `当前 exec 无 runtime.callMethod 通道。当前可见 window：${visible}`,

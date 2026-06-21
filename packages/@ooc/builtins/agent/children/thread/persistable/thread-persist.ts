@@ -43,6 +43,7 @@ import type { PersistableContext } from "@ooc/core/persistable/contract.js";
 import {
   ROOT_WINDOW_ID,
   isNonPersistedWindow,
+  classOf,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
@@ -74,12 +75,12 @@ function buildEntries(
     // self/member 门面窗一律不落盘（无独立 data.json、每轮 init 确定性重建，落 `_ref` 必 missing 刷屏）。
     // 旧"带 summarizedRanges 就 inline 落 self 门面窗"后门已删——events 折叠态现挂**自己视角 thread 窗**
     // （THREAD_CLASS_ID inline 类整窗落盘、folds 随之跨 reload 存活；builtin 类 hydrate 恒注册、无冷启动丢窗洞）。
-    if (registry.isInlinePersisted(window.class)) {
+    if (registry.isInlinePersisted(classOf(window))) {
       entries.push(window as ContextWindow);
     } else {
       entries.push({
         id: window.id,
-        class: window.class,
+        class: classOf(window),
         _ref: true,
         refObjectId: window.id,
       });

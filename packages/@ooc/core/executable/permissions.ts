@@ -26,6 +26,7 @@ import { deriveStoneFromThread, stoneDir } from "../persistable/common";
 import type { ThreadContext } from "../thinkable/context";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import { builtinRegistry } from "../runtime/object-registry.js";
+import { classOf } from "../_shared/types/context-window.js";
 
 /** 单档准入级别。 */
 export type PermissionLevel = "allow" | "ask" | "deny";
@@ -153,7 +154,7 @@ function lookupDeclaredPermission(
   if (call.windowId) {
     const target = thread.contextWindows?.find((w) => w.id === call.windowId);
     if (target) {
-      const fromTarget = tryWindow(target.class);
+      const fromTarget = tryWindow(classOf(target));
       if (fromTarget) return fromTarget;
     }
   }

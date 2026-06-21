@@ -1,11 +1,12 @@
 import type { Data } from "../types.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
+import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import React from "react";
 import { MarkdownContent } from "@ooc/web/src/shared/ui/MarkdownContent";
 
 /** Knowledge window 详情面板（业务字段读自实例 `data`）。 */
 export default function KnowledgeWindowDetail({ window }: { window: OocObjectInstance<Data> }) {
-  const data = window.data;
+  const data = objectDataOf(window);
   return (
     <>
       <div className="llm-input-attrs">

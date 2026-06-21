@@ -41,7 +41,7 @@ import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
-import { threadWindowIdOf, isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
+import { threadWindowIdOf, isSelfThreadWindow, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import type { TalkData, TalkWindowView } from "../types.js";
 
 export interface TalkDeliveryInput {
@@ -256,8 +256,8 @@ function resolveCalleeReplyToWindowId(
   // （target / targetThreadId）落 inst.data（=TalkData）。会话窗（talk + reflect_request
   // self-view）按 inst.class 识别，回信归位字段从 inst.data 读。
   const windows = (calleeThread.contextWindows ?? [])
-    .filter((inst) => isTalkLikeClass(inst.class))
-    .map((inst) => ({ id: inst.id, data: (inst.data ?? {}) as TalkData }));
+    .filter((inst) => isTalkLikeClass(classOf(inst)))
+    .map((inst) => ({ id: inst.id, data: (objectDataOf(inst) ?? {}) as TalkData }));
   const byThreadId = windows.find((w) => w.data.targetThreadId === callerThreadId);
   if (byThreadId) return byThreadId.id;
   const byObjectId = windows.find((w) => w.data.target === callerObjectId);

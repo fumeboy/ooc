@@ -13,7 +13,7 @@ import type { ThreadContext } from "../../thinkable/context.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
-import { isSelfThreadWindow } from "../../_shared/types/context-window.js";
+import { isSelfThreadWindow, objectDataOf, classOf } from "../../_shared/types/context-window.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 interface WaitCandidate {
@@ -23,7 +23,7 @@ interface WaitCandidate {
 
 /** 从实例读 talk 业务数据（Wave 4：业务字段落 inst.data=TalkData）。 */
 function talkDataOf(w: OocObjectInstance): Partial<TalkData> {
-  return (w.data ?? {}) as Partial<TalkData>;
+  return (objectDataOf(w) ?? {}) as Partial<TalkData>;
 }
 
 /** open/可作为未来 IO 来源的 window 列表，附 hint 帮 LLM 自纠时选对。 */
@@ -34,7 +34,7 @@ function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
   // （isSelfThreadWindow）。
   for (const w of thread.contextWindows ?? []) {
     // 会话窗（thread 实例：creator / peer / fork）= 唯一可产生未来 IO 的 window；alive=open。
-    if (w.class !== THREAD_CLASS_ID) continue;
+    if (classOf(w) !== THREAD_CLASS_ID) continue;
     if (w.status !== "open") continue;
     const d = talkDataOf(w);
     if (d.isForkWindow) {
@@ -149,14 +149,15 @@ export async function handleWaitTool(
 
   // R3: on 类型不合法（非会话窗）—— 会话窗 inst.class 一律 = `_builtin/thread`；同时盖掉
   // root/method_exec/file/process 等非会话窗。
-  if (target.class !== THREAD_CLASS_ID) {
+  if (classOf(target) !== THREAD_CLASS_ID) {
     // 进程 window 给针对性提示:它是同步执行,结果已落在 history 里,不需要 wait
+    const targetClass = classOf(target);
     const typeSpecificHint =
-      target.class === "terminal_process" || target.class === "interpreter_process"
-        ? `\n${target.class} 是同步执行的:exec 提交时立即跑完,输出已在该 window.history 里;不存在"运行中"状态可等。直接读它的 history 即可。`
+      targetClass === "terminal_process" || targetClass === "interpreter_process"
+        ? `\n${targetClass} 是同步执行的:exec 提交时立即跑完,输出已在该 window.history 里;不存在"运行中"状态可等。直接读它的 history 即可。`
         : "";
     return errorOutput(
-      `[wait] on="${onRaw}" 指向的是 ${target.class} window，不能作为 IO 来源——` +
+      `[wait] on="${onRaw}" 指向的是 ${targetClass} window，不能作为 IO 来源——` +
         "只有 talk_window（peer 等对端消息 / fork 等子线程回报）" +
         "才可被 wait 引用。" +
         typeSpecificHint +
