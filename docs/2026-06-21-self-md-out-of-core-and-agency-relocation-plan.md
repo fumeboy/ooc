@@ -226,16 +226,16 @@ git add -A && git commit -m "refactor(persistable): createStone 仅 agent(class=
 
 ---
 
-## Task 5：P1 stone-self 下沉 agent builtin + P2 删 PUT /self（persistable + 控制面）
+## Task 5：P1 stone-self 下沉 agent builtin + P2 import 重定向（persistable + 控制面）
+
+> **P2 已收回（2026-06-21 裁决）**：不删任何端点。putSelf 是四对等版本化源码编辑端点之一、且 TC-PERS-02 在测——只做 import 重定向。"删端点+塌为通用 file-edit / class visible 改 data"是 spec §六 的后续独立 spec。
 
 **Files:**
 - Create: `packages/@ooc/builtins/agent/persistable/self-md.ts`（承接 stone-self.ts）
 - Modify: `packages/@ooc/builtins/agent/persistable/index.ts`（用本地 self-md）
 - Delete: `packages/@ooc/core/persistable/stone-self.ts`
 - Modify: `packages/@ooc/core/persistable/index.ts`（删 re-export）
-- Modify（import 重定向到 builtin）：`core/app/server/modules/stones/service.ts`、`core/persistable/stone-create-object.ts`
-- Delete: `packages/@ooc/core/app/server/modules/stones/api.put-self.ts`
-- Modify: `core/app/server/modules/stones/service.ts`（删 putSelf 方法）、`core/app/server/modules/stones/index.ts`（删 putSelf 注册）
+- Modify（import 重定向到 builtin）：`core/app/server/modules/stones/service.ts`（getSelf/putSelf/createStone 的 readSelf/writeSelf）、`core/persistable/stone-create-object.ts`
 
 - [ ] **Step 5.1：建 builtin self-md.ts（移植 stone-self.ts 内容）**
 
@@ -309,14 +309,9 @@ git rm packages/@ooc/core/persistable/stone-self.ts
   Run: `grep -rln "readSelf\|writeSelf\|selfFile" packages/@ooc/core --include="*.ts" | grep -v test | grep -v stone-self`
   逐个核对 import 来源、改到 builtin self-md。
 
-- [ ] **Step 5.5：删未用的 PUT /self 写端点（P2）**
+- [ ] **Step 5.5：端点保留（不删）**
 
-```bash
-git rm packages/@ooc/core/app/server/modules/stones/api.put-self.ts
-```
-- `core/app/server/modules/stones/index.ts`：删 `import { putSelfApi } from "./api.put-self";` 与 `.use(putSelfApi(service))`。
-- `service.ts`：删 `putSelf` 方法（约 244-251）及其用到的 `ensureOverwriteAllowed` 若仅 putSelf 用则评估保留（putReadable 可能也用——Run: `grep -n "ensureOverwriteAllowed" packages/@ooc/core/app/server/modules/stones/service.ts`，仍有他用则留）。
-- `getSelf` 保留（GET /self 薄读，readSelf 已自 builtin）。
+`putSelf`/`getSelf`/`api.put-self.ts`/`api.get-self.ts`/注册点**全部保留不动**——它们的 `readSelf`/`writeSelf` 已在 Step 5.4 重定向到 builtin。端点存废归 spec §六 后续 spec。
 
 - [ ] **Step 5.6：核验 core 零 self.md 读写实现**
 
@@ -330,7 +325,7 @@ Expected: 仅 service.ts / stone-create-object.ts 等从 builtin import（合法
 Run: `cd packages/@ooc/core && bunx tsc --noEmit 2>&1 | grep -iv "\.test\.ts" | head -30`
 Expected: 无非测试源错误（测试错误是预期、Task 8 修）。
 ```bash
-git add -A && git commit -m "refactor(persistable): stone-self 下沉 agent builtin self-md + 删未用 PUT /self(P1+P2)"
+git add -A && git commit -m "refactor(persistable): stone-self 下沉 agent builtin self-md + 消费方 import 重定向(P1+P2)"
 ```
 
 ---
@@ -380,10 +375,9 @@ Expected: 空。
 Run: `grep -rln "readSelf\|writeSelf\|selfFile" packages --include="*.ts" | xargs grep -l "@ooc/core/persistable\|from \"../.*persistable\"\|stone-self" 2>/dev/null | grep test`
 把每个 test 文件 + 其 import 行记入下方账本（Task 8 逐个改）。
 
-- [ ] **Step 7.3：PUT /self 残留**
+- [ ] **Step 7.3：（端点保留，无需处理 PUT /self）**
 
-Run: `grep -rn "put-self\|putSelf" packages --include="*.ts"`
-Expected: 仅测试（server.e2e.test.ts / service.test.ts）——登记 Task 8 删/改。
+PUT /self 端点本次保留——TC-PERS-02 与 putSelf 测试**应继续通过**（仅底层 writeSelf 换了 import）。无需删/改其用例。
 
 ---
 
@@ -391,12 +385,12 @@ Expected: 仅测试（server.e2e.test.ts / service.test.ts）——登记 Task 8
 
 **已知断裂（账本，实现时按 Task 7 grep 补全）：**
 - 大量测试 import `readSelf`/`writeSelf`/`selfFile` 自 `@ooc/core/persistable` 或 `../stone-self` → 改到 `@ooc/builtins/agent/persistable/self-md.js`（部分 e2e 用 `@ooc/core/persistable` barrel——确认 barrel 是否仍 re-export；不再 re-export 则全部改 builtin 路径）。涉及：`core/persistable/__tests__/stone.test.ts`、`builtin-read.test.ts`、`session-aware-read.test.ts`、`core/executable/__tests__/{evolve-self,process,create-object}.test.ts`、`core/thinkable/__tests__/{context,real-compress,real-compress-v2}.test.ts`、`core/app/server/bootstrap/instantiate-classes.test.ts`、`tests/integration/*`、`storybook/stories/thinkable.story.ts` 等（以 Task 7.2 grep 为准）。
-- PUT /self 测试：`core/app/server/__tests__/server.e2e.test.ts`（putSelf 段）、`stones/service.test.ts`（putSelf 段）→ 删除该用例（端点已删）。
+- PUT /self 测试（server.e2e.test.ts / service.test.ts / TC-PERS-02）：端点保留，**应继续通过**——若失败说明 writeSelf 重定向有误，修源不删测试。
 - agent executable 旧测试若 import `agent/executable/method.end|todo` → 改 `children/thread/executable/...`。
 
 - [ ] **Step 8.1：逐文件改 import 路径**
 
-按账本把 `readSelf`/`writeSelf`/`selfFile` 的 import 改到 `@ooc/builtins/agent/persistable/self-md.js`。删 PUT /self 用例。
+按账本把 `readSelf`/`writeSelf`/`selfFile` 的 import 改到 `@ooc/builtins/agent/persistable/self-md.js`。**不删任何端点用例**。
 
 - [ ] **Step 8.2：跑 storybook gate**
 
@@ -416,7 +410,7 @@ Expected: 全绿（或 ≥ 基线）。残红逐个归因：是本次 import 漏
 - [ ] **Step 8.5：commit**
 
 ```bash
-git add -A && git commit -m "test: 统一 self-md import 路径到 agent builtin + 删 PUT /self 用例 + 全绿"
+git add -A && git commit -m "test: 统一 self-md import 路径到 agent builtin + 全绿"
 ```
 
 ---
@@ -445,7 +439,7 @@ git add -A && git commit -m "test: 统一 self-md import 路径到 agent builtin
 
 - spec §三 Task2 → 本 Task 1 ✓
 - spec P1（stone-self 下沉 + createStoneObject 停建）→ Task 2 + Task 5 ✓
-- spec P2（删 PUT /self、留 GET /self 薄读）→ Task 5.5 ✓
+- spec P2（不删端点、仅 import 重定向）→ Task 5.4/5.5 ✓
 - spec P3b（agent readable + renderer hydrate 去 readSelf）→ Task 3 ✓
 - spec P4（createStone 仅 agent 写 + displayName 降级）→ Task 4 + Task 9.3 ✓
 - spec §四工程纪律（测试延后 + 账本）→ Task 7/8 ✓
