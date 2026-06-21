@@ -4,7 +4,7 @@
  * 一处 `export const Class` 装配 constructor + 二维度（executable / readable）。
  * search 是**非单例 class**（有 constructor：每次 glob / grep 造一个 search 实例）。
  *
- * constructor：执行 glob / grep（grep 用 ./grep-impl.ts 的 runner，优先 rg、回退 JS）+ 排序 +
+ * constructor：执行 glob / grep（grep 用 ./executable/grep-impl.ts 的 runner，优先 rg、回退 JS）+ 排序 +
  * 截断到 200 → 返回纯 Data（kind/query/matches/truncated/searchRoot）。失败 throw（runtime 不建窗）。
  * glob vs grep 由 args 区分：带 path / glob / case_insensitive → grep，否则 glob。
  */
@@ -17,7 +17,7 @@ import {
   runRipgrep,
   runJsFallback,
   type GrepHit,
-} from "./grep-impl.js";
+} from "./executable/grep-impl.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import type { Data, SearchMatch } from "./types.js";

@@ -30,7 +30,7 @@ import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import { Class as SearchClass } from "@ooc/builtins/filesystem/search";
 import searchReadable from "@ooc/builtins/filesystem/search/readable/index.js";
 import type { Data as SearchData } from "@ooc/builtins/filesystem/search/types";
-import { runJsFallback } from "@ooc/builtins/filesystem/search/grep-impl";
+import { runJsFallback } from "@ooc/builtins/filesystem/search/executable/grep-impl";
 import { Class as FileClass } from "@ooc/builtins/filesystem/file";
 import { construct as fileConstruct } from "@ooc/builtins/filesystem/file/executable/construct.js";
 import type { Data as FileData } from "@ooc/builtins/filesystem/file/types";
