@@ -211,7 +211,7 @@ describe("observable persistable debug files", () => {
       id: "root",
       status: "running",
       events: [],
-      // Wave4 对象模型：file 窗 = OocObjectInstance 信封，业务字段 path 下沉 inst.data。
+      // Wave4 对象模型：file 窗 = OocObjectInstance 实例，业务字段 path 下沉 inst.data。
       contextWindows: [
         {
           id: "w_file_a",
@@ -257,11 +257,11 @@ describe("observable persistable debug files", () => {
     const hashA1 = meta1.windowsSnapshot[0].contentHash;
     const hashB1 = meta1.windowsSnapshot[1].contentHash;
 
-    // Loop 2: 改 a 的 title（内容变化，顶层信封字段），删 b（close 关闭）
+    // Loop 2: 改 a 的 title（内容变化，顶层元信息字段），删 b（close 关闭）
     // 注：原用例改 data.path 验「hash 变」，但 computeWindowContentHash 的 sortedKeys 顶层
     // 白名单 replacer 会过滤掉嵌套 data.path（见 window-hash.test.ts 的 real source bug skip），
-    // 改 path 不再改 hash。改顶层 title（信封字段，参与 hash）以在 bug 修复前仍验证 hash 随
-    // 信封内容变化而变。
+    // 改 path 不再改 hash。改顶层 title（元信息字段，参与 hash）以在 bug 修复前仍验证 hash 随
+    // 元信息内容变化而变。
     (thread.contextWindows[0] as unknown as { title: string }).title = "src/a-v2.ts";
     thread.contextWindows = [thread.contextWindows[0]!];
     const h2 = await observableModule.beginLlmLoop(thread, inputItems, tools);
@@ -269,7 +269,7 @@ describe("observable persistable debug files", () => {
     const meta2 = JSON.parse(await readFile(loopMetaFile(thread.persistence!, 2), "utf8"));
     expect(meta2.windowsSnapshot).toHaveLength(1);
     expect(meta2.windowsSnapshot[0].id).toBe("w_file_a");
-    // a 的 hash 应该变了（title 是顶层信封字段，参与 hash）
+    // a 的 hash 应该变了（title 是顶层元信息字段，参与 hash）
     expect(meta2.windowsSnapshot[0].contentHash).not.toBe(hashA1);
     // b 不再出现
     expect(meta2.windowsSnapshot.find((e: { id: string }) => e.id === "w_file_b")).toBeUndefined();

@@ -30,7 +30,7 @@ export class ContextPipeline {
   }
 
   async run(thread: ThreadContext): Promise<ContextSnapshot> {
-    // thread.contextWindows 已是 OocObjectInstance[]——pipeline 直接以实例信封为流通单元。
+    // thread.contextWindows 已是 OocObjectInstance[]——pipeline 直接以实例为流通单元。
     const ctx: PipelineContext = { windows: [...(thread.contextWindows ?? [])] };
 
     for (const phase of this.phases) {

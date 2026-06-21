@@ -9,7 +9,7 @@
  * - resume：reject 后 new_feat_branch(同 intent) 幂等重绑 feat 分支再 create_pr_and_invite_reviewers
  *
  * Wave 4 对象模型：pr 是注册 class `_builtin/agent/pr`（归一 id `agent/pr`）；
- * 窗实例是 `OocObjectInstance<PrData>`（信封 + 业务字段落 inst.data）。readable 经
+ * 窗实例是 `OocObjectInstance<PrData>`（元信息 + 业务字段落 inst.data）。readable 经
  * `Class.readable.readable(ctx, self=Data, win)` 返回 `{class, content}`；object method 经
  * `Class.executable.methods` 的三参 `exec(ctx, self=Data, args)`。沉淀两 method
  * （new_feat_branch / create_pr_and_invite_reviewers）归位到 thread class（reflect_request 投影窗 surface）。
@@ -112,7 +112,7 @@ function reviewerThread(baseDir: string, reviewerObjectId: string, threadId: str
   };
 }
 
-/** 构造一个 pr 窗实例信封（OocObjectInstance<PrData>）。 */
+/** 构造一个 pr 窗实例（OocObjectInstance<PrData>）。 */
 function prInstance(issueId: number, data: PrData, title: string): OocObjectInstance<PrData> {
   return {
     id: prWindowId(issueId),

@@ -29,9 +29,9 @@
  */
 
 /**
- * 后端 OocObjectInstance（runtime/ooc-class.ts）在前端的最小镜像 —— **信封 + data + win 三分**。
+ * 后端 OocObjectInstance（runtime/ooc-class.ts）在前端的最小镜像 —— **元信息 + data + win 三分**。
  *
- * 信封字段（id / class / title / status / createdAt / parentObjectId）由 runtime 管理，
+ * 元信息字段（id / class / title / status / createdAt / parentObjectId）由 runtime 管理，
  * 顶层平铺；业务数据归 `.data`（按 class 区分形态）；投影态归 `.win`。前端按 `.class` narrow，
  * 业务字段读 `.data.xxx`。
  */
@@ -186,7 +186,7 @@ type _ContextWindowData =
       };
     };
 
-/** 所有 ContextWindow 共享的信封 + enrichment 字段。 */
+/** 所有 ContextWindow 共享的元信息 + enrichment 字段。 */
 interface _ContextWindowEnvelope {
   id: string;
   title: string;
@@ -220,7 +220,7 @@ interface _ContextWindowEnvelope {
 }
 
 /**
- * ContextWindow —— 信封 + data（+ win）。镜像后端 `OocObjectInstance`。
+ * ContextWindow —— 元信息 + data（+ win）。镜像后端 `OocObjectInstance`。
  * 按 `.class` narrow（discriminant 在 `_ContextWindowData`），业务字段读 `.data.xxx`。
  */
 export type ContextWindow = _ContextWindowEnvelope & _ContextWindowData;

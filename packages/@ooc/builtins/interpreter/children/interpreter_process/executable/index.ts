@@ -3,7 +3,7 @@
  *
  * object method 签名 `(ctx, self, args)`，self=Data（业务数据），副作用经 ctx（thread）。
  * - exec：在已打开的 interpreter_process 中再跑一段 ts/js，结果追加进 self.history。
- * - close：关窗（无副作用，由 runtime 处置信封 status）。
+ * - close：关窗（无副作用，由 runtime 处置实例的 status）。
  * 构造（run：首次 exec 跑完造出实例）在 ../index.ts 的 Class.construct。
  */
 

@@ -19,8 +19,8 @@ import type { Data } from "../types.js";
 /**
  * creator（self-view）窗的归一化视图。
  *
- * Wave 4 对象模型：contextWindows 元素是 `OocObjectInstance`（信封 + data 分离）。
- * 会话窗状态（target / targetThreadId / isForkWindow）落 `inst.data`（=TalkData），`id` 落信封。
+ * Wave 4 对象模型：contextWindows 元素是 `OocObjectInstance`（元信息 + data 分离）。
+ * 会话窗状态（target / targetThreadId / isForkWindow）落 `inst.data`（=TalkData），`id` 落元信息。
  * 本视图把两侧拍平给 end 的 auto-reply / 持久化通知用。
  */
 type CreatorWindow = {

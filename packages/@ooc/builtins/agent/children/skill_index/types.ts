@@ -1,7 +1,7 @@
 /**
  * skill_index —— stones 上 skills 目录的索引视图的 **object data**（types.ts = 纯 Data）。
  *
- * 只含业务字段；**不含**窗信封字段（id/class/title/status/createdAt）——那些由 runtime 管理。
+ * 只含业务字段；**不含**窗的元信息字段（id/class/title/status/createdAt）——那些由 runtime 管理。
  *
  * skills 由 skill_index 的 **readable 渲染期自算**：按 thread.persistence 推导 stoneRef，
  * 并行扫描 workspace / object / external 三层 skills 目录（10s TTL 缓存，详见 ./scan.ts），

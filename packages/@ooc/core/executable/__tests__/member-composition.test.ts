@@ -8,7 +8,7 @@
  * thread-context.json，readThread 冷恢复重注入）；inline-持久化的会话窗（thread）则照常落盘。零 LLM。
  *
  * Wave 4 形态迁移：成员窗 inst.class = `_builtin/filesystem`（注册全 id，非裸 "filesystem"）；
- * isMemberWindow 在 inst.win（不在信封顶层）；旧 `mgr.openMethodExec` form 机制退役 →
+ * isMemberWindow 在 inst.win（不在实例顶层）；旧 `mgr.openMethodExec` form 机制退役 →
  * 经 execObjectMethod 直接 dispatch 成员 object method；会话窗 inst.class=THREAD_CLASS_ID、
  * 业务字段（target/targetThreadId）落 inst.data。
  */
@@ -51,7 +51,7 @@ test("组合：agent thread → injectMember 注入 filesystem member 窗（inst
       (w: OocObjectInstance) => w.class === FILESYSTEM_MEMBER_ID,
     );
     expect(fsWin).toBeDefined();
-    // isMemberWindow 标记在 inst.win（不在信封顶层）。
+    // isMemberWindow 标记在 inst.win（不在实例顶层）。
     expect((fsWin.win as { isMemberWindow?: boolean }).isMemberWindow).toBe(true);
     expect(fsWin.id).toBe(FILESYSTEM_MEMBER_ID);
   } finally {
@@ -80,7 +80,7 @@ test("组合机制命门：execObjectMethod(filesystem, grep) 经成员委托方
 
     const search = mgr.list().find((w) => w.class === "_builtin/filesystem/search");
     expect(search).toBeDefined();
-    // 业务字段落 inst.data（Wave 4 信封）。
+    // 业务字段落 inst.data（Wave 4 实例）。
     const data = search!.data as { kind: string; matches: unknown[] };
     expect(data.kind).toBe("grep");
     expect(data.matches.length).toBeGreaterThan(0); // 真实命中，证明是经 filesystem 成员真跑了 grep

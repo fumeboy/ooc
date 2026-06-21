@@ -4,7 +4,7 @@
  * 把一次 glob / grep 的结果以持久 object 形式留在 context，让 LLM 可以引用某个
  * match（open_match index）而不必从裸文本里 re-parse 路径。
  *
- * 只含**业务字段**；**不含**窗信封字段（id/class/title/status/createdAt）——那些由 runtime 管理。
+ * 只含**业务字段**；**不含**窗的元信息字段（id/class/title/status/createdAt）——那些由 runtime 管理。
  * 展示态（matches 渲染视口）也不在此，归 readable 的投影态 `win`（见 readable/index.ts 的 `SearchWin`）。
  *
  * - kind      : 区分搜索类型；同一 type 下未来可加 ast-grep / structural search 等

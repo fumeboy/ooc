@@ -5,7 +5,7 @@
  * `method::_builtin/agent::end`）应在业务 thread 开 end method form 时经完整 buildInputItems
  * 路径渲染进 system content；非 end form 时不出现。
  *
- * Wave 4 对象模型：method form 是一条 `OocObjectInstance` 信封——class="method_exec"、
+ * Wave 4 对象模型：method form 是一条 `OocObjectInstance` 实例——class="method_exec"、
  * 业务字段（method/intentPaths…）落 inst.data。activator 的 `method::` trigger 据
  * inst.data.method + 其 parentObjectId 指向的 self 窗 class（须解析到 `_builtin/agent`）命中。
  *
@@ -43,7 +43,7 @@ function makeSelfAgentWindow(): OocObjectInstance {
   };
 }
 
-/** method form 信封：class=method_exec，method 落 inst.data，parent 指向 self 窗。 */
+/** method form 实例：class=method_exec，method 落 inst.data，parent 指向 self 窗。 */
 function makeMethodExecWindow(
   opts: { method: string; id: string },
 ): OocObjectInstance {

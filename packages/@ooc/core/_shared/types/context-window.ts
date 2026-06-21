@@ -1,8 +1,8 @@
 /**
  * ContextWindow 家族类型 —— canonical 源。
  *
- * **对象模型收口（Wave 4）**：`ContextWindow` 不再是「每 class 一个平铺信封字段的成员」的
- * discriminated union，而**直接等于** `OocObjectInstance`——信封（id/class/title/status/
+ * **对象模型收口（Wave 4）**：`ContextWindow` 不再是「每 class 一个平铺元信息字段的成员」的
+ * discriminated union，而**直接等于** `OocObjectInstance`——元信息（id/class/title/status/
  * createdAt/parentObjectId）+ 业务 `.data` + 投影态 `.win`。需要按 class narrow 的调用方读
  * `.class` 后把 `.data` 断言成对应 class 的 `Data`（本文件 re-export 各 class 的 `Data`/`Win`
  * 供断言）。各 builtin types.ts 的 `@deprecated XxxWindow` 平铺别名已随之删除。
@@ -34,17 +34,17 @@ export type WindowStatus =
 /**
  * ContextWindow — canonical 形态（thread 维度，persist 到 thread-context.json）。
  *
- * = `OocObjectInstance`：信封（id/class/title/status/createdAt/parentObjectId）+ 业务 `.data`
+ * = `OocObjectInstance`：元信息（id/class/title/status/createdAt/parentObjectId）+ 业务 `.data`
  * + 投影态 `.win`。需要按 class narrow 的调用方读 `.class` 后断言 `.data`。
  */
 export type ContextWindow = OocObjectInstance;
 
-/** runtime object 实例信封 —— ContextWindow 的 canonical 形态。 */
+/** runtime object 实例 —— ContextWindow 的 canonical 形态。 */
 export type { OocObjectInstance } from "../../runtime/ooc-class.js";
 
 // ─────────────────────────── per-class Data / Win re-exports ──────────────────
 // 需要按 class narrow 的调用方：读 inst.class 后把 inst.data 断言成对应 Data。
-// 这些是 class 的纯业务数据（不含信封/不含旧平铺别名）。
+// 这些是 class 的纯业务数据（不含元信息/不含旧平铺别名）。
 export type { Data as TodoData } from "@ooc/builtins/agent/todo/types.js";
 export type { TalkData, TalkWin, TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
 export type { Data as PrData } from "@ooc/builtins/agent/pr/types.js";
@@ -124,7 +124,7 @@ export function hasCreatorChannel(w: { id: string; data?: unknown }): boolean {
  * data.json 的死 _ref，reload 刷屏 `references missing object <id>`。
  *
  * 标记落在窗的**投影态 `win`** 上（`win:{transient:true,isSelfWindow:true}` /
- * `win:{transient:true,isMemberWindow:true}`），不在信封顶层——故本谓词读 `win`。写盘端
+ * `win:{transient:true,isMemberWindow:true}`），不在实例顶层——故本谓词读 `win`。写盘端
  * （thread-persist.buildEntries）用它统一剔除。
  */
 export function isNonPersistedWindow(window: { win?: unknown }): boolean {

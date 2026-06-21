@@ -7,7 +7,7 @@
  * objectId == window.id（设计上扁平：不嵌套到 parent）。
  *
  * data.json 的内容是该 object 的**裸 Data**（业务字段；object↔class 绑定由 `.flow.json`
- * 的 `class` 字段独立承载，故无需信封）；context-lifecycle 字段（status / parentWindowId /
+ * 的 `class` 字段独立承载，故无需元信息）；context-lifecycle 字段（status / parentWindowId /
  * createdAt 等）属于 thread-context.json，不进 data.json（由 writeRuntimeObjectData 的
  * stripContextWindowsField + manager 的 inline 持久化分流保证，inline 经 class
  * persistable.mode 声明、registry.isInlinePersisted 解析）。

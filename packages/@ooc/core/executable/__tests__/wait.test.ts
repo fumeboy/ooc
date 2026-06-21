@@ -2,7 +2,7 @@
  * wait tool 5 条 reject 分支 + happy path 的单元测试。
  *
  * talk 统一后会话窗（creator/peer/fork）的 inst.class 一律 = THREAD_CLASS_ID（唯一会话载体注册
- * class）；wait 候选都是会话窗。Wave 4 信封：业务字段（target/targetThreadId/isForkWindow）落
+ * class）；wait 候选都是会话窗。Wave 4 实例：业务字段（target/targetThreadId/isForkWindow）落
  * inst.data；creator 窗身份由 id（threadWindowIdOf）派生，不存 isCreatorWindow flag。
  */
 
@@ -19,7 +19,7 @@ import {
 } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 
-/** 造一个会话窗实例信封（inst.class=THREAD_CLASS_ID，业务字段落 inst.data）。 */
+/** 造一个会话窗实例（inst.class=THREAD_CLASS_ID，业务字段落 inst.data）。 */
 function makeTalkInstance(
   id: string,
   data: Record<string, unknown>,

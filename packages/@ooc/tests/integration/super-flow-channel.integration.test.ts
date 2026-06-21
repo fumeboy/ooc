@@ -112,7 +112,7 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
 
     // 4) 直接调 deliverTalkMessage 模拟 alice say()——避免依赖 LLM 真的 open
     //    talk method（那是 U1 的 happy path 验证；此处验证 delivery 落点正确）。
-    //    deliverTalkMessage 收 TalkWindowView（扁平 DTO：信封 id/class + TalkData）。
+    //    deliverTalkMessage 收 TalkWindowView（扁平 DTO：元信息 id/class + TalkData）。
     //
     //    注意：prompt 故意 *不* 提 "reflectable" / "super" 等可能让 marker 检查
     //    误判的字串——hasReflectable 必须只在 U3 的注入路径生效时才通过。

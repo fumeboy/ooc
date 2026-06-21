@@ -50,7 +50,7 @@ export interface WindowManagerHooks {
 }
 
 export class WindowManager implements RuntimeHandle {
-  /** instance id → instance 信封。 */
+  /** instance id → 实例。 */
   private instances: Map<string, OocObjectInstance> = new Map();
   /** 拥有本 manager 的 thread（per-thread；fromThread 工厂建立）。 */
   private threadRef: ThreadContext | undefined;

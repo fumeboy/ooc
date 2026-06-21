@@ -5,7 +5,7 @@
  * - 一个 docToken 对应一个实例；docKind 区分 doc / docx / sheet / base / wiki / drive_md。
  * - 内容形态：read 模式以 markdown 拉到 content.body；写类命令严格走 dry-run gate。
  *
- * 不含窗信封字段（id/class/title/status/createdAt 由 runtime 管理）；投影态本类无独立 win。
+ * 不含窗的元信息字段（id/class/title/status/createdAt 由 runtime 管理）；投影态本类无独立 win。
  */
 export interface FeishuDocBlock {
   blockId: string;

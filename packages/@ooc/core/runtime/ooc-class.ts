@@ -1,6 +1,6 @@
 /**
  * OOC class 装配契约 —— 一个 ooc class `index.ts` 的 `export const Class` 形状，
- * 以及 runtime 持有的「object 实例信封」。
+ * 以及 runtime 持有的「object 实例」。
  *
  * 设计权威：`.ooc-world-meta/.../children/object/self.md`
  * 接口模板：同目录 `example.md`。
@@ -70,10 +70,10 @@ export interface OocPackageMeta {
 }
 
 /**
- * runtime 持有的 object **实例信封** —— 把「身份信封 + 业务 Data + 投影态」三者显式分离
+ * runtime 持有的 object **实例** —— 把「身份元信息 + 业务 Data + 投影态」三者显式分离
  * （object-model 核心 1/4）。取代旧的「BaseContextWindow 平铺业务字段」单体结构。
  *
- * - 信封字段（id / class / title / status / createdAt / parentObjectId…）由 runtime 管理
+ * - 元信息字段（id / class / title / status / createdAt / parentObjectId…）由 runtime 管理
  * - data : 业务数据（该 class 的 types.ts `Data`；object method 经 `self` 入参读写）
  * - win  : 投影态（window method 读写、readable 读；与 data 分离持久化）
  */

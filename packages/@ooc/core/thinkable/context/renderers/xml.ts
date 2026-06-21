@@ -1,7 +1,7 @@
 /**
  * XmlRenderer — renders a ContextSnapshot to the XML format used by the LLM.
  *
- * Wave 4 对象模型：thread 持 `OocObjectInstance`（身份信封 + 业务 data + 投影态 win），
+ * Wave 4 对象模型：thread 持 `OocObjectInstance`（身份元信息 + 业务 data + 投影态 win），
  * 渲染走 **readable 投影**：
  *   `resolveReadable(inst.class)?.readable(ctx, inst.data, inst.win)` → `ReadableProjection{class, content}`
  * —— class 是动态投影窗 class（同 object 不同视角可不同），content 是 `XmlNode[]`（直接用）或 string
@@ -411,7 +411,7 @@ export class XmlRenderer {
   }
 
   async render(snapshot: ContextSnapshot, thread: ThreadContext): Promise<string> {
-    // snapshot.windows（已 budget 分配）的元素是 object 实例信封。
+    // snapshot.windows（已 budget 分配）的元素是 object 实例。
     const windows = snapshot.windows;
     const threadForRender: ThreadContext = {
       ...thread,

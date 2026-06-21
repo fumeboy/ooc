@@ -21,7 +21,7 @@ interface WaitCandidate {
   hint: string;
 }
 
-/** 从实例信封读 talk 业务数据（Wave 4：业务字段落 inst.data=TalkData）。 */
+/** 从实例读 talk 业务数据（Wave 4：业务字段落 inst.data=TalkData）。 */
 function talkDataOf(w: OocObjectInstance): Partial<TalkData> {
   return (w.data ?? {}) as Partial<TalkData>;
 }

@@ -66,7 +66,7 @@ const submit: ObjectMethod<Data> = {
         self.accumulatedArgs,
       );
       self.status = "success";
-      // 成功：从 context 移除本 form（生命周期信封管理归 runtime）。
+      // 成功：从 context 移除本 form（生命周期元信息管理归 runtime）。
       await ctx.runtime.close?.(ctx.object.id);
       return `[form success] "${self.method}" 已执行并释放。${result ?? ""}`.trimEnd();
     } catch (err) {

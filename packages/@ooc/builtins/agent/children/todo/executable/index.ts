@@ -3,7 +3,7 @@
  *
  * todo 是待办卡片，持 open/done 业务态。唯一 object method `mark_done` 把
  * status 从 open 翻成 done——这是真实业务态迁移（改 object data），故归 executable，
- * 区别于纯生命周期 close（归 runtime 信封管理）。构造逻辑在 ../index.ts 的 `Class.construct`。
+ * 区别于纯生命周期 close（归 runtime 元信息管理）。构造逻辑在 ../index.ts 的 `Class.construct`。
  */
 
 import type {

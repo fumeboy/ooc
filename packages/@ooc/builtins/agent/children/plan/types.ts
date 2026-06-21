@@ -1,7 +1,7 @@
 /**
  * plan —— 行动计划对象的 **object data** 结构（types.ts = 纯 Data）。
  *
- * 只含业务字段；**不含**窗信封字段（id/class/parentWindowId/createdAt 等）——那些由 runtime 管理。
+ * 只含业务字段；**不含**窗的元信息字段（id/class/parentWindowId/createdAt 等）——那些由 runtime 管理。
  * 也无展示态——plan 当前无投影态视口（readable 直接投影整棵 step 树）。
  *
  * 数据形态：

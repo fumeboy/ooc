@@ -466,8 +466,8 @@ export type ThreadContext = {
   outbox?: ThreadMessage[];
   /**
    * 当前线程持有的 object 实例（Wave 4：元素类型从旧平铺 `ContextWindow` 改为
-   * `OocObjectInstance` —— 身份信封 + 业务 data + 投影态 win 分离）。**复用字段名**
-   * `contextWindows` 以最小破坏。访问方式：业务数据 `.data`、投影态 `.win`、信封 `.id/.class/...`。
+   * `OocObjectInstance` —— 身份元信息 + 业务 data + 投影态 win 分离）。**复用字段名**
+   * `contextWindows` 以最小破坏。访问方式：业务数据 `.data`、投影态 `.win`、元信息 `.id/.class/...`。
    */
   contextWindows: OocObjectInstance[];
   /**

@@ -3,7 +3,7 @@
  *
  * thread 是 builtin object：它怎么把自己的会话运行态落盘/读回是 thread 自己的逻辑——
  * thread.json（thread 自身对象数据：status/events/outbox/… strip 掉易变内存字段）+
- * thread-context.json（窗状态：信封 + win，inline class 整窗 vs 独立对象 `_ref`）+
+ * thread-context.json（窗状态：元信息 + win，inline class 整窗 vs 独立对象 `_ref`）+
  * inbox（per-message 目录）+ hydrate（冷恢复重建）。core 只提供框架与 API：串行写、路径原语、
  * 默认 data.json IO（`saveObjectData`）、inbox per-message 原语、registry dispatch；本模块经标准
  * `persistable.save`/`load` 注册（不再有专属 `container` 契约），被 core 的 `writeThread`/`readThread`
@@ -12,7 +12,7 @@
  *
  * 归属（窗持引用、对象持数据）：
  * - thread.json（thread 对象自身数据）：不含 contextWindows / inbox（各有独立权威，避免双写漂移）。
- * - thread-context.json（thread 维度的**窗状态**）：该 thread 的窗信封 + win；inline class 整窗、
+ * - thread-context.json（thread 维度的**窗状态**）：该 thread 的窗的元信息 + win；inline class 整窗、
  *   独立对象仅 `_ref`（被指对象数据各自落 data.json，不内联）。
  * - data.json（object 维度）：独立子窗自身 data，跨线程共享。
  */
@@ -184,7 +184,7 @@ export async function saveThread(_ctx: PersistableContext, thread: ThreadContext
   await mkdir(threadDir(thread.persistence), { recursive: true });
   // inbox → 独立 per-message 目录（append-only，并发安全），再从 thread.json strip 掉。
   await persistInboxMessages(thread.persistence, thread.inbox);
-  // contextWindows（OocObjectInstance[]）→ thread-context.json（窗状态：信封 + win + 引用）+
+  // contextWindows（OocObjectInstance[]）→ thread-context.json（窗状态：元信息 + win + 引用）+
   // 各独立对象 data 落各自 data.json（不内联）。
   const tref = threadPersistRef(thread);
   if (tref) {

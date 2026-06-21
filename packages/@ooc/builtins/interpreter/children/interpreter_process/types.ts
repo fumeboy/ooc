@@ -7,7 +7,7 @@
  * 通过 self.getThreadLocal/setThreadLocal 跨 exec 共享 in-memory 数据。非单例。
  *
  * 业务字段：history（exec 记录）+ userData（用户脚本经 getData/setData 读写的持久 scratch，
- * 与 history 投影隔离）。**不含**窗信封（id/class/title/status/createdAt）——由 runtime 管理；
+ * 与 history 投影隔离）。**不含**窗的元信息（id/class/title/status/createdAt）——由 runtime 管理；
  * 也**不含**展示态（history viewport）——归 readable 的投影态 win（见 readable/history.ts 的 ProcessWin）。
  */
 

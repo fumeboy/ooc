@@ -6,7 +6,7 @@
  * - 渐进式 buffer：默认 mode="tail" 拉取最近 N 条；search 模式临时切换。
  * - 写类方法（send/reply）严格走 dry-run gate（confirm=true 才真发）。
  *
- * 不含窗信封字段（id/class/title/status/createdAt 由 runtime 管理）；投影态本类无独立 win。
+ * 不含窗的元信息字段（id/class/title/status/createdAt 由 runtime 管理）；投影态本类无独立 win。
  */
 export interface FeishuChatMessage {
   /** 飞书 message_id（om_xxx）。 */

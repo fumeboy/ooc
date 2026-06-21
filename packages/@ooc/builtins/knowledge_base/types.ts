@@ -6,6 +6,6 @@
  * 故成员类型名 knowledge_base，区别于 `knowledge` 窗口类型）。
  *
  * 它无业务字段：是单例、纯委托的 tool-object（数据来自 self.md / 缺省空）。
- * 窗信封字段（id/class/title/status/createdAt）由 runtime 管理；展示态归 readable 的投影态 `win`。
+ * 窗的元信息字段（id/class/title/status/createdAt）由 runtime 管理；展示态归 readable 的投影态 `win`。
  */
 export interface Data {}

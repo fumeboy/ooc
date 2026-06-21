@@ -25,9 +25,9 @@ function indexOf(...docs: KnowledgeDoc[]): KnowledgeIndex {
 }
 
 /**
- * 构造 method_exec object 实例的辅助（Wave4 对象信封形态）；activator 内部走 evaluateTrigger，
+ * 构造 method_exec object 实例的辅助（Wave4 对象实例形态）；activator 内部走 evaluateTrigger，
  * 读 `w.class === "method_exec"` + `w.data.method` + `w.parentObjectId`。
- * `method` / `parentObjectId` 经命名参数传入，落进 `.data` / 信封。
+ * `method` / `parentObjectId` 经命名参数传入，落进 `.data` / 元信息。
  */
 function form(
   overrides: { id?: string; method?: string; parentObjectId?: string; status?: ContextWindow["status"] } = {},

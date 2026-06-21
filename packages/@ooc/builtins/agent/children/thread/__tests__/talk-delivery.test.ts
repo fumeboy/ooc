@@ -9,7 +9,7 @@
  *
  * Wave 4 对象模型：talk_window 是 thread 实例（inst.class=THREAD_CLASS_ID）；会话业务字段
  * （target/targetThreadId）落 inst.data（=TalkData）。`deliverTalkMessage` 的 caller.talkWindow
- * 期望扁平 `TalkWindowView`（id/class + TalkData 扁平），故本测试把实例信封 ↔ 扁平视图互转。
+ * 期望扁平 `TalkWindowView`（id/class + TalkData 扁平），故本测试把实例 ↔ 扁平视图互转。
  */
 import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm, stat } from "node:fs/promises";
@@ -36,7 +36,7 @@ import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import type { TalkData, TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
 
-/** 把会话窗实例信封还原成 delivery 期望的扁平 TalkWindowView（id/class + TalkData 扁平）。 */
+/** 把会话窗实例还原成 delivery 期望的扁平 TalkWindowView（id/class + TalkData 扁平）。 */
 function asTalkWindowView(inst: OocObjectInstance): TalkWindowView {
   const data = (inst.data ?? {}) as TalkData;
   return {
@@ -262,7 +262,7 @@ describe("talk-delivery target='super' alias", () => {
       initContextWindows(superAlice, { creatorThreadId: "root", initialTaskTitle: "reflect" });
       const creator = superAlice.contextWindows.find((w) => isSelfThreadWindow(w.id));
       expect(creator).toBeDefined();
-      // 投影 class 不持久化——存储信封 class 一律 THREAD_CLASS_ID；会话字段在 data。
+      // 投影 class 不持久化——存储的元信息 class 一律 THREAD_CLASS_ID；会话字段在 data。
       expect(creator!.class).toBe(THREAD_CLASS_ID);
       const creatorData = (creator!.data ?? {}) as TalkData;
       expect(creatorData.target).toBe("alice");

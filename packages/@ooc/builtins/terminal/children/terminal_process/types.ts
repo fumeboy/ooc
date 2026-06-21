@@ -4,7 +4,7 @@
  * 由 terminal 对象构造（args: code）。每次 exec 跑一段 bash 脚本（独立子进程），结果作为
  * 一条 ProcessExecRecord 追加进 history。非单例：一个 world 可有多个 terminal_process。
  *
- * 只含业务字段；**不含**窗信封（id/class/title/status/createdAt）——那些由 runtime 管理。
+ * 只含业务字段；**不含**窗的元信息（id/class/title/status/createdAt）——那些由 runtime 管理。
  * history 渲染视口也不在此——归 readable 的投影态 `ProcessWin`（见 readable/history.ts）。
  */
 
