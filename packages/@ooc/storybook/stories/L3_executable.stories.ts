@@ -128,15 +128,15 @@ export const L3_STORIES: Story[] = [
   story({
     id: "L3-UI-METHOD-CALL",
     layer: "executable",
-    expectation: "Object 的 for_ui_access object method 经 HTTP /call_method 执行并 data 通道返回结果",
-    design: "executable：for_ui_access object method 是 Object 暴露给 UI 的方法（经 HTTP）。modules/stones/api.call-method.ts",
+    expectation: "Object 的 visible/server 方法经 HTTP /call_method 执行并 data 通道返回结果",
+    design: "visible/server：visible/server 方法是 Object 暴露给人类侧 UI 的方法（经 HTTP）。modules/stones/api.call-method.ts + registry.resolveVisibleServer",
     run: async ({ app, baseDir }) => {
       const id = "calc_obj";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "index.ts",
         `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
-         export const Class: OocClass = { executable: { methods: [
-           { name: "add", description: "add", for_ui_access: true,
+         export const Class: OocClass = { visibleServer: { methods: [
+           { name: "add", description: "add",
              exec: (_ctx, _self, args) => ({ data: { sum: args.x + args.y } }) },
          ] } };`);
       await sleep(350);

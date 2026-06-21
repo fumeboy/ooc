@@ -124,7 +124,7 @@ describe("app server routes", () => {
 
   test("POST /api/stones/:id/call_method returns 404 for missing method", async () => {
     const app = await makeApp();
-    // 先创建一个 stone（不写任何 for_ui_access 方法）
+    // 先创建一个 stone（不写任何 visible/server 方法）
     await app.handle(
       new Request("http://localhost/api/stones", {
         method: "POST",

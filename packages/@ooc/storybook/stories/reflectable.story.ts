@@ -16,14 +16,14 @@ const CONFIRM = { "X-Overwrite-Confirm": "true" };
 const HOT = 350;
 
 /**
- * Wave4 对象模型：world 对象的后端程序路由 = stone 根 `index.ts` 一处 `export const Class`
- * （OocClass，装配 executable.methods 等）。call_method 经 server-loader 从根 index.ts 加载 Class、
- * resolveObjectMethods 取 for_ui_access object method（三参 `(ctx, self, args)`，返回 ObjectMethodResult
- * `{ message?, data?, err? }`）。loader 不再读旧 `executable/index.ts` 的 `export const window` barrel。
+ * Wave4 对象模型：world 对象的人类侧服务端 API = stone 根 `index.ts` 一处 `export const Class`
+ * （OocClass，装配 `visibleServer.methods`）。call_method 经 server-loader 从根 index.ts 加载 Class、
+ * registry.resolveVisibleServer 取 visible/server method（三参 `(ctx, self, args)`，返回 ObjectMethodResult
+ * `{ message?, data?, err? }`）。stone scope 下 ctx 带 baseDir / object.id（无 thinkloop thread）。
  * 写根 index.ts 是非 versioning 热更（按 mtime 失效），用 writeStoneFile 直写。
  */
 function classSource(methods: string): string {
-  return `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";\nexport const Class: OocClass = { executable: { methods: [${methods}] } };`;
+  return `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";\nexport const Class: OocClass = { visibleServer: { methods: [${methods}] } };`;
 }
 
 export async function runControlPlane(): Promise<StoryResult> {
@@ -35,12 +35,12 @@ export async function runControlPlane(): Promise<StoryResult> {
     const id = "mirror";
     const selfContent = "# Mirror\nI am a reflective agent";
 
-    // TC-REFL-01: 经 object method 读自己的 self.md（自观察）。
-    // 新模型：object method 三参 `(ctx, self, args)`，self.dir = stone 身份目录（callMethod 注入）。
-    // self.md 是 agent 实例身份文件——建 agent（class=_builtin/agent）才落 self.md（TC-REFL-01 自观察依赖）。
+    // TC-REFL-01: 经 visible/server 方法读自己的 self.md（自观察）。
+    // 新模型：visible/server 方法三参 `(ctx, self, args)`，stone 身份目录由 ctx.baseDir + ctx.object.id 定位
+    //（stones/main/objects/<id>）。self.md 是 agent 实例身份文件——建 agent（class=_builtin/agent）才落 self.md。
     await postJson(app, "/api/stones", { objectId: id, class: "_builtin/agent", self: selfContent });
     writeStoneFile(baseDir, id, "index.ts", classSource(
-      `{ name: "readSelf", description: "readSelf", for_ui_access: true, exec: (ctx, self) => ({ data: require("node:fs").readFileSync(require("node:path").join(self.dir, "self.md"), "utf8") }) }`,
+      `{ name: "readSelf", description: "readSelf", exec: (ctx) => ({ data: require("node:fs").readFileSync(require("node:path").join(ctx.baseDir, "stones", "main", "objects", ctx.object.id, "self.md"), "utf8") }) }`,
     ));
     await sleep(HOT);
     {
@@ -69,7 +69,7 @@ export async function runControlPlane(): Promise<StoryResult> {
         `writeOk=${w.status === 200 && w.json?.ok}, text=${g.json?.text}`);
     }
 
-    // TC-REFL-04: 改 executable 程序路由（自修改行为）—— 写 stone 根 index.ts 的 Class，
+    // TC-REFL-04: 改 visible/server 方法（自修改行为）—— 写 stone 根 index.ts 的 Class，
     // 热更后 call 新方法拿到新返回值。
     // 注：authoritative spec 写的是经 `PUT /server-source` 改完热更再 call；但 Wave4 loader 只读根
     // index.ts 的 `export const Class`，而 `PUT /server-source` 写的是 executable/index.ts——二者已脱节
@@ -77,11 +77,11 @@ export async function runControlPlane(): Promise<StoryResult> {
     // 故此处对齐 loader 现实，经根 index.ts Class 行使「自修改行为」闭环。
     {
       writeStoneFile(baseDir, id, "index.ts", classSource(
-        `{ name: "evolve", description: "evolve", for_ui_access: true, exec: () => ({ data: "I changed myself!" }) }`,
+        `{ name: "evolve", description: "evolve", exec: () => ({ data: "I changed myself!" }) }`,
       ));
       await sleep(HOT);
       const c = await postJson(app, `/api/stones/${id}/call_method`, { method: "evolve" });
-      rec.ok("TC-REFL-04", "改 executable Class（自修改行为）热更生效",
+      rec.ok("TC-REFL-04", "改 visible/server Class（自修改行为）热更生效",
         c.json?.data === "I changed myself!",
         `data=${JSON.stringify(c.json?.data)}`);
     }
@@ -102,18 +102,18 @@ export async function runControlPlane(): Promise<StoryResult> {
       const id2 = "morph";
       await postJson(app, "/api/stones", { objectId: id2 });
       writeStoneFile(baseDir, id2, "index.ts", classSource(
-        `{ name: "version", description: "version", for_ui_access: true, exec: () => ({ data: "v1" }) }`,
+        `{ name: "version", description: "version", exec: () => ({ data: "v1" }) }`,
       ));
       await sleep(HOT);
       const r1 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "version" });
       writeStoneFile(baseDir, id2, "index.ts", classSource(
-        `{ name: "version", description: "version", for_ui_access: true, exec: () => ({ data: "v2" }) },` +
-        `{ name: "hello", description: "hello", for_ui_access: true, exec: () => ({ data: "world" }) }`,
+        `{ name: "version", description: "version", exec: () => ({ data: "v2" }) },` +
+        `{ name: "hello", description: "hello", exec: () => ({ data: "world" }) }`,
       ));
       await sleep(HOT);
       const r2 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "version" });
       const r3 = await postJson(app, `/api/stones/${id2}/call_method`, { method: "hello" });
-      rec.ok("TC-REFL-06", "自修改行为闭环：改 executable Class 新方法热更生效",
+      rec.ok("TC-REFL-06", "自修改行为闭环：改 visible/server Class 新方法热更生效",
         r1.json?.data === "v1" && r2.json?.data === "v2" && r3.json?.data === "world",
         `v1=${r1.json?.data}, v2=${r2.json?.data}, hello=${r3.json?.data}`);
     }

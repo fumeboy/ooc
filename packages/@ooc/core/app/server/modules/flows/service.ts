@@ -3,6 +3,7 @@ import {
   createFlowSession,
   ensureSessionWorktree,
   objectDir,
+  readFlowObjectClass,
   threadDir,
   STONE_CHILDREN_SUBDIR,
 } from "@ooc/core/persistable";
@@ -897,6 +898,12 @@ export function createFlowsService(deps: {
           "read",
         );
         await defaultServerLoader.loadAndRegisterStoneClass(stoneRef, objectId, registry);
+        // flow object 的继承 class 落 `.flow.json`（非 stone package.json）——builtin-class 实例
+        // （如 todo）经此把 objectId 链到 builtin class，让 resolveVisibleServer 沿链找到方法。
+        const flowClass = await readFlowObjectClass({ baseDir: deps.baseDir, sessionId, objectId });
+        if (flowClass) {
+          registry.register(objectId, {}, { parentClass: flowClass });
+        }
       } catch (error) {
         throw new AppServerError(
           "METHOD_LOAD_FAILED",

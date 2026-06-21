@@ -12,13 +12,13 @@
 
 import { collectConsoleErrors, expect, test } from "./_fixture-client";
 
-const PING_SERVER = `export const window = { methods: {
-  ping: {
+const PING_SERVER = `export const Class = { visibleServer: { methods: [
+  {
+    name: "ping",
     description: "echoes",
-    for_ui_access: true,
-    exec: async ({ args }) => ({ ok: true, data: { pong: args.value ?? "default" } }),
+    exec: async (_ctx, _self, args) => ({ data: { pong: args.value ?? "default" } }),
   },
-} };`;
+] } };`;
 
 const PING_CLIENT = `import { useState } from "react";
 export default function View({ callMethod }) {

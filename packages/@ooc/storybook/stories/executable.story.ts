@@ -1,7 +1,7 @@
 /**
  * Story: executable —— LLM 经稳定 tool 原语在 ContextWindow 上调 Method 改变世界。
  *
- * 控制面（无 LLM）只验**结构**：① Object 自定义 for_ui_access object method 经 HTTP call_method 执行；
+ * 控制面（无 LLM）只验**结构**：① Object 自定义 visible/server 方法经 HTTP call_method 执行（人类侧）；
  * ② Object 定义的 executable.methods（LLM 命令面）经 loadStoneClass 可加载；③ 填表式渐进执行——method
  * 声明 route 时 exec 缺参开 method_exec form、refine 累积、submit 提交（route 只在 exec 工具边界消费，
  * 确定性可验）。深度（3 原语 exec/close/wait 驱动真实编辑）属 Tier B + e2e S1/S2。
@@ -16,21 +16,21 @@ export async function runControlPlane(): Promise<StoryResult> {
   const srv = await mkServer();
   const { app, baseDir } = srv;
   try {
-    // TC-EXEC-01: for_ui_access object method 经 HTTP call_method 执行（结果走 data 通道）。
-    // Wave4 对象模型：stone 一处 `export const Class: OocClass`（root index.ts），executable.methods
-    // 是数组，exec 三参 (ctx, self, args)；call_method 经 resolveObjectMethods 取 for_ui_access 方法。
+    // TC-EXEC-01: visible/server 方法经 HTTP call_method 执行（结果走 data 通道；人类侧 UI）。
+    // Wave4 对象模型：stone 一处 `export const Class: OocClass`（root index.ts），visibleServer.methods
+    // 是数组，exec 三参 (ctx, self, args)；call_method 经 registry.resolveVisibleServer 取方法。
     {
       const id = "calc";
       await postJson(app, "/api/stones", { objectId: id });
       writeStoneFile(baseDir, id, "index.ts",
         `import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
-         export const Class: OocClass = { executable: { methods: [
-           { name: "add", description: "add", for_ui_access: true,
+         export const Class: OocClass = { visibleServer: { methods: [
+           { name: "add", description: "add",
              exec: (_ctx, _self, args) => ({ data: { sum: args.x + args.y } }) },
          ] } };`);
       await sleep(350);
       const r = await postJson(app, `/api/stones/${id}/call_method`, { method: "add", args: { x: 2, y: 3 } });
-      rec.eq("TC-EXEC-01", "for_ui_access 方法经 HTTP 执行并 data 通道返回结果", r.json?.data, { sum: 5 });
+      rec.eq("TC-EXEC-01", "visible/server 方法经 HTTP 执行并 data 通道返回结果", r.json?.data, { sum: 5 });
     }
 
     // TC-EXEC-02: object method（LLM 命令面）经 loadStoneClass 可加载（executable 维度）。

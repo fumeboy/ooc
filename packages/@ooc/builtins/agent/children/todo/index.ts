@@ -1,14 +1,19 @@
 /**
  * todo —— ooc class 后端程序路由（不含 visible 前端）。
  *
- * 一处 `export const Class` 装配 construct + 两维度（executable / readable）。
+ * 一处 `export const Class` 装配 construct + 三维度（executable / readable / visibleServer）。
  * todo 是**非单例 class**（root.todo 一步直建，可建多个）；persistable 走系统默认（不自定义）。
+ *
+ * - executable    : mark_done（LLM 在 thinkloop 行使的业务态迁移）
+ * - readable      : 投影成 todo window
+ * - visibleServer : set_content / toggle_done（人类侧经 HTTP 控制面直接编辑 object data）
  */
 
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
 import type { ConstructorContext } from "@ooc/core/executable/contract.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
+import visibleServer from "./visible/server/index.js";
 import type { Data } from "./types.js";
 
 export const Class: OocClass<Data> = {
@@ -35,6 +40,7 @@ export const Class: OocClass<Data> = {
   },
   executable,
   readable,
+  visibleServer,
 };
 
 export type { Data } from "./types.js";

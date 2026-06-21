@@ -11,6 +11,11 @@ import type { ObjectRegistry } from "@ooc/core/runtime/object-registry";
 import type { FlowObjectRef } from "@ooc/core/_shared/types/thread.js";
 import { persistableCtx } from "@ooc/core/persistable/object-data.js";
 import {
+  readRuntimeObjectState,
+  writeRuntimeObjectState,
+} from "@ooc/core/persistable";
+import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import {
   normalizeMethodResult,
   type ObjectMethodResult,
 } from "@ooc/core/executable/contract.js";
@@ -47,10 +52,17 @@ export async function dispatchVisibleServerMethod(
     );
   }
 
-  // load 当前 data（无 persistable.load / 无盘上数据 → 空 Data，由 method 初始化字段）。
+  // load 当前 data。优先 class 自定义 persistable.load；否则系统默认（state.json 的 `.data`，
+  // 与 object-data.saveObjectData 同布局）。无盘上数据 → 空 Data，由 method 初始化字段。
   const persistable = registry.resolvePersistable(classId);
   const ctx = persistableCtx(flowRef);
-  const data = (await persistable?.load?.(ctx)) ?? {};
+  let data: Record<string, unknown>;
+  if (persistable?.load) {
+    data = ((await persistable.load(ctx)) as Record<string, unknown>) ?? {};
+  } else {
+    const state = await readRuntimeObjectState(flowRef);
+    data = ((state as { data?: Record<string, unknown> } | undefined)?.data) ?? {};
+  }
 
   // exec 改入参 data（pass-by-ref）→ reportDataEdit eager 落盘（与 thinkloop object method 一致约定）。
   const result = await entry.exec(
@@ -60,7 +72,16 @@ export async function dispatchVisibleServerMethod(
       object: { id: flowRef.objectId, class: classId },
       args,
       reportDataEdit: async () => {
-        await persistable?.save?.(persistableCtx(flowRef), data);
+        if (persistable?.save) {
+          await persistable.save(persistableCtx(flowRef), data);
+        } else {
+          // 系统默认：落 state.json `{ id, class, data }`（与 saveObjectData 同布局）。
+          await writeRuntimeObjectState(flowRef, {
+            id: flowRef.objectId,
+            class: classId,
+            data,
+          } as unknown as ContextWindow);
+        }
       },
     },
     data,
