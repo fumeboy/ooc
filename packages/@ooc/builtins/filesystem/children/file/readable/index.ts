@@ -21,7 +21,7 @@ import {
   applyViewport,
   mergeViewport,
   type Viewport,
-} from "@ooc/core/_shared/utils/viewport.js";
+} from "./viewport.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { asTuple } from "@ooc/builtins/_shared/executable/utils.js";
 import type { Data } from "../types.js";

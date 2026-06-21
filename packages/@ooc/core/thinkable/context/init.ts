@@ -21,7 +21,6 @@ import {
   SESSION_CREATOR_THREAD_ID,
   threadWindowIdOf,
 } from "../../_shared/types/context-window.js";
-import { DEFAULT_TRANSCRIPT_VIEWPORT } from "../../_shared/utils/viewport.js";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
 import type { OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { ThreadContext } from "../context.js";
@@ -151,10 +150,11 @@ export function initContextWindows(
     // 结构窗：thread 与 creator 的恒在通道（construct 期标）→ close 原语拒关（spec §5）。
     closable: false,
     data: threadData,
-    // 过程窗每轮 init 幂等重注入（transient：不单独落 state.json 死 _ref）；transcriptViewport / summarizedRanges
-    // 投影态进 win。注：transient 不影响 inline 持久化——THREAD_CLASS_ID inline 类整窗落 thread-context.json，
-    // win（含 folds）随之跨 reload 存活（reload 后 hydrate 还原 → 本幂等检查命中即跳过）。
-    win: { transient: true, transcriptViewport: { ...DEFAULT_TRANSCRIPT_VIEWPORT } },
+    // 过程窗每轮 init 幂等重注入（transient：不单独落 state.json 死 _ref）。transcriptViewport
+    // 不在此预填——thread 的 readable 投影时惰性兜底默认（conversation-render `?? DEFAULT_TRANSCRIPT_VIEWPORT`），
+    // core 不硬编码 thread 的投影默认。注：transient 不影响 inline 持久化——THREAD_CLASS_ID inline 类整窗落
+    // thread-context.json，win（含 folds）随之跨 reload 存活（reload 后 hydrate 还原 → 本幂等检查命中即跳过）。
+    win: { transient: true },
   };
 
   thread.contextWindows = [threadWindow, ...list];

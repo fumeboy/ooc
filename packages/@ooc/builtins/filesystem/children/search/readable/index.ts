@@ -18,7 +18,7 @@ import {
   applyTranscriptViewport,
   mergeTranscriptViewport,
   type TranscriptViewport,
-} from "@ooc/core/_shared/utils/viewport.js";
+} from "./transcript-viewport.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { Data } from "../types.js";
 

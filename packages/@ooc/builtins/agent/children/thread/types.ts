@@ -38,7 +38,7 @@ export interface Data {
  *   force-wait 据此判定「在途 compress」。随 inline thread 窗持久化（跨 reload；orphan 由 harvest 超时清）。
  */
 export interface ThreadWin {
-  transcriptViewport?: import("@ooc/core/_shared/utils/viewport.js").TranscriptViewport;
+  transcriptViewport?: import("./transcript-viewport.js").TranscriptViewport;
   summarizedRanges?: import("@ooc/core/_shared/utils/summarized-ranges.js").SummarizedRange[];
   autoCompressLevel?: 0 | 1 | 2;
   compressIntent?: boolean;

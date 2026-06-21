@@ -26,7 +26,7 @@ import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
   hasAnyTranscriptViewportField,
-} from "@ooc/core/_shared/utils/viewport.js";
+} from "../transcript-viewport.js";
 import { renderTranscriptOrHandle } from "./conversation-render.js";
 import { threadCompress, threadResize } from "./compress-events.js";
 import {

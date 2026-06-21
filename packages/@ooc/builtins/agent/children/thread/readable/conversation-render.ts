@@ -16,7 +16,7 @@ import {
   applyTranscriptViewport,
   DEFAULT_TRANSCRIPT_VIEWPORT,
   type TranscriptViewport,
-} from "@ooc/core/_shared/utils/viewport.js";
+} from "../transcript-viewport.js";
 import {
   projectSummarizedRanges,
   type SummarizedRange,

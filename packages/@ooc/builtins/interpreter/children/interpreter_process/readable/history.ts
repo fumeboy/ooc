@@ -3,15 +3,15 @@
  *
  * renderProcessHistory 是纯函数 `(history, win) => XmlNode[]`（读 Data.history + 投影态
  * win.historyViewport，不读整窗）；setHistoryWindowMethod 是新契约 WindowMethod
- * `(ctx, self, before_win, args) => 新 win`。直接用 core 的 transcript viewport 纯函数；
- * history_* 前缀在此 remap 到 core 的 tail / range_start / range_end。
+ * `(ctx, self, before_win, args) => 新 win`。用本 class 的 transcript-viewport.ts 纯函数；
+ * history_* 前缀在此 remap 到 tail / range_start / range_end。
  */
 import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import {
   applyTranscriptViewport,
   mergeTranscriptViewport,
   type TranscriptViewport,
-} from "@ooc/core/_shared/utils/viewport.js";
+} from "./transcript-viewport.js";
 import type { WindowMethod, ReadableContext } from "@ooc/core/readable/contract.js";
 import type { Data, ProcessExecRecord } from "../types.js";
 

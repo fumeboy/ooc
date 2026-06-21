@@ -4,8 +4,7 @@ import {
   DEFAULT_VIEWPORT,
   applyViewport,
   mergeViewport,
-  sliceColumn,
-} from "../viewport";
+} from "../readable/viewport";
 
 describe("viewport: defaults", () => {
   it("DEFAULT_VIEWPORT is 0-200 / 0-200", () => {
@@ -204,17 +203,5 @@ describe("viewport: applyViewport - column slicing", () => {
   });
 });
 
-describe("viewport: sliceColumn edge cases", () => {
-  it("empty line stays empty", () => {
-    expect(sliceColumn("", 0, 200)).toBe("");
-  });
-
-  it("line exactly at boundary - no overflow marker", () => {
-    const line = "x".repeat(200);
-    expect(sliceColumn(line, 0, 200)).toBe(line);
-  });
-
-  it("line shorter than columnEnd - no overflow marker", () => {
-    expect(sliceColumn("abc", 0, 200)).toBe("abc");
-  });
-});
+// sliceColumn 边界 case 由上方 applyViewport 列裁剪测试间接覆盖（sliceColumn 现为
+// readable/viewport.ts 内部 helper，不导出）。
