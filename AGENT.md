@@ -50,6 +50,7 @@ ooc-philosophy / ooc-glossary / engineering-harness / testing-strategy / authori
 1. **发起 issue**：在 `.ooc-world-meta/stones/main/docs/issues/` 新建 `YYYY-MM-DD-<slug>.md`（模板见该目录 `README.md`）：背景 / 现状（锚 index.md 对应 `##` 节）/ 改动提案 / **受影响设计元素**（对照 index.md `##` 清单逐一列出）/ 风险与权衡 / 待裁决点。
 2. **review fan-out**：并发派 sub agent——**每个受影响设计元素各派一个 reviewer**（以「我是这个元素的主人」视角审改动对该元素的契约影响、补具体评论）＋ **一个完整性批评官**（扫 index.md 全清单 + self.md，专问"还漏了哪个未被列为受影响、却会被波及的元素"，并查内部自洽 / 与 source 一致 / 术语漂移 / 设计-实施越界）。reviewer **不自己 commit、不直接改文件**，只回评论给 Supervisor 汇总。
 3. **汇总裁决 + 一致性回流**：Supervisor 汇总各 reviewer + 完整性批评官意见记进 issue → 裁决跨维度冲突与待决点 → 落地（改 self.md〔面向实施〕/ index.md〔面向设计〕/ 代码）→ **强制成对回流**（改一处必同步另一处；退役某符号/概念时全树〔index.md + 各 self.md + builtin md〕引用一并清理）→ issue 标 `landed`。
+   - **涉及源代码变更**（`packages/@ooc/`）的 issue 不在主工作区直接改，而是为该 issue 在源码仓根 `.worktree/<slug>` 新建 git worktree 分支隔离开发（多 issue 并行互不污染），开发完按常规合入、在 issue「裁决」段记录该分支；纯设计文档调整无需 worktree。
 
 要点：index.md（面向设计）与各 self.md（面向实施）是**同一设计的两个投影**，靠步骤 3 的成对回流防漂移；脱离此流程的零散设计改动是漂移之源。
 
