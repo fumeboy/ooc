@@ -86,6 +86,8 @@ async function execFork(ctx: ConstructorContext, selfObjectId: string): Promise<
     creatorObjectId: selfObjectId,
     contextWindows: [],
     persistence: deriveChildPersistence(parent, childId),
+    // compress v2：framework summarizer fork 标记（spawnSummarizerFork 传 args.summarizer=true）。
+    ...(ctx.args.summarizer === true ? { isSummarizer: true } : {}),
   };
 
   // fork 子线程是同 object 的 sub-thread——继承该 object 声明持有的 tool-object 成员（如 filesystem）。

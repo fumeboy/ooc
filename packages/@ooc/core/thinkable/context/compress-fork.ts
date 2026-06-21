@@ -74,6 +74,7 @@ export async function spawnSummarizerFork(
     target: selfObjectId,
     msg: seed,
     wait: false,
+    summarizer: true,
     title: "summarize early history",
   });
   thread.contextWindows = mgr.toData();

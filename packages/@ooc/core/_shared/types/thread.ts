@@ -445,6 +445,12 @@ export type ThreadContext = {
   /** 子线程实体表；当前内存实现直接嵌套，不引入独立存储层。 */
   childThreads?: Record<string, ThreadContext>;
   /**
+   * compress v2：本线程是 framework fork 的 **summarizer 子线程**（生成摘要后由 scheduler harvest
+   * 读其 endSummary 记入父窗 summarizedRanges）。标记使 emitChildEndNotifications 不对它发 child-end
+   * 通知（避免污染父会话 + 双记，C2）；它的产出经 harvest 内部回收、不进父的协作叙事。
+   */
+  isSummarizer?: boolean;
+  /**
    * 父 thread 反向引用（运行时设置，不持久化）。
    *
    * 用于 do_window.move 等命令需要从子 thread 访问父 thread 的场景；
