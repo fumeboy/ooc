@@ -26,14 +26,23 @@ export interface Data {
 }
 
 /**
- * thread 的**投影态**（与 Data 分离）：
+ * thread 的**投影态**（与 Data 分离）。compress v2（resize/compress 协议 + fork-summarizer）：
  * - `transcriptViewport`：transcript 渲染窗口（window method `set_transcript_window` 读写）。
- * - `summarizedRanges`：events compress 折叠态——transcript 内点名区段折成摘要占位
- *   （通用 window method `compress(scope=events)` 读写；视角独立、随 inline thread 窗持久化）。
+ * - `summarizedRanges`：折叠态——transcript 内点名区段折成摘要占位（fork-summarizer 产出后由框架记入；
+ *   视角独立、随 inline thread 窗持久化）。读出侧 `projectSummarizedRanges` 投影。
+ * - `autoCompressLevel`：**自动压缩档位**（window method `resize` 设）——thread 窗专用阈值旋钮：未总结
+ *   transcript 超该档位阈值即自动 fork-summarize。**独立于 compressLevel**（后者是内容窗的展示档位，
+ *   被 renderer `projectByCompressLevel` 消费；thread 窗自视渲句柄、不用展示档位），避免展示折叠副作用。
+ * - `compressIntent`：agent 经 window method `compress`（无参意图）请求折一次——框架 auto-trigger hook 消费。
+ * - `inFlightCompress`：在途 summarizer fork 标记 `{forkThreadId,fromIdx,toIdx}`——框架 harvest 完成后清；
+ *   force-wait 据此判定「在途 compress」。随 inline thread 窗持久化（跨 reload；orphan 由 harvest 超时清）。
  */
 export interface ThreadWin {
   transcriptViewport?: import("@ooc/core/_shared/utils/viewport.js").TranscriptViewport;
   summarizedRanges?: import("@ooc/core/_shared/utils/summarized-ranges.js").SummarizedRange[];
+  autoCompressLevel?: 0 | 1 | 2;
+  compressIntent?: boolean;
+  inFlightCompress?: { forkThreadId: string; fromIdx: number; toIdx: number };
 }
 
 /**
