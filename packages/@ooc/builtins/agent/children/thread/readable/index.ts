@@ -90,7 +90,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
     // 原语拒关（取代旧 close method 里的 data.isCreatorWindow 检查）。
     {
       class: "thread",
-      object_methods: ["say"],
+      object_methods: ["say", "end", "todo"],
       window_methods: [setTranscriptWindowMethod, threadCompress, threadResize],
     },
     // other-view：与对端 peer/sub 的对话（含父侧 fork 子窗）；可关（关窗经 close 原语、非 method——
