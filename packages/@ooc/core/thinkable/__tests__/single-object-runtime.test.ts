@@ -122,7 +122,7 @@ describe("single object runtime", () => {
       "完成单 object 最小闭环",
     );
     // 退役 thread.json.contextWindows：plan 是独立 flow object，落 thread-context.json 的
-    // _ref，权威字段在 plan 的 state.json。reload 经 readThread（thread-context.json → state.json
+    // _ref，权威字段在 plan 的 data.json。reload 经 readThread（thread-context.json → data.json
     // hydrate）才能拿到完整 plan window —— 直接 parse thread.json 不再含 contextWindows。
     expect(savedThread.contextWindows).toBeUndefined();
     const reloaded = await readThread(ref, "root");

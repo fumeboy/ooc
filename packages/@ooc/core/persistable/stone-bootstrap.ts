@@ -66,11 +66,11 @@ function runGit(args: string[], cwd?: string): GitRun {
  * session worktree（`flows/<sid>`）从 main checkout 时继承它。tracked stone 身份文件与运行时
  * 数据同落 `objects/<id>/`，故白名单 `objects/` 后再用黑名单排除运行时特征文件：
  *   - 顶层 `/*` 排除 session 级运行时；`!/objects/` `!/.gitignore` 放行。
- *   - `objects/** /threads/`、`objects/** /.flow.json`、`objects/** /state.json` 排除对象级运行时。
+ *   - `objects/** /threads/`、`objects/** /.flow.json`、`objects/** /data.json` 排除对象级运行时。
  * 让 `git status` / evolve diff 只看见身份改动，不被运行时数据污染。
  */
 const STONE_MAIN_GITIGNORE =
-  "/*\n!/objects/\n!/.gitignore\nobjects/**/threads/\nobjects/**/.flow.json\nobjects/**/state.json\n";
+  "/*\n!/objects/\n!/.gitignore\nobjects/**/threads/\nobjects/**/.flow.json\nobjects/**/data.json\n";
 
 /** 保留目录名，迁移时不会被搬到 main/ 下。 */
 const RESERVED_TOP_LEVEL = new Set([STONES_MAIN_BRANCH, STONES_BARE_REPO_DIR, ".git", ".gitignore"]);

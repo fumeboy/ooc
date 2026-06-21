@@ -191,7 +191,7 @@ describe("dispatchUnactiveIfZero (单次泛型, fast-path)", () => {
     const objId = "o_gc";
     const dir = objectDir({ baseDir, sessionId, objectId: objId });
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "state.json"), "{}");
+    writeFileSync(join(dir, "data.json"), "{}");
     expect(existsSync(dir)).toBe(true);
 
     // 持有窗已移除 → refcount 0。

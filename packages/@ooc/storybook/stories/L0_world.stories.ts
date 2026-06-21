@@ -102,7 +102,7 @@ export const L0_STORIES: Story[] = [
     id: "L0-GITIGNORE",
     layer: "persistable",
     expectation: "stones/main/.gitignore 白名单 objects/、黑名单运行时（threads/）",
-    design: "persistable：身份进 git、运行时产物（threads/state.json/.flow.json）不进 git。persistable/bootstrap.ts",
+    design: "persistable：身份进 git、运行时产物（threads/data.json/.flow.json）不进 git。persistable/bootstrap.ts",
     run: async ({ baseDir }) => {
       const p = join(baseDir, "stones", "main", ".gitignore");
       check(existsSync(p), ".gitignore 不存在");

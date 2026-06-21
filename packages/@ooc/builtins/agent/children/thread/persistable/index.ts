@@ -4,7 +4,7 @@
  * thread 是 builtin object，它的持久化**逻辑全在自己这里**，走 object-model 标准契约
  * `save` / `load`（与 `builtins/example/persistable/index.ts` 同一套），**不再**有专属 `container`：
  * - `mode:"inline"`：thread **作为别的 context 里的一个窗**时，整窗随所属 thread 的
- *   `thread-context.json` inline 落盘、不写独立 state.json（会话窗 self/peer/fork/reflect_request
+ *   `thread-context.json` inline 落盘、不写独立 data.json（会话窗 self/peer/fork/reflect_request
  *   投影都是 thread 实例）。
  * - `save` / `load`：thread **作为运行会话容器**时的持久化（thread.json + thread-context.json +
  *   inbox + hydrate），实现在 `./thread-persist`。thread 的落盘 API（`writeThread`/`readThread` +

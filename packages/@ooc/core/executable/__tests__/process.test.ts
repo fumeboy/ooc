@@ -115,7 +115,7 @@ describe("interpreter_process runtime — runInterpreterExec (ts/js)", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
     });
-    const rec = await runInterpreterExec(thread, "ts", "_result_ = 2 + 3;");
+    const rec = await runInterpreterExec(thread, "ts", "_result_ = 2 + 3;", {});
     expect(rec.output).toContain("[returnValue]");
     expect(rec.output).toContain("5");
     expect(rec.output).toContain("[exit 0]");
@@ -128,7 +128,7 @@ describe("interpreter_process runtime — runInterpreterExec (ts/js)", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
     });
-    const rec = await runInterpreterExec(thread, "ts", "_result_ = self.dir;");
+    const rec = await runInterpreterExec(thread, "ts", "_result_ = self.dir;", {});
     expect(rec.output).toContain("agent");
   });
 
@@ -139,10 +139,29 @@ describe("interpreter_process runtime — runInterpreterExec (ts/js)", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
     });
-    await runInterpreterExec(thread, "ts", "self.setThreadLocal('counter', 1);");
-    const second = await runInterpreterExec(thread, "ts", "_result_ = self.getThreadLocal('counter');");
+    await runInterpreterExec(thread, "ts", "self.setThreadLocal('counter', 1);", {});
+    const second = await runInterpreterExec(thread, "ts", "_result_ = self.getThreadLocal('counter');", {});
     expect(second.output).toContain("[returnValue]");
     expect(second.output).toContain("1");
+  });
+
+  test("ts mode getData/setData read/write the instance userData + trigger reportDataEdit", async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
+    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
+    const thread = makeThread({
+      id: "t",
+      persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
+    });
+    // 同一 userData 引用串两次 exec：setData 写、getData 读，落在实例自身 data 上（非草稿文件）。
+    const userData: Record<string, unknown> = {};
+    let edits = 0;
+    const reportDataEdit = async () => { edits += 1; };
+    await runInterpreterExec(thread, "ts", "await self.setData('k', 42);", userData, undefined, reportDataEdit);
+    expect(userData.k).toBe(42);
+    expect(edits).toBe(1);
+    const second = await runInterpreterExec(thread, "ts", "_result_ = await self.getData('k');", userData, undefined, reportDataEdit);
+    expect(second.output).toContain("[returnValue]");
+    expect(second.output).toContain("42");
   });
 });
 

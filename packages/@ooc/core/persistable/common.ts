@@ -53,7 +53,7 @@ export const SESSION_BRANCH_PREFIX = "session-";
  * 落点统一为 `flows/<sid>/objects/<nestedObjectPath>` —— 与 stoneDir 的 session worktree
  * 分支（`flows/<sid>/objects/<id>`）同落点：一个 `objects/<id>/` 目录同时容纳该对象的
  * **身份文件（tracked stone：self.md / readable.md / executable/** / …）+ 运行时数据
- * （untracked：.flow.json / threads/ / state.json）**，由 main 根 .gitignore 黑名单区分。
+ * （untracked：.flow.json / threads/ / data.json）**，由 main 根 .gitignore 黑名单区分。
  *
  * objectId 中的 "/" 被翻译为 children/ 嵌套（与 stoneDir 对称；详见 nestedObjectPath）——
  * nested child 仍落 `objects/<a>/children/<b>/`，只是基路径多了一段 `objects/`。
@@ -88,7 +88,7 @@ export function stoneDir(ref: StoneObjectRef): string {
     // session worktree（branch `session-<sid>`）物理落 `flows/<sid>`——
     // 与 sessionWorktreePath 对齐。tracked stone 与运行时数据现在**同落 `objects/<id>/`**
     // （objectDir 续案：flows/<sid>/objects/<id>），由 main 根 .gitignore 黑名单区分
-    // tracked（self.md/…）vs untracked（.flow.json/threads//state.json）。
+    // tracked（self.md/…）vs untracked（.flow.json/threads//data.json）。
     // 其他 _stonesBranch（metaprog 去除后理论不再有，防御保留）仍走 `stones/<branch>/`。
     if (ref._stonesBranch.startsWith(SESSION_BRANCH_PREFIX)) {
       const sid = ref._stonesBranch.slice(SESSION_BRANCH_PREFIX.length);

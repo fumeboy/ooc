@@ -80,6 +80,14 @@ declare -a FORBIDDEN_PATTERNS=(
   "ObjectDestructor"
   "destruct\\?:"
   "\\barchiveForkChild\\b"
+  # —— object data 落盘统一 data.json，退役 state.json（2026-06-21）：默认持久化文件名 state.json→data.json
+  #    （裸 data 替信封），interpreter getData/setData 收紧为本实例 userData（删 flow-data session 草稿）。
+  #    退役符号 + 落盘字面量防回潮（精确小写 `state\.json`，不命中大写 STATE / 无关词）：
+  "writeRuntimeObjectState"
+  "readRuntimeObjectState"
+  "runtimeObjectStateFile"
+  "flowDataFile"
+  "state\\.json"
 )
 
 # 允许列表（D6 硬切的合法引用点 + 概念文档）
@@ -94,6 +102,8 @@ ALLOW_LIST=(
   "scripts/check-doc-deprecated-drift.sh"  # 文档漂移检查的 FORBIDDEN_PATTERNS 列了这些废弃符号字面量
   "packages/@ooc/core/persistable/__tests__/stone.test.ts"  # 守门断言：writeReadable 不再写 readme.md，须引用该字面量
   "packages/@ooc/builtins/agent/children/thread/TODO.md"  # 计划文档：记述 container/ThreadContainerPersistence 退役过程，须引用字面量
+  "scripts/migrate-state-context-split.ts"  # 一次性历史数据迁移脚本：按定义操作旧 state.json 布局，须引用旧字面量
+  "scripts/__tests__/migrate-state-context-split.test.ts"  # 上述迁移脚本的测试，同样引用旧 state.json 布局
 )
 
 EXCLUDE_DIRS=(

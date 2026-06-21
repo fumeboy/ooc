@@ -8,9 +8,9 @@
  *   `{baseDir}/flows/{sessionId}/{objectId}/threads/{threadId}/thread-context.json`
  *
  * 维度区分（关键不变量）:
- *   - state.json (Object 维度) — 仅 object 自身字段，跨线程共享，不含 contextWindows
+ *   - data.json (Object 维度) — 仅 object 自身字段（裸 Data），跨线程共享，不含 contextWindows
  *   - thread-context.json (Thread 维度) — 该 thread 的 contextWindows 数组
- *       · 内置特性 (talk/do/todo/method_exec) 完整 inline，因为它们没有独立 state.json
+ *       · 内置特性 (talk/do/todo/method_exec) 完整 inline，因为它们没有独立 data.json
  *       · 独立 flow object (plan/program/file/...) 仅放 ref `{ id, type, _ref: true, refObjectId }`
  *
  * 写盘通过 enqueueSessionWrite 串行化，per-(objectId, threadId) 一个 key，
@@ -30,7 +30,7 @@ import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
  *     · 会话窗 inst.class=`_builtin/thread`（真实注册 class）照常 inline；talk/reflect_request
  *       投影 class 是 POV 派生值、不在 inst 里，渲染期由 thread readable 内 computeProjectionClass
  *       动态算（context.md 核心 2/8/9），故磁盘也不存它。
- *   - 独立 flow object：只放轻量 ref，hydrate 时另读 `<refObjectId>/state.json`
+ *   - 独立 flow object：只放轻量 ref，hydrate 时另读 `<refObjectId>/data.json`
  */
 export type ThreadContextEntry =
   | ContextWindow

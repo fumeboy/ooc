@@ -31,9 +31,6 @@ export {
 
 export { readCsv, writeCsv, appendRow } from "./csv-pool";
 
-// flow-data（data.json IO）已下沉 interpreter builtin（InterpreterSelf.getData/setData 独占）：
-// @ooc/builtins/interpreter/children/interpreter_process/persistable/flow-data.ts
-
 export {
   createFlowSession,
   createFlowObject,
@@ -57,8 +54,8 @@ export {
 } from "./stone-object";
 
 export {
-  writeRuntimeObjectState,
-  readRuntimeObjectState,
+  writeRuntimeObjectData,
+  readRuntimeObjectData,
 } from "./flow-runtime-object";
 
 export {
@@ -84,7 +81,6 @@ export {
   readableFile,
   writeReadable,
 } from "./stone-readable";
-// stone-data 已删除：data.json 语义改为 session-scoped 落 flow（IO 实现已下沉 interpreter builtin，见上）。
 export {
   readExecutableSource,
   executableIndexFile,

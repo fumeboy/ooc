@@ -3,7 +3,7 @@
  *
  * 控制面（无 LLM）只验**通道**：① seed 一个 talk（user→target）后，target 的 callee thread inbox
  * 真实收到该消息（talk-delivery 双写）；② user.root 上挂了指向 target 的会话窗
- *（stored class = `_builtin/agent/thread`，target 落在被引窗 state.json）。
+ *（stored class = `_builtin/agent/thread`，target 落在被引窗 data.json）。
  * 「对端真实回应」属 Tier B（需对端 thinkloop）。规格见 collaborable 对象 knowledge/tests.md（.ooc-world-meta）。
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -41,7 +41,7 @@ export async function runControlPlane(): Promise<StoryResult> {
     // Wave4 对象模型：会话窗 stored class = thread 的 stone objectId "_builtin/agent/thread"
     //（唯一会话载体注册 class；"talk" 是 readable 按 POV 算的投影 class，不落盘）。
     // 会话窗是 inline 持久化（thread persistable.mode=inline）：整窗 inline 进 user thread-context
-    // entry，data.target 直接可读（不写独立 state.json）。
+    // entry，data.target 直接可读（不写独立 data.json）。
     // 故按「entry stored class = _builtin/agent/thread + 该 inline entry 的 data.target === target」断言。
     {
       const userCtx = readThreadContextJson(baseDir, sid, "user", "root");
@@ -49,12 +49,12 @@ export async function runControlPlane(): Promise<StoryResult> {
       const sessionWin = wins.find((w) => normalizeClassId(w?.class ?? "") === "agent/thread");
       let pointsAtTarget = false;
       if (sessionWin) {
-        // inline：data 直接在 entry；_ref 退化形态：读被引窗 state.json（兜底兼容）。
+        // inline：data 直接在 entry；_ref 退化形态：读被引窗 data.json 裸 data（兜底兼容）。
         let data = sessionWin.data;
         if (data == null && sessionWin.refObjectId) {
-          const statePath = join(baseDir, "flows", sid, "objects", sessionWin.refObjectId, "state.json");
-          if (existsSync(statePath)) {
-            try { data = JSON.parse(readFileSync(statePath, "utf8"))?.data; } catch { /* malformed */ }
+          const dataPath = join(baseDir, "flows", sid, "objects", sessionWin.refObjectId, "data.json");
+          if (existsSync(dataPath)) {
+            try { data = JSON.parse(readFileSync(dataPath, "utf8")); } catch { /* malformed */ }
           }
         }
         pointsAtTarget = data?.target === target;

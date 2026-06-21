@@ -58,7 +58,7 @@ Pool **对 Builtin 和 Stone Object 都适用**：supervisor / user 的跨 sessi
 
 `flows/<sessionId>/<objectId>/`：
 - `threads/<tid>/thread.json`：thread 状态序列化
-- `data.json`：session 级数据载体（程序方法层 `getData` / `setData`）
+- `data.json`：该 object 自身 data 的默认落盘（裸 Data；class 可自定义 `persistable.save` 改目录/格式）
 - `knowledge/relations/<peer>.md`：session 临时 relation
 
 ## 关键原则

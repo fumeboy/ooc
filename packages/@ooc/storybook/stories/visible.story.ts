@@ -12,9 +12,9 @@ import { stoneDir as realStoneDir, createFlowSession, createFlowObject } from "@
 import { mkServer, postJson, getJson, writeStoneFile, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
-/** 读 flows/<sid>/objects/<oid>/state.json（系统默认 object data 落盘；不存在 → undefined）。 */
-function readStateJson(baseDir: string, sid: string, oid: string): any | undefined {
-  const p = join(baseDir, "flows", sid, "objects", oid, "state.json");
+/** 读 flows/<sid>/objects/<oid>/data.json（系统默认 object 裸 data 落盘；不存在 → undefined）。 */
+function readDataJson(baseDir: string, sid: string, oid: string): any | undefined {
+  const p = join(baseDir, "flows", sid, "objects", oid, "data.json");
   if (!existsSync(p)) return undefined;
   try { return JSON.parse(readFileSync(p, "utf8")); } catch { return undefined; }
 }
@@ -117,9 +117,9 @@ export async function runControlPlane(): Promise<StoryResult> {
     }
 
     // TC-VIS-06（demonstrator）: flow scope visible/server 端到端 —— builtin todo 的 visibleServer
-    // 方法经 HTTP call_method 编辑 object data + reportDataEdit 系统默认落 state.json。
+    // 方法经 HTTP call_method 编辑 object data + reportDataEdit 系统默认落 data.json（裸 data）。
     // 验证机制全链路：.flow.json:class 解析 builtin todo → resolveVisibleServer 沿链找方法 →
-    // exec 改入参 data → reportDataEdit → 读回 state.json 反映改动。
+    // exec 改入参 data → reportDataEdit → 读回 data.json 反映改动。
     {
       const sid = "vis-demo-todo";
       const oid = "todo_1";
@@ -127,23 +127,23 @@ export async function runControlPlane(): Promise<StoryResult> {
       // 建标准 flow object：.flow.json:class = builtin todo（继承链上有 visibleServer）。
       await createFlowObject({ baseDir, sessionId: sid, objectId: oid }, { class: "_builtin/agent/todo" });
 
-      // set_content：写正文 → reportDataEdit 落 state.json。
+      // set_content：写正文 → reportDataEdit 落 data.json（裸 data）。
       const r1 = await postJson(app, `/api/flows/${sid}/${oid}/call_method`,
         { method: "set_content", args: { content: "买牛奶" } });
-      const st1 = readStateJson(baseDir, sid, oid);
+      const st1 = readDataJson(baseDir, sid, oid);
       const setOk = r1.status === 200 && r1.json?.data?.content === "买牛奶"
-        && st1?.data?.content === "买牛奶";
+        && st1?.content === "买牛奶";
 
       // toggle_done：基于刚落盘的 data 翻转 status（验证 load→exec→save 闭环跨调用）。
       const r2 = await postJson(app, `/api/flows/${sid}/${oid}/call_method`,
         { method: "toggle_done", args: {} });
-      const st2 = readStateJson(baseDir, sid, oid);
+      const st2 = readDataJson(baseDir, sid, oid);
       const toggleOk = r2.status === 200 && r2.json?.data?.status === "done"
-        && st2?.data?.status === "done" && st2?.data?.content === "买牛奶";
+        && st2?.status === "done" && st2?.content === "买牛奶";
 
-      rec.ok("TC-VIS-06", "flow scope visible/server 端到端：todo set_content/toggle_done 改 data + 落 state.json",
+      rec.ok("TC-VIS-06", "flow scope visible/server 端到端：todo set_content/toggle_done 改 data + 落 data.json",
         setOk && toggleOk,
-        `set: call=${JSON.stringify(r1.json?.data)} disk=${JSON.stringify(st1?.data)}; toggle: call=${JSON.stringify(r2.json?.data)} disk=${JSON.stringify(st2?.data)}`);
+        `set: call=${JSON.stringify(r1.json?.data)} disk=${JSON.stringify(st1)}; toggle: call=${JSON.stringify(r2.json?.data)} disk=${JSON.stringify(st2)}`);
     }
   } finally {
     await srv.cleanup();
