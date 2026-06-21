@@ -3,7 +3,8 @@ import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { ensureStoneRepo, stoneDir, readSelf } from "@ooc/core/persistable";
+import { ensureStoneRepo, stoneDir } from "@ooc/core/persistable";
+import { readSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { instantiateBuiltinClassObjects } from "./instantiate-classes";
 
 describe("instantiateBuiltinClassObjects", () => {

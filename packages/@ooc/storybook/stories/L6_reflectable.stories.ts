@@ -18,7 +18,8 @@ export const L6_STORIES: Story[] = [
     design: "reflectable：业务 session 是试验层（worktree），main 是 canonical。stone-worktree.ts:ensureSessionWorktree",
     run: async ({ app, baseDir }) => {
       const id = "ego";
-      await postJson(app, "/api/stones", { objectId: id, self: "# ego v1" });
+      // self.md 是 agent 实例身份文件——建 agent（class=_builtin/agent）才落 self.md（worktree checkout 依赖）。
+      await postJson(app, "/api/stones", { objectId: id, class: "_builtin/agent", self: "# ego v1" });
       const { ensureSessionWorktree } = await import("@ooc/core/persistable");
       const sid = "sb-r-wt";
       await ensureSessionWorktree(baseDir, sid);

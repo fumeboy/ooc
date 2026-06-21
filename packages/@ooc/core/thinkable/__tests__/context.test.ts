@@ -20,13 +20,15 @@ async function buildContext(
     .filter((item): item is Extract<typeof item, { type: "message" }> => item.type === "message")
     .map((item) => ({ role: item.role, content: item.content }));
 }
-import { createStoneObject, createPoolObject, poolKnowledgeDir, writeSelf, ensureStoneRepo, ensureSessionWorktree } from "../../persistable";
+import { createStoneObject, createPoolObject, poolKnowledgeDir, ensureStoneRepo, ensureSessionWorktree } from "../../persistable";
+import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import {
   ROOT_WINDOW_ID,
   threadWindowIdOf,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**
@@ -624,8 +626,11 @@ describe("buildInputItems self.md → self 窗 self 视角（不再灌 instructi
 
   it("self.md 作为 self 窗 self 视角内容渲进 context XML；不再单独灌 instructions", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
-    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
+    const stoneRef = await createStoneObject({ baseDir: tempRoot, objectId: "alice" }, { class: "_builtin/agent" });
     await writeSelf(stoneRef, "I am Alice, a careful reviewer.");
+    // self 门面窗经 agent readable 渲 data.self（persistable.load hydrate self.md）——alice 须经
+    // 单跳继承解析到 _builtin/agent 的 readable/persistable，故注册其 parentClass。
+    builtinRegistry.register("alice", {}, { parentClass: "_builtin/agent" });
 
     const thread = makeThread({
       id: "t_alice",
@@ -653,8 +658,10 @@ describe("buildInputItems self.md → self 窗 self 视角（不再灌 instructi
   it("worktree：业务 session 的 self 窗渲 worktree self.md；其它 session + super 渲 main", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-ctx-self-"));
     await ensureStoneRepo({ baseDir: tempRoot });
-    await createStoneObject({ baseDir: tempRoot, objectId: "alice", _stonesBranch: "main" });
+    await createStoneObject({ baseDir: tempRoot, objectId: "alice", _stonesBranch: "main" }, { class: "_builtin/agent" });
     await writeSelf({ baseDir: tempRoot, objectId: "alice", _stonesBranch: "main" }, "canonical Alice");
+    // self 门面窗经 agent readable + persistable.load 渲 self.md——alice 须解析到 _builtin/agent。
+    builtinRegistry.register("alice", {}, { parentClass: "_builtin/agent" });
     // identity 入 main（worktree 从 main HEAD checkout 须先 commit）
     const mainDir = join(tempRoot, "stones", "main");
     Bun.spawnSync(["git", "add", "-A"], { cwd: mainDir });

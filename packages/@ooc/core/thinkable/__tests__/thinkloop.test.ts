@@ -248,17 +248,18 @@ describe("think", () => {
       id: "thread-5",
       status: "running",
       events: [],
-      // agency 方法（todo/...）已从 root 迁到 `_builtin/agent` 类；exec 须经 agent 面窗调用。
+      // end/todo 已从 agent agency 迁回 thread 作用域（注册 `_builtin/agent/thread`）；exec 须经
+      // thread 窗调用（resolveObjectMethod 在 thread class 上才命中 todo）。
       contextWindows: [
         {
           id: "agent",
-          class: "_builtin/agent",
+          class: "_builtin/agent/thread",
           parentWindowId: "root",
-          title: "agent",
+          title: "thread",
           status: "open",
           createdAt: Date.now(),
           isMemberWindow: true,
-          // class="_builtin/agent" 是继承类、非 ContextWindow union 的 discriminant 字面量 → 经 unknown 转。
+          // class 是继承/注册 class id、非 ContextWindow union 的 discriminant 字面量 → 经 unknown 转。
         } as unknown as ContextWindow,
       ]
     };

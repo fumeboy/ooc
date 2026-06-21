@@ -6,6 +6,8 @@ export const createStoneBody = t.Object({
   name: t.Optional(t.String()),
   self: t.Optional(t.String()),
   readable: t.Optional(t.String()),
+  // ooc.class —— object 的继承父类（写入 package.json ooc.class）。仅 _builtin/agent 实例有 self.md。
+  class: t.Optional(t.String()),
 });
 export const textBody = t.Object({ text: t.String() });
 export const codeBody = t.Object({ code: t.String() });

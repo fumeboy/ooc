@@ -26,8 +26,8 @@ import { runScheduler } from "@ooc/core/thinkable/scheduler";
 import {
   createFlowObject,
   createStoneObject,
-  writeSelf,
 } from "@ooc/core/persistable";
+import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import {
   bootstrapInboxFromPrompt,
   hasLlmEnv,

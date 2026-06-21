@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureStoneRepo, createStoneObject, writeSelf } from "@ooc/core/persistable";
+import { ensureStoneRepo, createStoneObject } from "@ooc/core/persistable";
+import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import {
   resolveStoneIdentityDir,
   sessionUsesWorktree,

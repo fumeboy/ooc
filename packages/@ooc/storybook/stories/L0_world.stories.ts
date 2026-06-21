@@ -31,7 +31,8 @@ export const L0_STORIES: Story[] = [
     design: "persistable：stone identity 落 stones/main/objects/<id>/。modules/stones/api.create-stone.ts",
     run: async ({ app, baseDir }) => {
       const id = "keeper";
-      const r = await postJson(app, "/api/stones", { objectId: id, self: "# Keeper" });
+      // 仅 agent（class=_builtin/agent）有 self.md；建 agent 才能断言 self.md 落盘。
+      const r = await postJson(app, "/api/stones", { objectId: id, class: "_builtin/agent", self: "# Keeper" });
       check(r.status === 200, `createStone status=${r.status}`);
       check(existsSync(mainObjects(baseDir, id, "package.json")), "package.json 未落盘");
       check(existsSync(mainObjects(baseDir, id, "self.md")), "self.md 未落盘");
@@ -45,7 +46,8 @@ export const L0_STORIES: Story[] = [
     design: "persistable：stone identity 进 git tracked、可回溯。versioning.ts",
     run: async ({ app, baseDir }) => {
       const id = "keeper";
-      await postJson(app, "/api/stones", { objectId: id, self: "# Keeper" });
+      // self.md 仅 agent 落盘，故建 agent 才有 self.md commit 可审计。
+      await postJson(app, "/api/stones", { objectId: id, class: "_builtin/agent", self: "# Keeper" });
       const commits = stoneCommits(baseDir, join("objects", id, "self.md"));
       check(commits.length >= 1, `self.md commit 数=${commits.length}`);
     },

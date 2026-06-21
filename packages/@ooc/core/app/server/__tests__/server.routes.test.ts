@@ -262,6 +262,8 @@ describe("app server routes", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           name: "writer",
+          // self.md 仅 agent（class=_builtin/agent）落盘；本 case 断言 self.md 内容故建 agent。
+          class: "_builtin/agent",
           self: "# Writer\nI write notes.",
           readable: "# Writer README",
         }),

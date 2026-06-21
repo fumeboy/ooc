@@ -1,12 +1,11 @@
 /**
- * resolveProjection 默认投影（视角分流）测试。
+ * resolveProjection 投影测试。
  *
- * 对象没自定义 readable module 时，框架默认投影**视角分流**：
- * - self 视角（看自己，thread.self objectId === inst.id）→ 渲 self.md 内容
- * - peer 视角（别人看它）→ 渲 readable.md 内容
- * - 两者皆空 → 空 context window `<window class="<inst.class>" id="..."/>`（无 placeholder 文案）
- *
- * self.md / readable.md 是所有 ooc object 的通用身份文件（非 agent 专属）。
+ * - self 门面窗（agent 实例，`win.isSelfWindow`，inst.class=_builtin/agent）→ 经 agent
+ *   persistable.load 把 self.md hydrate 进 `data.self`，再由 agent readable 渲出身份正文。
+ *   renderer 不再直接 readSelf（对象模型核心 9：self.md 只属 agent 实例，读取经 registry 派发）。
+ * - peer 视角（无自定义 readable module 的普通对象，别人看它）→ 默认投影读盘 readable.md。
+ * - 身份皆空 → 空 context window `<window class="<inst.class>" id="..."/>`（无 placeholder 文案）。
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -31,13 +30,14 @@ describe("resolveProjection 默认投影视角分流", () => {
     await rm(baseDir, { recursive: true, force: true });
   });
 
-  const instOf = (id: string): OocObjectInstance => ({
+  const instOf = (id: string, overrides: Partial<OocObjectInstance> = {}): OocObjectInstance => ({
     id,
     class: id,
     title: id,
     status: "open",
     createdAt: 0,
     data: {},
+    ...overrides,
   });
 
   /** thread 的 self objectId = viewer（决定 self/peer 视角）。 */
@@ -48,15 +48,18 @@ describe("resolveProjection 默认投影视角分流", () => {
       skipCreatorWindow: true,
     });
 
-  it("self 视角（看自己）→ 渲 self.md 内容", async () => {
+  it("self 门面窗（agent 实例）→ persistable.load hydrate self.md → agent readable 渲身份", async () => {
     await createStoneObject({ baseDir, objectId: "obj_a" });
     await writeFile(join(stoneDir({ baseDir, objectId: "obj_a" }), "self.md"), "我是 obj_a 的 self 身份", "utf8");
 
-    const proj = await resolveProjection(instOf("obj_a"), threadViewedBy("obj_a"), createObjectRegistry(), {
+    // self 门面窗：inst.class=_builtin/agent（resolveReadable/resolvePersistable 命中 agent 模块），
+    // win.isSelfWindow + data 空 → resolveProjection 经 persistable.load 读盘 hydrate data.self，
+    // 再由 agent readable 渲出身份正文。
+    const selfWin = instOf("obj_a", { class: "_builtin/agent", win: { isSelfWindow: true } as never });
+    const proj = await resolveProjection(selfWin, threadViewedBy("obj_a"), createObjectRegistry(), {
       baseDir,
       sessionId: "s1",
     });
-    expect(proj.class).toBe("obj_a");
     expect(JSON.stringify(proj.content)).toContain("我是 obj_a 的 self 身份");
   });
 

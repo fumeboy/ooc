@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { readSelf } from "./stone-self";
+import { readSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { readReadable } from "./stone-readable";
 
 describe("builtin class five-piece read goes to framework package (via _builtin/ addressing)", () => {

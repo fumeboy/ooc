@@ -14,7 +14,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile, stat } from "node:fs/promises"
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { ensureStoneRepo, __resetSerialQueueForTests, readSelf } from "@ooc/core/persistable";
+import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
+import { readSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { executeCreateObject } from "@ooc/builtins/runtime/executable/index.js";
 import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/agent/thread/executable/method.create-pr-and-invite-reviewers.js";
 import { executeNewFeatBranch } from "@ooc/builtins/agent/thread/executable/method.new-feat-branch.js";

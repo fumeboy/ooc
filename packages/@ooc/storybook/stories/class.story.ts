@@ -93,17 +93,25 @@ export async function runControlPlane(): Promise<StoryResult> {
     }
 
     // TC-COMP-02: supervisor 经 ooc.class 继承 _builtin/agent（Object/Agent split：supervisor=object 实例，
-    // agent=承载 agency 的基类）。agency（talk/plan/todo/end）注册在 _builtin/agent class 上、经单跳继承可达。
+    // agent=承载 agency 的基类）。agency 作用域分层：talk/plan 是 agent 基类能力（注册 _builtin/agent，
+    // 经单跳继承可达）；end/todo 是 thread 作用域操作（注册 _builtin/agent/thread，非 agent 基类）。
     {
       const supDir = resolveBuiltinReadDir({ objectId: "_builtin/supervisor" });
       let supClass: unknown;
       try { supClass = JSON.parse(readFileSync(join(supDir!, "package.json"), "utf8"))?.ooc?.class; } catch { /* */ }
-      const agentAgency = ["talk", "plan", "todo", "end"].every(
+      const agentAgency = ["talk", "plan"].every(
         (m) => !!builtinRegistry.resolveObjectMethod("_builtin/agent", m),
       );
-      rec.ok("TC-COMP-02", "supervisor 经 ooc.class 继承 _builtin/agent，agency(talk/plan/todo/end) 在 agent 基类",
-        supClass === "_builtin/agent" && agentAgency,
-        `supClass=${JSON.stringify(supClass)} agentAgency=${agentAgency}`);
+      // end/todo 已迁 thread 作用域：不在 agent 基类、在 thread class 上。
+      const endTodoOnThread = ["end", "todo"].every(
+        (m) => !!builtinRegistry.resolveObjectMethod("_builtin/agent/thread", m),
+      );
+      const endTodoNotOnAgent = ["end", "todo"].every(
+        (m) => !builtinRegistry.resolveObjectMethod("_builtin/agent", m),
+      );
+      rec.ok("TC-COMP-02", "supervisor 继承 _builtin/agent；talk/plan 在 agent 基类，end/todo 迁 thread 作用域",
+        supClass === "_builtin/agent" && agentAgency && endTodoOnThread && endTodoNotOnAgent,
+        `supClass=${JSON.stringify(supClass)} agency=${agentAgency} endTodoOnThread=${endTodoOnThread} endTodoNotOnAgent=${endTodoNotOnAgent}`);
     }
 
     // TC-COMP-03: 组合注入 —— agent thread 默认补齐 6 个全局单例 member 窗（非持久化）。

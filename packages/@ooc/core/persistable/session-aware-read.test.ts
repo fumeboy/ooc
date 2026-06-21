@@ -5,12 +5,11 @@ import { join } from "node:path";
 import {
   ensureStoneRepo,
   createStoneObject,
-  writeSelf,
-  readSelf,
   createObjectInSession,
   resolveStoneIdentityRef,
   stoneDir,
 } from "@ooc/core/persistable";
+import { writeSelf, readSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { Class as ThreadClass } from "@ooc/builtins/agent/thread";
 import type { ThreadContext } from "@ooc/core/thinkable/context";
 

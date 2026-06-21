@@ -33,8 +33,8 @@ import {
   createFlowObject,
   createFlowSession,
   createStoneObject,
-  writeSelf,
 } from "@ooc/core/persistable";
+import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import { initContextWindows } from "@ooc/core/thinkable/context/init.js";

@@ -7,7 +7,8 @@
  */
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { stoneDir as realStoneDir, readSelf } from "@ooc/core/persistable";
+import { stoneDir as realStoneDir } from "@ooc/core/persistable";
+import { readSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { mkServer, postJson, StoryRecorder } from "../_harness/control-plane";
 import { rollupTier, type StoryResult } from "../_harness/types";
 
@@ -17,7 +18,8 @@ export async function runControlPlane(): Promise<StoryResult> {
   const { app, baseDir } = srv;
   try {
     const id = "thinker";
-    await postJson(app, "/api/stones", { objectId: id, self: "# Thinker\n我是一个会思考的 Object。" });
+    // self.md 是 agent 实例身份文件——建 agent（class=_builtin/agent）才落 self.md（TC-THINK-02 依赖）。
+    await postJson(app, "/api/stones", { objectId: id, class: "_builtin/agent", self: "# Thinker\n我是一个会思考的 Object。" });
 
     // TC-THINK-01: seed knowledge（带 activates_on）经 loadKnowledgeIndex 被加载（知识激活机制）
     {

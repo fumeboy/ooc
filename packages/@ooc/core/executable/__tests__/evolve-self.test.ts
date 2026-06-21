@@ -20,8 +20,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   ensureStoneRepo,
   __resetSerialQueueForTests,
-  readSelf,
 } from "@ooc/core/persistable";
+import { readSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { readPrIssue } from "@ooc/builtins/agent/pr/persistable/pr-issue";
 import { resolvePrIssue } from "@ooc/builtins/agent/pr/resolve";
 import { executeCreatePrAndInviteReviewers } from "@ooc/builtins/agent/thread/executable/method.create-pr-and-invite-reviewers.js";

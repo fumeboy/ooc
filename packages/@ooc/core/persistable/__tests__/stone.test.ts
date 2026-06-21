@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createStoneObject, stoneDir } from "../stone-object";
-import { readSelf, selfFile, writeSelf } from "../stone-self";
+import { readSelf, selfFile, writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { readReadable, readableFile, writeReadable } from "../stone-readable";
 import {
   executableIndexFile,
@@ -21,19 +21,20 @@ afterEach(async () => {
 });
 
 describe("createStoneObject", () => {
-  test("creates minimal visible skeleton: package.json + self.md + readable.md", async () => {
+  test("creates minimal skeleton: package.json only（self.md/readable.md 不预创）", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
     const dir = stoneDir(ref);
 
-    // 预创的初始文件：package.json / self.md / readable.md
+    // 唯一预创文件：package.json。
     const pkg = JSON.parse(await readFile(join(dir, "package.json"), "utf8"));
     expect(pkg.ooc.objectId).toBe("alice");
 
-    // 空文件占位：ls 可见，但 readSelf/readReadable 返回 ""（loadSelfInstructions 视 empty 等价 undefined）
-    expect(await readSelf(ref)).toBe("");
-    expect(await readReadable(ref)).toBe("");
+    // self.md / readable.md 不再预创空文件——self.md 仅 agent 实例由 agent persistable 写入
+    // （对象模型核心 9），readable.md 按需 lazy 写入；未写时 readSelf/readReadable 返回 undefined。
+    expect(await readSelf(ref)).toBeUndefined();
+    expect(await readReadable(ref)).toBeUndefined();
 
     // 不预创的子目录：executable / visible / knowledge / files / database
     // 以及 legacy server / client。
@@ -49,8 +50,8 @@ describe("stone file IO", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "alice" });
 
-    // createStoneObject 预创空文件占位；写入覆盖
-    expect(await readSelf(ref)).toBe("");
+    // createStoneObject 不预创 self.md；未写时 readSelf 返回 undefined，写入后可读回。
+    expect(await readSelf(ref)).toBeUndefined();
     await writeSelf(ref, "# Alice\n\nI am Alice.");
     expect(await readSelf(ref)).toBe("# Alice\n\nI am Alice.");
     expect(selfFile(ref)).toBe(join(stoneDir(ref), "self.md"));
@@ -60,8 +61,8 @@ describe("stone file IO", () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-stone-"));
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "bob" });
 
-    // createStoneObject 预创空 readable.md
-    expect(await readReadable(ref)).toBe("");
+    // createStoneObject 不预创 readable.md；未写时 readReadable 返回 undefined，写入后可读回。
+    expect(await readReadable(ref)).toBeUndefined();
     await writeReadable(ref, "Hello visitors.");
     expect(await readReadable(ref)).toBe("Hello visitors.");
     expect(readableFile(ref)).toBe(join(stoneDir(ref), "readable.md"));

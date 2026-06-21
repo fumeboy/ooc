@@ -7,7 +7,8 @@ import { runInterpreterExec } from "@ooc/builtins/interpreter/interpreter_proces
 import { Class as TerminalProcessClass } from "@ooc/builtins/terminal/terminal_process";
 import { Class as InterpreterProcessClass } from "@ooc/builtins/interpreter/interpreter_process";
 import type { Data as TerminalProcessData } from "@ooc/builtins/terminal/terminal_process";
-import { createStoneObject, ensureStoneRepo, writeSelf } from "../../persistable";
+import { createStoneObject, ensureStoneRepo } from "../../persistable";
+import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 import { makeThread } from "../../__tests__/make-thread";
 

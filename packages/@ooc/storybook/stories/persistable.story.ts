@@ -20,7 +20,8 @@ export async function runControlPlane(): Promise<StoryResult> {
 
     // TC-PERS-01: createStone 落 stones/main/objects 且进 git（持久 + 版本化）
     {
-      const c = await postJson(app, "/api/stones", { objectId: id, self: "# Keeper v1" });
+      // self.md 仅 agent（class=_builtin/agent）落盘，故建 agent 才有 self.md commit 可审计。
+      const c = await postJson(app, "/api/stones", { objectId: id, class: "_builtin/agent", self: "# Keeper v1" });
       const onDisk = existsSync(join(baseDir, "stones", "main", "objects", id, "package.json"));
       const commits = stoneCommits(baseDir, rel(id, "self.md"));
       rec.ok("TC-PERS-01", "createStone 落 stones/main/objects 且进 git",

@@ -190,7 +190,8 @@ describe("PUT 覆盖性写无护栏", () => {
       new Request("http://localhost/api/stones", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ objectId: "_test_executable_target_2", self: "existing" }),
+        // self.md 仅 agent（class=_builtin/agent）落盘——须建 agent 才有已存在 self.md，覆盖护栏才触发。
+        body: JSON.stringify({ objectId: "_test_executable_target_2", class: "_builtin/agent", self: "existing" }),
       })
     );
     // 已存在 self.md,再 PUT 没带 header — 应被拒

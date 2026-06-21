@@ -37,7 +37,8 @@ export async function runControlPlane(): Promise<StoryResult> {
 
     // TC-REFL-01: 经 object method 读自己的 self.md（自观察）。
     // 新模型：object method 三参 `(ctx, self, args)`，self.dir = stone 身份目录（callMethod 注入）。
-    await postJson(app, "/api/stones", { objectId: id, self: selfContent });
+    // self.md 是 agent 实例身份文件——建 agent（class=_builtin/agent）才落 self.md（TC-REFL-01 自观察依赖）。
+    await postJson(app, "/api/stones", { objectId: id, class: "_builtin/agent", self: selfContent });
     writeStoneFile(baseDir, id, "index.ts", classSource(
       `{ name: "readSelf", description: "readSelf", for_ui_access: true, exec: (ctx, self) => ({ data: require("node:fs").readFileSync(require("node:path").join(self.dir, "self.md"), "utf8") }) }`,
     ));
