@@ -154,9 +154,8 @@ export function createStonesService({
    *
    * 校验由 route 层从 `X-Overwrite-Confirm: true` header 派生 boolean 传入。
    *
-   * 空文件等价于"未写过"：createStoneObject 现在预创 self.md / readable.md 空文件
-   * 作为 visibility-first 占位；这里把 size===0 视为等价 ENOENT 放行，对应 protection 的初衷
-   * （避免覆盖用户已经写过的内容，空占位不算内容）。
+   * 空文件等价于"未写过"：size===0 视为等价 ENOENT 放行，对应 protection 的初衷
+   * （避免覆盖用户已经写过的内容；空文件不算内容）。
    */
   async function ensureOverwriteAllowed(
     targetFile: string,

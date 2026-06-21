@@ -7,7 +7,7 @@
  * → 被 classifyPackagesPath 判 workspace-level 资源拒写。于是「建新对象」这条原语断了。
  *
  * 本函数补回这条原语，但**落 session worktree（非旧的立即 commit main）**：
- * 复用 createStoneObject 建骨架（package.json + 空 self + 空 readable）→ writeSelf /
+ * 复用 createStoneObject 建骨架（package.json）→ writeSelf /
  * writeReadable 填内容 + 写 knowledge/<file>.md。**不 commit**。
  *
  * 地基不变量：session worktree 是纯运行时派生物，**永不合入 main**——
@@ -156,7 +156,7 @@ export async function createObjectInSession(
       } as const;
     }
 
-    // 建骨架（package.json + 空 self + 空 readable）→ 填内容。复用 createStoneObject，不重写骨架逻辑。
+    // 建骨架（package.json）→ 填内容。复用 createStoneObject，不重写骨架逻辑。
     await createStoneObject(wtRef);
     await writeSelf(wtRef, selfMd);
     await writeReadable(wtRef, readableMd);

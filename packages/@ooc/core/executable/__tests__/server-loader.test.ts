@@ -36,7 +36,7 @@ async function writeStoneIndex(ref: { baseDir: string; objectId: string }, code:
 describe("loadStoneClass", () => {
   test("returns undefined when index.ts is missing", async () => {
     tempRoot = await mkdtemp(join(tmpdir(), "ooc-srv-"));
-    // createStoneObject 写 package.json / self.md / readable.md，但不写根 index.ts。
+    // createStoneObject 写 package.json，但不写根 index.ts。
     const ref = await createStoneObject({ baseDir: tempRoot, objectId: "x" });
     const loaded = await loadStoneClass(ref);
     expect(loaded).toBeUndefined();
