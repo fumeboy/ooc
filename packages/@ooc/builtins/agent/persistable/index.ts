@@ -12,11 +12,8 @@ import type {
   PersistableContext,
   PersistableModule,
 } from "@ooc/core/persistable/contract.js";
-import {
-  readSelf,
-  writeSelf,
-  resolveStoneIdentityRef,
-} from "@ooc/core/persistable/index.js";
+import { readSelf, writeSelf } from "./self-md.js";
+import { resolveStoneIdentityRef } from "@ooc/core/persistable/index.js";
 import type { Data } from "../types.js";
 
 const persistable: PersistableModule<Data> = {

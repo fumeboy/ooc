@@ -5,12 +5,11 @@ import {
   poolKnowledgeDir,
   readExecutableSource,
   readReadable,
-  readSelf,
   stoneDir,
   writeExecutableSource,
   writeReadable,
-  writeSelf,
 } from "@ooc/core/persistable";
+import { readSelf, writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
 import type { ExecutableContext } from "@ooc/core/executable/contract";

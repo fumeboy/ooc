@@ -1,7 +1,14 @@
+/**
+ * self.md 读写实现——已从 core/persistable/stone-self.ts 下沉至此。
+ *
+ * self.md 是 agent 实例独有的身份文件（对象模型核心 9），读写逻辑
+ * 属 builtin 私有实现，不应由 core 拥有。模式同 thread-json 下沉至
+ * thread builtin（core/runtime/window-persistence.ts → builtin writeThread）。
+ */
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { stoneDir, type StoneObjectRef } from "./common";
-import { resolveBuiltinReadDir } from "./builtin-dir";
+import { stoneDir, type StoneObjectRef } from "@ooc/core/persistable";
+import { resolveBuiltinReadDir } from "@ooc/core/persistable";
 
 /** stone 的身份说明文件 self.md 的 canonical（写）绝对路径。 */
 export function selfFile(ref: StoneObjectRef): string {
