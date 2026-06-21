@@ -37,7 +37,6 @@ import {
   type ObjectRegistry,
 } from "../../../runtime/object-registry.js";
 import type { ReadableContext, ReadableProjection } from "../../../readable/contract.js";
-import { DEFAULT_WINDOW_METHODS } from "../../../readable/default-window-methods.js";
 import { extractBasicDescription, conciseDescription } from "@ooc/core/thinkable/context/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
@@ -147,12 +146,8 @@ export function computeVisibleMethodSet(
     merged.set(name, m);
   }
   // window method：取自该投影窗声明（self 窗若也有 decl 则一并合入，如 viewport 类展示方法）。
+  // compress v2：无通用默认窗方法表——菜单只含 class 自声明的 window method（compress/resize 协议各 class 自实现）。
   for (const wm of decl?.window_methods ?? []) {
-    if (merged.has(wm.name)) continue;
-    merged.set(wm.name, wm);
-  }
-  // 默认 window method（compress/expand 等通用折叠能力）：合入菜单，class/decl 同名已占则不覆盖。
-  for (const wm of DEFAULT_WINDOW_METHODS) {
     if (merged.has(wm.name)) continue;
     merged.set(wm.name, wm);
   }

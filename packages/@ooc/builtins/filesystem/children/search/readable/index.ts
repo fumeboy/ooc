@@ -21,6 +21,7 @@ import {
 } from "@ooc/core/_shared/utils/viewport.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { Data } from "../types.js";
+import { displayResize } from "@ooc/core/readable/display-resize.js";
 
 /** search window 的默认 results viewport：末 50 条 match。 */
 export const DEFAULT_RESULTS_VIEWPORT: TranscriptViewport = Object.freeze({
@@ -162,7 +163,7 @@ const readable: ReadableModule<Data, SearchWin> = {
     {
       class: "search",
       object_methods: ["open_match", "close"],
-      window_methods: [setResultsWindowMethod],
+      window_methods: [setResultsWindowMethod, displayResize],
     },
   ],
 };

@@ -25,6 +25,7 @@ import {
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { asTuple } from "@ooc/builtins/_shared/executable/utils.js";
 import type { Data } from "../types.js";
+import { displayResize } from "@ooc/core/readable/display-resize.js";
 
 const MAX_FILE_WINDOW_BYTES = 32768;
 
@@ -136,7 +137,7 @@ const readable: ReadableModule<Data, FileWin> = {
     {
       class: "file",
       object_methods: ["reload", "edit", "close"],
-      window_methods: [setViewportMethod, setRangeMethod],
+      window_methods: [setViewportMethod, setRangeMethod, displayResize],
     },
   ],
 };

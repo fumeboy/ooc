@@ -27,6 +27,7 @@ import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
 import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
 import type { Data } from "../types.js";
+import { displayResize } from "@ooc/core/readable/display-resize.js";
 
 const MAX_KNOWLEDGE_BYTES = 8192;
 
@@ -122,7 +123,7 @@ const readable: ReadableModule<Data, KnowledgeWin> = {
     {
       class: "knowledge",
       object_methods: ["reload", "close"],
-      window_methods: [setViewportMethod],
+      window_methods: [setViewportMethod, displayResize],
     },
   ],
 };

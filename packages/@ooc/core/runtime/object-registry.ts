@@ -33,7 +33,6 @@ import type {
   WindowClassDecl,
   ReadableModule,
 } from "../readable/contract.js";
-import { resolveDefaultWindowMethod } from "../readable/default-window-methods.js";
 import type { PersistableModule } from "../persistable/contract.js";
 
 export type { RegisteredClass, MethodVisibilityContext };
@@ -194,13 +193,15 @@ export class ObjectRegistry {
    * class 同名声明优先可 override）。
    */
   resolveWindowMethod(classId: string, name: string): WindowMethod | undefined {
+    // compress v2：无通用默认窗方法表——window method 只来自 class 自己 readable.window[] 声明
+    // （compress/resize 是协议，class 自实现：thread 窗自声明 compress/resize、内容窗声明 displayResize）。
     for (const cid of this.selfThenChain(classId)) {
       for (const decl of this.store.get(cid)?.readable?.window ?? []) {
         const found = decl.window_methods.find((wm) => wm.name === name);
         if (found) return found;
       }
     }
-    return resolveDefaultWindowMethod(name);
+    return undefined;
   }
 
   /** 解析 readable 模块（沿继承链首个声明 readable 的 class）。 */

@@ -1,4 +1,5 @@
 .worktrees/
+.worktree/
 .env
 node_modules/
 .trae

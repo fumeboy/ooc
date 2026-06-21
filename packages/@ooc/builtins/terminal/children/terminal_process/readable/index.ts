@@ -18,6 +18,7 @@ import {
   type ProcessWin,
 } from "@ooc/builtins/_shared/executable/process-readable.js";
 import type { Data } from "../types.js";
+import { displayResize } from "@ooc/core/readable/display-resize.js";
 
 const setHistoryWindowMethod = makeSetHistoryWindowMethod("terminal_process");
 
@@ -30,7 +31,7 @@ const readable: ReadableModule<Data, ProcessWin> = {
     {
       class: "terminal_process",
       object_methods: ["exec", "close"],
-      window_methods: [setHistoryWindowMethod],
+      window_methods: [setHistoryWindowMethod, displayResize],
     },
   ],
 };
