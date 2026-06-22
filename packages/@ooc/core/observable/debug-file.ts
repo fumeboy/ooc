@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { threadDir, toJson, type ThreadPersistenceRef } from "../persistable/common";
 import type { LlmGenerateResult, LlmInputItem, LlmMessage } from "../thinkable/llm/types";
-import type { ProcessEvent, ThreadContext, ThreadMessage } from "../thinkable/context";
+import type { ProcessEvent, ThreadContext, ThreadMessage } from "../_shared/types/thread.js";
 import type { OocObjectRef } from "../runtime/ooc-class.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";

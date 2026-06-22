@@ -14,7 +14,7 @@
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
-import type { ThreadContext } from "../../thinkable/context.js";
+import type { ThreadContext } from "../../_shared/types/thread.js";
 import { builtinRegistry, type ObjectRegistry } from "../../runtime/object-registry.js";
 import { WindowManager } from "../../runtime/window-manager.js";
 import { referencedObjectId, dispatchUnactiveIfZero } from "../../runtime/object-lifecycle.js";

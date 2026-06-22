@@ -13,7 +13,7 @@ import { resolveStoneIdentityRef } from "@ooc/core/persistable";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import { dispatchVisibleServerMethod } from "../_shared/visible-server-dispatch";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import type { TalkData } from "@ooc/builtins/agent/thread/types.js";

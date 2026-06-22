@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import {
   applyResumeTransition,
   canResumeThread,

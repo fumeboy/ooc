@@ -1,4 +1,4 @@
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 /**
  * thread 状态简化
