@@ -103,7 +103,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
     // transcriptViewport（set_transcript_window 末 N/区间）+ inbox/outbox 持久可拉回，不 fold。
     {
       class: "talk",
-      object_methods: ["say"],
+      object_methods: ["reply"],
       window_methods: [setTranscriptWindowMethod],
     },
     // self-view super：反思自视（恒在通道，同样不 surface close）；会话 method + 2 个 reflectable 沉淀 method。
