@@ -19,7 +19,7 @@ export const L2_STORIES: Story[] = [
       await postJson(app, "/api/stones", { objectId: id, self: "# Doc" });
       const r = await postJson(app, `/api/pools/${id}/knowledge/files`, { path: "guide/intro.md", content: "# Intro\nhello" });
       check(r.status === 200, `创建 knowledge file status=${r.status}`);
-      const { loadKnowledgeIndex } = await import("@ooc/core/thinkable/knowledge/loader");
+      const { loadKnowledgeIndex } = await import("@ooc/builtins/knowledge_base/loader");
       const idx = await loadKnowledgeIndex({ stone: { baseDir, objectId: id }, pool: { baseDir, objectId: id } });
       const paths = [...idx.byPath.keys()];
       check(paths.some((p) => p.includes("guide/intro")), `索引未含 guide/intro：${JSON.stringify(paths)}`);
@@ -36,7 +36,7 @@ export const L2_STORIES: Story[] = [
     run: async ({ baseDir }) => {
       const { mkdir, writeFile } = await import("node:fs/promises");
       const { join } = await import("node:path");
-      const { loadKnowledgeIndex } = await import("@ooc/core/thinkable/knowledge/loader");
+      const { loadKnowledgeIndex } = await import("@ooc/builtins/knowledge_base/loader");
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const { stoneKnowledgeDir } = await import("@ooc/core/persistable");
 

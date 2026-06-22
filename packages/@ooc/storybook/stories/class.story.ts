@@ -57,7 +57,7 @@ export async function runControlPlane(): Promise<StoryResult> {
     // 一个 instance（parentClass 单跳指向它），验 instance 加载时纳入 class 的 seed。
     {
       const { mkdir, writeFile } = await import("node:fs/promises");
-      const { loadKnowledgeIndex } = await import("@ooc/core/thinkable/knowledge/loader");
+      const { loadKnowledgeIndex } = await import("@ooc/builtins/knowledge_base/loader");
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const { stoneKnowledgeDir } = await import("@ooc/core/persistable");
       const reg = createObjectRegistry();

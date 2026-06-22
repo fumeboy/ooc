@@ -6,10 +6,10 @@ import {
   stoneKnowledgeDir,
   type PoolObjectRef,
   type StoneObjectRef,
-} from "../../persistable";
+} from "@ooc/core/persistable";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
-import { parseKnowledgeFile } from "./parser";
+import { parseKnowledgeFile } from "@ooc/core/thinkable/knowledge/parser.js";
 import type { KnowledgeDoc, KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 
 /** 双源 loader 输入：stone (seed) + pool (sediment) 两个 ref。 */

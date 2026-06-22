@@ -11,7 +11,7 @@ import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ThreadContext } from "./index.js";
 import { computeActivations } from "@ooc/core/thinkable/knowledge/activator.js";
-import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/loader.js";
+import { loadKnowledgeIndex } from "@ooc/builtins/knowledge_base/loader.js";
 import { deriveStoneFromThread, derivePoolFromThread } from "@ooc/core/persistable/index.js";
 import { makeKnowledgeWindow } from "./knowledge-window.js";
 

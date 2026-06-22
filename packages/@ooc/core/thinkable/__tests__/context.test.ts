@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 // resolveReadable 取不到投影，全部落 placeholder（Wave4：窗类型经 side-effect import 自声明）。
 import "@ooc/core/runtime/register-builtins.js";
 import { buildInputItems, type ThreadContext } from "@ooc/builtins/agent/thread/thinkable/context/index";
-import { clearKnowledgeLoaderCache } from "../knowledge";
+import { clearKnowledgeLoaderCache } from "@ooc/builtins/knowledge_base/loader.js";
 
 /**
  * 测试 helper：把 buildInputItems 的输入投影回旧的 `{ role, content }[]` 形态，
