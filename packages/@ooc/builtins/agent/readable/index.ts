@@ -20,6 +20,7 @@ import type {
   ReadableContext,
   ReadableModule,
 } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 /** self 门面窗的投影态（init 注入 `{ transient, isSelfWindow }`）。 */
@@ -28,8 +29,8 @@ export interface AgentWin {
 }
 
 const readable: ReadableModule<Data, AgentWin> = {
-  readable: (ctx: ReadableContext, self: Data, _win: AgentWin) => {
-    const body = self?.self ?? "";
+  readable: (ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: AgentWin) => {
+    const body = self.data?.self ?? "";
     return {
       class: ctx.object.class,
       content: body.trim().length > 0 ? body : [],

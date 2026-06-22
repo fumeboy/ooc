@@ -19,6 +19,7 @@ import type {
   ReadableModule,
   WindowMethod,
 } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { computeProjectionClass } from "./projection-class.js";
 import { isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
@@ -28,6 +29,7 @@ import {
   hasAnyTranscriptViewportField,
 } from "../transcript-viewport.js";
 import { renderTranscriptOrHandle } from "./conversation-render.js";
+import { runningThreadForRender } from "../executable/running-thread.js";
 import { threadCompress, threadResize } from "./compress-events.js";
 import {
   filterTalkMessages,
@@ -45,7 +47,7 @@ const setTranscriptWindowMethod: WindowMethod<Data, ThreadWin> = {
       range_end: { type: "number", required: false, description: "区间终点" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: ThreadWin, args: Record<string, unknown>) => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: ThreadWin, args: Record<string, unknown>) => {
     if (!hasAnyTranscriptViewportField(args)) {
       return before ?? {};
     }
@@ -59,17 +61,17 @@ const setTranscriptWindowMethod: WindowMethod<Data, ThreadWin> = {
 };
 
 const readable: ReadableModule<Data, ThreadWin> = {
-  readable: (ctx: ReadableContext, self: Data, win: ThreadWin) => {
-    const thread = ctx.thread;
+  readable: (ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: ThreadWin) => {
+    const thread = runningThreadForRender(ctx);
     // 投影 class：POV 派生（self-view 非 super→thread / other-view→talk / self-view super→reflect_request）。
     const projectionClass = thread
       ? computeProjectionClass({ id: ctx.object.id }, thread)
       : "thread";
 
-    const children: XmlNode[] = renderHead(self, ctx.object.id);
+    const children: XmlNode[] = renderHead(self.data, ctx.object.id);
     let consumedMessageIds: string[] | undefined;
     if (thread) {
-      const messages = filterTalkMessages(ctx.object.id, self, thread);
+      const messages = filterTalkMessages(ctx.object.id, self.data, thread);
       // 这些消息已进本窗 transcript → 报给渲染器，从顶层 inbox/outbox 兜底剔除（信息只渲一次）。
       consumedMessageIds = messages.map((m) => m.id);
       children.push(

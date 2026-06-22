@@ -4,7 +4,7 @@
  * 由 interpreter（构造首 exec）与 interpreter_process.exec（追加 exec）共用：跑一段 ts/js
  * 脚本（独立 sandbox），把输出包成 ProcessExecRecord。
  */
-import type { ThreadContext } from "@ooc/core/thinkable/context.js";
+import type { ThreadPersistenceRef } from "@ooc/core/_shared/types/thread.js";
 import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
 import { deriveStoneFromThread } from "@ooc/core/persistable/index.js";
 import type { ProcessExecRecord } from "../types.js";
@@ -25,7 +25,7 @@ export type InterpreterLang = "ts" | "typescript" | "js" | "javascript";
  * `reportDataEdit`：setData 写后通知 runtime 重持久化（construct 阶段可缺省，写入随返回 Data 落盘）。
  */
 export async function runInterpreterExec(
-  thread: ThreadContext,
+  persistence: ThreadPersistenceRef | undefined,
   language: InterpreterLang | undefined,
   code: string | undefined,
   userData: Record<string, unknown>,
@@ -38,21 +38,20 @@ export async function runInterpreterExec(
   if (typeof code !== "string" || code.trim() === "") {
     return { execId, language: normLang, code, output: `[interpreter_process] 缺少 code 参数`, ok: false, startedAt };
   }
-  const output = await runTsJs(thread, code, userData, runtime, reportDataEdit);
+  const output = await runTsJs(persistence, code, userData, runtime, reportDataEdit);
   return { execId, language: normLang, code, output, ok: isOkResult(output), startedAt };
 }
 
 async function runTsJs(
-  thread: ThreadContext,
+  persistence: ThreadPersistenceRef | undefined,
   code: string,
   userData: Record<string, unknown>,
   runtime?: RuntimeHandle,
   reportDataEdit?: () => Promise<void>,
 ): Promise<string> {
-  const persistence = thread.persistence;
   // ts/js 在无 persistence 时也允许跑（能调用 console，但 self.* 全空）
   const self = persistence
-    ? createInterpreterSelf(deriveStoneFromThread(persistence), thread, userData, runtime, reportDataEdit)
+    ? createInterpreterSelf(deriveStoneFromThread(persistence), userData, runtime, reportDataEdit)
     : null;
   const exec = await executeUserCode(code, self);
   const firstLine = code.split("\n")[0]?.trim() ?? "";

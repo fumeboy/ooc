@@ -405,7 +405,7 @@ export type ThreadStatus =
  *
  * 重构：
  * - 删除 activeForms / windows / pinnedKnowledge / waitingType / awaitingChildren
- * - 新增 contextWindows（统一抽象）+ threadLocalData（program_window 使用，先占位）
+ * - 新增 contextWindows（统一抽象）
  * - status="waiting" 单独表达"等待 inbox 新消息"，不再细分 waitingType（等待语义的简化）
  */
 export type ThreadContext = {
@@ -469,11 +469,6 @@ export type ThreadContext = {
    * `contextWindows` 以最小破坏。访问方式：业务数据 `.data`、投影态 `.win`、元信息 `.id/.class/...`。
    */
   contextWindows: OocObjectRef[];
-  /**
-   * thread-local 共享数据；program_window 的 ts/js exec 之间通过这里传值
-   * （program_window 的"跨 exec 数据传递"）。当前仅占位、不读不写。
-   */
-  threadLocalData?: Record<string, unknown>;
   /** end method 写入的结束原因。 */
   endReason?: string;
   /** end method 写入的最终摘要。 */

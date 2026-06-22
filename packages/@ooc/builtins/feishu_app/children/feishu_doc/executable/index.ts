@@ -34,7 +34,7 @@ const readMethod: ObjectMethod<Data> = {
       format: { type: "string", enum: ["markdown", "blocks"], description: "输出格式，默认 markdown" },
     },
   },
-  exec: (_ctx, self, args) => executeRead(self, args),
+  exec: (_ctx, self, args) => executeRead(self.data, args),
 };
 
 const searchInDocMethod: ObjectMethod<Data> = {
@@ -46,7 +46,7 @@ const searchInDocMethod: ObjectMethod<Data> = {
       limit: { type: "number", description: "最多返回行数" },
     },
   },
-  exec: (_ctx, self, args) => executeSearchInDoc(self, args),
+  exec: (_ctx, self, args) => executeSearchInDoc(self.data, args),
 };
 
 const appendMethod: ObjectMethod<Data> = {
@@ -58,7 +58,7 @@ const appendMethod: ObjectMethod<Data> = {
       confirm: { type: "boolean", description: "true 才真追加" },
     },
   },
-  exec: (_ctx, self, args) => executeAppend(self, args),
+  exec: (_ctx, self, args) => executeAppend(self.data, args),
 };
 
 const patchBlockMethod: ObjectMethod<Data> = {
@@ -73,13 +73,13 @@ const patchBlockMethod: ObjectMethod<Data> = {
       expected_version: { type: "string", description: "dry-run 返回的 versionId" },
     },
   },
-  exec: (_ctx, self, args) => executePatchBlock(self, args),
+  exec: (_ctx, self, args) => executePatchBlock(self.data, args),
 };
 
 const shareLinkMethod: ObjectMethod<Data> = {
   name: "share_link",
   description: "Get a shareable URL for this doc.",
-  exec: (ctx, self) => executeShareLink(ctx, self),
+  exec: (ctx, self) => executeShareLink(ctx, self.data),
 };
 
 const attachToChatMethod: ObjectMethod<Data> = {
@@ -93,7 +93,7 @@ const attachToChatMethod: ObjectMethod<Data> = {
       as: { type: "string", enum: ["bot", "user"] },
     },
   },
-  exec: (ctx, self, args) => executeAttachToChat(ctx, self, args),
+  exec: (ctx, self, args) => executeAttachToChat(ctx, self.data, args),
 };
 
 const closeMethod: ObjectMethod<Data> = {
@@ -286,7 +286,7 @@ async function executePatchBlock(self: Data, args: Record<string, unknown>): Pro
 
 async function executeShareLink(ctx: ExecutableContext, self: Data): Promise<string | undefined> {
   // 租户 host 由 .world.json 的 LarkTenantHost 字段配置（默认 feishu.cn）。
-  const baseDir = ctx.thread?.persistence?.baseDir;
+  const baseDir = ctx.persistence?.baseDir;
   const tenantHost = baseDir
     ? (await readWorldConfig(baseDir)).larkTenantHost
     : DEFAULT_LARK_TENANT_HOST;

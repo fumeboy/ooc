@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { ensureSelfObjectTypeRegistered } from "../object-windows.js";
 import { makeThread } from "../../../__tests__/make-thread";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry.js";
+import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import { clearServerLoaderCache } from "../../../runtime/server-loader.js";
 import {
   createStoneObject,
@@ -59,8 +60,8 @@ describe("ensureSelfObjectTypeRegistered fail-loud on broken executable", () => 
     thread: ReturnType<typeof makeSelfThread>,
   ): Promise<string> {
     const projection = await def.readable!.readable(
-      { object: { id: objectId, class: objectId }, thread },
-      {},
+      { object: { id: objectId, class: objectId }, persistence: thread.persistence },
+      makeReadonlySelfProxy({}),
       undefined,
     );
     return JSON.stringify(projection.content);

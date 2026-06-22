@@ -22,13 +22,12 @@ export const Class: OocClass<Data> = {
       },
     },
     exec: async (ctx: ConstructorContext, args: { code?: string }): Promise<Data> => {
-      const thread = ctx.thread;
-      if (!thread) throw new Error("[terminal_process] 缺少 thread context。");
+      const persistence = ctx.persistence;
       const code = args?.code;
       if (typeof code !== "string" || code.trim() === "") {
         throw new Error("[terminal_process] 缺少 code 参数。");
       }
-      const record = await runBashExec(thread, code);
+      const record = await runBashExec(persistence, code);
       return { history: [record] };
     },
   },

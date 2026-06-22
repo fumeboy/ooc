@@ -41,6 +41,7 @@ import {
   type ObjectRegistry,
 } from "../../../runtime/object-registry.js";
 import type { ReadableContext, ReadableProjection } from "../../../readable/contract.js";
+import { makeReadonlySelfProxy } from "../../../runtime/self-proxy.js";
 import { extractBasicDescription, conciseDescription } from "@ooc/core/thinkable/context/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
@@ -288,9 +289,8 @@ export async function resolveProjection(
   persistence: { baseDir: string; sessionId?: string } | undefined,
 ): Promise<ReadableProjection> {
   const readableCtx: ReadableContext = {
-    thread,
     object: { id: inst.id, class: classOf(inst) },
-    persistence,
+    persistence: thread.persistence,
   };
 
   // self 门面窗 hydrate：self 门面窗注入时 data 为空（init.ts），其身份正文（self.md）由
@@ -319,7 +319,7 @@ export async function resolveProjection(
   const mod = registry.resolveReadable(classOf(inst));
   if (mod) {
     try {
-      return await mod.readable(readableCtx, objectDataOf(inst, table), inst.win);
+      return await mod.readable(readableCtx, makeReadonlySelfProxy(objectDataOf(inst, table) ?? {}), inst.win);
     } catch (err) {
       return {
         class: classOf(inst),

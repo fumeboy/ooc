@@ -29,8 +29,6 @@ export const Class: OocClass<Data> = {
       },
     },
     exec: async (ctx: ConstructorContext, args: Record<string, unknown>): Promise<Data> => {
-      const thread = ctx.thread;
-      if (!thread) throw new Error("[interpreter_process] 缺少 thread context。");
       const lang = normLang(args);
       const code = args.code as string | undefined;
       if (!(lang && code)) {
@@ -38,7 +36,7 @@ export const Class: OocClass<Data> = {
       }
       // 实例 data 刚创建：userData 是活引用，construct 内 self.setData 的写入随返回的 Data 落盘。
       const userData: Record<string, unknown> = {};
-      const record = await runInterpreterExec(thread, lang, code, userData, ctx.runtime);
+      const record = await runInterpreterExec(ctx.persistence, lang, code, userData, ctx.runtime);
       return { history: [record], userData };
     },
   },

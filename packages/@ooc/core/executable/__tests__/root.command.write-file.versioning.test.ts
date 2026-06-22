@@ -74,13 +74,8 @@ function writeFile_construct(
   };
   if (objectId !== undefined) persistence.objectId = objectId;
   if (overrides.stonesBranch) persistence.stonesBranch = overrides.stonesBranch;
-  const thread = {
-    persistence,
-    contextWindows: [] as unknown[],
-    events: overrides.events ?? [],
-  };
   return fileConstruct.exec(
-    { thread, args } as unknown as ConstructorContext,
+    { persistence, args } as unknown as ConstructorContext,
     args,
   ) as Promise<FileData>;
 }

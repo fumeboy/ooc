@@ -18,16 +18,16 @@ import type { ThreadContext } from "@ooc/core/thinkable/context";
  *
  * 验证 Agent 在 ≥15 轮 think 循环里：
  * - 维持 4+ 件事的任务列表，逐个推进不串台
- * - 跨轮共享状态：用 self.setThreadLocal/getThreadLocal 把每轮中间结果存进 thread 局部数据
- *   （跨 program 调用、同一 thread 内共享），最终统一汇总
- * - 三种 program 模式混用：shell（拿数字）/ ts（读写 thread-local + 计算）/ end
+ * - 跨轮共享状态：每轮 program 的 [returnValue] 段留在 context（executed form 累积），
+ *   下一轮 LLM 直接从上文读回中间结果、最终统一汇总
+ * - 三种 program 模式混用：shell（拿数字）/ ts（计算）/ end
  * - executed form 累积，下一轮 LLM 能从 [returnValue] 段读到上一轮结果
  *
- * 这是对 form lifecycle / context renderer / 跨 exec 共享通道三层的端到端长程考验。
+ * 这是对 form lifecycle / context renderer 两层的端到端长程考验。
  *
  * 注：setData/getData 已收紧为「读写本 interpreter_process 实例自身 data」（不再跨 program 实例
- * 共享的 session 草稿）；跨 program 调用的工作记忆改用 thread-local（in-memory 跨 exec 共享）。
- * 故断言改读 endSummary（agent 算出的 total），不再读已退役的 flow 层 data.json。
+ * 共享）；跨 program 调用的工作记忆改由 context 中累积的 form [returnValue] 承载（LLM 自上文读回）。
+ * 故断言读 endSummary（agent 算出的 total）。
  */
 describe.skipIf(!hasLlmEnv)("integration: multi-round-multitask", () => {
   let tempRoot: string;
@@ -52,19 +52,14 @@ describe.skipIf(!hasLlmEnv)("integration: multi-round-multitask", () => {
         "任务 1：用 program(language=shell) 跑命令",
         "  find src/persistable -type f -name '*.ts' -not -path '*/__tests__/*' | wc -l",
         "  看到 [returnValue] / [stdout] 中的数字后，用 program(language=ts) 写：",
-        "  self.setThreadLocal('c_persistable', <那个数字>);",
+        "  _result_ = <那个数字>;  // 记为 c_persistable",
         "",
-        "任务 2：同样的形式，但目录改为 src/thinkable/，字段名 'c_thinkable'",
-        "任务 3：目录 src/executable/，字段名 'c_executable'",
-        "任务 4：目录 src/observable/，字段名 'c_observable'",
+        "任务 2：同样的形式，但目录改为 src/thinkable/（记为 c_thinkable）",
+        "任务 3：目录 src/executable/（记为 c_executable）",
+        "任务 4：目录 src/observable/（记为 c_observable）",
         "",
-        "任务 5：用 program(language=ts) 写：",
-        "  const a = self.getThreadLocal('c_persistable');",
-        "  const b = self.getThreadLocal('c_thinkable');",
-        "  const c = self.getThreadLocal('c_executable');",
-        "  const d = self.getThreadLocal('c_observable');",
-        "  const total = a + b + c + d;",
-        "  self.setThreadLocal('total', total);",
+        "任务 5：用 program(language=ts) 写（四个数字从上文各步的 [returnValue] 段读回、直接写成字面量）：",
+        "  const total = c_persistable + c_thinkable + c_executable + c_observable; // 替换成上文实际数字",
         "  _result_ = total;",
         "",
         "最后 open(end, summary='4 个目录共 N 个 ts 文件') 结束，N 是上面算出的 total。",

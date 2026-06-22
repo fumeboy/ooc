@@ -6,6 +6,7 @@
  */
 
 import type { ReadableContext, ReadableModule } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import {
   xmlElement,
   xmlText,
@@ -19,36 +20,36 @@ import type { Data } from "../types.js";
 export type MethodExecWin = Record<string, never>;
 
 const readable: ReadableModule<Data, MethodExecWin> = {
-  readable: (_ctx: ReadableContext, self: Data) => {
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>) => {
     const children: XmlNode[] = [
-      xmlElement("method", {}, [xmlText(self.method)]),
-      xmlElement("description", {}, [xmlText(self.description)]),
-      xmlElement("accumulated_args", {}, [xmlText(JSON.stringify(self.accumulatedArgs))]),
+      xmlElement("method", {}, [xmlText(self.data.method)]),
+      xmlElement("description", {}, [xmlText(self.data.description)]),
+      xmlElement("accumulated_args", {}, [xmlText(JSON.stringify(self.data.accumulatedArgs))]),
     ];
-    if (self.tip) children.push(xmlElement("tip", {}, [xmlText(self.tip)]));
-    appendNode(children, renderPathList("intent_paths", self.intentPaths));
+    if (self.data.tip) children.push(xmlElement("tip", {}, [xmlText(self.data.tip)]));
+    appendNode(children, renderPathList("intent_paths", self.data.intentPaths));
     // 仅 failed 留 result（success 已移除窗；open/executing 无 result）。
-    if (self.status === "failed" && self.result) {
-      children.push(xmlElement("result", {}, [xmlText(self.result)]));
+    if (self.data.status === "failed" && self.data.result) {
+      children.push(xmlElement("result", {}, [xmlText(self.data.result)]));
     }
 
     // ── schema / fill_state / next_steps 结构化渲染 ──
-    if (self.schema) {
+    if (self.data.schema) {
       children.push({
         kind: "element",
         tag: "schema",
-        children: Object.entries(self.schema.args).map(([name, spec]) => ({
+        children: Object.entries(self.data.schema.args).map(([name, spec]) => ({
           kind: "element" as const,
           tag: "arg",
           attrs: { name, type: spec.type, required: spec.required ? "true" : "false" },
           children: spec.description ? [{ kind: "text" as const, value: spec.description }] : undefined,
         })),
       });
-      if (self.fill) {
+      if (self.data.fill) {
         children.push({
           kind: "element",
           tag: "fill_state",
-          children: Object.entries(self.fill).map(([name, state]) => ({
+          children: Object.entries(self.data.fill).map(([name, state]) => ({
             kind: "element" as const,
             tag: "arg",
             attrs: { name, status: state.status },
@@ -62,10 +63,10 @@ const readable: ReadableModule<Data, MethodExecWin> = {
         });
       }
       // 还缺哪些必填参数 → next_steps，引导继续 refine。
-      const nextSteps = Object.entries(self.schema.args)
+      const nextSteps = Object.entries(self.data.schema.args)
         .filter(([name, spec]) => {
           if (!spec.required) return false;
-          const fs = self.fill?.[name];
+          const fs = self.data.fill?.[name];
           return !fs || fs.status !== "provided";
         })
         .map(([name]) => name);

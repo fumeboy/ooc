@@ -26,14 +26,14 @@ export const Class: OocClass<Data> = {
       },
     },
     exec: async (ctx: ConstructorContext, args: { path?: string }): Promise<Data> => {
-      const thread = ctx.thread;
-      if (!thread) throw new Error("[open_knowledge] 缺少 thread context。");
+      const persistence = ctx.persistence;
+      if (!persistence) throw new Error("[open_knowledge] 缺少 persistence context。");
       const path = typeof args.path === "string" ? args.path : "";
       if (!path) throw new Error("[open_knowledge] 缺少 path。");
 
-      if (thread.persistence) {
-        const stoneRef = deriveStoneFromThread(thread.persistence);
-        const poolRef = derivePoolFromThread(thread.persistence);
+      if (persistence) {
+        const stoneRef = deriveStoneFromThread(persistence);
+        const poolRef = derivePoolFromThread(persistence);
         let index;
         try {
           index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });

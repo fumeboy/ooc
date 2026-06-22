@@ -11,6 +11,7 @@ import type {
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import { isString } from "@ooc/builtins/_shared/executable/utils.js";
 import type { Data, PlanWindowStep } from "../types.js";
 
@@ -53,14 +54,14 @@ const updatePlanMethod: ObjectMethod<Data> = {
       description: { type: "string", description: "新 plan 说明" },
     },
   },
-  exec: (_ctx: ExecutableContext, self: Data, args: Record<string, unknown>) => {
+  exec: (_ctx: ExecutableContext, self: SelfProxy<Data>, args: Record<string, unknown>) => {
     const title = isString(args.title) ? args.title : undefined;
     const description = isString(args.description) ? args.description : undefined;
     if (title === undefined && description === undefined) {
       return "[plan.update_plan] 至少需要 args.title 或 args.description 之一。";
     }
-    if (title !== undefined) self.title = title;
-    if (description !== undefined) self.description = description;
+    if (title !== undefined) self.data.title = title;
+    if (description !== undefined) self.data.description = description;
     return undefined;
   },
 };
@@ -78,12 +79,12 @@ const addStepMethod: ObjectMethod<Data> = {
       },
     },
   },
-  exec: (_ctx: ExecutableContext, self: Data, args: Record<string, unknown>) => {
+  exec: (_ctx: ExecutableContext, self: SelfProxy<Data>, args: Record<string, unknown>) => {
     const text = isString(args.text) ? args.text.trim() : "";
     if (!text) return "[plan.add_step] 缺少 args.text（步骤描述）。";
     const status = asStepStatus(args.status) ?? "pending";
     const step: PlanWindowStep = { id: generateStepId(), text, status };
-    self.steps = [...self.steps, step];
+    self.data.steps = [...self.data.steps, step];
     return `added step ${step.id}`;
   },
 };
@@ -102,7 +103,7 @@ const updateStepMethod: ObjectMethod<Data> = {
       },
     },
   },
-  exec: (_ctx: ExecutableContext, self: Data, args: Record<string, unknown>) => {
+  exec: (_ctx: ExecutableContext, self: SelfProxy<Data>, args: Record<string, unknown>) => {
     const stepId = isString(args.step_id) ? args.step_id : "";
     if (!stepId) return "[plan.update_step] 缺少 args.step_id。";
     const text = isString(args.text) ? args.text : undefined;
@@ -110,17 +111,17 @@ const updateStepMethod: ObjectMethod<Data> = {
     if (text === undefined && status === undefined) {
       return "[plan.update_step] 至少需要 args.text 或 args.status 之一。";
     }
-    const idx = self.steps.findIndex((s) => s.id === stepId);
+    const idx = self.data.steps.findIndex((s) => s.id === stepId);
     if (idx < 0) return `[plan.update_step] step "${stepId}" 不存在。`;
-    const cur = self.steps[idx]!;
+    const cur = self.data.steps[idx]!;
     const nextStep: PlanWindowStep = {
       ...cur,
       text: text !== undefined ? text : cur.text,
       status: status !== undefined ? status : cur.status,
     };
-    const nextSteps = self.steps.slice();
+    const nextSteps = self.data.steps.slice();
     nextSteps[idx] = nextStep;
-    self.steps = nextSteps;
+    self.data.steps = nextSteps;
     return undefined;
   },
 };
@@ -135,13 +136,13 @@ const expandStepMethod: ObjectMethod<Data> = {
       description: { type: "string", description: "sub plan 的描述" },
     },
   },
-  exec: async (ctx: ExecutableContext, self: Data, args: Record<string, unknown>) => {
+  exec: async (ctx: ExecutableContext, self: SelfProxy<Data>, args: Record<string, unknown>) => {
     if (!ctx.runtime) return "[plan.expand_step] 缺少 runtime context。";
     const stepId = isString(args.step_id) ? args.step_id : "";
     if (!stepId) return "[plan.expand_step] 缺少 args.step_id。";
-    const idx = self.steps.findIndex((s) => s.id === stepId);
+    const idx = self.data.steps.findIndex((s) => s.id === stepId);
     if (idx < 0) return `[plan.expand_step] step "${stepId}" 不存在。`;
-    const cur = self.steps[idx]!;
+    const cur = self.data.steps[idx]!;
     if (cur.subPlanWindowId) {
       return `[plan.expand_step] step "${stepId}" 已经展开为 sub plan "${cur.subPlanWindowId}"；如需重做请先 collapse_subplan。`;
     }
@@ -156,9 +157,9 @@ const expandStepMethod: ObjectMethod<Data> = {
       parentStepId: stepId,
     });
 
-    const nextSteps = self.steps.slice();
+    const nextSteps = self.data.steps.slice();
     nextSteps[idx] = { ...cur, subPlanWindowId: childId };
-    self.steps = nextSteps;
+    self.data.steps = nextSteps;
     return `expanded step ${stepId} into sub plan ${childId}`;
   },
 };
@@ -171,20 +172,20 @@ const collapseSubplanMethod: ObjectMethod<Data> = {
       step_id: { type: "string", required: true, description: "目标 step id" },
     },
   },
-  exec: async (ctx: ExecutableContext, self: Data, args: Record<string, unknown>) => {
+  exec: async (ctx: ExecutableContext, self: SelfProxy<Data>, args: Record<string, unknown>) => {
     const stepId = isString(args.step_id) ? args.step_id : "";
     if (!stepId) return "[plan.collapse_subplan] 缺少 args.step_id。";
-    const idx = self.steps.findIndex((s) => s.id === stepId);
+    const idx = self.data.steps.findIndex((s) => s.id === stepId);
     if (idx < 0) return `[plan.collapse_subplan] step "${stepId}" 不存在。`;
-    const cur = self.steps[idx]!;
+    const cur = self.data.steps[idx]!;
     if (!cur.subPlanWindowId) {
       return `[plan.collapse_subplan] step "${stepId}" 未展开 sub plan。`;
     }
     const childId = cur.subPlanWindowId;
 
-    const nextSteps = self.steps.slice();
+    const nextSteps = self.data.steps.slice();
     nextSteps[idx] = { ...cur, subPlanWindowId: undefined };
-    self.steps = nextSteps;
+    self.data.steps = nextSteps;
 
     // 关掉子 plan 对象（runtime 协助）。
     await ctx.runtime?.close?.(childId);
@@ -195,8 +196,8 @@ const collapseSubplanMethod: ObjectMethod<Data> = {
 const markDoneMethod: ObjectMethod<Data> = {
   name: "mark_done",
   description: "Mark this plan as done.",
-  exec: (_ctx: ExecutableContext, self: Data) => {
-    self.status = "done";
+  exec: (_ctx: ExecutableContext, self: SelfProxy<Data>) => {
+    self.data.status = "done";
     return undefined;
   },
 };

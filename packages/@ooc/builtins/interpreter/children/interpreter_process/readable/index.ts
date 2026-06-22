@@ -8,6 +8,7 @@
  */
 
 import type { ReadableContext, ReadableModule, WindowMethod } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import {
   renderProcessHistory,
   setHistoryWindowMethod,
@@ -27,7 +28,7 @@ const resizeMethod: WindowMethod<Data, ProcessWin> = {
       level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: ProcessWin, args: Record<string, unknown>): ProcessWin => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: ProcessWin, args: Record<string, unknown>): ProcessWin => {
     const raw = (args as { level?: number }).level;
     const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
     return { ...before, compressLevel: level };
@@ -35,9 +36,9 @@ const resizeMethod: WindowMethod<Data, ProcessWin> = {
 };
 
 const readable: ReadableModule<Data, ProcessWin> = {
-  readable: (_ctx: ReadableContext, self: Data, win: ProcessWin) => ({
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: ProcessWin) => ({
     class: "interpreter_process",
-    content: renderProcessHistory(self.history, win),
+    content: renderProcessHistory(self.data.history, win),
   }),
   window: [
     {

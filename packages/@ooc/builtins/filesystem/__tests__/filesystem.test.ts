@@ -1,6 +1,7 @@
 import { test, expect } from "bun:test";
 import "@ooc/core/runtime/register-builtins.js"; // 全量 boot：注册 filesystem class + 委托目标 search/file
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
 
 function objMethod(classId: string, name: string) {
@@ -28,7 +29,7 @@ test("filesystem.grep 委托 ctx.runtime.instantiate 造 search 子对象（mode
   };
   const out = await grep.exec(
     { runtime, object: { id: "filesystem", class: "filesystem" }, args: {} } as never,
-    {},
+    makeSelfProxy({}, "filesystem", undefined),
     { pattern: "x", path: process.cwd() },
   );
   expect(String(out)).toContain("opened search (grep)");
@@ -49,7 +50,7 @@ test("filesystem.glob 委托 search：glob 通配符走 pattern 入参 + 显式 
   };
   await glob.exec(
     { runtime, object: { id: "filesystem", class: "filesystem" }, args: {} } as never,
-    {},
+    makeSelfProxy({}, "filesystem", undefined),
     { pattern: "**/*.ts" },
   );
   expect(instantiated).toHaveLength(1);
@@ -62,7 +63,7 @@ test("filesystem.grep 缺 runtime 句柄时 fail-loud（本方法名串，非 de
   const grep = objMethod("filesystem", "grep")!;
   let err = "";
   try {
-    await grep.exec({ object: { id: "filesystem", class: "filesystem" }, args: {} } as never, {}, {
+    await grep.exec({ object: { id: "filesystem", class: "filesystem" }, args: {} } as never, makeSelfProxy({}, "filesystem", undefined), {
       pattern: "x",
     });
   } catch (e) {
@@ -77,7 +78,7 @@ test("filesystem readable 维度：readable 经 register 注册（投影 class=f
   expect(cls?.readable).toBeDefined();
   const proj = cls!.readable!.readable(
     { object: { id: "filesystem", class: "filesystem" } } as never,
-    {},
+    makeReadonlySelfProxy({}),
     {},
   );
   expect((proj as { class: string }).class).toBe("filesystem");
@@ -87,7 +88,7 @@ test("filesystem readable 渲染身份说明", () => {
   const cls = builtinRegistry.getClass("filesystem");
   const proj = cls!.readable!.readable(
     { object: { id: "filesystem", class: "filesystem" } } as never,
-    {},
+    makeReadonlySelfProxy({}),
     {},
   ) as { class: string; content: unknown };
   expect(String(proj.content)).toContain("文件系统");

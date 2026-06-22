@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import "@ooc/core/runtime/register-builtins.js"; // 全量 boot：注册 terminal class + 委托目标 terminal_process
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
+import { makeSelfProxy } from "@ooc/core/runtime/self-proxy.js";
 
 const TERMINAL_PROCESS_CLASS = "_builtin/terminal/terminal_process";
 
@@ -30,7 +31,7 @@ test("terminal.run 委托 ctx.runtime.instantiate 造 terminal_process 子对象
   };
   const out = await run.exec(
     { runtime, object: { id: "terminal", class: "terminal" }, args: {} } as never,
-    {},
+    makeSelfProxy({}, "terminal", undefined),
     { code: "echo hi" },
   );
   expect(String(out)).toContain("terminal_process 已创建");
@@ -45,7 +46,7 @@ test("terminal.run 缺 runtime 句柄时 fail-loud（本方法名串，非 deleg
   try {
     await run.exec(
       { object: { id: "terminal", class: "terminal" }, args: {} } as never,
-      {},
+      makeSelfProxy({}, "terminal", undefined),
       { code: "echo hi" },
     );
   } catch (e) {

@@ -27,6 +27,7 @@ import terminalProcessReadable from "@ooc/builtins/terminal/terminal_process/rea
 import { Class as TerminalProcessClass } from "@ooc/builtins/terminal/terminal_process";
 import type { Data as TerminalProcessData } from "@ooc/builtins/terminal/terminal_process";
 import { makeThread } from "../../__tests__/make-thread.js";
+import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 
 const NOW = 1_700_000_000_000;
 const setHistoryWindow = setHistoryWindowMethod;
@@ -44,7 +45,7 @@ function makeHistory(n: number): ProcessExecRecord[] {
 
 /** 渲染 terminal_process readable 投影 → XML 字符串（外层包 <window>）。 */
 function renderXml(history: ProcessExecRecord[], win: ProcessWin): string {
-  const node = terminalProcessReadable.readable({} as never, { history }, win) as {
+  const node = terminalProcessReadable.readable({} as never, makeReadonlySelfProxy({ history }), win) as {
     class: string;
     content: XmlNode[];
   };
@@ -132,7 +133,7 @@ describe("renderProcessHistory shared helper", () => {
 
 describe("set_history_window window method", () => {
   const call = (before: ProcessWin, args: Record<string, unknown>) =>
-    setHistoryWindow.exec({} as never, { history: [] }, before, args);
+    setHistoryWindow.exec({} as never, makeReadonlySelfProxy({ history: [] }), before, args);
 
   it("history_tail returns new win with historyViewport", () => {
     const out = call({ historyViewport: { tail: 10 } }, { history_tail: 30 });
@@ -197,7 +198,7 @@ describe("terminal_process.exec object method is not affected by historyViewport
     const self: TerminalProcessData = { history: makeHistory(3) };
     const ctx = { thread, runtime: undefined, reportDataEdit: async () => {} } as never;
 
-    const out = await execMethod.exec(ctx, self, { code: "echo new" });
+    const out = await execMethod.exec(ctx, makeSelfProxy(self, "t_exec_under_viewport", undefined), { code: "echo new" });
     expect(out).toBeUndefined();
     // exec append 到完整 history（viewport 是投影态、不在 Data 上，故不受影响）。
     expect(self.history.length).toBe(4);

@@ -32,6 +32,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { makeThread } from "../../__tests__/make-thread.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 
 /** 测试 class `test_note`：method `save` 带 route（content 空给 tip，否则 create/update 意图）。 */
 function registerTestNote(reg: ObjectRegistry): { execCount: () => number } {
@@ -61,12 +63,12 @@ function registerTestNote(reg: ObjectRegistry): { execCount: () => number } {
             }
             return { intents: args.id ? ["update"] : ["create"] };
           },
-          exec: (_ctx, self: { saved: string[] }, args: Record<string, unknown>) => {
+          exec: (_ctx, self: SelfProxy<{ saved: string[] }>, args: Record<string, unknown>) => {
             if (!args.content) return { err: "content 为空" };
             if (args.boom) throw new Error("boom");
             execCount += 1;
-            self.saved.push(String(args.content));
-            return `saved → ${self.saved.length}`;
+            self.data.saved.push(String(args.content));
+            return `saved → ${self.data.saved.length}`;
           },
         },
       ],
@@ -317,7 +319,7 @@ describe("form readable 投影", () => {
   });
 
   it("投影渲染 method / accumulated_args / tip", () => {
-    const proj = formReadable.readable({} as never, mkData(), {}) as {
+    const proj = formReadable.readable({} as never, makeReadonlySelfProxy(mkData()), {}) as {
       class: string;
       content: XmlNode[];
     };

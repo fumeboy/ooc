@@ -100,7 +100,7 @@ export async function dispatchUnactiveIfZero(
   if (!hook) return; // fast-path：无 body → 不算 refcount
   if (countSessionReferences(ctxThread, targetId) > 0) return;
   const ctx: LifecycleContext = {
-    thread: ctxThread,
+    persistence: ctxThread.persistence,
     runtime: undefined,
     args: {},
     targetId,
@@ -131,7 +131,7 @@ export async function dispatchActiveIfFirst(
   if (!hook) return; // fast-path：无 active body → 不算 refcount（零成本）
   if (countSessionReferences(ctxThread, targetId) !== 1) return; // 刚加的窗 = 第 1 个引用 ⇒ 0→1
   const ctx: LifecycleContext = {
-    thread: ctxThread,
+    persistence: ctxThread.persistence,
     runtime: undefined,
     args: {},
     targetId,

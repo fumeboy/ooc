@@ -15,7 +15,7 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { ConstructorContext, ObjectConstructor } from "@ooc/core/executable/contract.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadPersistenceRef, ProcessEvent } from "@ooc/core/_shared/types/thread.js";
 import type { Data } from "../types.js";
 import {
   classifyPackagesPath,
@@ -36,14 +36,14 @@ import { isString } from "@ooc/builtins/_shared/executable/utils.js";
  * stone 自治区时，把 main 路径重定向到 worktree 落点；否则返回 undefined（裸路径）。
  */
 export async function resolveStoneWorktreeTarget(
-  thread: ThreadContext | undefined,
+  persistence: ThreadPersistenceRef | undefined,
   absPath: string,
   mode: "read" | "write",
 ): Promise<string | undefined> {
-  const baseDir = thread?.persistence?.baseDir;
-  const sessionId = thread?.persistence?.sessionId;
+  const baseDir = persistence?.baseDir;
+  const sessionId = persistence?.sessionId;
   // feat 分支绑定（reflectable 沉淀，super(foo) 直接编辑）也要路由——不只 business session。
-  const stonesBranch = thread?.persistence?.stonesBranch;
+  const stonesBranch = persistence?.stonesBranch;
   if (!baseDir || (!sessionUsesWorktree(sessionId) && !stonesBranch)) return undefined;
   // feat 分支沉淀允许新建对象（package.json 尚不在 main / feat worktree）→ 结构化判 owner。
   const stoneClass = classifyPackagesPath(absPath, baseDir, { allowNewObject: !!stonesBranch });
@@ -59,18 +59,22 @@ export async function resolveStoneWorktreeTarget(
   return join(stoneDir(wtRef), ...rel.split("/").filter(Boolean));
 }
 
-async function constructWriteFile(thread: ThreadContext, args: Record<string, unknown>): Promise<Data> {
+async function constructWriteFile(
+  persistence: ThreadPersistenceRef | undefined,
+  args: Record<string, unknown>,
+  events: ProcessEvent[] | undefined,
+): Promise<Data> {
   const rawPath = isString(args.path) ? args.path : "";
   if (!rawPath) throw new Error("[write_file] 缺少 path 参数。");
   const content = args.content;
   if (typeof content !== "string") {
     throw new Error("[write_file] 缺少 content 参数（应是字符串，可为空）。");
   }
-  const path = resolveSessionPath(thread, rawPath);
-  const baseDir = thread.persistence?.baseDir;
+  const path = resolveSessionPath(persistence, rawPath);
+  const baseDir = persistence?.baseDir;
   // feat 分支沉淀允许新建对象（package.json 尚不在 main / feat worktree）→ 结构化判 owner。
   const stoneClass = classifyPackagesPath(path, baseDir, {
-    allowNewObject: !!thread.persistence?.stonesBranch,
+    allowNewObject: !!persistence?.stonesBranch,
   });
 
   let preExisted = false;
@@ -84,17 +88,17 @@ async function constructWriteFile(thread: ThreadContext, args: Record<string, un
   }
 
   if (stoneClass.kind === "package-object") {
-    const authorObjectId = thread.persistence?.objectId;
+    const authorObjectId = persistence?.objectId;
     if (!baseDir || !authorObjectId) {
       throw new Error(
-        `[write_file] 路径落在 packages 自治区 (${path}) 需走 versioning，但当前 thread ` +
+        `[write_file] 路径落在 packages 自治区 (${path}) 需走 versioning，但当前 ` +
           `缺少 ${!baseDir ? "persistence.baseDir" : "persistence.objectId"}，无法版本化写入。`,
       );
     }
 
-    const sessionId = thread.persistence?.sessionId;
+    const sessionId = persistence?.sessionId;
     // feat 分支绑定（reflectable 沉淀，super(foo) 直接编辑）也放行——不只 business session。
-    const stonesBranch = thread.persistence?.stonesBranch;
+    const stonesBranch = persistence?.stonesBranch;
     const targetObjectId = stoneClass.ownerObjectId;
     const relWithinObject = relWithinObjectFromPackages(
       targetObjectId,
@@ -130,11 +134,11 @@ async function constructWriteFile(thread: ThreadContext, args: Record<string, un
       throw new Error(`[write_file] 写入 worktree ${wtTarget} 失败：${(err as Error).message}`);
     }
     const isOwnStone = targetObjectId === authorObjectId;
-    if (thread.events) {
+    if (events) {
       // feat 分支绑定下（reflectable 沉淀 super(foo) 直接编辑）：改动落 feat worktree，
       // 经 create_pr_and_invite_reviewers commit + 开 PR；与 business session worktree 文案区分。
       const onFeatBranch = !!stonesBranch;
-      thread.events.push({
+      events.push({
         category: "context_change",
         kind: "inject",
         text: onFeatBranch
@@ -166,20 +170,20 @@ async function constructWriteFile(thread: ThreadContext, args: Record<string, un
     // 的写（典型 pools/ 知识/记忆路径）是 write-through——立即生效、**不进本 PR**、
     // 不在 feat worktree。此前静默无提示 → 随后 create_pr_and_invite_reviewers 发现 feat 分支无 stone
     // 改动报 NO_CHANGES，LLM 不知为何。这里显式点破两通道，消除静默 + 困惑。
-    if (thread.persistence?.stonesBranch && thread.events) {
-      thread.events.push({
+    if (persistence?.stonesBranch && events) {
+      events.push({
         category: "context_change",
         kind: "inject",
         text:
-          `[write_file] 你在 feat 沉淀绑定（${thread.persistence.stonesBranch}）中，但 ${path} ` +
+          `[write_file] 你在 feat 沉淀绑定（${persistence.stonesBranch}）中，但 ${path} ` +
           `落在 stone 自治区之外，是 write-through 写——立即生效、不进本 PR、不在 feat 分支。` +
           `若你只想沉淀知识/记忆（pool），写完即生效，无需 create_pr_and_invite_reviewers（feat 分支无 stone 改动会报 NO_CHANGES）。` +
           `若要改身体/身份并经 PR review 合入，请写 stone 路径 stones/<self>/...（objects/...）。`,
       });
     }
   }
-  if (preExisted && thread.events) {
-    thread.events.push({
+  if (preExisted && events) {
+    events.push({
       category: "context_change",
       kind: "inject",
       text:
@@ -192,11 +196,11 @@ async function constructWriteFile(thread: ThreadContext, args: Record<string, un
   return { path };
 }
 
-async function constructOpenFile(thread: ThreadContext, args: Record<string, unknown>): Promise<Data> {
+async function constructOpenFile(persistence: ThreadPersistenceRef | undefined, args: Record<string, unknown>): Promise<Data> {
   const rawPath = isString(args.path) ? args.path : "";
   if (!rawPath) throw new Error("[open_file] 缺少 path。");
-  let path = resolveSessionPath(thread, rawPath);
-  const openWtTarget = await resolveStoneWorktreeTarget(thread, path, "read");
+  let path = resolveSessionPath(persistence, rawPath);
+  const openWtTarget = await resolveStoneWorktreeTarget(persistence, path, "read");
   if (openWtTarget) path = openWtTarget;
   try {
     await stat(path);
@@ -218,9 +222,11 @@ export const construct: ObjectConstructor<Data> = {
     },
   },
   exec: async (ctx: ConstructorContext, args: Record<string, unknown>): Promise<Data> => {
-    const thread = ctx.thread;
-    if (!thread) throw new Error("[file] 缺少 thread context。");
     const isWrite = typeof args.content === "string";
-    return isWrite ? constructWriteFile(thread, args) : constructOpenFile(thread, args);
+    // TODO(thread-core-boundary): construct ctx 无运行 thread 的 events 流，故 write_file 的
+    // worktree/沉淀提示注入暂缺（传 undefined）；待「运行 thread 获取」路径接入后回填 events。
+    return isWrite
+      ? constructWriteFile(ctx.persistence, args, undefined)
+      : constructOpenFile(ctx.persistence, args);
   },
 };

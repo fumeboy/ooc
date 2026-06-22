@@ -13,6 +13,7 @@ import {
   type TranscriptViewport,
 } from "./transcript-viewport.js";
 import type { WindowMethod, ReadableContext } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data, ProcessExecRecord } from "../types.js";
 
 /** interpreter_process 窗的投影态（与 Data 分离）：history 视口 + 展示档位。 */
@@ -72,7 +73,7 @@ export const setHistoryWindowMethod: WindowMethod<Data, ProcessWin> = {
       history_end: { type: "number", description: "End of range (non-neg int; pairs with history_start)" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: ProcessWin, args: Record<string, unknown>) => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: ProcessWin, args: Record<string, unknown>) => {
     // history_* → core transcript viewport 字段名
     const mapped: Record<string, unknown> = {};
     if ("history_tail" in args) mapped.tail = args.history_tail;

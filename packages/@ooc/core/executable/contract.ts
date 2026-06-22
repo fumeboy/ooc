@@ -6,20 +6,18 @@
  *
  * object method **可改 object data、可产生副作用**（区别于 readable 维度的 window method，
  * 后者只动展示投影态、不碰业务数据）。统一签名 `(ctx, self, args)`：
- *   - ctx  : ExecutableContext —— 运行时环境（thread / 对象身份元信息 / runtime 句柄）
- *   - self : Data —— 对象自身**业务数据**（由该 class 的 `types.ts` 定义；方法直接读写其字段）
+ *   - ctx  : ExecutableContext —— 运行时环境（对象身份元信息 / persistence / runtime 句柄）
+ *   - self : SelfProxy<Data> —— `self.data` 读写对象业务数据（由 class `types.ts` 定义）；
+ *            `self.methods.foo(args)` 调对象自己的另一条 object method（exec-by-name 自指）
  *   - args : 调用参数
- *
- * 与旧契约（`_shared/method-types.ts` 的 `ObjectMethod` + 单参 `MethodExecutionContext`
- * 把 `ctx.self`=整窗、`ctx.args` 捆绑在 ctx）的差异：self / args 升为独立入参，self 收窄为纯 Data。
  */
 
 import type {
-  ThreadContext,
   FlowObjectRef,
   ThreadPersistenceRef,
 } from "../_shared/types/thread.js";
 import type { MethodCallSchema } from "../_shared/types/intent.js";
+import type { SelfProxy } from "../_shared/types/self-proxy.js";
 
 /**
  * runtime 句柄 —— 让 method / constructor 行使「需要 runtime 协助」的副作用。
@@ -71,10 +69,14 @@ export interface RuntimeHandle {
  * **不含** self / args —— 它们是 exec 的独立入参。ctx 只携带「方法做副作用时需要的运行时环境」。
  */
 export interface ExecutableContext {
-  /** 当前执行该 method 的 thread（method 跑在某 thread 的 thinkloop 内时存在）。 */
-  thread?: ThreadContext;
   /** 接收者对象的身份元信息（id / class）。业务数据经 self 入参，**不**在此。 */
   object: { id: string; class: string };
+  /**
+   * 实例的**盘上定位**（中立持久化 ref，非 thread 运行态）——method 需读写自己所属
+   * flow object 的盘上位置时用（如 file 解析 worktree、knowledge 推导 stone/pool、
+   * runtime.create_object 落 session worktree）。取代旧的 `ctx.thread.persistence`。
+   */
+  persistence?: ThreadPersistenceRef;
   /** runtime 句柄 —— 实例化子对象 / 关窗等需 runtime 协助的副作用。 */
   runtime?: RuntimeHandle;
   /** method 跑在独立 flow object 上时设置。 */
@@ -90,11 +92,12 @@ export interface ExecutableContext {
 
 /**
  * constructor 的执行上下文 —— 实例尚未存在，故**无 `object`**（id/class 由 runtime 在打包成实例时分配）。
- * trivial 的 class（如 note/example）忽略 ctx；需要 thread/worktree/spawn 等前置的 class（file/search/
+ * trivial 的 class（如 note/example）忽略 ctx；需要 persistence/worktree/spawn 等前置的 class（file/search/
  * *_process）从此取运行时环境。
  */
 export interface ConstructorContext {
-  thread?: ThreadContext;
+  /** 新实例的盘上定位（中立持久化 ref）；取代旧的 `ctx.thread.persistence`。 */
+  persistence?: ThreadPersistenceRef;
   runtime?: RuntimeHandle;
   ownerFlowObjectRef?: FlowObjectRef;
   ownerThreadRef?: ThreadPersistenceRef;
@@ -121,10 +124,10 @@ export interface ObjectMethod<Data = any, Args = any> {
   permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
 
   intents?: {name: string, description: string}[]
-  route?: (ctx: ExecutableContext, self: Data, args: Args) => ObjectMethodIntents;
+  route?: (ctx: ExecutableContext, self: SelfProxy<Data>, args: Args) => ObjectMethodIntents;
   exec: (
     ctx: ExecutableContext,
-    self: Data,
+    self: SelfProxy<Data>,
     args: Args,
   ) => ObjectMethodResult | string | void | Promise<ObjectMethodResult | string | void>;
 }
@@ -183,7 +186,7 @@ export interface ObjectConstructor<Data = any, Args = any> {
  * 对象生命周期钩子的执行上下文 —— 在 construct 上下文之上携带 refcount 变动的目标 id。
  *
  * 生命周期钩子作用于**既有**对象（不产 Data）；body 经 ctx 自解析它要操作的对象：
- * `thread` 是解引用发生处的线程、`targetId` 是 refcount 跨 0↔1 的对象 id。
+ * `targetId` 是 refcount 跨 0↔1 的对象 id。
  */
 export interface LifecycleContext extends ConstructorContext {
   /** refcount 跨 0↔1 的对象 id（钩子 body 据此定位自己要操作的对象）。 */
@@ -197,7 +200,7 @@ export interface UnactiveResult {
 
 /**
  * 对象生命周期钩子（active/unactive 共用）—— 与 construct 对称、按 refcount 0↔1 触发。
- * 与 construct 签名不同：作用于既有对象、不产 Data；body 经 ctx（thread + targetId）自解析目标。
+ * 与 construct 签名不同：作用于既有对象、不产 Data；body 经 ctx（targetId）自解析目标。
  * 皆可选。无独立 destruct —— OOC object 默认持久身份；unactive 可经返回 {delete:true} 自决彻底删除
  * （refcount-0-gated，故无悬空引用）。仅 unactive 路径 honor delete；active 返回值忽略。
  */

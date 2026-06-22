@@ -36,7 +36,7 @@ const refreshMethod: ObjectMethod<Data> = {
       since_message_id: { type: "string", description: "增量拉的起点 message_id" },
     },
   },
-  exec: (_ctx, self, args) => executeRefresh(self, args),
+  exec: (_ctx, self, args) => executeRefresh(self.data, args),
 };
 
 const searchMethod: ObjectMethod<Data> = {
@@ -48,7 +48,7 @@ const searchMethod: ObjectMethod<Data> = {
       limit: { type: "number", description: "最多返回条数" },
     },
   },
-  exec: (_ctx, self, args) => executeSearch(self, args),
+  exec: (_ctx, self, args) => executeSearch(self.data, args),
 };
 
 const sendMethod: ObjectMethod<Data> = {
@@ -61,7 +61,7 @@ const sendMethod: ObjectMethod<Data> = {
       confirm: { type: "boolean", description: "true 才真发；首次 submit 走 dry-run" },
     },
   },
-  exec: (_ctx, self, args) => executeSend(self, args),
+  exec: (_ctx, self, args) => executeSend(self.data, args),
 };
 
 const replyMethod: ObjectMethod<Data> = {
@@ -75,7 +75,7 @@ const replyMethod: ObjectMethod<Data> = {
       confirm: { type: "boolean" },
     },
   },
-  exec: (_ctx, self, args) => executeReply(self, args),
+  exec: (_ctx, self, args) => executeReply(self.data, args),
 };
 
 const subscribeMethod: ObjectMethod<Data> = {
@@ -86,7 +86,7 @@ const subscribeMethod: ObjectMethod<Data> = {
       interval_ms: { type: "number", required: true, description: "refresh 间隔毫秒；0 取消订阅" },
     },
   },
-  exec: (_ctx, self, args) => executeSubscribe(self, args),
+  exec: (_ctx, self, args) => executeSubscribe(self.data, args),
 };
 
 const closeMethod: ObjectMethod<Data> = {

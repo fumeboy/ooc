@@ -11,14 +11,15 @@ import type {
   ExecutableModule,
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 const markDone: ObjectMethod<Data> = {
   name: "mark_done",
   description: "Mark this todo as done.",
-  exec: async (ctx: ExecutableContext, self: Data) => {
-    if (self.status === "done") return "已是 done 状态。";
-    self.status = "done";
+  exec: async (ctx: ExecutableContext, self: SelfProxy<Data>) => {
+    if (self.data.status === "done") return "已是 done 状态。";
+    self.data.status = "done";
     await ctx.reportDataEdit?.();
     return "已标记为 done。";
   },

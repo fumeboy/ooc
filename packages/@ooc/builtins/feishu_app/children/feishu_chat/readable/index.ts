@@ -11,6 +11,7 @@ import type {
   ReadableContext,
   ReadableModule,
 } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { Data, FeishuChatMessage } from "../types.js";
 
@@ -54,9 +55,9 @@ function formatMessageLine(m: FeishuChatMessage): string {
 }
 
 const readable: ReadableModule<Data> = {
-  readable: (_ctx: ReadableContext, self: Data) => ({
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>) => ({
     class: "feishu_chat",
-    content: renderFeishuChat(self),
+    content: renderFeishuChat(self.data),
   }),
   window: [
     {

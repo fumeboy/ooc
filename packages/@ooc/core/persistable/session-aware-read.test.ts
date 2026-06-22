@@ -61,7 +61,7 @@ function mkThread(baseDir: string, sessionId: string, objectId: string): ThreadC
 async function talkResolves(thread: ThreadContext, target: string): Promise<boolean> {
   const args = { target, title: "hi" };
   try {
-    await talkConstructor.exec({ thread, args }, args);
+    await talkConstructor.exec({ persistence: thread.persistence, args }, args);
     return true;
   } catch {
     return false;

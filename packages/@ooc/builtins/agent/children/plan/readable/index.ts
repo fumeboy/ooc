@@ -11,6 +11,7 @@ import type {
   ReadableContext,
   ReadableModule,
 } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import {
   xmlElement,
   xmlText,
@@ -22,24 +23,24 @@ import type { Data } from "../types.js";
 export interface PlanWin {}
 
 const readable: ReadableModule<Data, PlanWin> = {
-  readable: (_ctx: ReadableContext, self: Data, _win: PlanWin) => {
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: PlanWin) => {
     const children: XmlNode[] = [];
-    if (self.description !== undefined) {
-      children.push(xmlElement("description", {}, [xmlText(self.description)]));
+    if (self.data.description !== undefined) {
+      children.push(xmlElement("description", {}, [xmlText(self.data.description)]));
     }
-    const stepNodes: XmlNode[] = self.steps.map((s) => {
+    const stepNodes: XmlNode[] = self.data.steps.map((s) => {
       const attrs: Record<string, string> = { id: s.id, status: s.status };
       if (s.subPlanWindowId) attrs.sub_plan_window_id = s.subPlanWindowId;
       return xmlElement("step", attrs, [xmlText(s.text)]);
     });
     children.push(
-      xmlElement("steps", { count: String(self.steps.length) }, stepNodes),
+      xmlElement("steps", { count: String(self.data.steps.length) }, stepNodes),
     );
-    if (self.parentPlanWindowId) {
+    if (self.data.parentPlanWindowId) {
       children.push(
         xmlElement("parent_plan", {
-          plan_window_id: self.parentPlanWindowId,
-          step_id: self.parentStepId ?? "",
+          plan_window_id: self.data.parentPlanWindowId,
+          step_id: self.data.parentStepId ?? "",
         }),
       );
     }

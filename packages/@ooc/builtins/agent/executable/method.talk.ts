@@ -15,6 +15,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 const TALK_TIP = `talk 开启一个持续会话 talk_window。
@@ -37,7 +38,7 @@ export const talkMethod: ObjectMethod<Data> = {
       wait: { type: "boolean", required: false, description: "（fork）true 时父线程等待子线程回写" },
     },
   },
-  exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
+  exec: async (ctx: ExecutableContext, _self: SelfProxy<Data>, args: Record<string, unknown>) => {
     const target = typeof args.target === "string" ? args.target.trim() : "";
     if (!target) return `[talk] ${TALK_TIP}`;
     const hasTitle = typeof args.title === "string" && args.title.trim().length > 0;

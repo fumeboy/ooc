@@ -12,6 +12,7 @@ import type {
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import { runInterpreterExec, type InterpreterLang } from "./runtime.js";
 export { runInterpreterExec } from "./runtime.js";
 import type { Data } from "../types.js";
@@ -32,18 +33,16 @@ const execMethod: ObjectMethod<Data> = {
       code: { type: "string", required: true, description: "Code string to execute" },
     },
   },
-  exec: async (ctx: ExecutableContext, self: Data, args: Record<string, unknown>) => {
-    const thread = ctx.thread;
-    if (!thread) return "[interpreter_process.exec] 缺少 thread context。";
+  exec: async (ctx: ExecutableContext, self: SelfProxy<Data>, args: Record<string, unknown>) => {
     const lang = normLang(args);
     const code = args.code as string | undefined;
     if (!(lang && code)) {
       return "[interpreter_process.exec] 缺少执行参数。请重新 exec(window_id=\"<interpreter_process_id>\", method=\"exec\", args={ language: \"ts\"|\"js\", code: \"...\" })。";
     }
-    // self.userData 是活引用：self.setData 直接写它、经 reportDataEdit 随默认 data.json 落盘。
-    if (!self.userData) self.userData = {};
-    const record = await runInterpreterExec(thread, lang, code, self.userData, ctx.runtime, ctx.reportDataEdit);
-    self.history.push(record);
+    // self.data.userData 是活引用：sandbox self.setData 直接写它、经 reportDataEdit 随默认 data.json 落盘。
+    if (!self.data.userData) self.data.userData = {};
+    const record = await runInterpreterExec(ctx.persistence, lang, code, self.data.userData, ctx.runtime, ctx.reportDataEdit);
+    self.data.history.push(record);
     await ctx.reportDataEdit?.();
     return undefined;
   },

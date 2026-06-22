@@ -9,6 +9,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 const TODO_TIP = `todo 登记一条可见待办，产生 todo_window。
@@ -23,7 +24,7 @@ export const todoMethod: ObjectMethod<Data> = {
       activates_on: { type: "array", required: false, description: "命中这些 intent 时强提醒" },
     },
   },
-  exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
+  exec: async (ctx: ExecutableContext, _self: SelfProxy<Data>, args: Record<string, unknown>) => {
     const content = typeof args.content === "string" ? args.content.trim() : "";
     if (!content) return `[todo] ${TODO_TIP}`;
     if (!ctx.runtime) return `[todo] ${TODO_TIP}\n（runtime 不可用，无法实例化 todo 对象）`;

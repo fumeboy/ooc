@@ -4,7 +4,7 @@
  * runtime 是 agent 组合持有的 **tool-object 成员**，向 Agent 提供系统级接口。本维度落
  * `create_object`（建新对象骨架到 session worktree）。它从 root 迁来——root 不再承载对象世界机制。
  *
- * exec 直接调 `createObjectInSession`（persistable）；session/persistence 经 `ctx.thread`。
+ * exec 直接调 `createObjectInSession`（persistable）；session/persistence 经 `ctx.persistence`。
  *
  * 与 readable 维度（投影 + window method，在 ../readable/index.ts）物理分离。
  */
@@ -32,7 +32,7 @@ function asKnowledge(v: unknown): Record<string, string> | undefined {
 }
 
 /**
- * create_object 的 exec：建对象骨架落 session worktree。session/persistence 经 ctx.thread。
+ * create_object 的 exec：建对象骨架落 session worktree。session/persistence 经 ctx.persistence。
  * 导出供测试直接驱动（runtime 是其唯一注册家）。
  */
 export async function executeCreateObject(
@@ -40,10 +40,9 @@ export async function executeCreateObject(
   _self: Data,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return "[create_object] 缺少 thread context。";
-  if (!thread.persistence) return "[create_object] thread 无 persistence。";
-  const { baseDir, sessionId, objectId: authorObjectId } = thread.persistence;
+  const persistence = ctx.persistence;
+  if (!persistence) return "[create_object] 缺少 persistence context。";
+  const { baseDir, sessionId, objectId: authorObjectId } = persistence;
   if (isSuperSessionId(sessionId) || !sessionId || !sessionId.trim()) {
     return `[create_object] 仅业务 session 可建对象（当前 session='${sessionId ?? ""}'）。`;
   }

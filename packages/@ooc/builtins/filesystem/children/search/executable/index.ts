@@ -16,6 +16,7 @@ import type {
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 /** open_match 在 file 对象上套的上下文行数（match.line ± 该值）。 */
@@ -49,16 +50,16 @@ const openMatchMethod: ObjectMethod<Data> = {
   },
   exec: async (
     ctx: ExecutableContext,
-    self: Data,
+    self: SelfProxy<Data>,
     args: { index?: number },
   ): Promise<string | undefined> => {
     const indexArg = args.index;
     if (typeof indexArg !== "number") {
       return "[search.open_match] 缺少 index 参数（应是整数）。";
     }
-    const match = self.matches.find((m) => m.index === indexArg);
+    const match = self.data.matches.find((m) => m.index === indexArg);
     if (!match) {
-      return `[search.open_match] match index ${indexArg} 不存在（当前 ${self.matches.length} 条 match，最大 index ${self.matches.length - 1}）。`;
+      return `[search.open_match] match index ${indexArg} 不存在（当前 ${self.data.matches.length} 条 match，最大 index ${self.data.matches.length - 1}）。`;
     }
 
     const runtime = ctx.runtime;
@@ -74,7 +75,7 @@ const openMatchMethod: ObjectMethod<Data> = {
 
     const absPath = isAbsolute(match.path)
       ? match.path
-      : resolve(self.searchRoot ?? process.cwd(), match.path);
+      : resolve(self.data.searchRoot ?? process.cwd(), match.path);
 
     await runtime.instantiate(FILE_CLASS, { path: absPath, lines });
     return undefined;

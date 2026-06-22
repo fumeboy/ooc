@@ -16,6 +16,7 @@ import type {
   ReadableContext,
   ReadableModule,
 } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
 import {
   deriveStoneFromThread,
@@ -37,7 +38,7 @@ export interface SkillIndexWin {}
  * 真异常 log 出来而不静默吞）。
  */
 async function computeSkills(ctx: ReadableContext): Promise<SkillEntry[]> {
-  const persistence = ctx.thread?.persistence;
+  const persistence = ctx.persistence;
   if (!persistence) return [];
 
   try {
@@ -66,7 +67,7 @@ async function computeSkills(ctx: ReadableContext): Promise<SkillEntry[]> {
 }
 
 const readable: ReadableModule<Data, SkillIndexWin> = {
-  readable: async (ctx: ReadableContext, _self: Data) => {
+  readable: async (ctx: ReadableContext, _self: ReadonlySelfProxy<Data>) => {
     const skills = await computeSkills(ctx);
     return {
       class: "skill_index",

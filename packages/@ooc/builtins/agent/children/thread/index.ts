@@ -38,6 +38,7 @@ import {
 } from "@ooc/builtins/agent/thread/executable/talk-fork.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
+import { runningThread } from "./executable/running-thread.js";
 import persistable from "./persistable/index.js";
 import { writeThread } from "./persistable/thread-json.js";
 import type { Data } from "./types.js";
@@ -73,8 +74,7 @@ function deriveChildPersistence(
  * self-view 窗本轮不在 construct 内造（子 thread 起 thinkloop 时由 init 投影）；share_windows 不再支持。
  */
 async function execFork(ctx: ConstructorContext, selfObjectId: string): Promise<Data> {
-  const parent = ctx.thread;
-  if (!parent) throw new Error("[thread] 缺少 thread context。");
+  const parent = runningThread(ctx);
 
   const content = typeof ctx.args.msg === "string" ? ctx.args.msg : "";
   if (!content.trim()) {
@@ -141,8 +141,7 @@ const talkConstructor: ObjectConstructor<Data> = {
     },
   } as MethodCallSchema,
   exec: async (ctx: ConstructorContext, args: Record<string, unknown>): Promise<Data> => {
-    const thread = ctx.thread;
-    if (!thread) throw new Error("[thread] 缺少 thread context。");
+    const thread = runningThread(ctx);
     const target = typeof args.target === "string" ? args.target.trim() : "";
     if (!target) throw new Error(`[thread] 缺少 target 参数。\n${TALK_CONSTRUCTOR_TIP}`);
 
@@ -206,8 +205,8 @@ const unactive: ObjectLifecycleHook = {
   description:
     "Notify the dereferenced thread it lost its last subscriber (creator closed the conversation window); non-terminal threads receive an inbox notice and self-decide whether to end. No cancel / cascade / forced destruct.",
   exec: async (ctx) => {
-    if (!ctx.thread) return;
-    const t = findChild(ctx.thread, ctx.targetId);
+    const lifeThread = runningThread(ctx);
+    const t = findChild(lifeThread, ctx.targetId);
     if (!t || TERMINAL.has(t.status)) return;
     const notice: ThreadMessage = {
       ...makeMessage(

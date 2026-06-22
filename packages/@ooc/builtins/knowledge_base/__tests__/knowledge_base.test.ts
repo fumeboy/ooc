@@ -3,6 +3,7 @@ import "@ooc/core/runtime/register-builtins.js"; // 全量 boot：注册 knowled
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { KNOWLEDGE_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
+import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 
 function objMethod(name: string) {
   return builtinRegistry.getClass("knowledge_base")?.executable?.methods.find((m) => m.name === name);
@@ -23,7 +24,7 @@ test("knowledge_base.open_knowledge 委托 ctx.runtime.instantiate 造 knowledge
   };
   const out = await open.exec(
     { runtime, object: { id: "knowledge_base", class: "knowledge_base" }, args: {} } as never,
-    {},
+    makeSelfProxy({}, "knowledge_base", undefined),
     { path: "x" },
   );
   expect(String(out)).toContain("opened knowledge");
@@ -38,7 +39,7 @@ test("knowledge_base.open_knowledge 缺 runtime 句柄时 fail-loud（本方法�
   try {
     await open.exec(
       { object: { id: "knowledge_base", class: "knowledge_base" }, args: {} } as never,
-      {},
+      makeSelfProxy({}, "knowledge_base", undefined),
       { path: "x" },
     );
   } catch (e) {
@@ -53,7 +54,7 @@ test("knowledge_base readable 维度：readable 经 register 注册（投影 cla
   expect(cls?.readable).toBeDefined();
   const proj = cls!.readable!.readable(
     { object: { id: "knowledge_base", class: "knowledge_base" } } as never,
-    {},
+    makeReadonlySelfProxy({}),
     {},
   );
   expect((proj as { class: string }).class).toBe("knowledge_base");
@@ -63,7 +64,7 @@ test("knowledge_base readable 渲染身份说明", () => {
   const cls = builtinRegistry.getClass("knowledge_base");
   const proj = cls!.readable!.readable(
     { object: { id: "knowledge_base", class: "knowledge_base" } } as never,
-    {},
+    makeReadonlySelfProxy({}),
     {},
   ) as { class: string; content: any[] };
   const about = proj.content.find((n: any) => n.tag === "about");

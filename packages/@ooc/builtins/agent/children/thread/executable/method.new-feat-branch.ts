@@ -32,6 +32,7 @@ import type {
 } from "@ooc/core/executable/contract.js";
 import { createFeatBranchWorktree } from "@ooc/core/persistable/index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
+import { runningThread } from "./running-thread.js";
 import type { Data } from "../types.js";
 
 const NEW_FEAT_BRANCH_TIP = `new_feat_branch 在 super flow 内开一个 feat 分支用于沉淀（沉淀第一步）。
@@ -60,8 +61,7 @@ export async function executeNewFeatBranch(
   ctx: ExecutableContext,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return "[new_feat_branch] 缺少 thread context。";
+  const thread = runningThread(ctx);
   if (!thread.persistence) return "[new_feat_branch] thread 无 persistence。";
 
   const { baseDir, sessionId } = thread.persistence;

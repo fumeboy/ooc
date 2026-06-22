@@ -15,6 +15,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { serializeXml, xmlElement, type XmlNode } from "@ooc/core/_shared/types/xml.js";
+import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import searchReadable, {
   DEFAULT_RESULTS_VIEWPORT,
 } from "@ooc/builtins/filesystem/search/readable/index.js";
@@ -23,7 +24,7 @@ import type { Data, SearchMatch } from "@ooc/builtins/filesystem/search/types";
 
 /** 把 readable 投影 {class, content} 序列化成 XML 字符串（外层包 <window>）。 */
 function renderXml(self: Data, win: { resultsViewport?: Data["matches"] extends never ? never : unknown }): string {
-  const node = searchReadable.readable({} as never, self, win as never) as {
+  const node = searchReadable.readable({} as never, makeReadonlySelfProxy(self), win as never) as {
     class: string;
     content: XmlNode[];
   };
@@ -116,7 +117,7 @@ describe("search readable render: matches.count reflects full total (not visible
 
 describe("set_results_window window method", () => {
   const call = (before: unknown, args: Record<string, unknown>) =>
-    setResultsWindow.exec({} as never, makeData([]), before as never, args);
+    setResultsWindow.exec({} as never, makeReadonlySelfProxy(makeData([])), before as never, args);
 
   it("matches_tail returns new win with resultsViewport", () => {
     const out = call({ resultsViewport: { tail: 50 } }, { matches_tail: 100 });
@@ -192,7 +193,7 @@ describe("open_match honors full matches array (not viewport-clipped)", () => {
     // tail=10 → visible 90..99；open_match 按全集 index 寻址，但本例只验证缺 index 的 guard。
     const out = await openMatch.exec(
       { thread: { contextWindows: [], events: [] }, runtime: undefined } as never,
-      self,
+      makeSelfProxy(self, "w_search", undefined),
       {},
     );
     expect(typeof out).toBe("string");

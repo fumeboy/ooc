@@ -27,6 +27,7 @@ import type {
 import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { deliverPrWindowToReviewers } from "@ooc/builtins/agent/pr/delivery.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
+import { runningThread } from "./running-thread.js";
 import type { Data } from "../types.js";
 
 const CREATE_PR_TIP = `create_pr_and_invite_reviewers 是 super flow 沉淀的 finalizer（feat 分支 → commit → PR）。
@@ -59,8 +60,7 @@ export async function executeCreatePrAndInviteReviewers(
   ctx: ExecutableContext,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return "[create_pr_and_invite_reviewers] 缺少 thread context。";
+  const thread = runningThread(ctx);
   if (!thread.persistence) return "[create_pr_and_invite_reviewers] thread 无 persistence。";
 
   const { baseDir, sessionId, objectId, stonesBranch, sedimentIntent } = thread.persistence;

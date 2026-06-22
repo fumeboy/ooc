@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import "@ooc/core/runtime/register-builtins.js"; // 全量 boot（example 不在 register-builtins，下方直接装 Class）
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import { Class as ExampleClass } from "@ooc/builtins/example/index.js";
 import type { Data } from "@ooc/builtins/example/types.js";
 import type { ExampleWin } from "@ooc/builtins/example/readable/index.js";
@@ -37,8 +38,8 @@ test("example construct 产出初始 Data，bump 累加业务数据（self.bumpC
   expect(data.message).toBe("hi\nthere");
   expect(data.bumpCount).toBe(0);
 
-  // bump object method：可改 self（Data）。
-  await objMethod("bump")!.exec({ object: { id: "x", class: "example" }, args: {} } as never, data, {});
+  // bump object method：可改 self.data（Data）。
+  await objMethod("bump")!.exec({ object: { id: "x", class: "example" }, args: {} } as never, makeSelfProxy(data, "x", undefined), {});
   expect(data.bumpCount).toBe(1);
 });
 
@@ -68,7 +69,7 @@ test("example readable 渲染 bump_count + viewport 切片后的 message", () =>
   const cls = builtinRegistry.getClass("example");
   const self: Data = { message: "line0\nline1\nline2", bumpCount: 3 };
   const win: ExampleWin = { viewport: { lineStart: 0, lineEnd: 1, columnStart: 0, columnEnd: 80 } };
-  const proj = cls!.readable!.readable({} as never, self, win) as { class: string; content: any[] };
+  const proj = cls!.readable!.readable({} as never, makeReadonlySelfProxy(self), win) as { class: string; content: any[] };
   const bump = proj.content.find((n: any) => n.tag === "bump_count");
   expect(bump?.children?.[0]?.value).toBe("3");
   const message = proj.content.find((n: any) => n.tag === "message");
