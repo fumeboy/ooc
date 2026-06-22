@@ -13,8 +13,12 @@
  * **ThreadWin**（inst.win）= 投影态：transcript 渲染窗口（window method `set_transcript_window` 读写）。
  *
  * 元信息字段（id / class / title / status / createdAt / parentWindowId）由 runtime 管理
- * （`OocObjectRef` 实例），不进 Data；thread 的过程数据（context/inbox/outbox/events/status）
- * 落 thread.json / thread-context.json，由 runtime/persistence 管理，不冗余进本 Data。
+ * （`OocObjectRef` 实例），不进 Data；thread 的过程数据（context/events/status）落 thread.json /
+ * thread-context.json，由 runtime/persistence 管理，不冗余进本 Data。
+ *
+ * **inbox / outbox（creator-scoped 会话通道）**：一条 thread 与**它的 creator** 之间的消息单一真相源——
+ * inbox = creator → 本 thread 的入站消息；outbox = 本 thread → creator 的出站消息。`say` 只往这两个 box
+ * 写、经 runtime 触发对端调度（见 `executable/session-methods.ts`）；对端读侧投影（peer-ref）属后续重构。
  */
 export interface Data {
   /** 对端 objectId（peer 会话）或自己的 objectId（fork 子线程）。 */
@@ -23,6 +27,10 @@ export interface Data {
   targetThreadId?: string;
   /** true ⇒ fork 子线程窗（同对象，旧 do_window）；缺省 ⇒ peer 跨对象会话窗。 */
   isForkWindow?: boolean;
+  /** creator → 本 thread 的入站消息（creator-scoped inbox）。 */
+  inbox?: import("@ooc/core/_shared/types/thread.js").ThreadMessage[];
+  /** 本 thread → creator 的出站消息（creator-scoped outbox）。 */
+  outbox?: import("@ooc/core/_shared/types/thread.js").ThreadMessage[];
 }
 
 /**
