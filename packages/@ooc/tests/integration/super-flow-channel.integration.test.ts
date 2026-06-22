@@ -37,7 +37,7 @@ import {
 import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
-import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
+import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -54,7 +54,7 @@ import {
   llm,
   setupTempFlow,
 } from "./_fixture";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 const ALICE_SELF = `
 你叫 Alice，一个务实的工程师助手。

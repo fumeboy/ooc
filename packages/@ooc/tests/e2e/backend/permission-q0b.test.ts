@@ -28,7 +28,7 @@ import * as toolsModule from "@ooc/core/executable/tools";
 import * as observableModule from "@ooc/core/observable";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 import { deriveStoneFromThread, stoneDir } from "@ooc/core/persistable/common";
-import * as contextModule from "@ooc/core/thinkable/context";
+import * as contextModule from "@ooc/builtins/agent/thread/thinkable/context/index";
 import type {
   LlmClient,
   LlmGenerateResult,

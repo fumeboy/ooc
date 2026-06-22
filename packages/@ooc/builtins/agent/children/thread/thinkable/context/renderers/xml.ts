@@ -30,23 +30,23 @@
  *   </context>
  */
 import type { ContextSnapshot } from "../snapshot.js";
-import type { OocObjectRef } from "../../../runtime/ooc-class.js";
-import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../../../_shared/types/context-window.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
+import { ROOT_WINDOW_ID, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import {
   getSessionObjectTable,
   setSessionObject,
-} from "../../../runtime/session-object-table.js";
+} from "@ooc/core/runtime/session-object-table.js";
 import {
   builtinRegistry,
   type ObjectRegistry,
-} from "../../../runtime/object-registry.js";
-import type { ReadableContext, ReadableProjection } from "../../../readable/contract.js";
-import { makeReadonlySelfProxy } from "../../../runtime/self-proxy.js";
-import { extractBasicDescription, conciseDescription } from "@ooc/core/thinkable/context/method-description.js";
+} from "@ooc/core/runtime/object-registry.js";
+import type { ReadableContext, ReadableProjection } from "@ooc/core/readable/contract.js";
+import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
+import { extractBasicDescription, conciseDescription } from "@ooc/builtins/agent/thread/thinkable/context/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
-import { readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "../../../persistable/index.js";
-import { persistableCtx, runtimeObjectRef } from "../../../persistable/object-data.js";
+import { readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "@ooc/core/persistable/index.js";
+import { persistableCtx, runtimeObjectRef } from "@ooc/core/persistable/object-data.js";
 import {
   appendNode,
   optionalElement,
@@ -136,8 +136,8 @@ export function computeVisibleMethodSet(
   const inSuperFlow = isSuperSessionId(thread.persistence?.sessionId ?? "");
 
   type AnyMethod =
-    | import("../../../executable/contract.js").ObjectMethod
-    | import("../../../readable/contract.js").WindowMethod;
+    | import("@ooc/core/executable/contract.js").ObjectMethod
+    | import("@ooc/core/readable/contract.js").WindowMethod;
   const merged = new Map<string, AnyMethod>();
 
   // object method：沿继承链合并。self 窗取全部自有方法名；非 self 按 decl.object_methods 引用名挑选。
@@ -291,6 +291,7 @@ export async function resolveProjection(
   const readableCtx: ReadableContext = {
     object: { id: inst.id, class: classOf(inst) },
     persistence: thread.persistence,
+    ownerThread: thread,
   };
 
   // self 门面窗 hydrate：self 门面窗注入时 data 为空（init.ts），其身份正文（self.md）由

@@ -3,12 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { derivePeerObjectWindows } from "../object-windows.js";
-import { makeThread } from "../../../__tests__/make-thread";
-import { setSessionObject } from "../../../runtime/session-object-table.js";
+import { makeThread } from "@ooc/core/__tests__/make-thread";
+import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 import {
   createStoneObject,
   writeReadable,
-} from "../../../persistable";
+} from "@ooc/core/persistable";
 
 describe("derivePeerObjectWindows (ooc-6 Phase 6)", () => {
   let baseDir: string;

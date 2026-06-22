@@ -15,14 +15,14 @@ import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry, createObjectRegistry, type ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { handleExecTool } from "../tools/exec.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context.js";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import {
   materializeWindow,
   getSessionObjectTable,
 } from "@ooc/core/runtime/session-object-table.js";
 import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import { serializeXml, xmlElement, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { buildInputItems } from "@ooc/core/thinkable/context.js";
+import { buildInputItems } from "@ooc/builtins/agent/thread/thinkable/context/index.js";
 import formReadable from "@ooc/builtins/agent/method_exec_form/readable/index.js";
 import type { Data as FormData } from "@ooc/builtins/agent/method_exec_form/types.js";
 import { createFlowObject } from "@ooc/core/persistable/flow-object.js";

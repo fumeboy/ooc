@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import { buildProtocolKnowledgeWindows } from "../protocol";
-import { makeThread } from "../../../__tests__/make-thread";
+import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type { ThreadContext } from "../index.js";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import { objectDataOf, threadWindowIdOf } from "@ooc/core/_shared/types/context-window.js";

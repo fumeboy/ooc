@@ -1,4 +1,4 @@
-import type { ThreadContext } from "../thinkable/context";
+import type { ThreadContext } from "../_shared/types/thread.js";
 import type { LlmTool, LlmToolCall } from "../thinkable/llm/types";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import { builtinRegistry } from "../runtime/object-registry.js";

@@ -139,6 +139,7 @@ export class WindowManager implements RuntimeHandle {
     const ctorCtx: ConstructorContext = {
       persistence: this.threadRef?.persistence,
       runtime: this,
+      ownerThread: this.threadRef,
       args,
     };
     const data = await ctor.exec(ctorCtx, args);
@@ -228,6 +229,7 @@ export class WindowManager implements RuntimeHandle {
       persistence: this.threadRef?.persistence,
       object: { id: instance.id, class: instance.class },
       runtime: this,
+      ownerThread: this.threadRef,
       args,
     };
     const self = this.threadRef
@@ -275,6 +277,7 @@ export class WindowManager implements RuntimeHandle {
       persistence: thread.persistence,
       object: { id: instance.id, class: instance.class },
       runtime: this,
+      ownerThread: thread,
       args,
       reportDataEdit: () => this.hooks.reportDataEdit?.(objectId) ?? Promise.resolve(),
       reportContextEdit: () => this.hooks.reportContextEdit?.() ?? Promise.resolve(),
@@ -314,6 +317,7 @@ export class WindowManager implements RuntimeHandle {
     const ctx: ReadableContext = {
       persistence: thread.persistence,
       object: { id: instance.id, class: instance.class },
+      ownerThread: thread,
     };
     const self = getSessionObject(thread, objectId)?.data ?? {};
     const nextWin = await method.exec(ctx, makeReadonlySelfProxy(self), instance.win, args);

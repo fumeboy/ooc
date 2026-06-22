@@ -26,7 +26,7 @@ import {
 import { readThread, writeThread } from "../persistable/thread-json";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID, THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
+import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -39,7 +39,7 @@ import {
   getSessionObjectTable,
 } from "@ooc/core/runtime/session-object-table.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context.js";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import type { TalkData, TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
 
 /**

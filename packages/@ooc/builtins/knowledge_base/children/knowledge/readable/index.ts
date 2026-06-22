@@ -26,7 +26,7 @@ import {
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
-import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
+import { loadKnowledgeIndex } from "@ooc/builtins/knowledge_base/loader.js";
 import type { Data } from "../types.js";
 
 const MAX_KNOWLEDGE_BYTES = 8192;

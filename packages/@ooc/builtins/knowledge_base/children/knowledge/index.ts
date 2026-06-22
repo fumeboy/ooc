@@ -12,7 +12,7 @@ import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
 import type { ConstructorContext } from "@ooc/core/executable/contract.js";
 import { deriveStoneFromThread } from "@ooc/core/persistable/common.js";
 import { derivePoolFromThread } from "@ooc/core/persistable/pool-object.js";
-import { loadKnowledgeIndex } from "@ooc/core/thinkable/knowledge/index.js";
+import { loadKnowledgeIndex } from "@ooc/builtins/knowledge_base/loader.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import type { Data } from "./types.js";

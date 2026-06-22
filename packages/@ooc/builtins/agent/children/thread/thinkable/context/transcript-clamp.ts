@@ -18,7 +18,7 @@
  * 在被丢前缀里"的孤儿 output——sanitize 丢掉这类孤儿 output 即可（provider 层不 sanitize，孤儿
  * tool_result 会被 Anthropic/OpenAI 拒，必须在此堵住）。
  */
-import type { LlmInputItem } from "../llm/types";
+import type { LlmInputItem } from "@ooc/core/thinkable/llm/types";
 import { estimateTranscriptTokens } from "./budget.js";
 
 export interface TranscriptClampResult {

@@ -12,7 +12,7 @@
  * —— 与 executable 维度的 object method 维度隔离（同名 fail-loud）。
  */
 
-import type { ThreadPersistenceRef } from "../_shared/types/thread.js";
+import type { ThreadPersistenceRef, ThreadContext } from "../_shared/types/thread.js";
 import type { MethodCallSchema } from "../_shared/types/intent.js";
 import type { XmlNode } from "../_shared/types/xml.js";
 import type { ReadonlySelfProxy } from "../_shared/types/self-proxy.js";
@@ -26,6 +26,12 @@ export interface ReadableContext {
    * file 读文件内容、knowledge/skill_index 推导 stone/pool ref。取代旧的 `ctx.thread.persistence`。
    */
   persistence?: ThreadPersistenceRef;
+  /**
+   * **运行 thread**（正在被渲染的那条线程）——由 WindowManager.fromThread 注入。
+   * thread 类 readable 投影 transcript（按运行 thread 的 events/inbox/outbox 归属）经
+   * `runningThreadForRender(ctx)` 读取；缺则降级（不渲 transcript、不崩 render）。其它 class readable 忽略。
+   */
+  ownerThread?: ThreadContext;
 }
 
 /**

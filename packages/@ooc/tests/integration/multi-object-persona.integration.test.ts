@@ -34,8 +34,8 @@ import {
   llm,
   setupTempFlow,
 } from "./_fixture";
-import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 const ALICE_SELF = `
 你叫 Alice。每次 end 时，summary 必须以 "ALICE-TOKEN-7421:" 开头。

@@ -12,7 +12,7 @@ import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { handleCloseTool } from "@ooc/core/executable/tools/close.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context.js";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
 /**

@@ -37,11 +37,9 @@ import type {
  * 旧的独立 writeFileExec 已退役，写盘逻辑下沉到 file construct——这里直接驱动 construct.exec
  * 模拟 super(foo) 在 feat 绑定下用 write_file 落 feat worktree。
  */
-async function executeWriteFileMethod(ctx: { thread?: unknown; args: Record<string, unknown> }): Promise<{ ok: true; path: string }> {
-  const data = await fileConstruct.exec(
-    { thread: ctx.thread, args: ctx.args } as unknown as ConstructorContext,
-    ctx.args,
-  );
+async function executeWriteFileMethod(ctx: { ownerThread?: unknown; args: Record<string, unknown> }): Promise<{ ok: true; path: string }> {
+  // ctx 由 ctxWith 造，已带 ownerThread（运行 thread，construct 经 ctx.ownerThread 取 persistence/events）。
+  const data = await fileConstruct.exec(ctx as unknown as ConstructorContext, ctx.args);
   return { ok: true, path: (data as { path: string }).path };
 }
 
@@ -92,7 +90,7 @@ function superThread(baseDir: string, objectId: string) {
 }
 
 function ctxWith(thread: unknown, args: Record<string, unknown>): ExecutableContext {
-  return { thread, args } as unknown as ExecutableContext;
+  return { ownerThread: thread, args } as unknown as ExecutableContext;
 }
 
 /** new_feat_branch exec 是 (ctx, args)；测试直接驱动。 */

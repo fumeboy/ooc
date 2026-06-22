@@ -38,8 +38,8 @@ import { createFlowObject, createFlowSession, sessionMetadataFile, resolveSuperA
 import { readThread, writeThread } from "../persistable/thread-json.js";
 import { stat } from "node:fs/promises";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
-import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
-import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread.js";
+import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { threadWindowIdOf, isSelfThreadWindow, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";

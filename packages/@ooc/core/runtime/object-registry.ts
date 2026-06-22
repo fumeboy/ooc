@@ -33,6 +33,7 @@ import type {
   ReadableModule,
 } from "../readable/contract.js";
 import type { PersistableModule } from "../persistable/contract.js";
+import type { ThinkableModule } from "../thinkable/contract.js";
 import type { VisibleServerModule } from "../_shared/types/visible-server.js";
 
 export type { RegisteredClass };
@@ -118,6 +119,7 @@ export class ObjectRegistry {
       executable: cls.executable ?? existing?.executable,
       readable: cls.readable ?? existing?.readable,
       persistable: cls.persistable ?? existing?.persistable,
+      thinkable: cls.thinkable ?? existing?.thinkable,
       visibleServer: cls.visibleServer ?? existing?.visibleServer,
       parentClass: nextParentClass,
     });
@@ -241,6 +243,19 @@ export class ObjectRegistry {
     return undefined;
   }
 
+  /**
+   * 解析 thinkable 模块（沿继承链首个声明 thinkable 的 class；无则 undefined）。
+   * 仅跑 thinkloop 的 thread 类注册；core thinkloop/scheduler 经 `thinkableOf` 包装解析后调用，
+   * 无注册 fail-loud（见 `../thinkable/resolve.ts`）。
+   */
+  resolveThinkable(classId: string): ThinkableModule | undefined {
+    for (const cid of this.selfThenChain(classId)) {
+      const t = this.store.get(cid)?.thinkable;
+      if (t) return t;
+    }
+    return undefined;
+  }
+
   /** 解析 visibleServer 模块（沿继承链首个声明 visibleServer 的 class；无则 HTTP 控制面无可调方法）。 */
   resolveVisibleServer(classId: string): VisibleServerModule | undefined {
     for (const cid of this.selfThenChain(classId)) {
@@ -298,6 +313,7 @@ export class ObjectRegistry {
           executable: def.executable ?? existing.executable,
           readable: def.readable ?? existing.readable,
           persistable: def.persistable ?? existing.persistable,
+          thinkable: def.thinkable ?? existing.thinkable,
           visibleServer: def.visibleServer ?? existing.visibleServer,
           parentClass:
             def.parentClass !== undefined ? def.parentClass : existing.parentClass,

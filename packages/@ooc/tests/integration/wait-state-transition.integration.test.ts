@@ -17,7 +17,7 @@ import {
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
   let tempRoot: string;

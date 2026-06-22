@@ -11,7 +11,7 @@
  *
  * 持 manager 的 **live `instances` Map** 引用，snapshot 时取最新全量；IO 失败 fail-soft（不阻塞 think loop）。
  */
-import type { ThreadContext } from "../thinkable/context.js";
+import type { ThreadContext } from "../_shared/types/thread.js";
 import type { OocObjectRef } from "./ooc-class.js";
 import type { ObjectRegistry } from "./object-registry.js";
 import { saveObjectData } from "../persistable/object-data.js";

@@ -11,7 +11,7 @@ import {
 } from "@ooc/core/persistable";
 import { writeSelf, readSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { Class as ThreadClass } from "@ooc/builtins/agent/thread";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 /** talk constructor 现寄居在 thread Class.construct（target=别对象 ⇒ peer 会话校验存在性）。 */
 const talkConstructor = ThreadClass.construct!;
@@ -61,7 +61,7 @@ function mkThread(baseDir: string, sessionId: string, objectId: string): ThreadC
 async function talkResolves(thread: ThreadContext, target: string): Promise<boolean> {
   const args = { target, title: "hi" };
   try {
-    await talkConstructor.exec({ persistence: thread.persistence, args }, args);
+    await talkConstructor.exec({ persistence: thread.persistence, ownerThread: thread, args }, args);
     return true;
   } catch {
     return false;

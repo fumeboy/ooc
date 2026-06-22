@@ -20,8 +20,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { makeThread } from "@ooc/core/__tests__/make-thread";
-import type { ProcessEvent } from "@ooc/core/thinkable/context";
-import { buildInputItems } from "@ooc/core/thinkable/context";
+import type { ProcessEvent } from "@ooc/core/_shared/types/thread.js";
+import { buildInputItems } from "@ooc/builtins/agent/thread/thinkable/context/index";
 import { createFlowObject } from "@ooc/core/persistable";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import {

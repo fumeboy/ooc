@@ -18,18 +18,18 @@ import {
   readExecutableSource,
   readReadable,
   resolveStoneIdentityRef,
-} from "../../persistable/index.js";
+} from "@ooc/core/persistable/index.js";
 import type { ThreadContext } from "./index.js";
-import type { ObjectRegistry, RegisteredClass } from "../../runtime/object-registry.js";
-import { builtinRegistry } from "../../runtime/object-registry.js";
-import type { OocObjectRef } from "../../runtime/ooc-class.js";
-import type { OocClass } from "../../runtime/ooc-class.js";
-import { objectDataOf, classOf } from "../../_shared/types/context-window.js";
-import { getSessionObjectTable, materializeWindow } from "../../runtime/session-object-table.js";
-import type { ReadableContext, ReadableProjection } from "../../readable/contract.js";
+import type { ObjectRegistry, RegisteredClass } from "@ooc/core/runtime/object-registry.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
+import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
+import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { getSessionObjectTable, materializeWindow } from "@ooc/core/runtime/session-object-table.js";
+import type { ReadableContext, ReadableProjection } from "@ooc/core/readable/contract.js";
 import { SUPER_ALIAS_TARGET, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
-import { defaultServerLoader } from "../../runtime/server-loader.js";
+import { defaultServerLoader } from "@ooc/core/runtime/server-loader.js";
 
 /**
  * 一个把 code load 失败注入 self window 的 readable 投影 —— 让 agent 在 context 里看到

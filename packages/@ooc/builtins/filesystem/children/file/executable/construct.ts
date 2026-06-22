@@ -223,10 +223,12 @@ export const construct: ObjectConstructor<Data> = {
   },
   exec: async (ctx: ConstructorContext, args: Record<string, unknown>): Promise<Data> => {
     const isWrite = typeof args.content === "string";
-    // TODO(thread-core-boundary): construct ctx 无运行 thread 的 events 流，故 write_file 的
-    // worktree/沉淀提示注入暂缺（传 undefined）；待「运行 thread 获取」路径接入后回填 events。
+    // 运行 thread（ctx.ownerThread，WindowManager.fromThread 注入）提供 worktree/沉淀提示注入所需
+    // 的 events 流；persistence 在真实 runtime 即 thread.persistence，缺省回退运行 thread 的 persistence
+    // （feat 分支绑定 stonesBranch 落在运行 thread 上）。
+    const persistence = ctx.persistence ?? ctx.ownerThread?.persistence;
     return isWrite
-      ? constructWriteFile(ctx.persistence, args, undefined)
-      : constructOpenFile(ctx.persistence, args);
+      ? constructWriteFile(persistence, args, ctx.ownerThread?.events)
+      : constructOpenFile(persistence, args);
   },
 };

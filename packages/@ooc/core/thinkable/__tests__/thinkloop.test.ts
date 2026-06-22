@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import "@ooc/core/runtime/register-builtins.js";
 import * as toolsModule from "../../executable/tools.ts";
 import * as observableModule from "../../observable/index.ts";
-import * as contextModule from "../context.ts";
+import * as contextModule from "@ooc/builtins/agent/thread/thinkable/context/index";
 import type { LlmClient, LlmGenerateResult, LlmInputItem, LlmToolCall } from "../llm/types";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";

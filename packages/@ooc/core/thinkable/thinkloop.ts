@@ -2,11 +2,17 @@ import { decidePermission, type PendingToolCall } from "../executable/permission
 import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
-import { buildInputItems, type ProcessEvent, type ThreadContext } from "./context";
-// thread compress policy（blessed thread import，同 writeThread）：framework hook 调、thread builtin 实现。
-import { maybeAutoCompress, maybeForceWaitForCompress } from "@ooc/builtins/agent/thread/executable/compress.js";
+import type { ProcessEvent, ThreadContext } from "../_shared/types/thread.js";
+// thinkable 模块经 registry 解析（thinkableOf）调用——core 不再静态 import thread builtin 的
+// context 构造 / compress policy；buildInputItems / appendEvents / compress 钩子全归 thread.thinkable。
+import { thinkableOf } from "./resolve.js";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "./llm/types";
 import { LlmTimeoutError } from "./llm/timeout";
+
+/** 把 core 本步产出的 ProcessEvent 折进 thread 历史——经 thread.thinkable.appendEvents 单一 ingest。 */
+function record(thread: ThreadContext, ...events: ProcessEvent[]): void {
+  thinkableOf(thread).appendEvents({ thread }, events);
+}
 
 /**
  * 把 LlmToolCall 解析成 PermissionDecider 可消费的 PendingToolCall 载荷。
@@ -72,7 +78,7 @@ async function dispatchApprovedToolCall(
     } catch {
       // output 不是 JSON 时默认认为成功
     }
-    thread.events.push({
+    record(thread, {
       category: "tool_runtime",
       kind: "function_call_output",
       callId: toolCall.id,
@@ -81,7 +87,7 @@ async function dispatchApprovedToolCall(
       ok,
     });
   } catch (error) {
-    thread.events.push({
+    record(thread, {
       category: "tool_runtime",
       kind: "function_call_output",
       callId: toolCall.id,
@@ -129,7 +135,7 @@ async function processDecidedPermissionAsks(thread: ThreadContext): Promise<bool
       if (!pc) {
         // pendingCall 不应缺失 (写 ask event 时必填); 缺失时退化为写 denied,
         // 避免静默吞噬 (silent-swallow ban)。
-        thread.events.push({
+        record(thread, {
           category: "permission",
           kind: "permission_denied",
           toolCallId: event.toolCallId,
@@ -137,7 +143,7 @@ async function processDecidedPermissionAsks(thread: ThreadContext): Promise<bool
           reason: "approve received but pendingCall missing; cannot replay",
           windowId: event.windowId,
         });
-        thread.events.push({
+        record(thread, {
           category: "tool_runtime",
           kind: "function_call_output",
           callId: event.toolCallId,
@@ -161,7 +167,7 @@ async function processDecidedPermissionAsks(thread: ThreadContext): Promise<bool
 
     // reject 路径
     const reason = `user-rejected: ${event.decided.reason ?? ""}`.trim();
-    thread.events.push({
+    record(thread, {
       category: "permission",
       kind: "permission_denied",
       toolCallId: event.toolCallId,
@@ -170,7 +176,7 @@ async function processDecidedPermissionAsks(thread: ThreadContext): Promise<bool
       argsSummary: event.argsSummary,
       windowId: event.windowId,
     });
-    thread.events.push({
+    record(thread, {
       category: "tool_runtime",
       kind: "function_call_output",
       callId: event.toolCallId,
@@ -261,9 +267,9 @@ async function runToolDispatchLoop(
         argsSummary: summarizeArgs(pending.args ?? toolCall.arguments),
         windowId: pending.windowId,
       };
-      thread.events.push(denyEvent);
+      record(thread, denyEvent);
       // 合成 function_call_output, LLM 下一轮可以看到 (Deny 信息流不变量)
-      thread.events.push({
+      record(thread, {
         category: "tool_runtime",
         kind: "function_call_output",
         callId: toolCall.id,
@@ -296,7 +302,7 @@ async function runToolDispatchLoop(
           toolCallId: toolCall.id,
         },
       };
-      thread.events.push(askEvent);
+      record(thread, askEvent);
       await finishLlmLoop(thread, loopHandle, { result, status: "paused" });
       thread.status = "paused";
       return "paused";
@@ -317,7 +323,7 @@ async function runToolDispatchLoop(
       } catch {
         // output 不是 JSON 时默认认为成功(handler 没遵循 ok-shape)
       }
-      thread.events.push({
+      record(thread, {
         category: "tool_runtime",
         kind: "function_call_output",
         callId: toolCall.id,
@@ -326,7 +332,7 @@ async function runToolDispatchLoop(
         ok,
       });
     } catch (error) {
-      thread.events.push({
+      record(thread, {
         category: "tool_runtime",
         kind: "function_call_output",
         callId: toolCall.id,
@@ -339,7 +345,7 @@ async function runToolDispatchLoop(
         status: "error",
         error: (error as Error).message
       });
-      thread.events.push({
+      record(thread, {
         category: "context_change",
         kind: "inject",
         text: (error as Error).message,
@@ -379,15 +385,15 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     // overflow）由 buildInputItems → pipeline.run 唯一负责：overflow 经 renderer 的
     // <context_overflow> 呈现，soft 档警告由 buildInputItems 注入。thinkloop 不再自行
     // 裁剪 thread.contextWindows——窗口是持久实体，仅由显式 close/compress 移除。
-    const llmInput = await buildInputItems(thread);
+    const llmInput = await thinkableOf(thread).buildInputItems({ thread });
 
     // compress v2 auto-trigger：未总结 transcript 超 autoCompressLevel 阈值（或 compress 置 intent）
     // 且无在途 compress → fork 一条 summarizer 子线程压缩早期过程（dormant：未 resize/intent 且未超阈值时 no-op）。
-    await maybeAutoCompress(thread, llmInput.transcriptTokens ?? 0);
+    await thinkableOf(thread).maybeAutoCompress({ thread }, llmInput.transcriptTokens ?? 0);
 
     // compress v2 force-wait：context 超 hard 且有在途 compress → 切 waiting、本轮不 LLM call
     // （等 summarizer 富摘要、不给 LLM 看 lossy clamp）；无在途则照走 buildInputItems clamp floor。
-    if (maybeForceWaitForCompress(thread, llmInput.transcriptTokens ?? 0)) {
+    if (thinkableOf(thread).maybeForceWaitForCompress({ thread }, llmInput.transcriptTokens ?? 0)) {
       await writeThread(thread);
       return;
     }
@@ -403,7 +409,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     // 让磁盘上的 thread.json 与 debug llm.input.json atomic 对应。任何"call_started 之后无
     // 任何 llm_interaction 后续"的 thread.json 即被 detectInterruptedThread 判定为中断。
     // 见 ./recovery.ts。
-    thread.events.push({
+    record(thread, {
       category: "llm_interaction",
       kind: "call_started",
       loopIndex: loopHandle.loopIndex,
@@ -420,7 +426,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
 
     // thinking 只记录，不负责回注到下一轮 context。
     if (result.thinking) {
-      thread.events.push({
+      record(thread, {
         category: "llm_interaction",
         kind: "thinking",
         text: result.thinking
@@ -429,7 +435,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
 
     // 文本输出进入 process events，供后续 context-builder 消费；完全重复的文本不再追加。
     if (result.text && latestAssistantText(thread) !== result.text) {
-      thread.events.push({
+      record(thread, {
         category: "llm_interaction",
         kind: "text",
         text: result.text
@@ -448,7 +454,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
 
     // tool call 先记录，再由 executable 顺序执行。
     for (const toolCall of result.toolCalls) {
-      thread.events.push({
+      record(thread, {
         category: "llm_interaction",
         kind: "function_call",
         callId: toolCall.id,
@@ -485,7 +491,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
         error: message
       });
     }
-    thread.events.push({
+    record(thread, {
       category: "context_change",
       kind: "inject",
       text: message,

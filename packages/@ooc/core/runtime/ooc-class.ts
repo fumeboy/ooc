@@ -18,6 +18,7 @@ import type {
 } from "../executable/contract.js";
 import type { ReadableModule } from "../readable/contract.js";
 import type { PersistableModule } from "../persistable/contract.js";
+import type { ThinkableModule } from "../thinkable/contract.js";
 import type { VisibleServerModule } from "../_shared/types/visible-server.js";
 import type { WindowStatus } from "../_shared/types/context-window.js";
 
@@ -41,6 +42,9 @@ export interface World {
  * - executable  : object method（改数据 / 副作用；LLM 在 thinkloop 行使）
  * - readable    : 投影成 context window + window method
  * - persistable : 自定义序列化（省略走系统默认）
+ * - thinkable   : 一个 class 如何把自己组织进 thinkloop 的一轮 think（buildInputItems / appendEvents /
+ *                 compress 钩子 / onSchedulerTick）；core thinkloop/scheduler 经 registry 解析后调用。
+ *                 **仅跑 thinkloop 的 thread 类实际注册**——任意 class 可声明，但只有 thread 被调度行使。
  * - visibleServer : 人类侧服务端 API（HTTP 控制面编辑 object data；无 thinkloop thread）
  *
  * 注：constructor 槽位命名为 **`construct`** 而非 `constructor` —— JS `Object.prototype.constructor`
@@ -55,6 +59,7 @@ export interface OocClass<Data = any> {
   executable?: ExecutableModule<Data>;
   readable?: ReadableModule<Data>;
   persistable?: PersistableModule<Data>;
+  thinkable?: ThinkableModule<Data>;
   visibleServer?: VisibleServerModule<Data>;
 }
 

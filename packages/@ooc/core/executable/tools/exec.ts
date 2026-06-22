@@ -17,7 +17,7 @@
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
-import type { ThreadContext } from "../../thinkable/context.js";
+import type { ThreadContext } from "../../_shared/types/thread.js";
 import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../../_shared/types/context-window.js";
 import { getSessionObjectTable } from "../../runtime/session-object-table.js";
 import { builtinRegistry, type ObjectRegistry } from "../../runtime/object-registry.js";

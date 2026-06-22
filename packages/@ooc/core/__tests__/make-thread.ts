@@ -4,10 +4,10 @@
  * Step 1 重构后 ThreadContext.contextWindows 必填；不少老测试用对象字面量直接 new 一个 thread，
  * 通过这个 helper 集中处理 contextWindows 的初始化（含 creator talk_window 注入）。
  */
-import type { ThreadContext } from "../thinkable/context";
+import type { ThreadContext } from "../_shared/types/thread.js";
 import type { ThreadPersistenceRef } from "../persistable/common";
 import type { OocObjectRef } from "../runtime/ooc-class";
-import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
+import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
 import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 
 export interface MakeThreadOpts {

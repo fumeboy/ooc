@@ -6,7 +6,7 @@
  * spyOn(module, "fn") 拦截（见 thinkable/__tests__/thinkloop.test.ts）——
  * spyOn 只能拦截真正经过模块导出的调用，故复合实现必须调模块级导出函数。
  */
-import type { ThreadContext } from "../thinkable/context.js";
+import type { ThreadContext } from "../_shared/types/thread.js";
 import type {
   LlmGenerateResult,
   LlmInputItem,

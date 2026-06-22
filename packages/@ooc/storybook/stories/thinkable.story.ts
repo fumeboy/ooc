@@ -27,7 +27,7 @@ export async function runControlPlane(): Promise<StoryResult> {
       mkdirSync(kdir, { recursive: true });
       writeFileSync(join(kdir, "rule.md"),
         `---\ntitle: 项目约定\nactivates_on:\n  "window::root": "show_content"\n---\n\n约定：所有 ID 用 ULID。`, "utf8");
-      const { loadKnowledgeIndex } = await import("@ooc/core/thinkable/knowledge/loader");
+      const { loadKnowledgeIndex } = await import("@ooc/builtins/knowledge_base/loader");
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
       const idx = await loadKnowledgeIndex(
         { stone: { baseDir, objectId: id }, pool: { baseDir, objectId: id } }, createObjectRegistry());
@@ -54,9 +54,9 @@ export async function runControlPlane(): Promise<StoryResult> {
     {
       await import("@ooc/core/runtime/register-builtins.js"); // boot builtin registry
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
-      const { computeVisibleMethodSet } = await import("@ooc/core/thinkable/context/renderers/xml");
+      const { computeVisibleMethodSet } = await import("@ooc/builtins/agent/thread/thinkable/context/renderers/xml");
       const { extractBasicDescription } = await import(
-        "@ooc/core/thinkable/context/method-description.js"
+        "@ooc/builtins/agent/thread/thinkable/context/method-description.js"
       );
       const ownerClass = "filesystem/file";
       const projectionClass = "file";

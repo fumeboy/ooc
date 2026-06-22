@@ -15,6 +15,7 @@
 import type {
   FlowObjectRef,
   ThreadPersistenceRef,
+  ThreadContext,
 } from "../_shared/types/thread.js";
 import type { MethodCallSchema } from "../_shared/types/intent.js";
 import type { SelfProxy } from "../_shared/types/self-proxy.js";
@@ -79,6 +80,14 @@ export interface ExecutableContext {
   persistence?: ThreadPersistenceRef;
   /** runtime 句柄 —— 实例化子对象 / 关窗等需 runtime 协助的副作用。 */
   runtime?: RuntimeHandle;
+  /**
+   * **运行 thread**（在其 runtime 中调用本 method 的那条线程）——由 WindowManager.fromThread 注入。
+   *
+   * 仅 **thread 类自己的载体 method**（end / new_feat_branch / create_pr 等需操作运行 thread 树的方法）
+   * 经 `runningThread(ctx)` 读取；非 thread builtin（file/search/interpreter…）忽略它、仍用中立
+   * `ctx.persistence`（point-1 的非 thread 中立化不回退）。是 point-1 `runningThread(ctx)` TODO 的归宿。
+   */
+  ownerThread?: ThreadContext;
   /** method 跑在独立 flow object 上时设置。 */
   ownerFlowObjectRef?: FlowObjectRef;
   /** method 跑在持久化 thread 中时设置。 */
@@ -99,6 +108,13 @@ export interface ConstructorContext {
   /** 新实例的盘上定位（中立持久化 ref）；取代旧的 `ctx.thread.persistence`。 */
   persistence?: ThreadPersistenceRef;
   runtime?: RuntimeHandle;
+  /**
+   * **运行 thread**（在其 runtime 中调用本 construct/lifecycle 的那条线程）——由 WindowManager.fromThread 注入。
+   *
+   * thread 类 construct（fork 形态需父 thread 挂子线程）与 lifecycle（unactive 需 scope thread 找目标子线程）
+   * 经 `runningThread(ctx)` 读取。非 thread 类 construct（file/search/interpreter…）忽略它。
+   */
+  ownerThread?: ThreadContext;
   ownerFlowObjectRef?: FlowObjectRef;
   ownerThreadRef?: ThreadPersistenceRef;
   args: Record<string, unknown>;

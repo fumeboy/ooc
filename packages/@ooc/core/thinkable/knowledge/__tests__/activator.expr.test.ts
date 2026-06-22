@@ -5,7 +5,7 @@ import {
   parseActivatesOn,
   parseTrigger,
 } from "../activator.expr";
-import type { ThreadContext } from "../../context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";

@@ -21,7 +21,7 @@ import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { createLlmClient } from "../llm/client";
 import { harvestSummarizerForks, spawnSummarizerFork } from "@ooc/builtins/agent/thread/executable/compress.js";
 import { think } from "../thinkloop";
-import type { ThreadContext } from "../context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 function loadRealEnv(): void {
   const envPaths = [resolve(process.cwd(), ".env"), resolve(process.cwd(), "../../.env")];

@@ -8,7 +8,7 @@ import {
   stoneKnowledgeDir,
   type PoolObjectRef,
   type StoneObjectRef,
-} from "../../../persistable";
+} from "@ooc/core/persistable";
 import { clearKnowledgeLoaderCache, loadKnowledgeIndex } from "../loader";
 
 /**

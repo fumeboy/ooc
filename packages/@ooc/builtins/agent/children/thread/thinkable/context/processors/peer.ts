@@ -5,7 +5,7 @@
  */
 import type { PipelinePhase, PipelineContext } from "../pipeline.js";
 import type { ThreadContext } from "../index.js";
-import type { OocObjectRef } from "../../../runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import { derivePeerObjectWindows } from "../object-windows.js";
 
 export const PeerProcessor: PipelinePhase = {

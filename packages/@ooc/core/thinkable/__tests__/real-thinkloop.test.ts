@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import * as toolsModule from "../../executable/tools";
 import { EXEC_TOOL } from "../../executable/tools/exec";
 import { createLlmClient } from "../llm/client";
-import * as contextModule from "../context";
+import * as contextModule from "@ooc/builtins/agent/thread/thinkable/context/index";
 import { think } from "../thinkloop";
 
 // 真实测试优先读取当前工作区 .env，没有时回退到主仓库根目录 .env。

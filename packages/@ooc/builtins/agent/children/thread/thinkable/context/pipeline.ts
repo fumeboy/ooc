@@ -6,7 +6,7 @@
  * buildInputItems 是本 pipeline 的薄封装。
  */
 import type { ThreadContext } from "./index.js";
-import type { OocObjectRef } from "../../runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { ContextSnapshot } from "./snapshot.js";
 import { BudgetManager, loadBudgetThresholds } from "./budget.js";
 import { SystemProcessor } from "./processors/system.js";

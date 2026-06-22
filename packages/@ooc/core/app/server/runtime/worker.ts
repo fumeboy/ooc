@@ -7,7 +7,7 @@ import { detectInterruptedThread, markInterrupted } from "@ooc/core/thinkable/re
 import { stat } from "node:fs/promises";
 import type { ServerConfig } from "../bootstrap/config";
 import type { RuntimeJob } from "./types";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import type { OocObjectRef, OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
