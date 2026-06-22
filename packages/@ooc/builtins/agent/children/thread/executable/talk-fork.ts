@@ -6,7 +6,7 @@
  * - 关 fork 子窗：经 close 原语 → refcount 归 0 触发 thread.unactive 通知「无订阅者」、由其自决（见 index.ts）。
  */
 
-import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread.js";
 
 export function generateMessageId(): string {
   return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;

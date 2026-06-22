@@ -1,5 +1,5 @@
-import type { LlmInputItem } from "../llm/types";
-import { isBuiltinObjectId, objectDir, resolveStoneIdentityRef, stoneDir, threadDir } from "../../persistable";
+import type { LlmInputItem } from "@ooc/core/thinkable/llm/types";
+import { isBuiltinObjectId, objectDir, resolveStoneIdentityRef, stoneDir, threadDir } from "@ooc/core/persistable";
 import { createDefaultPipeline } from "./pipeline.js";
 import {
   estimateTranscriptTokens,
@@ -9,16 +9,16 @@ import {
 } from "./budget.js";
 import { clampTranscriptToBudget } from "./transcript-clamp.js";
 import { XmlRenderer } from "./renderers/xml.js";
-import type { OocObjectRef } from "../../runtime/ooc-class.js";
-import { isTalkLikeClass } from "../../_shared/types/constants.js";
-import { isSelfThreadWindow, objectDataOf, classOf } from "../../_shared/types/context-window.js";
-import { getSessionObjectTable } from "../../runtime/session-object-table.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
+import { isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
+import { isSelfThreadWindow, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import {
   normalizeSummarizedRanges,
   projectSummarizedRanges,
   type SummarizedRange,
-} from "../../_shared/utils/summarized-ranges.js";
-import type { ProcessEvent, ThreadContext, ThreadMessage } from "../../_shared/types/thread.js";
+} from "@ooc/core/_shared/utils/summarized-ranges.js";
+import type { ProcessEvent, ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread.js";
 
 export type {
   MethodCallSchema,
@@ -42,7 +42,7 @@ export type {
   ThreadMessage,
   ThreadStatus,
   ThreadContext,
-} from "../../_shared/types/thread.js";
+} from "@ooc/core/_shared/types/thread.js";
 
 /** 基于 msgId 在 inbox 中查找实际消息正文。 */
 function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage | undefined {

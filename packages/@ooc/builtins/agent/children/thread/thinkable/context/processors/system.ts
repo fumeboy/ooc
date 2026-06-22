@@ -7,7 +7,7 @@
  */
 import type { PipelinePhase, PipelineContext } from "../pipeline.js";
 import type { ThreadContext } from "../index.js";
-import type { OocObjectRef } from "../../../runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { buildProtocolKnowledgeWindows } from "../protocol.js";
 import { ensureSelfObjectTypeRegistered } from "../object-windows.js";

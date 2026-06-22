@@ -12,7 +12,7 @@ import {
   loopMetaFile,
 } from "../../observable/debug-file";
 import { readThread, threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
-import type { ThreadContext } from "../context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";

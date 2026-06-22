@@ -8,9 +8,9 @@
  * from the supplied windows and call XmlRenderer.render — keeping the old
  * "given these windows, produce this XML" contract intact.
  */
-import { XmlRenderer } from "../thinkable/context/renderers/xml.js";
-import type { ContextSnapshot } from "../thinkable/context/snapshot.js";
-import type { ThreadContext } from "../thinkable/context/index.js";
+import { XmlRenderer } from "@ooc/builtins/agent/thread/thinkable/context/renderers/xml.js";
+import type { ContextSnapshot } from "@ooc/builtins/agent/thread/thinkable/context/snapshot.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/thinkable/context/index.js";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 export async function renderContextXml(input: {

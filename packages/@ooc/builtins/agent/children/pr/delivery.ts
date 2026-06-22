@@ -27,7 +27,7 @@ import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { SUPER_SESSION_ID, PR_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
-import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread.js";
 import type { Data as PrData } from "./types.js";
 
 /** pr_window 的稳定 id：同一 reviewer 看同一 PR 复用同一 window（幂等更新，不堆叠）。 */

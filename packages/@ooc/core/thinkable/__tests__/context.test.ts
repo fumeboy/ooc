@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 // 注册窗类型（thread/plan/todo/knowledge/file…）进 builtinRegistry —— 否则 render 期
 // resolveReadable 取不到投影，全部落 placeholder（Wave4：窗类型经 side-effect import 自声明）。
 import "@ooc/core/runtime/register-builtins.js";
-import { buildInputItems, type ThreadContext } from "../context";
+import { buildInputItems, type ThreadContext } from "@ooc/builtins/agent/thread/thinkable/context/index";
 import { clearKnowledgeLoaderCache } from "../knowledge";
 
 /**
@@ -941,7 +941,7 @@ describe("transcript 纳入 budget（core10 另一半）", () => {
   }
 
   it("estimateTranscriptTokens 随内容量增长（与窗口同口径）", async () => {
-    const { estimateTranscriptTokens } = await import("../context/budget");
+    const { estimateTranscriptTokens } = await import("@ooc/builtins/agent/thread/thinkable/context/budget");
     const small = estimateTranscriptTokens([{ type: "message", role: "assistant", content: "x" }]);
     const big = estimateTranscriptTokens([
       { type: "message", role: "assistant", content: "x".repeat(4000) },

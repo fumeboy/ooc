@@ -9,11 +9,11 @@
  */
 import { hasCreatorChannel, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
-import type { OocObjectRef } from "../../runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
-import { computeActivations, loadKnowledgeIndexFromDir } from "../knowledge/index.js";
+import { computeActivations, loadKnowledgeIndexFromDir } from "@ooc/core/thinkable/knowledge/index.js";
 import type { KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
 import { dirname, join } from "node:path";
 import { existsSync, readdirSync } from "node:fs";

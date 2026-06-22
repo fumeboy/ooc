@@ -16,7 +16,7 @@ import { resolveProjection } from "../xml.js";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { createStoneObject, stoneDir } from "@ooc/core/persistable";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader.js";
-import { makeThread } from "../../../../__tests__/make-thread";
+import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";

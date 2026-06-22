@@ -17,8 +17,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { makeThread } from "@ooc/core/__tests__/make-thread";
-import { buildInputItems } from "@ooc/core/thinkable/context";
-import { buildProtocolKnowledgeWindows } from "@ooc/core/thinkable/context/protocol";
+import { buildInputItems } from "@ooc/builtins/agent/thread/thinkable/context/index";
+import { buildProtocolKnowledgeWindows } from "@ooc/builtins/agent/thread/thinkable/context/protocol";
 import { isKnowledgeClass } from "@ooc/core/_shared/types/constants.js";
 import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
@@ -26,7 +26,7 @@ import {
   getSessionObjectTable,
   materializeWindow,
 } from "@ooc/core/runtime/session-object-table.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
 // 触发 builtin class 注册（含 _builtin/agent + method_exec_form）。

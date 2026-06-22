@@ -12,7 +12,7 @@ import { stoneDir as realStoneDir, resolveBuiltinReadDir } from "@ooc/core/persi
 // executable/readable）；不 import 它 registry 为空，下面 getClass/resolveObjectMethod 全落空。
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry";
-import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
+import { injectMemberWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import {
   materializeWindow,

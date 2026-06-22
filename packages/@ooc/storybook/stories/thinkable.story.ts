@@ -54,9 +54,9 @@ export async function runControlPlane(): Promise<StoryResult> {
     {
       await import("@ooc/core/runtime/register-builtins.js"); // boot builtin registry
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
-      const { computeVisibleMethodSet } = await import("@ooc/core/thinkable/context/renderers/xml");
+      const { computeVisibleMethodSet } = await import("@ooc/builtins/agent/thread/thinkable/context/renderers/xml");
       const { extractBasicDescription } = await import(
-        "@ooc/core/thinkable/context/method-description.js"
+        "@ooc/builtins/agent/thread/thinkable/context/method-description.js"
       );
       const ownerClass = "filesystem/file";
       const projectionClass = "file";

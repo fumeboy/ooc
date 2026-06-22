@@ -22,7 +22,7 @@ import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/
 // side-effect：让 builtinRegistry 持有 filesystem/search 等窗类型（resolveObjectMethod / constructor）。
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
-import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
+import { injectMemberWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import {
   materializeWindow,

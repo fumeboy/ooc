@@ -9,11 +9,11 @@
  *
  * core thinkloop/scheduler 经 `thinkableOf(thread)`（registry 解析）调本模块，**不再静态 import 本 builtin**。
  *
- * P1b：实现暂从 `@ooc/core/thinkable/context` + 本 builtin executable 包一层（buildInputItems / compress
- * 仍物理在 core）；P2 把 context 树搬进本目录后改引本地。
+ * context 构造实现物理在本目录 `./context/`（P2 从 core/thinkable/context 整树搬入）；compress policy
+ * 在本 builtin executable。
  */
 import type { ThinkableModule, ThinkableContext } from "@ooc/core/thinkable/contract.js";
-import { buildInputItems as coreBuildInputItems } from "@ooc/core/thinkable/context.js";
+import { buildInputItems as coreBuildInputItems } from "./context/index.js";
 import {
   maybeAutoCompress as threadMaybeAutoCompress,
   maybeForceWaitForCompress as threadMaybeForceWaitForCompress,

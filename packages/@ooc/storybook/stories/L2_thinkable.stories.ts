@@ -79,7 +79,7 @@ export const L2_STORIES: Story[] = [
       "读出侧 xml.ts:projectByCompressLevel 按 win.compressLevel 投影详略（0 全文 / 1 缩略 / 2 仅句柄）。",
     run: async () => {
       const { createObjectRegistry } = await import("@ooc/core/runtime/object-registry");
-      const { projectByCompressLevel } = await import("@ooc/core/thinkable/context/renderers/xml");
+      const { projectByCompressLevel } = await import("@ooc/builtins/agent/thread/thinkable/context/renderers/xml");
       const { xmlElement, xmlText, serializeXml } = await import("@ooc/core/_shared/types/xml");
 
       // 内容窗 class 各自实现的 resize（compress v2：无共享默认实现；这里模拟某内容窗自实现一份）。
@@ -132,7 +132,7 @@ export const L2_STORIES: Story[] = [
       await import("@ooc/core/runtime/register-builtins.js");
       const { builtinRegistry } = await import("@ooc/core/runtime/object-registry");
       const { THREAD_CLASS_ID } = await import("@ooc/core/_shared/types/constants");
-      const { autoCompressThreshold, shouldAutoCompress } = await import("@ooc/core/thinkable/context/compress-trigger");
+      const { autoCompressThreshold, shouldAutoCompress } = await import("@ooc/builtins/agent/thread/thinkable/context/compress-trigger");
       const { projectSummarizedRanges } = await import("@ooc/core/_shared/utils/summarized-ranges");
 
       // thread class 自声明 compress（intent）+ resize（autoCompressLevel）——无通用默认表。

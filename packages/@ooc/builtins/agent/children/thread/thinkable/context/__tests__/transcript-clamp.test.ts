@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { clampTranscriptToBudget } from "../transcript-clamp";
-import type { LlmInputItem } from "../../llm/types";
+import type { LlmInputItem } from "@ooc/core/thinkable/llm/types";
 
 function msg(n: number): LlmInputItem {
   return { type: "message", role: "assistant", content: "x".repeat(n) };

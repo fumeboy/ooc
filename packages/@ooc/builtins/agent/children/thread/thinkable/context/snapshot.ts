@@ -1,4 +1,4 @@
-import type { OocObjectRef } from "../../runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 
 export interface ContextSnapshot {
   thread: { id: string; status: string };

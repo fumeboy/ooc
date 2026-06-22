@@ -1,4 +1,4 @@
-import type { ProcessEvent, ThreadContext } from "./context";
+import type { ProcessEvent, ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 /**
  * 中断恢复检测与标记 (thinkable 维度的纯函数 hook)。

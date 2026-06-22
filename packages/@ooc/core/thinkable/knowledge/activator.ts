@@ -1,4 +1,4 @@
-import type { ThreadContext } from "../context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import {
   evaluateTrigger,
   maxLevel,

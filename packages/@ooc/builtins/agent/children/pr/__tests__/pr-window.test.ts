@@ -27,7 +27,7 @@ import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { readPrIssue } from "../persistable/pr-issue.js";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import {
   materializeWindow,
@@ -325,7 +325,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
     await writeThread(superFoo);
 
     // ① new_feat_branch(intent) 绑定（method 签名 (ctx, args)）
-    const open1 = await executeNewFeatBranch({ thread: superFoo, args: {} } as never, { intent: "share into bob" });
+    const open1 = await executeNewFeatBranch({ ownerThread: superFoo, args: {} } as never, { intent: "share into bob" });
     expect(JSON.parse(open1 as string).ok).toBe(true);
     const branch = superFoo.persistence!.stonesBranch!;
     expect(branch).toBe("feat/share-into-bob");
@@ -335,7 +335,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
     await editInFeatWorktree(baseDir, branch, "objects/bob/readable.md", "bob touched by foo\n");
 
     // ③ create_pr_and_invite_reviewers → 开 PR（reviewers 含 bob + supervisor），清绑定
-    const fin1 = JSON.parse((await executeCreatePrAndInviteReviewers({ thread: superFoo, args: {} } as never, {})) as string);
+    const fin1 = JSON.parse((await executeCreatePrAndInviteReviewers({ ownerThread: superFoo, args: {} } as never, {})) as string);
     expect(fin1.ok).toBe(true);
     const issueId = fin1.issueId as number;
     expect((fin1.reviewers as string[]).sort()).toEqual(["bob", "supervisor"]);
@@ -353,7 +353,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
 
     // resume：同 intent 重绑（request_changes 时旧 worktree + 编辑都在）
     superFoo.persistence!.stonesBranch = undefined; // 模拟 disk 恢复后无绑定
-    const open2 = await executeNewFeatBranch({ thread: superFoo, args: {} } as never, { intent: "share into bob" });
+    const open2 = await executeNewFeatBranch({ ownerThread: superFoo, args: {} } as never, { intent: "share into bob" });
     expect(JSON.parse(open2 as string).ok).toBe(true);
     const reboundBranch = String(superFoo.persistence!.stonesBranch);
     expect(reboundBranch).toBe(String(branch)); // 幂等重绑同分支
@@ -362,7 +362,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
 
     // re-edit + re-submit
     await editInFeatWorktree(baseDir, branch, "objects/foo/self.md", "foo v3 revised\n");
-    const fin2 = JSON.parse((await executeCreatePrAndInviteReviewers({ thread: superFoo, args: {} } as never, {})) as string);
+    const fin2 = JSON.parse((await executeCreatePrAndInviteReviewers({ ownerThread: superFoo, args: {} } as never, {})) as string);
     expect(fin2.ok).toBe(true);
     expect(fin2.issueId).toBeGreaterThan(issueId); // 重开新 PR
   });

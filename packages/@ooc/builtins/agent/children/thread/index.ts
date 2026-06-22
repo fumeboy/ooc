@@ -29,8 +29,8 @@ import { stat } from "node:fs/promises";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common.js";
 import { stoneDir, resolveStoneIdentityRef } from "@ooc/core/persistable/index.js";
 import { SUPER_ALIAS_TARGET } from "@ooc/core/_shared/types/constants.js";
-import { injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
-import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.js";
+import { injectMemberWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread.js";
 import {
   makeMessage,
   appendInbox,

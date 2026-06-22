@@ -36,8 +36,8 @@ import {
   writeReadable,
 } from "@ooc/core/persistable";
 import { hasLlmEnv, llm, setupTempFlow } from "./_fixture";
-import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 const CRITIC_READABLE = `
 我是 critic。我从两个角度审视代码方案:

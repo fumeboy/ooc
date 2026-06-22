@@ -18,10 +18,10 @@ import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { isSelfThreadWindow, objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
-import type { ThreadContext, ProcessEvent } from "@ooc/core/thinkable/context.js";
+import type { ThreadContext, ProcessEvent } from "@ooc/core/_shared/types/thread.js";
 import { addSummarizedRange } from "@ooc/core/_shared/utils/summarized-ranges.js";
-import { loadBudgetThresholds } from "@ooc/core/thinkable/context/budget.js";
-import { shouldAutoCompress } from "@ooc/core/thinkable/context/compress-trigger.js";
+import { loadBudgetThresholds } from "@ooc/builtins/agent/thread/thinkable/context/budget.js";
+import { shouldAutoCompress } from "@ooc/builtins/agent/thread/thinkable/context/compress-trigger.js";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import type { ThreadWin } from "@ooc/builtins/agent/thread/types.js";
 

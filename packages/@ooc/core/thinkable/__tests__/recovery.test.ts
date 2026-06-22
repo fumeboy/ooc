@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { detectInterruptedThread, markInterrupted } from "../recovery";
-import type { ThreadContext } from "../context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 function makeThread(events: ThreadContext["events"]): ThreadContext {
   return {

@@ -56,12 +56,12 @@ import {
   objectDataOf,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context.js";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 import {
   initContextWindows,
   injectPeerWindowsIfObjectThread,
   injectMemberWindowsIfObjectThread,
-} from "@ooc/core/thinkable/context/init.js";
+} from "@ooc/builtins/agent/thread/thinkable/context/init.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";

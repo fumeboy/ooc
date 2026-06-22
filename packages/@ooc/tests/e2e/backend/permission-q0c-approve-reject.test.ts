@@ -29,7 +29,7 @@ import {
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
 import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
-import * as contextModule from "@ooc/core/thinkable/context";
+import * as contextModule from "@ooc/builtins/agent/thread/thinkable/context/index";
 import type {
   LlmClient,
   LlmGenerateResult,

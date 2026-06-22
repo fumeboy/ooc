@@ -7,7 +7,7 @@
 import type { ThreadContext } from "../_shared/types/thread.js";
 import type { ThreadPersistenceRef } from "../persistable/common";
 import type { OocObjectRef } from "../runtime/ooc-class";
-import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
+import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
 import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 
 export interface MakeThreadOpts {

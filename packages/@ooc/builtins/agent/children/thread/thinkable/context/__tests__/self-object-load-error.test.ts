@@ -14,15 +14,15 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureSelfObjectTypeRegistered } from "../object-windows.js";
-import { makeThread } from "../../../__tests__/make-thread";
+import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
-import { clearServerLoaderCache } from "../../../runtime/server-loader.js";
+import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader.js";
 import {
   createStoneObject,
   writeExecutableSource,
   stoneDir,
-} from "../../../persistable";
+} from "@ooc/core/persistable";
 
 // Wave4：class 装配入口 = stone 根 index.ts（`export const Class`），loader 真实 import 它。
 // 「broken executable」复刻 = 写一段 import 不存在模块的根 index.ts → load 抛错。

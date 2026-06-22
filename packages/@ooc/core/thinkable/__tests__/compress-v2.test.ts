@@ -6,11 +6,11 @@ import { describe, expect, it } from "bun:test";
 import {
   autoCompressThreshold,
   shouldAutoCompress,
-} from "../context/compress-trigger";
+} from "@ooc/builtins/agent/thread/thinkable/context/compress-trigger";
 import { harvestSummarizerForks } from "@ooc/builtins/agent/thread/executable/compress.js";
 import { threadWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import type { ThreadContext } from "../context";
+import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
 
 const THRESHOLDS = { soft: 100000, hard: 180000 };
 
