@@ -7,7 +7,7 @@ import {
   autoCompressThreshold,
   shouldAutoCompress,
 } from "../context/compress-trigger";
-import { harvestSummarizerForks } from "../scheduler";
+import { harvestSummarizerForks } from "@ooc/builtins/agent/thread/executable/compress.js";
 import { threadWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { ThreadContext } from "../context";

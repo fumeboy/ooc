@@ -4,11 +4,7 @@ import { think } from "./thinkloop";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 // thread 业务 policy（blessed thread import，同 writeThread）：core scheduler 只调、不内联读 thread 业务字段。
 import { emitChildEndNotifications } from "@ooc/builtins/agent/thread/executable/child-notify.js";
-import { isSelfThreadWindow } from "../_shared/types/context-window.js";
-import {
-  addSummarizedRange,
-  type SummarizedRange,
-} from "../_shared/utils/summarized-ranges.js";
+import { harvestSummarizerForks } from "@ooc/builtins/agent/thread/executable/compress.js";
 
 /** Scheduler 的运行参数。 */
 export interface SchedulerOptions {
@@ -78,69 +74,10 @@ function selectNextThread(threads: ThreadContext[]): ThreadContext {
  * 4. 若该线程携带 persistence ref，think 完成后立即落盘
  *
  * 不负责跨 Object talk、deadlock 兜底或 paused 恢复。
- */
-/**
- * compress v2 —— harvest summarizer fork（每 tick 顶部，先于 emitChildEndNotifications）。
  *
- * 对每个 self-view thread 窗带 `inFlightCompress` 的线程：找其 summarizer 子线程 forkThreadId——
- * - done → 读 child.endSummary 记入父窗 `summarizedRanges{fromIdx,toIdx,summary}` + push 可见
- *   `context_compressed` 事件（silent-swallow-ban：折叠对 LLM 可见）；
- * - failed / orphan（child 不存在，crash）→ 不记 fold（clamp floor 兜底防溢出）；
- * 之后清 `inFlightCompress`（解除 force-wait）；若父在本 compress 上 waiting → 直接翻 running 唤醒
- * （内部回收，不靠 inbox 污染 / child-end 通知）。
+ * harvest（compress）/ emitChildEndNotifications（child-end）是 **thread builtin policy**——
+ * core scheduler 经 blessed thread import 只调、不内联读 thread 业务字段。
  */
-export function harvestSummarizerForks(root: ThreadContext): void {
-  for (const thread of iterateThreads(root)) {
-    const selfWin = thread.contextWindows?.find((w) => isSelfThreadWindow(w.id))?.win as
-      | {
-          summarizedRanges?: SummarizedRange[];
-          inFlightCompress?: { forkThreadId: string; fromIdx: number; toIdx: number };
-          autoCompressLevel?: 0 | 1 | 2;
-        }
-      | undefined;
-    const inFlight = selfWin?.inFlightCompress;
-    if (!selfWin || !inFlight) continue;
-    const child = thread.childThreads?.[inFlight.forkThreadId];
-    if (child && child.status !== "done" && child.status !== "failed") continue; // 还在跑
-    if (child && child.status === "done") {
-      const summary = (child.endSummary ?? "").trim() || "(summarizer 未产出摘要)";
-      selfWin.summarizedRanges = addSummarizedRange(selfWin.summarizedRanges, {
-        fromIdx: inFlight.fromIdx,
-        toIdx: inFlight.toIdx,
-        summary,
-      });
-      thread.events = [
-        ...thread.events,
-        {
-          category: "context_change",
-          kind: "context_compressed",
-          levelChange: "auto-fold",
-          reason: "auto-summarized",
-        },
-      ];
-    } else if (child && child.status === "failed") {
-      // summarizer fork 失败：关掉本窗自动压缩（防反复 spawn-fail livelock），插可见 note（silent-swallow-ban）；
-      // 超 hard 由 buildInputItems clamp floor 兜底。agent 可再 resize 重开。
-      selfWin.autoCompressLevel = 0;
-      thread.events = [
-        ...thread.events,
-        {
-          category: "context_change",
-          kind: "context_compressed",
-          levelChange: "auto-fold-failed",
-          reason: "summarizer-fork-failed; auto-compress 已关闭，可 resize 重开",
-        },
-      ];
-    }
-    selfWin.inFlightCompress = undefined;
-    if (thread.status === "waiting" && (thread.waitingOn ?? "").startsWith("compress:")) {
-      thread.status = "running";
-      thread.inboxSnapshotAtWait = undefined;
-      thread.waitingOn = undefined;
-    }
-  }
-}
-
 export async function runScheduler(
   rootThread: ThreadContext,
   llmClient: LlmClient,

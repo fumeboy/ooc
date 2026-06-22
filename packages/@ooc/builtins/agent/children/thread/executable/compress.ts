@@ -1,34 +1,38 @@
 /**
- * compress v2 —— summarizer fork（framework 程序化 fork 子线程生成摘要）。
+ * compress —— thread 自我主历史窗的 compress policy（A 退潮：从 core/thinkable/context 搬入 thread builtin）。
  *
  * 镜像 Claude Code full-compact 的 Fork Agent：当 thread 窗未总结 transcript 超阈值（或 agent 显式
- * compress 置 intent），framework 经 `runtime.instantiate(THREAD_CLASS_ID,{target:self})` fork 一条
- * 子线程，seed 早期 transcript，令其单轮生成摘要后 `end({summary})`。完成由 scheduler harvest 读 child
- * 摘要 → 记入 parent **self-view thread 窗** `win.summarizedRanges{fromIdx,toIdx,summary}` + 清 inFlightCompress。
+ * compress 置 intent），fork 一条 summarizer 子线程 seed 早期 transcript、令其单轮 `end({summary})`；
+ * 完成由 harvest 读 child 摘要 → 记入 parent self-view thread 窗 `win.summarizedRanges` + 清 inFlightCompress。
  *
- * 分层：core 经 builtinRegistry + WindowManager.instantiate 桥接到 builtins thread 构造（execFork），
- * 无 core→builtins 直接 import（registry 解析；writeThread 沿用 thinkloop 既有 builtins import 模式）。
+ * 分层：本文件是 **thread builtin 的 compress policy**（读写 thread 自己的业务字段 = ThreadWin 权威态）；
+ * core thinkable 只留 **框架**——token 计数（budget）/ fork 原语（WindowManager.instantiate）/ isSummarizer
+ * thinkloop 执行特化 / 纯阈值判定（compress-trigger）/ snapRangesToToolPairs·projectSummarizedRanges
+ * 渲染折叠——并经 blessed thread import（同 writeThread）调本文件的 maybeAutoCompress / maybeForceWaitForCompress
+ * （thinkloop hook）+ harvestSummarizerForks（scheduler tick）。compress 设计单一权威仍在 thinkable compress.md。
+ *
+ * compress.md 的「零副本重投影」refinement（与 say 读侧重投影同一能力）归 thread-as-referencable-object。
  */
-import { builtinRegistry } from "../../runtime/object-registry.js";
-import { WindowManager } from "../../runtime/window-manager.js";
-import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
-import { isSelfThreadWindow, objectDataOf } from "../../_shared/types/context-window.js";
+import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import { WindowManager } from "@ooc/core/runtime/window-manager.js";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { isSelfThreadWindow, objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import type { ThreadContext, ProcessEvent } from "@ooc/core/thinkable/context.js";
+import { addSummarizedRange } from "@ooc/core/_shared/utils/summarized-ranges.js";
+import { loadBudgetThresholds } from "@ooc/core/thinkable/context/budget.js";
+import { shouldAutoCompress } from "@ooc/core/thinkable/context/compress-trigger.js";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
-import type { ThreadContext, ProcessEvent } from "../context.js";
-import type { SummarizedRange } from "../../_shared/utils/summarized-ranges.js";
-import { loadBudgetThresholds } from "./budget.js";
-import { shouldAutoCompress } from "./compress-trigger.js";
-
-/** self-view thread 窗投影态里 compress v2 关心的子集（loose；权威定义在 builtins ThreadWin）。 */
-interface CompressV2Win {
-  summarizedRanges?: SummarizedRange[];
-  compressIntent?: boolean;
-  autoCompressLevel?: 0 | 1 | 2;
-  inFlightCompress?: { forkThreadId: string; fromIdx: number; toIdx: number };
-}
+import type { ThreadWin } from "@ooc/builtins/agent/thread/types.js";
 
 /** 自动压缩保留的末尾 event 条数（保最近叙事；折早期段）。可调。 */
 const KEEP_TAIL_EVENTS = 20;
+
+function* iterateThreads(root: ThreadContext): Iterable<ThreadContext> {
+  yield root;
+  for (const child of Object.values(root.childThreads ?? {})) {
+    yield* iterateThreads(child);
+  }
+}
 
 /** 把 events[fromIdx..toIdx] 渲成给 summarizer fork 的种子文本（轻量、单轮足够）。 */
 export function buildSummarizerSeed(
@@ -61,8 +65,7 @@ export function buildSummarizerSeed(
 
 /**
  * 程序化 fork 一条 summarizer 子线程压缩 events[fromIdx..toIdx]，原子置 parent self-view thread 窗的
- * `win.inFlightCompress`（H2：spawn 后 toData sync → 在同步后的 contextWindows 上 mutate → writeThread，
- * 故下轮 buildInputItems 读到 inFlightCompress；丢弃的临时 mgr 不影响）。返回 child thread id（失败 undefined）。
+ * `win.inFlightCompress`。返回 child thread id（失败 undefined）。
  */
 export async function spawnSummarizerFork(
   thread: ThreadContext,
@@ -88,9 +91,8 @@ export async function spawnSummarizerFork(
   const childId = (thread.childThreadIds ?? []).find((id) => !before.has(id));
   if (!childId) return undefined;
 
-  // 移除 instantiate 留下的父侧 summarizer fork **窗**——summarizer 是内部 fork：child 在
-  // childThreads 由 scheduler 跑、harvest 直读 child.endSummary、不经父侧窗回报，故父无需该窗
-  // （否则污染 agent 窗列表 + wait 候选）。child thread（childThreads[childId]）保留。
+  // 移除 instantiate 留下的父侧 summarizer fork 窗——summarizer 是内部 fork：child 在 childThreads
+  // 由 scheduler 跑、harvest 直读 child.endSummary、不经父侧窗回报，故父无需该窗。
   thread.contextWindows = (thread.contextWindows ?? []).filter((w) => {
     const d = (objectDataOf(w) ?? {}) as { targetThreadId?: string; isForkWindow?: boolean };
     return !(d.isForkWindow === true && d.targetThreadId === childId);
@@ -98,7 +100,7 @@ export async function spawnSummarizerFork(
 
   const selfWindow = thread.contextWindows?.find((w) => isSelfThreadWindow(w.id));
   if (selfWindow) {
-    const win = (selfWindow.win ?? (selfWindow.win = {})) as CompressV2Win;
+    const win = (selfWindow.win ?? (selfWindow.win = {})) as ThreadWin;
     win.inFlightCompress = { forkThreadId: childId, fromIdx, toIdx };
     win.compressIntent = undefined;
   }
@@ -107,10 +109,9 @@ export async function spawnSummarizerFork(
 }
 
 /**
- * compress v2 auto-trigger —— thinkloop hook（buildInputItems 后、LLM call 前）。
- * 据 self-view thread 窗 autoCompressLevel/compressIntent + 未总结 transcript token（transcript-gated H3）
- * 判定是否触发；触发则算待折区段（已折之后 → 保留末 N 条之前）并 spawn summarizer fork（H2 原子置 inFlight）。
- * dormant：autoCompressLevel/compressIntent 均未设、且 transcript 未超 level 阈值时不触发（与原行为同）。
+ * compress auto-trigger —— thinkloop hook（buildInputItems 后、LLM call 前）。
+ * 据 self-view thread 窗 autoCompressLevel/compressIntent + 未总结 transcript token 判定是否触发；
+ * 触发则算待折区段（已折之后 → 保留末 N 条之前）并 spawn summarizer fork。
  */
 export async function maybeAutoCompress(
   thread: ThreadContext,
@@ -119,7 +120,7 @@ export async function maybeAutoCompress(
   // summarizer fork 自身不再自动压缩（防递归 spawn）；其 seed 若超 budget 由 buildInputItems clamp floor 兜底。
   if (thread.isSummarizer) return;
   const win = thread.contextWindows?.find((w) => isSelfThreadWindow(w.id))?.win as
-    | CompressV2Win
+    | ThreadWin
     | undefined;
   if (!win) return;
   const thresholds = loadBudgetThresholds(thread);
@@ -135,10 +136,7 @@ export async function maybeAutoCompress(
     return;
   }
   const events = thread.events ?? [];
-  const lastFolded = (win.summarizedRanges ?? []).reduce(
-    (m, r) => Math.max(m, r.toIdx),
-    -1,
-  );
+  const lastFolded = (win.summarizedRanges ?? []).reduce((m, r) => Math.max(m, r.toIdx), -1);
   const fromIdx = lastFolded + 1;
   const toIdx = events.length - 1 - KEEP_TAIL_EVENTS;
   if (toIdx < fromIdx) {
@@ -150,10 +148,9 @@ export async function maybeAutoCompress(
 }
 
 /**
- * compress v2 force-wait —— thinkloop（auto-trigger 后、LLM call 前）。
+ * compress force-wait —— thinkloop（auto-trigger 后、LLM call 前）。
  * context 超 hard **且**有在途 summarizer fork → 把本线程切 waiting（waitingOn="compress:<forkId>"），
- * 本轮不 LLM call；fork 完成由 harvest 折叠 + 直接唤醒。即「宁等富摘要、不给 LLM 看 lossy clamp」。
- * 无在途 compress（fork 未起/已失败）→ 不 force-wait，本轮照走 buildInputItems 的 clamp floor（保不崩，C3）。
+ * 本轮不 LLM call；fork 完成由 harvest 折叠 + 直接唤醒。无在途 compress → 不 force-wait（clamp floor 兜底）。
  * 返回 true 表示已切 waiting（调用方应 return 本轮）。summarizer fork 自身不 force-wait（防自锁）。
  */
 export function maybeForceWaitForCompress(
@@ -162,7 +159,7 @@ export function maybeForceWaitForCompress(
 ): boolean {
   if (thread.isSummarizer) return false;
   const win = thread.contextWindows?.find((w) => isSelfThreadWindow(w.id))?.win as
-    | CompressV2Win
+    | ThreadWin
     | undefined;
   const inFlight = win?.inFlightCompress;
   if (!inFlight) return false;
@@ -172,4 +169,54 @@ export function maybeForceWaitForCompress(
   thread.inboxSnapshotAtWait = thread.inbox?.length ?? 0;
   thread.waitingOn = `compress:${inFlight.forkThreadId}`;
   return true;
+}
+
+/**
+ * harvest summarizer fork（scheduler tick 顶部调）—— A 退潮：从 core scheduler 搬入 thread builtin。
+ *
+ * 对每个 self-view thread 窗带 `inFlightCompress` 的线程：找其 summarizer 子线程——
+ * - done → 读 child.endSummary 记入父窗 `summarizedRanges` + push 可见 `context_compressed` 事件；
+ * - failed / orphan → 不记 fold（clamp floor 兜底防溢出）；
+ * 之后清 `inFlightCompress`；若父在本 compress 上 waiting → 翻 running 唤醒（内部回收，不污染 inbox）。
+ */
+export function harvestSummarizerForks(root: ThreadContext): void {
+  for (const thread of iterateThreads(root)) {
+    const selfWin = thread.contextWindows?.find((w) => isSelfThreadWindow(w.id))?.win as
+      | ThreadWin
+      | undefined;
+    const inFlight = selfWin?.inFlightCompress;
+    if (!selfWin || !inFlight) continue;
+    const child = thread.childThreads?.[inFlight.forkThreadId];
+    if (child && child.status !== "done" && child.status !== "failed") continue; // 还在跑
+    if (child && child.status === "done") {
+      const summary = (child.endSummary ?? "").trim() || "(summarizer 未产出摘要)";
+      selfWin.summarizedRanges = addSummarizedRange(selfWin.summarizedRanges, {
+        fromIdx: inFlight.fromIdx,
+        toIdx: inFlight.toIdx,
+        summary,
+      });
+      thread.events = [
+        ...thread.events,
+        { category: "context_change", kind: "context_compressed", levelChange: "auto-fold", reason: "auto-summarized" },
+      ];
+    } else if (child && child.status === "failed") {
+      // summarizer fork 失败：关掉本窗自动压缩（防反复 spawn-fail livelock），插可见 note；clamp floor 兜底。
+      selfWin.autoCompressLevel = 0;
+      thread.events = [
+        ...thread.events,
+        {
+          category: "context_change",
+          kind: "context_compressed",
+          levelChange: "auto-fold-failed",
+          reason: "summarizer-fork-failed; auto-compress 已关闭，可 resize 重开",
+        },
+      ];
+    }
+    selfWin.inFlightCompress = undefined;
+    if (thread.status === "waiting" && (thread.waitingOn ?? "").startsWith("compress:")) {
+      thread.status = "running";
+      thread.inboxSnapshotAtWait = undefined;
+      thread.waitingOn = undefined;
+    }
+  }
 }

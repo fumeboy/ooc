@@ -3,7 +3,8 @@ import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 import { buildInputItems, type ProcessEvent, type ThreadContext } from "./context";
-import { maybeAutoCompress, maybeForceWaitForCompress } from "./context/compress-fork";
+// thread compress policy（blessed thread import，同 writeThread）：framework hook 调、thread builtin 实现。
+import { maybeAutoCompress, maybeForceWaitForCompress } from "@ooc/builtins/agent/thread/executable/compress.js";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "./llm/types";
 import { LlmTimeoutError } from "./llm/timeout";
 

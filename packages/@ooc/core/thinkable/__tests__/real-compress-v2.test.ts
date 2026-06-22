@@ -18,9 +18,8 @@ import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { ROOT_WINDOW_ID, threadWindowIdOf, isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { createLlmClient } from "../llm/client";
-import { harvestSummarizerForks } from "../scheduler";
+import { harvestSummarizerForks, spawnSummarizerFork } from "@ooc/builtins/agent/thread/executable/compress.js";
 import { think } from "../thinkloop";
-import { spawnSummarizerFork } from "../context/compress-fork";
 import type { ThreadContext } from "../context";
 
 function loadRealEnv(): void {
