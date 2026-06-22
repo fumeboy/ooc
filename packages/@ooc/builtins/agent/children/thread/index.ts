@@ -38,6 +38,7 @@ import {
 } from "@ooc/builtins/agent/thread/executable/talk-fork.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
+import thinkable from "./thinkable/index.js";
 import { runningThread } from "./executable/running-thread.js";
 import persistable from "./persistable/index.js";
 import { writeThread } from "./persistable/thread-json.js";
@@ -225,6 +226,7 @@ export const Class: OocClass<Data> = {
   construct: talkConstructor,
   executable,
   readable,
+  thinkable,
   persistable,
   unactive,
 };

@@ -1,10 +1,10 @@
 import type { LlmClient } from "./llm/types";
-import type { ThreadContext } from "./context";
+import type { ThreadContext } from "../_shared/types/thread.js";
 import { think } from "./thinkloop";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
-// thread 业务 policy（blessed thread import，同 writeThread）：core scheduler 只调、不内联读 thread 业务字段。
-import { emitChildEndNotifications } from "@ooc/builtins/agent/thread/executable/child-notify.js";
-import { harvestSummarizerForks } from "@ooc/builtins/agent/thread/executable/compress.js";
+// thread 业务 policy（compress harvest + child-end 通知）经 thinkable 模块（thinkableOf）调用——
+// core scheduler 只调一个每-tick 钩子、不静态 import thread builtin、不内联读 thread 业务字段。
+import { thinkableOf } from "./resolve.js";
 
 /** Scheduler 的运行参数。 */
 export interface SchedulerOptions {
@@ -86,8 +86,8 @@ export async function runScheduler(
   const maxTicks = options.maxTicks ?? 20;
 
   for (let tick = 0; tick < maxTicks; tick += 1) {
-    harvestSummarizerForks(rootThread);
-    emitChildEndNotifications(rootThread);
+    // thread.thinkable.onSchedulerTick = harvest summarizer fork 摘要 + child-end 通知（按序，thread 内部）。
+    thinkableOf(rootThread).onSchedulerTick({ thread: rootThread });
     wakeWaitingThreadsOnInbox(rootThread);
 
     const runningThreads = collectRunningThreads(rootThread);
