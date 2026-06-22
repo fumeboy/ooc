@@ -15,6 +15,11 @@ import { readThread, threadFile } from "@ooc/builtins/agent/thread/persistable/t
 import type { ThreadContext } from "../context";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import {
+  getSessionObjectTable,
+  materializeWindow,
+} from "@ooc/core/runtime/session-object-table.js";
 import { runScheduler } from "../scheduler";
 import { clearObservableDebugState, disableDebug, enableDebug } from "../../observable";
 
@@ -58,19 +63,22 @@ describe("single object runtime", () => {
       status: "running",
       events: [],
       // agency 方法（plan/...）已从 root 迁到 `_builtin/agent` 类；exec 须经 agent 面窗调用。
-      contextWindows: [
-        {
-          id: "agent",
-          parentWindowId: "root",
-          title: "agent",
-          status: "open",
-          createdAt: Date.now(),
-          object: { class: "_builtin/agent", data: {} },
-          isMemberWindow: true,
-        } as unknown as ContextWindow,
-      ],
+      contextWindows: [],
       persistence: { ...flowRef, threadId: "root" }
     };
+    // 窗=ref + object 入 session 对象表，materializeWindow 一处搞定。
+    root.contextWindows = [
+      materializeWindow(root, {
+        id: "agent",
+        class: "_builtin/agent",
+        data: {},
+        parentWindowId: "root",
+        title: "agent",
+        status: "open",
+        createdAt: Date.now(),
+        win: { transient: true, isMemberWindow: true },
+      }),
+    ];
 
     let callCount = 0;
     const llmClient: LlmClient = {
@@ -115,21 +123,27 @@ describe("single object runtime", () => {
     // plan 升格为 plan_window；旧 thread.plan 字段已废弃。Wave4：实例 inst.class = 注册 class id
     // `_builtin/agent/plan`（instantiate 写入），业务字段（description）落 inst.data。
     const rootPlanWindow = (root.contextWindows as ContextWindow[]).find(
-      (w) => w.object.class === "_builtin/agent/plan",
+      (w) => w.class === "_builtin/agent/plan",
     );
-    expect(rootPlanWindow?.object.class).toBe("_builtin/agent/plan");
-    expect((rootPlanWindow?.object.data as { description?: string } | undefined)?.description).toBe(
-      "完成单 object 最小闭环",
-    );
+    expect(rootPlanWindow?.class).toBe("_builtin/agent/plan");
+    expect(
+      rootPlanWindow
+        ? (objectDataOf(rootPlanWindow, getSessionObjectTable(root)) as { description?: string } | undefined)?.description
+        : undefined,
+    ).toBe("完成单 object 最小闭环");
     // 退役 thread.json.contextWindows：plan 是独立 flow object，落 thread-context.json 的
     // _ref，权威字段在 plan 的 data.json。reload 经 readThread（thread-context.json → data.json
     // hydrate）才能拿到完整 plan window —— 直接 parse thread.json 不再含 contextWindows。
     expect(savedThread.contextWindows).toBeUndefined();
     const reloaded = await readThread(ref, "root");
     const savedPlanWindow = (reloaded?.contextWindows ?? []).find(
-      (w) => w.object.class === "_builtin/agent/plan",
-    ) as { object: { class: string; data?: { description?: string } } } | undefined;
-    expect(savedPlanWindow?.object.data?.description).toBe("完成单 object 最小闭环");
+      (w) => w.class === "_builtin/agent/plan",
+    );
+    expect(
+      savedPlanWindow && reloaded
+        ? (objectDataOf(savedPlanWindow, getSessionObjectTable(reloaded)) as { description?: string } | undefined)?.description
+        : undefined,
+    ).toBe("完成单 object 最小闭环");
     expect(
       savedThread.events.some(
         (event: { category: string; kind: string }) =>

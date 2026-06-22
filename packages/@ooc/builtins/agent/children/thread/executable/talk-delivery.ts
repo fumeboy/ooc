@@ -42,6 +42,7 @@ import type { ThreadContext, ThreadMessage } from "@ooc/core/thinkable/context.j
 import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/core/thinkable/context/init.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { threadWindowIdOf, isSelfThreadWindow, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import type { TalkData, TalkWindowView } from "../types.js";
 
 export interface TalkDeliveryInput {
@@ -252,12 +253,13 @@ function resolveCalleeReplyToWindowId(
   callerThreadId: string,
   callerObjectId: string,
 ): string {
-  // Wave 4：contextWindows 元素是 OocObjectInstance（元信息 + data 分离）；会话业务字段
+  // Wave 4：contextWindows 元素是 OocObjectRef（元信息 + data 分离）；会话业务字段
   // （target / targetThreadId）落 inst.data（=TalkData）。会话窗（talk + reflect_request
   // self-view）按 inst.class 识别，回信归位字段从 inst.data 读。
+  const table = getSessionObjectTable(calleeThread);
   const windows = (calleeThread.contextWindows ?? [])
     .filter((inst) => isTalkLikeClass(classOf(inst)))
-    .map((inst) => ({ id: inst.id, data: (objectDataOf(inst) ?? {}) as TalkData }));
+    .map((inst) => ({ id: inst.id, data: (objectDataOf(inst, table) ?? {}) as TalkData }));
   const byThreadId = windows.find((w) => w.data.targetThreadId === callerThreadId);
   if (byThreadId) return byThreadId.id;
   const byObjectId = windows.find((w) => w.data.target === callerObjectId);

@@ -7,18 +7,18 @@
  */
 import type { PipelinePhase, PipelineContext } from "../pipeline.js";
 import type { ThreadContext } from "../index.js";
-import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
+import type { OocObjectRef } from "../../../runtime/ooc-class.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { buildProtocolKnowledgeWindows } from "../protocol.js";
 import { ensureSelfObjectTypeRegistered } from "../object-windows.js";
 
 export const SystemProcessor: PipelinePhase = {
   name: "SystemProcessor",
-  async run(thread: ThreadContext, _ctx: PipelineContext): Promise<OocObjectInstance[]> {
+  async run(thread: ThreadContext, _ctx: PipelineContext): Promise<OocObjectRef[]> {
     // Ensure self object type is dynamically registered (ooc-6 design)
     await ensureSelfObjectTypeRegistered(thread, builtinRegistry);
 
-    const out: OocObjectInstance[] = [];
+    const out: OocObjectRef[] = [];
 
     // Protocol knowledge windows
     out.push(...await buildProtocolKnowledgeWindows(thread, builtinRegistry));

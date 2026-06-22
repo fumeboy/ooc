@@ -27,7 +27,7 @@ import type { WindowStatus } from "@ooc/core/_shared/types/context-window.js";
 /**
  * thread-context.json 中一条 inline contextWindow 的**磁盘形态**（平铺：class/data 在 entry 顶层）。
  *
- * 内存里 OocObjectInstance 把对象身份收进 `.object={class,data}` 子对象，但磁盘格式保持平铺历史形态
+ * 内存里 OocObjectRef 把对象身份收进 `.object={class,data}` 子对象，但磁盘格式保持平铺历史形态
  * （`class`/`data` 仍在 entry 顶层）——内存 `.object.class` ↔ 盘上 `class`、`.object.data` ↔ 盘上 `data`。
  * 会话窗 class=`_builtin/thread`（真实注册 class）照常 inline；talk/reflect_request 投影 class 是 POV
  * 派生值、不在实例里，渲染期由 thread readable 内 computeProjectionClass 动态算（context.md 核心 2/8/9），
@@ -37,7 +37,7 @@ export interface InlineThreadContextEntry {
   id: string;
   class: string;
   data: unknown;
-  parentObjectId?: string;
+  parentWindowId?: string;
   title: string;
   status: WindowStatus;
   createdAt: number;

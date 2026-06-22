@@ -15,7 +15,8 @@ import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { createStoneObject, ensureStoneRepo, createFlowObject } from "../../persistable";
 import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
-import { ROOT_WINDOW_ID, threadWindowIdOf, isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
+import { ROOT_WINDOW_ID, threadWindowIdOf, isSelfThreadWindow, objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import { getSessionObjectTable, materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { createLlmClient } from "../llm/client";
 import { harvestSummarizerForks, spawnSummarizerFork } from "@ooc/builtins/agent/thread/executable/compress.js";
@@ -72,20 +73,22 @@ describe.skipIf(!shouldRun)("compress v2 —— 真实 LLM auto fork-summarize",
       id: threadId,
       status: "running",
       events,
-      contextWindows: [
-        {
-          id: threadWindowIdOf(threadId),
-          class: THREAD_CLASS_ID,
-          parentObjectId: ROOT_WINDOW_ID,
-          title: "thread",
-          status: "open",
-          createdAt: 1,
-          data: {},
-          win: {},
-        },
-      ],
+      contextWindows: [],
       persistence: { baseDir: world, sessionId: "s_v2", objectId: TESTER, threadId },
     } as unknown as ThreadContext;
+    // self thread 窗 = ref + object 入 session 对象表（materializeWindow 一处搞定）。
+    thread.contextWindows = [
+      materializeWindow(thread, {
+        id: threadWindowIdOf(threadId),
+        class: THREAD_CLASS_ID,
+        data: {},
+        parentWindowId: ROOT_WINDOW_ID,
+        title: "thread",
+        status: "open",
+        createdAt: 1,
+        win: {},
+      }),
+    ];
 
     // 直接 spawn summarizer fork 压缩 events[0..4]（确定性触发；auto-trigger 的判定已由单测覆盖）。
     const forkId = await spawnSummarizerFork(thread, 0, 4);
@@ -97,7 +100,7 @@ describe.skipIf(!shouldRun)("compress v2 —— 真实 LLM auto fork-summarize",
       };
     expect((win().inFlightCompress as { forkThreadId?: string })?.forkThreadId).toBe(forkId);
     // 父侧 summarizer fork 窗已移除（不污染窗列表）。
-    expect(thread.contextWindows!.some((w) => (w.object.data as { targetThreadId?: string })?.targetThreadId === forkId)).toBe(false);
+    expect(thread.contextWindows!.some((w) => (objectDataOf(w, getSessionObjectTable(thread)) as { targetThreadId?: string } | undefined)?.targetThreadId === forkId)).toBe(false);
     // child 在 childThreads（直接驱动它跑一轮，隔离机制：不经 runScheduler 避免唤醒后 parent 空跑）。
     const forkChild = thread.childThreads![forkId!]!;
     expect(forkChild).toBeDefined();

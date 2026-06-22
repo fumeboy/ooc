@@ -24,8 +24,9 @@ import "@ooc/core/runtime/register-builtins.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { generateWindowId } from "@ooc/core/_shared/types/context-window.js";
+import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { serializeXml, xmlElement, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 
 import { Class as SearchClass } from "@ooc/builtins/filesystem/search";
 import searchReadable from "@ooc/builtins/filesystem/search/readable/index.js";
@@ -125,16 +126,14 @@ describe("U1: search readable projection + close", () => {
 
   it("WindowManager.close removes a search instance", async () => {
     const thread = makeThread({ id: "t_close_search" });
-    const sw: OocObjectInstance = {
+    const sw: OocObjectRef = materializeWindow(thread, {
       id: "w_search_to_close",
+      class: "search",
+      data: { kind: "glob", query: "*", matches: [], truncated: false } satisfies SearchData,
       title: "close me",
       status: "open",
       createdAt: Date.now(),
-      object: {
-        class: "search",
-        data: { kind: "glob", query: "*", matches: [], truncated: false } satisfies SearchData,
-      },
-    };
+    });
     thread.contextWindows = [...thread.contextWindows, sw];
     const mgr = WindowManager.fromThread(thread, builtinRegistry);
     await mgr.close(sw.id);

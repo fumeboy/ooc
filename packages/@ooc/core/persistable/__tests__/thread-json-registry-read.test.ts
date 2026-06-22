@@ -15,6 +15,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeThread, readThread, threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { materializeWindow } from "@ooc/core/runtime/session-object-table";
 import { __resetSerialQueueForTests } from "../index";
 import type { ThreadPersistenceRef, FlowObjectRef } from "../common";
 import { makeThread } from "../../__tests__/make-thread";
@@ -55,13 +56,15 @@ describe("readThread — thread-context.json 单一权威读路径", () => {
     // reload 经 thread-context.json hydrate 还原——不再依赖已退役的 thread.contextWindows fallback。
     const thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
     thread.contextWindows = [
-      {
+      // B→A：data 入 session 对象表、窗只持 ref（materializeWindow 一处搞定）。
+      materializeWindow(thread, {
         id: "todo_legacy",
+        class: "_builtin/agent/todo",
+        data: { content: "persisted via thread-context.json", status: "open" },
         title: "builtin todo",
         status: "open",
         createdAt: 1,
-        object: { class: "agent/todo", data: { content: "persisted via thread-context.json", status: "open" } },
-      } as never,
+      }),
     ];
     await writeThread(thread);
 

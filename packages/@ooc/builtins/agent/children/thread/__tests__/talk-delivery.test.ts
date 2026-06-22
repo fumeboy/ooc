@@ -31,17 +31,26 @@ import {
   ROOT_WINDOW_ID,
   generateWindowId,
   isSelfThreadWindow,
+  objectDataOf,
+  classOf,
 } from "@ooc/core/_shared/types/context-window.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import {
+  materializeWindow,
+  getSessionObjectTable,
+} from "@ooc/core/runtime/session-object-table.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
 import type { TalkData, TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
 
-/** 把会话窗实例还原成 delivery 期望的扁平 TalkWindowView（id/class + TalkData 扁平）。 */
-function asTalkWindowView(inst: OocObjectInstance): TalkWindowView {
-  const data = (inst.object.data ?? {}) as TalkData;
+/**
+ * 把会话窗（OocObjectRef）还原成 delivery 期望的扁平 TalkWindowView（id/class + TalkData 扁平）。
+ * data 经 session 对象表按 ref.id 解析（窗不持 data）。
+ */
+function asTalkWindowView(thread: ThreadContext, inst: OocObjectRef): TalkWindowView {
+  const data = (objectDataOf(inst, getSessionObjectTable(thread)) ?? {}) as TalkData;
   return {
     id: inst.id,
-    class: inst.object.class,
+    class: classOf(inst),
     target: data.target,
     targetThreadId: data.targetThreadId,
     isForkWindow: data.isForkWindow,
@@ -77,19 +86,20 @@ async function setupCaller(opts: {
     persistence: { ...flow, threadId: "root" },
   };
   initContextWindows(thread, { initialTaskTitle: "test caller" });
-  // peer talk_window：thread 实例（inst.class=THREAD_CLASS_ID），target 落 inst.data。
+  // peer talk_window：thread 实例（class=THREAD_CLASS_ID），target 落 session 对象表的 data。
   const talkWindowId = generateWindowId("talk");
-  const talkInstance: OocObjectInstance<TalkData> = {
+  const talkInstance = materializeWindow(thread, {
     id: talkWindowId,
-    parentObjectId: ROOT_WINDOW_ID,
+    parentWindowId: ROOT_WINDOW_ID,
     title: `talk-${opts.target}`,
     status: "open",
     createdAt: Date.now(),
-    object: { class: THREAD_CLASS_ID, data: { target: opts.target } },
-  };
+    class: THREAD_CLASS_ID,
+    data: { target: opts.target } satisfies TalkData,
+  });
   thread.contextWindows = [...thread.contextWindows, talkInstance];
   await writeThread(thread);
-  return { thread, talkWindow: asTalkWindowView(talkInstance) };
+  return { thread, talkWindow: asTalkWindowView(thread, talkInstance) };
 }
 
 describe("talk-delivery target='super' alias", () => {
@@ -261,16 +271,16 @@ describe("talk-delivery target='super' alias", () => {
       initContextWindows(superAlice, { creatorThreadId: "root", initialTaskTitle: "reflect" });
       const creator = superAlice.contextWindows.find((w) => isSelfThreadWindow(w.id));
       expect(creator).toBeDefined();
-      // 投影 class 不持久化——存储的元信息 class 一律 THREAD_CLASS_ID；会话字段在 data。
-      expect(creator!.object.class).toBe(THREAD_CLASS_ID);
-      const creatorData = (creator!.object.data ?? {}) as TalkData;
+      // 投影 class 不持久化——存储的元信息 class 一律 THREAD_CLASS_ID；会话字段在 data（对象表解析）。
+      expect(creator!.class).toBe(THREAD_CLASS_ID);
+      const creatorData = (objectDataOf(creator!, getSessionObjectTable(superAlice)) ?? {}) as TalkData;
       expect(creatorData.target).toBe("alice");
       expect(creatorData.targetThreadId).toBe("root");
       await writeThread(superAlice);
 
       // 3) super-alice 通过 creator talk_window 回报（扁平视图传给 delivery）。
       const delivered = await deliverTalkMessage({
-        caller: { thread: superAlice, talkWindow: asTalkWindowView(creator!) },
+        caller: { thread: superAlice, talkWindow: asTalkWindowView(superAlice, creator!) },
         content: "已沉淀：见 memory/x.md",
         source: "talk",
       });

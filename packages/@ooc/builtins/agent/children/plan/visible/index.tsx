@@ -1,14 +1,13 @@
 import type { Data, PlanWindowStep } from "../types.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
-import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class";
 import React from "react";
 import { CheckCircle2, Circle, CircleDot, CircleSlash } from "lucide-react";
 import { MarkdownContent } from "@ooc/web/src/shared/ui/MarkdownContent";
 import { dispatchNavigateToWindow } from "@ooc/web/src/domains/files/navigation-events";
 
 /** Plan window 详情面板（业务字段读自实例 `data`）。 */
-export default function PlanWindowDetail({ window }: { window: OocObjectInstance<Data> }) {
-  const data = objectDataOf(window);
+export default function PlanWindowDetail({ window }: { window: OocObjectRef & { data: Data } }) {
+  const data = window.data;
   const total = data.steps.length;
   const doneN = data.steps.filter((s) => s.status === "done").length;
   const isArchived = data.status === "archived";

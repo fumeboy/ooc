@@ -8,7 +8,8 @@
  * - **creator-reply 协议**：动态按 creator talk window 的 id 生成，不属于静态 builtin 知识。
  */
 import { hasCreatorChannel, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
-import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
+import type { OocObjectRef } from "../../runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
@@ -63,14 +64,14 @@ async function loadRootKnowledgeIndex(): Promise<KnowledgeIndex> {
  */
 async function buildRootKnowledgeWindows(
   thread: ThreadContext,
-): Promise<OocObjectInstance<KnowledgeData>[]> {
+): Promise<OocObjectRef<KnowledgeData>[]> {
   const index = await loadRootKnowledgeIndex();
   if (index.byPath.size === 0) return [];
-  const out: OocObjectInstance<KnowledgeData>[] = [];
+  const out: OocObjectRef<KnowledgeData>[] = [];
   for (const act of computeActivations(thread, index)) {
     const body = act.presentation === "full" ? act.doc.body : "";
     out.push(
-      makeKnowledgeWindow(act.path, body, "protocol", {
+      makeKnowledgeWindow(thread, act.path, body, "protocol", {
         presentation: act.presentation,
         description: act.doc.frontmatter.description,
       }),
@@ -83,8 +84,8 @@ async function buildRootKnowledgeWindows(
  * 子→父 reply protocol knowledge builder.
  * Tells sub-thread LLM the only valid reply channel is creator talk_window.say.
  */
-function buildCreatorReplyKnowledge(window: OocObjectInstance): string {
-  const isFork = (objectDataOf(window) as { isForkWindow?: boolean } | undefined)?.isForkWindow === true;
+function buildCreatorReplyKnowledge(thread: ThreadContext, window: OocObjectRef): string {
+  const isFork = (objectDataOf(window, getSessionObjectTable(thread)) as { isForkWindow?: boolean } | undefined)?.isForkWindow === true;
   const upstream = isFork ? "父线程" : "caller object 的对端 thread";
   const delivery = isFork
     ? "这条消息走内存树寻址 deliver 到父 thread 的 inbox，父 LLM 下一轮就能看到。"
@@ -119,19 +120,20 @@ function buildCreatorReplyKnowledge(window: OocObjectInstance): string {
 export async function buildProtocolKnowledgeWindows(
   thread: ThreadContext,
   _registry: ObjectRegistry = builtinRegistry,
-): Promise<OocObjectInstance<KnowledgeData>[]> {
-  const windows: OocObjectInstance<KnowledgeData>[] = await buildRootKnowledgeWindows(thread);
+): Promise<OocObjectRef<KnowledgeData>[]> {
+  const windows: OocObjectRef<KnowledgeData>[] = await buildRootKnowledgeWindows(thread);
 
   // creator-reply 协议：每个**有上游 creator 通道**的过程窗一条，按 window id 去重。
   // 按 hasCreatorChannel（thread 窗 id 前缀 + data 带 target/isForkWindow）识别；
   // self-driven root 的空通道过程窗无 creator 可回 → 不生成此协议知识。
   const seen = new Set<string>();
+  const table = getSessionObjectTable(thread);
   for (const w of thread.contextWindows ?? []) {
-    if (!hasCreatorChannel(w)) continue;
+    if (!hasCreatorChannel(w, table)) continue;
     const path = `internal/windows/${classOf(w)}/creator-reply/${w.id}`;
     if (seen.has(path)) continue;
     seen.add(path);
-    windows.push(makeKnowledgeWindow(path, buildCreatorReplyKnowledge(w), "protocol"));
+    windows.push(makeKnowledgeWindow(thread, path, buildCreatorReplyKnowledge(thread, w), "protocol"));
   }
 
   return windows;

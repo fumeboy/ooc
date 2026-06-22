@@ -14,8 +14,13 @@ import { describe, it, expect } from "bun:test";
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry, createObjectRegistry, type ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { handleExecTool } from "../tools/exec.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
+import {
+  materializeWindow,
+  getSessionObjectTable,
+} from "@ooc/core/runtime/session-object-table.js";
+import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import { serializeXml, xmlElement, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { buildInputItems } from "@ooc/core/thinkable/context.js";
 import formReadable from "@ooc/builtins/agent/method_exec_form/readable/index.js";
@@ -74,16 +79,17 @@ function registerTestNote(reg: ObjectRegistry): { execCount: () => number } {
   return { execCount: () => execCount };
 }
 
-/** 往 thread 放一个 test_note 实例窗，返回其 id。 */
+/** 往 thread 放一个 test_note 实例窗（data 登记进 session 对象表），返回其 id。 */
 function seedNote(thread: ThreadContext): string {
   const id = "note1";
-  const inst: OocObjectInstance = {
+  const inst: OocObjectRef = materializeWindow(thread, {
     id,
+    class: "test_note",
+    data: { saved: [] },
     title: "note",
     status: "open",
     createdAt: 0,
-    object: { class: "test_note", data: { saved: [] } },
-  };
+  });
   thread.contextWindows.push(inst);
   return id;
 }
@@ -105,9 +111,12 @@ describe("route → method_exec form", () => {
     expect(note.execCount()).toBe(0);
 
     // form 窗出现在 context，状态 open，累积了入参
-    const form = thread.contextWindows.find((w) => w.object.class === "method_exec");
+    const form = thread.contextWindows.find((w) => w.class === "method_exec");
     expect(form).toBeDefined();
-    const data = form!.object.data as { accumulatedArgs: Record<string, unknown>; status: string };
+    const data = objectDataOf(form!, getSessionObjectTable(thread)) as {
+      accumulatedArgs: Record<string, unknown>;
+      status: string;
+    };
     expect(data.status).toBe("open");
     expect(data.accumulatedArgs).toEqual({ content: "" });
 
@@ -130,7 +139,7 @@ describe("route → method_exec form", () => {
     // 原方法已执行
     expect(note.execCount()).toBe(1);
     // 不建 form 窗
-    expect(thread.contextWindows.find((w) => w.object.class === "method_exec")).toBeUndefined();
+    expect(thread.contextWindows.find((w) => w.class === "method_exec")).toBeUndefined();
     expect(out).toContain("saved");
   });
 });
@@ -142,7 +151,7 @@ async function openForm(thread: ThreadContext, reg: ObjectRegistry, noteId: stri
     { window_id: noteId, method: "save", title: "save record", args: { content: "" } },
     reg,
   );
-  const form = thread.contextWindows.find((w) => w.object.class === "method_exec");
+  const form = thread.contextWindows.find((w) => w.class === "method_exec");
   if (!form) throw new Error("form 未创建");
   return form.id;
 }
@@ -164,7 +173,10 @@ describe("form.refine", () => {
     // 原方法仍未执行（refine 只累积，不触发 exec）
     expect(note.execCount()).toBe(0);
     const form = thread.contextWindows.find((w) => w.id === formId)!;
-    const data = form.object.data as { accumulatedArgs: Record<string, unknown>; status: string };
+    const data = objectDataOf(form, getSessionObjectTable(thread)) as {
+      accumulatedArgs: Record<string, unknown>;
+      status: string;
+    };
     expect(data.accumulatedArgs.content).toBe("hello");
     expect(data.status).toBe("open");
     expect(JSON.parse(out).ok).toBe(true);
@@ -178,7 +190,10 @@ describe("form.refine", () => {
     const formId = await openForm(thread, reg, noteId);
 
     // 开表时 content 空 → route 给 tip、intents 空
-    const opened = thread.contextWindows.find((w) => w.id === formId)!.object.data as FormData;
+    const opened = objectDataOf(
+      thread.contextWindows.find((w) => w.id === formId)!,
+      getSessionObjectTable(thread),
+    ) as FormData;
     expect(opened.tip).toContain("需要补充");
 
     await handleExecTool(
@@ -188,7 +203,10 @@ describe("form.refine", () => {
     );
 
     // 补齐 content（无 id）→ route 重算 intents=["create"]、不再有 tip
-    const refined = thread.contextWindows.find((w) => w.id === formId)!.object.data as FormData;
+    const refined = objectDataOf(
+      thread.contextWindows.find((w) => w.id === formId)!,
+      getSessionObjectTable(thread),
+    ) as FormData;
     expect(refined.intentPaths).toEqual(["create"]);
     expect(refined.tip).toBeUndefined();
   });
@@ -219,7 +237,9 @@ describe("form.submit", () => {
     expect(thread.contextWindows.find((w) => w.id === formId)).toBeUndefined();
     // 目标对象 data 被真正改动
     const noteWin = thread.contextWindows.find((w) => w.id === noteId)!;
-    expect((noteWin.object.data as { saved: string[] }).saved).toContain("hello");
+    expect(
+      (objectDataOf(noteWin, getSessionObjectTable(thread)) as { saved: string[] }).saved,
+    ).toContain("hello");
     expect(out).toContain("saved");
   });
 
@@ -243,7 +263,10 @@ describe("form.submit", () => {
     );
     expect(failOut).toContain("form failed");
     const failed = thread.contextWindows.find((w) => w.id === formId)!;
-    const failedData = failed.object.data as { status: string; result?: string };
+    const failedData = objectDataOf(failed, getSessionObjectTable(thread)) as {
+      status: string;
+      result?: string;
+    };
     expect(failedData.status).toBe("failed");
     expect(failedData.result).toContain("boom");
     expect(note.execCount()).toBe(0);
@@ -254,7 +277,14 @@ describe("form.submit", () => {
       { window_id: formId, method: "refine", title: "refine", args: { boom: false } },
       reg,
     );
-    expect((thread.contextWindows.find((w) => w.id === formId)!.object.data as { status: string }).status).toBe("open");
+    expect(
+      (
+        objectDataOf(
+          thread.contextWindows.find((w) => w.id === formId)!,
+          getSessionObjectTable(thread),
+        ) as { status: string }
+      ).status,
+    ).toBe("open");
 
     // 重 submit → 成功
     await handleExecTool(thread, { window_id: formId, method: "submit", title: "submit" }, reg);
@@ -302,12 +332,9 @@ describe("form readable 投影", () => {
 describe("form 真实上屏 LLM context", () => {
   it("buildInputItems 把 form 窗本体 + refine/submit 方法菜单都渲进发给 LLM 的 input", async () => {
     const thread = makeThread();
-    thread.contextWindows.push({
-      id: "f_probe",
-      title: "save record",
-      status: "open",
-      createdAt: 1,
-      object: {
+    thread.contextWindows.push(
+      materializeWindow(thread, {
+        id: "f_probe",
         class: "method_exec",
         data: {
           targetObjectId: "note1",
@@ -320,8 +347,11 @@ describe("form 真实上屏 LLM context", () => {
           methodKnowledgePaths: [],
           status: "open",
         } satisfies FormData,
-      },
-    } as never);
+        title: "save record",
+        status: "open",
+        createdAt: 1,
+      }),
+    );
 
     const { input } = await buildInputItems(thread);
     const text = JSON.stringify(input);
@@ -349,25 +379,23 @@ describe("form inline 持久化往返", () => {
       await createFlowObject(persistence);
       const thread = makeThread({ id: "t_form", persistence, skipCreatorWindow: true });
       thread.contextWindows = [
-        {
+        materializeWindow(thread, {
           id: "f_keep",
+          class: "method_exec",
+          data: {
+            targetObjectId: "note1",
+            method: "save",
+            description: "save",
+            accumulatedArgs: { content: "hi" },
+            intentPaths: ["create"],
+            loadedKnowledgePaths: [],
+            methodKnowledgePaths: [],
+            status: "open",
+          } satisfies FormData,
           title: "form",
           status: "open",
           createdAt: 1,
-          object: {
-            class: "method_exec",
-            data: {
-              targetObjectId: "note1",
-              method: "save",
-              description: "save",
-              accumulatedArgs: { content: "hi" },
-              intentPaths: ["create"],
-              loadedKnowledgePaths: [],
-              methodKnowledgePaths: [],
-              status: "open",
-            } satisfies FormData,
-          },
-        } as never,
+        }),
       ];
       await writeThread(thread);
 
@@ -377,7 +405,8 @@ describe("form inline 持久化往返", () => {
       );
       const form = (restored?.contextWindows ?? []).find((w) => w.id === "f_keep");
       expect(form).toBeDefined();
-      const data = form!.object.data as FormData;
+      // hydrate 时 thread-persist 把 data 写回 restored 的 session 对象表，经表解析。
+      const data = objectDataOf(form!, getSessionObjectTable(restored!)) as FormData;
       expect(data.accumulatedArgs.content).toBe("hi");
       expect(data.status).toBe("open");
       expect(data.targetObjectId).toBe("note1");

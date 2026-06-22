@@ -4,7 +4,7 @@
  * - `ensureSelfObjectTypeRegistered`：渲染前确保 thread 自己的 Object class 已注册进 registry，
  *   否则 renderer 取不到它的 object method / readable 投影。由 SystemProcessor 调用。
  * - `derivePeerObjectWindows`：把 peer / children Object 注入成 context window（一条
- *   `OocObjectInstance`，class=peerId），顺带注册其 class。由 PeerProcessor 调用。
+ *   `OocObjectRef`，class=peerId），顺带注册其 class。由 PeerProcessor 调用。
  *
  * 这里是 world stone 对象 class 注册进 registry 的**唯一路径**（渲染期 lazy ensure）：
  * think/exec/render 经全局 builtinRegistry，stone class 在首次进入某 thread 的 context 时
@@ -22,9 +22,10 @@ import {
 import type { ThreadContext } from "./index.js";
 import type { ObjectRegistry, RegisteredClass } from "../../runtime/object-registry.js";
 import { builtinRegistry } from "../../runtime/object-registry.js";
-import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { OocObjectRef } from "../../runtime/ooc-class.js";
 import type { OocClass } from "../../runtime/ooc-class.js";
 import { objectDataOf, classOf } from "../../_shared/types/context-window.js";
+import { getSessionObjectTable, materializeWindow } from "../../runtime/session-object-table.js";
 import type { ReadableContext, ReadableProjection } from "../../readable/contract.js";
 import { SUPER_ALIAS_TARGET, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
@@ -128,19 +129,19 @@ export async function ensureSelfObjectTypeRegistered(
 }
 
 /**
- * 派生 peer / children Object 窗口：peer/children OOC Object 本身以一条 `OocObjectInstance`
+ * 派生 peer / children Object 窗口：peer/children OOC Object 本身以一条 `OocObjectRef`
  * （class=peerId）进 context。
  *
  * 机制：
  * 1. 从 talk_window(target=peerId) 收集交互过的 peer
  * 2. 从 stone 层级收集默认可见的 sibling + 一级 children
- * 3. 每个 peer 造一条 OocObjectInstance（class=peerId, id=peerId），title 取其 readable.md frontmatter
+ * 3. 每个 peer 造一条 OocObjectRef（class=peerId, id=peerId），title 取其 readable.md frontmatter
  * 4. 动态注册每个 peer 的 class
  */
 export async function derivePeerObjectWindows(
   thread: ThreadContext,
   registry: ObjectRegistry = builtinRegistry,
-): Promise<OocObjectInstance[]> {
+): Promise<OocObjectRef[]> {
   if (!thread.persistence) return [];
   const { baseDir, objectId: selfId, sessionId } = thread.persistence;
 
@@ -150,9 +151,10 @@ export async function derivePeerObjectWindows(
   const talkWindows = (thread.contextWindows ?? []).filter((w) =>
     isTalkLikeClass(classOf(w)),
   );
+  const table = getSessionObjectTable(thread);
   const peerEarliest = new Map<string, number>();
   for (const w of talkWindows) {
-    const target = (objectDataOf(w) as { target?: string } | undefined)?.target;
+    const target = (objectDataOf(w, table) as { target?: string } | undefined)?.target;
     if (!target) continue;
     if (target === SUPER_ALIAS_TARGET) continue;
     // user 不再特殊排除：talk 过的对端对象（含 user）统一作 peer object window 进 context。
@@ -178,7 +180,7 @@ export async function derivePeerObjectWindows(
 
   if (peerEarliest.size === 0) return [];
 
-  const out: OocObjectInstance[] = [];
+  const out: OocObjectRef[] = [];
   for (const [peerId, createdAt] of peerEarliest) {
     let title = `peer: ${peerId}`;
     try {
@@ -200,14 +202,17 @@ export async function derivePeerObjectWindows(
       // ignore — fail-soft，未注册的 peer 由 render 路径占位处理
     }
 
-    out.push({
-      id: peerId,
-      parentObjectId: "root",
-      title,
-      status: "open",
-      createdAt,
-      object: { class: peerId, data: {} },
-    });
+    out.push(
+      materializeWindow(thread, {
+        id: peerId,
+        class: peerId,
+        data: {},
+        parentWindowId: "root",
+        title,
+        status: "open",
+        createdAt,
+      }),
+    );
   }
 
   return out;

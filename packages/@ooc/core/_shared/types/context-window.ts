@@ -2,15 +2,15 @@
  * ContextWindow 家族类型 —— canonical 源。
  *
  * **对象模型收口（Wave 4）**：`ContextWindow` 不再是「每 class 一个平铺元信息字段的成员」的
- * discriminated union，而**直接等于** `OocObjectInstance`——元信息（id/class/title/status/
- * createdAt/parentObjectId）+ 业务 `.data` + 投影态 `.win`。需要按 class narrow 的调用方读
+ * discriminated union，而**直接等于** `OocObjectRef`——元信息（id/class/title/status/
+ * createdAt/parentWindowId）+ 业务 `.data` + 投影态 `.win`。需要按 class narrow 的调用方读
  * `.class` 后把 `.data` 断言成对应 class 的 `Data`（本文件 re-export 各 class 的 `Data`/`Win`
  * 供断言）。各 builtin types.ts 的 `@deprecated XxxWindow` 平铺别名已随之删除。
  *
  * base 部分（WindowStatus / 常量 / id 工具函数）也在本零依赖层定义。
  */
 
-import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { OocObjectRef, OocObjectInstance } from "../../runtime/ooc-class.js";
 
 /**
  * Window 状态值汇总。
@@ -34,29 +34,32 @@ export type WindowStatus =
 /**
  * ContextWindow — canonical 形态（thread 维度，persist 到 thread-context.json）。
  *
- * = `OocObjectInstance`：元信息（id/class/title/status/createdAt/parentObjectId）+ 业务 `.data`
- * + 投影态 `.win`。需要按 class narrow 的调用方读 `.class` 后断言 `.data`。
+ * = `OocObjectRef`：对 object 的引用（id=objectId + 缓存 class）+ 视角态（title/status/createdAt/
+ * parentWindowId/win/closable）。**不持 data**——data 在 session 对象表（按 id 解析，见 `objectDataOf`）。
  */
-export type ContextWindow = OocObjectInstance;
+export type ContextWindow = OocObjectRef;
 
-/** runtime object 实例 —— ContextWindow 的 canonical 形态。 */
-export type { OocObjectInstance } from "../../runtime/ooc-class.js";
+/** object 实例（持 data，活在 session 对象表）+ context window（对它的引用）。 */
+export type { OocObjectRef, OocObjectInstance } from "../../runtime/ooc-class.js";
 
 // ─────────────────── object 解析 accessor（读者经此取 object data/class，而非直读窗）───────────────────
-// 收敛「从窗取被引对象的 data/class」到一处。对象身份收在 `.object` 子对象
-// （OocObjectInstance.object = { class, data }）——B→A：该 `.object` 在内存里是指向 session 对象表
-// 单一实例的**共享引用**（runtime/session-object-table.ts），磁盘上窗只持 `objectRef`。
-// 读者规则：读「被引用对象的业务数据/注册 class」→ 用本 accessor；读「窗自身视角态」
-// （status/title/win/closable/id）→ 直读窗（window 侧、不迁）。
+// B→A：context window（OocObjectRef）只持 objectId(=id)+缓存 class，**不持 data**；object data 活在
+// session 对象表（`Map<objectId, OocObjectInstance>`，挂线程树根，见 runtime/session-object-table.ts）。
+// - classOf(ref)=ref.class（缓存、免查表）。
+// - objectDataOf(ref, table) 经对象表按 ref.id 解析 data（table 由调用方 `getSessionObjectTable(thread)`
+//   取并传入，避免 _shared→runtime 循环依赖）。读「窗自身视角态」(status/title/win/closable/id)→直读窗。
 
-/** 取一个 context window 所引用对象的业务 data（= session 对象表中该 objectId 单一实例的 data）。 */
-export function objectDataOf<Data = unknown>(w: OocObjectInstance<Data>): Data {
-  return w.object.data;
+/** 取 context window 所引用对象的业务 data —— 经 session 对象表按 `ref.id` 解析。 */
+export function objectDataOf<Data = unknown>(
+  w: OocObjectRef,
+  table: Map<string, OocObjectInstance>,
+): Data {
+  return (table.get(w.id) as OocObjectInstance<Data> | undefined)?.data as Data;
 }
 
-/** 取一个 context window 所引用对象的**注册 class**（非投影 class；投影 class 渲染期算）。 */
-export function classOf(w: OocObjectInstance): string {
-  return w.object.class;
+/** 取 context window 所引用对象的**注册 class**（缓存在窗上；非投影 class，投影 class 渲染期算）。 */
+export function classOf(w: OocObjectRef): string {
+  return w.class;
 }
 
 // ─────────────────────────── per-class Data / Win re-exports ──────────────────
@@ -126,10 +129,15 @@ export function isSelfThreadWindow(id: string): boolean {
  * = 是自己的 thread 窗（`isSelfThreadWindow`）且 data 带 creator 端点（target 或 isForkWindow）。
  * self-driven root 的 thread 窗：是过程窗但**无上游** → 此谓词为假 → 不触发任何 creator affordance
  * （say 菜单 / wait IO 源 / end auto-reply / creator-reply 协议知识都 gate 在此）。
+ *
+ * B→A：窗不持 data，故经 session 对象表（`table`，调用方 `getSessionObjectTable(thread)` 取）解析。
  */
-export function hasCreatorChannel(w: OocObjectInstance): boolean {
+export function hasCreatorChannel(
+  w: OocObjectRef,
+  table: Map<string, OocObjectInstance>,
+): boolean {
   if (!isSelfThreadWindow(w.id)) return false;
-  const d = (objectDataOf(w) ?? {}) as { target?: string; isForkWindow?: boolean };
+  const d = (objectDataOf(w, table) ?? {}) as { target?: string; isForkWindow?: boolean };
   return d.target != null || d.isForkWindow === true;
 }
 

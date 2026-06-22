@@ -70,29 +70,35 @@ export interface OocPackageMeta {
 }
 
 /**
- * runtime 持有的 object **实例** —— 把「对象身份 + 窗视角态」显式分离（object-model 核心 1/4）。
- * 取代旧的「BaseContextWindow 平铺业务字段」单体结构。
- *
- * - object : 对象身份（class 注册类 + 业务 data；object method 经 `self` 入参读写 data），与窗视角态分离
- * - 窗视角态（id / title / status / createdAt / parentObjectId / win / closable / objectRef）由 runtime 管理
- * - win  : 投影态（window method 读写、readable 读；与 object data 分离持久化）
+ * **object 实例** —— 一个 objectId 一份、持业务 `data`（object-model 核心 1/4）。活在 session
+ * 对象表（`Map<objectId, OocObjectInstance>`，挂内存线程树根、runtime-only）。object method 经
+ * `self` 入参读写 `data`。**context window 是对它的引用**（见 `OocObjectRef`）——窗不持 data。
  */
-export interface OocObjectInstance<Data = unknown, Win = unknown> {
+export interface OocObjectInstance<Data = unknown> {
   id: string;
-  parentObjectId?: string;
+  class: string;
+  data: Data;
+}
+
+/**
+ * **context window** —— 对一个 object 的引用 + 本窗视角态（object-model 核心 4：window=ref）。
+ * 活在 `thread.contextWindows`；**不持 object data**（data 在 session 对象表/data.json）。
+ *
+ * - id     : 所引用对象的 objectId（= session 对象表 key；窗身份与对象身份 1:1）
+ * - class  : 缓存注册 class（`classOf` 免查表 + dispatch/narrow；权威在对象实例上）
+ * - 视角态 : title / status / createdAt / parentWindowId / win / closable —— 本窗私有、与 object data 分离
+ * - win    : 投影态（window method 读写、readable 读）
+ * - objectRef : 独立对象引用标记（lifecycle refcount：set ⟺ 非 inline 持久化对象；`referencedObjectId` 据此解析）
+ */
+export interface OocObjectRef<Win = unknown> {
+  id: string;
+  class: string;
+  parentWindowId?: string;
   title: string;
   status: WindowStatus;
   createdAt: number;
-  object: { class: string; data: Data };
   win?: Win;
   /** 结构窗保护：construct 标 false → close 原语拒关（缺省 undefined = 可关）。spec §5。 */
   closable?: boolean;
-  /**
-   * **独立对象窗的引用标记**（object/context-window 拆分 P1，additive optional）。
-   * 非 inline 持久化的窗（各自落 data.json、经 `_ref` 持久）携带它，自描述为对某 object 的引用——
-   * `referencedObjectId` 据此直接解析（lifecycle phase-2「referencedObjectId 扩到 member 窗」的合并）。
-   * inline 窗（thread 自有窗 / talk / todo，isInlinePersisted）**不设**，object 仍内联在 data。
-   * 独立对象现 id===objectId（1:1）。
-   */
   objectRef?: { objectId: string; class: string };
 }

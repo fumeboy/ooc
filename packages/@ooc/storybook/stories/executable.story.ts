@@ -78,12 +78,14 @@ export async function runControlPlane(): Promise<StoryResult> {
       const { defaultServerLoader } = await import("@ooc/core/runtime/server-loader");
       const reg = createObjectRegistry();
       await defaultServerLoader.loadAndRegisterStoneClass({ baseDir, objectId: id }, id, reg);
-      const thread: any = {
-        id: "t_cp", status: "running", events: [],
-        contextWindows: [{ id, title: id, status: "open", createdAt: 0, object: { class: id, data: {} } }],
-      };
+      const { materializeWindow } = await import("@ooc/core/runtime/session-object-table");
+      const thread: any = { id: "t_cp", status: "running", events: [], contextWindows: [] };
+      // B→A：窗 = 纯 ref（id/class/视角态）；data 入 session 对象表（materializeWindow 一处搞定）。
+      thread.contextWindows = [
+        materializeWindow(thread, { id, class: id, data: {}, title: id, status: "open", createdAt: 0 }),
+      ];
       const out1 = await handleExecTool(thread, { window_id: id, method: "CreateOrUpdate", title: "建", args: {} }, reg);
-      const form = thread.contextWindows.find((w: any) => w.object.class === "method_exec");
+      const form = thread.contextWindows.find((w: any) => w.class === "method_exec");
       rec.ok("TC-EXEC-03a", "route 缺参 → 开 method_exec form（不直执行）+ tip 回显",
         !!form && out1.includes("需要补充 content"), `out=${out1.slice(0, 90)}`);
       if (form) {

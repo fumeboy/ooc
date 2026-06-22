@@ -8,6 +8,7 @@ import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
+import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { handleCloseTool } from "@ooc/core/executable/tools/close.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
@@ -80,9 +81,17 @@ describe("thread.unactive（关 fork 窗 → 子线程收无订阅者通知、�
     };
     child.childThreads = { [grandId]: grand };
     child.childThreadIds = [grandId];
+    // 对象/窗拆分：fork 窗 = OocObjectRef（视角态顶层）；fork 业务字段（isForkWindow/targetThreadId）
+    // 入 session 对象表，referencedObjectId 经表解析 → 级联停用孙线程。
     child.contextWindows = [
-      { id: "w_fork_grand", title: "孙", status: "open", createdAt: 0,
-        object: { class: THREAD_CLASS_ID, data: { isForkWindow: true, targetThreadId: grandId } } },
+      materializeWindow(child, {
+        id: "w_fork_grand",
+        title: "孙",
+        status: "open",
+        createdAt: 0,
+        class: THREAD_CLASS_ID,
+        data: { isForkWindow: true, targetThreadId: grandId },
+      }),
     ];
 
     await handleCloseTool(parent, { window_id: forkId, reason: "整棵弃" }, builtinRegistry);

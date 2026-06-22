@@ -44,7 +44,7 @@ export type WindowVisibleComp = ComponentType<{
 /**
  * builtin window type → 视觉组件。组件约定 `({ window, callMethod? }) => JSX`。
  *
- * builtin `visible/index` 组件签名是 `{ window: OocObjectInstance<Data, Win> }`（元信息 + data + win）；
+ * builtin `visible/index` 组件签名是 `{ window: OocObjectRef<Data, Win> }`（元信息 + data + win）；
  * web `ContextWindow` 是同形镜像，但各 class 的 `data` 形态精确到具体 class，与组件期望的具体 `Data`
  * 不互相 assignable，故经 `unknown` 统一收口为 `WindowVisibleComp`。
  */

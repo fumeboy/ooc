@@ -16,7 +16,7 @@ import { readFile } from "node:fs/promises";
 
 import type { FileData } from "@ooc/core/_shared/types/context-window.js";
 import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
+import type { OocObjectRef, OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 import { isFileClass } from "@ooc/core/_shared/types/constants.js";
 
 /**
@@ -51,7 +51,7 @@ const FILE_DIFF_MAX_BYTES = 200 * 1024;
  * - 删 compressLevel === 0 或 undefined（默认值不参与 hash，避免与历史 window 漂移）
  * - 其余字段（含 sharing / windowKnowledgePaths / status / type-specific 字段）原样保留
  */
-export function stripVolatileWindow(window: OocObjectInstance): Record<string, unknown> {
+export function stripVolatileWindow(window: OocObjectRef): Record<string, unknown> {
   // shallow clone 后剥字段；保证调用方传入对象不被改动（immutability）
   const rest: Record<string, unknown> = { ...(window as unknown as Record<string, unknown>) };
   // Wave 4：compressLevel 投影态落 inst.win.compressLevel；默认值（undefined/0）不参与 hash。
@@ -91,8 +91,13 @@ function stableStringify(value: unknown): string {
  * 同 content（剥 volatile 后）→ 同 hash；
  * 不同 content → 不同 hash（高概率；hash 冲突非安全需求）。
  */
-export function computeWindowContentHash(window: OocObjectInstance): string {
+export function computeWindowContentHash(
+  window: OocObjectRef,
+  table: Map<string, OocObjectInstance>,
+): string {
   const stripped = stripVolatileWindow(window);
+  // B→A：窗不持 data（data 在 session 对象表）；hash 须含表中 data 以保 content-sensitivity（核心不变量）。
+  stripped.data = objectDataOf(window, table);
   return Bun.hash(stableStringify(stripped)).toString(36);
 }
 
@@ -126,10 +131,11 @@ export type WindowSnapshotEntry = {
  * 上一 loop 时刻的内容；时间机器的核心就是 prev = "上一 loop 那一刻"）。
  */
 async function computeFileDiff(
-  w: OocObjectInstance<FileData>,
+  w: OocObjectRef,
+  table: Map<string, OocObjectInstance>,
   previousSnapshot: WindowSnapshotEntry[] | undefined,
 ): Promise<FileDiffData> {
-  const path = objectDataOf(w).path;
+  const path = objectDataOf<FileData>(w, table).path;
   const previousContent =
     previousSnapshot?.find((s) => s.id === w.id)?.fileDiff?.currentContent ?? "";
 
@@ -175,7 +181,8 @@ async function computeFileDiff(
  *                          previousContent。
  */
 export async function buildWindowsSnapshot(
-  windows: OocObjectInstance[],
+  windows: OocObjectRef[],
+  table: Map<string, OocObjectInstance>,
   previousSnapshot?: WindowSnapshotEntry[],
 ): Promise<WindowSnapshotEntry[]> {
   const out: WindowSnapshotEntry[] = [];
@@ -183,9 +190,9 @@ export async function buildWindowsSnapshot(
     const entry: WindowSnapshotEntry = {
       id: w.id,
       class: classOf(w),
-      contentHash: computeWindowContentHash(w),
+      contentHash: computeWindowContentHash(w, table),
     };
-    if (w.parentObjectId) entry.parentWindowId = w.parentObjectId;
+    if (w.parentWindowId) entry.parentWindowId = w.parentWindowId;
     if (w.status) entry.status = w.status;
     const compressLevel = (w.win as { compressLevel?: 0 | 1 | 2 } | undefined)?.compressLevel;
     if (compressLevel !== undefined && compressLevel !== 0) {
@@ -194,7 +201,7 @@ export async function buildWindowsSnapshot(
     // file 实例的 stored class 是注册 id（FILE_CLASS_ID）；裸名 "file" 只是 readable 投影 class，
     // 真实管道里的 contextWindows 永远持注册 id，旧的 `w.class === "file"` 判定恒不命中 → fileDiff dead。
     if (isFileClass(classOf(w))) {
-      entry.fileDiff = await computeFileDiff(w as unknown as OocObjectInstance<FileData>, previousSnapshot);
+      entry.fileDiff = await computeFileDiff(w, table, previousSnapshot);
     }
     out.push(entry);
   }

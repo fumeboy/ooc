@@ -29,11 +29,35 @@ import {
 } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 import { makeThread } from "../../__tests__/make-thread";
 
 /**
- * 构造一个 method_exec window（Wave4 对象模型：业务字段进 inst.data）。
- * activator 的 `method::<type>::<m>` trigger 读 inst.data.method，故 method 必落 data。
+ * B→A 测试 helper：把「窗 spec（含 class + data）」拆成 context window（OocObjectRef，不持 data）
+ * + 把其引用对象的 data 登记进 thread 的 session 对象表（渲染期 objectDataOf 经表解析）。
+ * 在 makeThread 之后调用（thread 树根已就绪），返回纯 ref（可直接 push 进 contextWindows）。
+ */
+interface WinSpec {
+  id: string;
+  class: string;
+  data: unknown;
+  parentWindowId?: string;
+  title?: string;
+  status?: ContextWindow["status"];
+  createdAt?: number;
+  closable?: boolean;
+  win?: unknown;
+}
+function seedWindow(thread: ThreadContext, spec: WinSpec): ContextWindow {
+  const { data, ...ref } = spec;
+  setSessionObject(thread, { id: spec.id, class: spec.class, data });
+  return ref as ContextWindow;
+}
+
+/**
+ * 构造一个 method_exec window spec（Wave4 对象模型：业务字段进 object data）。
+ * B→A：返回 WinSpec（含 class + data）；调用方经 seedWindow(thread, …) 入窗 + 登记对象表。
+ * activator 的 `method::<type>::<m>` trigger 读对象 data.method，故 method 必落 data。
  */
 function execForm(overrides: {
   id?: string;
@@ -44,25 +68,23 @@ function execForm(overrides: {
   accumulatedArgs?: Record<string, unknown>;
   intentPaths?: string[];
   result?: string;
-}): ContextWindow {
+}): WinSpec {
   const method = overrides.method ?? "program";
   return {
     id: overrides.id ?? "f_x",
-    parentObjectId: ROOT_WINDOW_ID,
+    class: "method_exec",
+    parentWindowId: ROOT_WINDOW_ID,
     title: overrides.title ?? "form",
     status: overrides.status ?? "open",
     createdAt: overrides.createdAt ?? 1,
-    object: {
-      class: "method_exec",
-      data: {
-        method,
-        description: "form description",
-        accumulatedArgs: overrides.accumulatedArgs ?? {},
-        intentPaths: overrides.intentPaths ?? [method],
-        loadedKnowledgePaths: [],
-        status: overrides.status ?? "open",
-        result: overrides.result,
-      },
+    data: {
+      method,
+      description: "form description",
+      accumulatedArgs: overrides.accumulatedArgs ?? {},
+      intentPaths: overrides.intentPaths ?? [method],
+      loadedKnowledgePaths: [],
+      status: overrides.status ?? "open",
+      result: overrides.result,
     },
   };
 }
@@ -182,28 +204,30 @@ describe("buildContext (ContextWindow model)", () => {
           source: "talk",
         },
       ],
-      extraWindows: [
-        // 普通 fork 子窗(非 creator)同样指向 t_creator。Wave4：stored class=_builtin/agent/thread；
-        // resolveInboxWindowId 的 fork 判据读窗实例 data.isForkWindow / data.targetThreadId。
-        {
-          id: "w_fork_other",
-          parentObjectId: ROOT_WINDOW_ID,
-          title: "non-creator",
-          status: "open",
-          createdAt: 1,
-          object: { class: "_builtin/agent/thread", data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true } },
-        },
-        // creator fork 窗应被优先选中（creator 身份编码在 id=w_creator_<本thread.id>）。
-        {
-          id: "w_creator_t_child",
-          parentObjectId: ROOT_WINDOW_ID,
-          title: "creator",
-          status: "open",
-          createdAt: 1,
-          object: { class: "_builtin/agent/thread", data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true } },
-        },
-      ] as ContextWindow[],
     });
+    // 普通 fork 子窗(非 creator)同样指向 t_creator。Wave4：stored class=_builtin/agent/thread；
+    // resolveInboxWindowId 的 fork 判据读窗引用对象 data.isForkWindow / data.targetThreadId（经对象表）。
+    thread.contextWindows.push(
+      seedWindow(thread, {
+        id: "w_fork_other",
+        class: "_builtin/agent/thread",
+        data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true },
+        parentWindowId: ROOT_WINDOW_ID,
+        title: "non-creator",
+        status: "open",
+        createdAt: 1,
+      }),
+      // creator fork 窗应被优先选中（creator 身份编码在 id=w_creator_<本thread.id>）。
+      seedWindow(thread, {
+        id: "w_creator_t_child",
+        class: "_builtin/agent/thread",
+        data: { target: "alice", targetThreadId: "t_creator", isForkWindow: true },
+        parentWindowId: ROOT_WINDOW_ID,
+        title: "creator",
+        status: "open",
+        createdAt: 1,
+      }),
+    );
     const out = await buildInputItems(thread);
     const item = out.input.find(
       (i) => i.type === "message" && i.role === "system" && i.content.includes("[context_change:inbox_message_arrived]"),
@@ -297,14 +321,17 @@ describe("buildContext (ContextWindow model)", () => {
     });
     // thread.plan 字段已废弃；用 plan_window 验证 plan 已渲染。Wave4：业务字段进 inst.data。
     const planId = `${thread.id}_plan`;
-    thread.contextWindows.push({
-      id: planId,
-      title: "Plan",
-      status: "active",
-      createdAt: 0,
-      // 注册 class id；readable 投影成 class="plan"
-      object: { class: "_builtin/agent/plan", data: { title: "Plan", description: "先处理 inbox", steps: [] } },
-    } as ContextWindow);
+    thread.contextWindows.push(
+      seedWindow(thread, {
+        id: planId,
+        // 注册 class id；readable 投影成 class="plan"
+        class: "_builtin/agent/plan",
+        data: { title: "Plan", description: "先处理 inbox", steps: [] },
+        title: "Plan",
+        status: "active",
+        createdAt: 0,
+      }),
+    );
     const messages = await buildContext(thread);
     expect(messages).toHaveLength(1);
     const xml = messages[0]!.content;
@@ -339,13 +366,16 @@ describe("buildContext (ContextWindow model)", () => {
     // getObjectDefinition(peerType) 修复前会抛 → think_error → 全 world 谁都不能 think。
     // fail-soft：未注册 type 走 readable/占位渲染（坐实 registrar 契约「render handles unregistered gracefully」）。
     const thread: ThreadContext = makeThread({ id: "t_peer" });
-    thread.contextWindows.push({
-      id: "w_peer_expert",
-      title: "expert (peer)",
-      status: "open",
-      createdAt: 0,
-      object: { class: "expert", data: {} }, // 未注册的 peer stone 类型
-    } as unknown as ContextWindow);
+    thread.contextWindows.push(
+      seedWindow(thread, {
+        id: "w_peer_expert",
+        class: "expert", // 未注册的 peer stone 类型
+        data: {},
+        title: "expert (peer)",
+        status: "open",
+        createdAt: 0,
+      }),
+    );
     // 修复前此处抛 'getObjectDefinition: object type "expert" not registered'
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
@@ -358,20 +388,19 @@ describe("buildContext (ContextWindow model)", () => {
   // method_exec 窗只剩元信息 status，由 placeholder 投影。该 TC 测的 result-rendering 状态机已不存在。
 
   it("renders todo_window content + activates_on", async () => {
-    const thread = makeThread({
-      id: "t_todo",
-      extraWindows: [
-        {
-          // Wave4：实例注册 class id（_builtin/agent/todo）；readable 投影成 class="todo"。
-          id: "w_todo_1",
-          parentObjectId: ROOT_WINDOW_ID,
-          title: "记一笔",
-          status: "open",
-          createdAt: 1,
-          object: { class: "_builtin/agent/todo", data: { content: "记得加单测", activatesOn: ["program.shell"] } },
-        },
-      ] as ContextWindow[],
-    });
+    const thread = makeThread({ id: "t_todo" });
+    thread.contextWindows.push(
+      seedWindow(thread, {
+        // Wave4：实例注册 class id（_builtin/agent/todo）；readable 投影成 class="todo"。
+        id: "w_todo_1",
+        class: "_builtin/agent/todo",
+        data: { content: "记得加单测", activatesOn: ["program.shell"] },
+        parentWindowId: ROOT_WINDOW_ID,
+        title: "记一笔",
+        status: "open",
+        createdAt: 1,
+      }),
+    );
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
     expect(xml).toContain('class="todo"');
@@ -383,15 +412,25 @@ describe("buildContext (ContextWindow model)", () => {
   it("class 声明层去重：多个同 class 实例 → <window_classes> 内只声明一个 <class>", async () => {
     // 3 个 knowledge 实例（同 class、同方法集）应只产出 1 个 <class name="knowledge">，
     // 而非旧版逐实例抄一份 <methods>（28% 重复的根因）。
-    const thread = makeThread({
-      id: "t_dup",
-      extraWindows: [
-        // 实例 inst.class = 注册 class id（_builtin/knowledge_base/knowledge）；readable 投影成 class="knowledge"。
-        { id: "k1", parentObjectId: ROOT_WINDOW_ID, title: "k1", status: "open", createdAt: 1, object: { class: "_builtin/knowledge_base/knowledge", data: { path: "a", source: "explicit", body: "A" } } },
-        { id: "k2", parentObjectId: ROOT_WINDOW_ID, title: "k2", status: "open", createdAt: 1, object: { class: "_builtin/knowledge_base/knowledge", data: { path: "b", source: "explicit", body: "B" } } },
-        { id: "k3", parentObjectId: ROOT_WINDOW_ID, title: "k3", status: "open", createdAt: 1, object: { class: "_builtin/knowledge_base/knowledge", data: { path: "c", source: "explicit", body: "C" } } },
-      ] as ContextWindow[],
-    });
+    const thread = makeThread({ id: "t_dup" });
+    // 窗引用对象 class = 注册 class id（_builtin/knowledge_base/knowledge）；readable 投影成 class="knowledge"。
+    for (const [id, path, body] of [
+      ["k1", "a", "A"],
+      ["k2", "b", "B"],
+      ["k3", "c", "C"],
+    ] as const) {
+      thread.contextWindows.push(
+        seedWindow(thread, {
+          id,
+          class: "_builtin/knowledge_base/knowledge",
+          data: { path, source: "explicit", body },
+          parentWindowId: ROOT_WINDOW_ID,
+          title: id,
+          status: "open",
+          createdAt: 1,
+        }),
+      );
+    }
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
     const wcBlock = xml.slice(xml.indexOf("<window_classes"), xml.indexOf("</window_classes>"));
@@ -429,17 +468,18 @@ describe("buildContext (ContextWindow model)", () => {
           source: "talk",
         },
       ],
-      extraWindows: [
-        {
-          id: "w_fork_child",
-          parentObjectId: ROOT_WINDOW_ID,
-          title: "对子线程",
-          status: "open",
-          createdAt: 1,
-          object: { class: "_builtin/agent/thread", data: { target: "alice", targetThreadId: "t_child", isForkWindow: true } },
-        },
-      ] as ContextWindow[],
     });
+    thread.contextWindows.push(
+      seedWindow(thread, {
+        id: "w_fork_child",
+        class: "_builtin/agent/thread",
+        data: { target: "alice", targetThreadId: "t_child", isForkWindow: true },
+        parentWindowId: ROOT_WINDOW_ID,
+        title: "对子线程",
+        status: "open",
+        createdAt: 1,
+      }),
+    );
     const messages = await buildContext(thread);
     const xml = messages[0]!.content;
     // creator window 也是一种 fork talk_window，targetThreadId="__session__"，会过滤；t_other 没归入任何 fork 窗
@@ -513,17 +553,18 @@ describe("buildContext (ContextWindow model)", () => {
   // 指引以 plain-string tip 直接渲染在 form 上，跨 form 知识正文去重语义不复存在，原 dedup 测试删除。
 
   it("emits text content raw — no XML escaping, no CDATA (表意为主)", async () => {
-    const thread = makeThread({
-      id: "t_cdata",
-      extraWindows: [
+    const thread = makeThread({ id: "t_cdata" });
+    thread.contextWindows.push(
+      seedWindow(
+        thread,
         execForm({
           id: "f_cdata",
           method: "talk",
           accumulatedArgs: { msg: 'say "hello" & <tag>' },
           intentPaths: ["talk"],
         }),
-      ],
-    });
+      ),
+    );
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
     // 原样输出：既不转义也不包 CDATA
@@ -560,8 +601,10 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     const thread = makeThread({
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
-      extraWindows: [execForm({ id: "f1", method: "program", intentPaths: ["program"] })],
     });
+    thread.contextWindows.push(
+      seedWindow(thread, execForm({ id: "f1", method: "program", intentPaths: ["program"] })),
+    );
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
     expect(xml).toContain('class="knowledge"');
@@ -584,10 +627,13 @@ describe("buildContext knowledge synthesis (activator → knowledge_window)", ()
     const thread = makeThread({
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
-      extraWindows: [
-        execForm({ id: "f1", method: "program", intentPaths: ["program", "program.shell"] }),
-      ],
     });
+    thread.contextWindows.push(
+      seedWindow(
+        thread,
+        execForm({ id: "f1", method: "program", intentPaths: ["program", "program.shell"] }),
+      ),
+    );
     const messages = await buildContext(thread);
     const xml = messages[0]?.content ?? "";
     expect(xml).toContain('class="knowledge"');
@@ -718,16 +764,22 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   // 折叠 self 视角的 thread.events transcript：载体是**自己视角 thread 窗**（id=threadWindowIdOf(threadId)，
   // class=THREAD_CLASS_ID），其 win.summarizedRanges 把段内连续 events 折成一条 summary 占位（读出侧
   // context/index.ts:buildInputItems find(isSelfThreadWindow)）。不改 thread.events、可逆。
-  function makeThreadWindow(threadId: string): ContextWindow & { win: Record<string, unknown> } {
-    return {
-      id: threadWindowIdOf(threadId),
-      parentObjectId: ROOT_WINDOW_ID,
-      title: "thread",
-      status: "open",
-      createdAt: 1,
-      object: { class: THREAD_CLASS_ID, data: {} },
-      win: { transient: true },
-    } as ContextWindow & { win: Record<string, unknown> };
+  // self-view thread 窗：构造 + 入 thread.contextWindows + 登记空 object data 进 session 对象表。
+  // 返回的 ref 持有可变 win（测试就地 mutate win.summarizedRanges 模拟 harvest 写入折叠态）。
+  function addThreadWindow(thread: ThreadContext): ContextWindow & { win: Record<string, unknown> } {
+    const win = thread.contextWindows.push(
+      seedWindow(thread, {
+        id: threadWindowIdOf(thread.id),
+        class: THREAD_CLASS_ID,
+        data: {},
+        parentWindowId: ROOT_WINDOW_ID,
+        title: "thread",
+        status: "open",
+        createdAt: 1,
+        win: { transient: true },
+      }),
+    );
+    return thread.contextWindows[win - 1] as ContextWindow & { win: Record<string, unknown> };
   }
 
   const fourTurns: ThreadContext["events"] = [
@@ -744,13 +796,12 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   }
 
   it("折叠 events[0..2] → 段内折成一条 summary、transcript item 数降、段外原样", async () => {
-    const threadWin = makeThreadWindow("t_fold");
     const thread = makeThread({
       id: "t_fold",
       events: fourTurns,
-      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
+    const threadWin = addThreadWindow(thread);
 
     const baseline = await buildInputItems(thread);
     expect(assistantTexts(baseline)).toEqual(["turn-A", "turn-B", "turn-C", "turn-D"]);
@@ -774,13 +825,12 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   });
 
   it("视角隔离：self 折叠不改 thread.events（object data 一字不动）", async () => {
-    const threadWin = makeThreadWindow("t_iso");
     const thread = makeThread({
       id: "t_iso",
       events: fourTurns,
-      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
+    const threadWin = addThreadWindow(thread);
     threadWin.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "折叠" }];
     await buildInputItems(thread);
     // thread.events 是 object data —— 折叠只动 win 投影态，events 原封不动（peer 视角读 messages，不受影响）。
@@ -794,13 +844,12 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   });
 
   it("可逆：清空 summarizedRanges（expand）→ transcript 完整还原", async () => {
-    const threadWin = makeThreadWindow("t_rev");
     const thread = makeThread({
       id: "t_rev",
       events: fourTurns,
-      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
+    const threadWin = addThreadWindow(thread);
     threadWin.win.summarizedRanges = [{ fromIdx: 0, toIdx: 2, summary: "折叠" }];
     expect(assistantTexts(await buildInputItems(thread))).toEqual(["turn-D"]);
     threadWin.win.summarizedRanges = [];
@@ -837,15 +886,14 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   }
 
   it("折叠区段同时切断两对（c1 output 半 + c2 call 半）→ 外扩全折、无孤儿", async () => {
-    const threadWin = makeThreadWindow("t_caseB_both");
-    // [2,4] 覆盖 fco(c1)@2（call@1 在外）+ t3@3 + fc(c2)@4（output@5 在外）→ 两对各被切一半。
-    threadWin.win.summarizedRanges = [{ fromIdx: 2, toIdx: 4, summary: "中段折叠" }];
     const thread = makeThread({
       id: "t_caseB_both",
       events: toolEvents,
-      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
+    const threadWin = addThreadWindow(thread);
+    // [2,4] 覆盖 fco(c1)@2（call@1 在外）+ t3@3 + fc(c2)@4（output@5 在外）→ 两对各被切一半。
+    threadWin.win.summarizedRanges = [{ fromIdx: 2, toIdx: 4, summary: "中段折叠" }];
     const out = await buildInputItems(thread);
     const { calls, outs } = toolCallIds(out);
     // 无孤儿：output 集合 === call 集合。
@@ -863,15 +911,14 @@ describe("events compress — self-view fold (win.summarizedRanges)", () => {
   });
 
   it("折叠只切一对（c1）→ c1 整对折进 summary、完整的 c2 对原样保留（不过度折叠）", async () => {
-    const threadWin = makeThreadWindow("t_caseB_one");
-    // [1,1] 只覆盖 fc(c1)@1，output@2 在外 → 切断 c1；c2 对完全在区段外。
-    threadWin.win.summarizedRanges = [{ fromIdx: 1, toIdx: 1, summary: "折 c1" }];
     const thread = makeThread({
       id: "t_caseB_one",
       events: toolEvents,
-      extraWindows: [threadWin],
       skipCreatorWindow: true,
     });
+    const threadWin = addThreadWindow(thread);
+    // [1,1] 只覆盖 fc(c1)@1，output@2 在外 → 切断 c1；c2 对完全在区段外。
+    threadWin.win.summarizedRanges = [{ fromIdx: 1, toIdx: 1, summary: "折 c1" }];
     const out = await buildInputItems(thread);
     const { calls, outs } = toolCallIds(out);
     expect(new Set(outs)).toEqual(new Set(calls)); // balanced

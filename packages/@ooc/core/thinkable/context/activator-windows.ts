@@ -5,8 +5,9 @@
  * KnowledgeWindow entries with source="activator".
  */
 import { isKnowledgeClass } from "../../_shared/types/constants.js";
-import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { OocObjectRef } from "../../runtime/ooc-class.js";
 import { objectDataOf, classOf } from "../../_shared/types/context-window.js";
+import { getSessionObjectTable } from "../../runtime/session-object-table.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ThreadContext } from "./index.js";
 import { computeActivations } from "../knowledge/activator.js";
@@ -21,13 +22,14 @@ import { makeKnowledgeWindow } from "./knowledge-window.js";
  */
 export async function buildActivatorKnowledgeWindows(
   thread: ThreadContext,
-): Promise<OocObjectInstance<KnowledgeData>[]> {
+): Promise<OocObjectRef<KnowledgeData>[]> {
   if (!thread.persistence) return [];
 
+  const table = getSessionObjectTable(thread);
   const explicitPaths = new Set(
     (thread.contextWindows ?? [])
-      .filter((w) => isKnowledgeClass(classOf(w)) && (objectDataOf(w) as KnowledgeData | undefined)?.source === "explicit")
-      .map((w) => (objectDataOf(w) as KnowledgeData).path),
+      .filter((w) => isKnowledgeClass(classOf(w)) && (objectDataOf(w, table) as KnowledgeData | undefined)?.source === "explicit")
+      .map((w) => (objectDataOf(w, table) as KnowledgeData).path),
   );
 
   try {
@@ -36,12 +38,12 @@ export async function buildActivatorKnowledgeWindows(
     const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
     const activations = computeActivations(thread, index);
 
-    const out: OocObjectInstance<KnowledgeData>[] = [];
+    const out: OocObjectRef<KnowledgeData>[] = [];
     for (const act of activations) {
       if (explicitPaths.has(act.path)) continue;
       const body = act.presentation === "full" ? act.doc.body : "";
       out.push(
-        makeKnowledgeWindow(act.path, body, "activator", {
+        makeKnowledgeWindow(thread, act.path, body, "activator", {
           presentation: act.presentation,
           description: act.doc.frontmatter.description,
         }),

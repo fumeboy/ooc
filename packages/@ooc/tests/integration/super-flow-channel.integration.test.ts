@@ -41,9 +41,10 @@ import { initContextWindows } from "@ooc/core/thinkable/context/init.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
-  type OocObjectInstance,
+  type OocObjectRef,
 } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import type {
   TalkData,
   TalkWindowView,
@@ -98,14 +99,17 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
     // 3) alice 挂一个 target="super" 的会话窗（Wave4：stored class = THREAD_CLASS_ID，
     //    target 落 inst.data；talk 只是 readable 投影 class，按 isTalkLikeClass 认 thread class）。
     const talkWindowId = generateWindowId("talk");
-    const superTalkWindow: OocObjectInstance<TalkData> = {
+    const superTalkData: TalkData = { target: "super" };
+    // 窗=ref + object（target 落 data）入 session 对象表（materializeWindow 一处搞定）。
+    const superTalkWindow: OocObjectRef = materializeWindow(aliceRoot, {
       id: talkWindowId,
-      parentObjectId: ROOT_WINDOW_ID,
+      class: THREAD_CLASS_ID,
+      data: superTalkData,
+      parentWindowId: ROOT_WINDOW_ID,
       title: "ask self for reflection",
       status: "open",
       createdAt: Date.now(),
-      object: { class: THREAD_CLASS_ID, data: { target: "super" } },
-    };
+    });
     aliceRoot.contextWindows = [...aliceRoot.contextWindows, superTalkWindow];
     await writeThread(aliceRoot);
 
@@ -117,8 +121,8 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
     //    误判的字串——hasReflectable 必须只在 U3 的注入路径生效时才通过。
     const superTalkView: TalkWindowView = {
       id: superTalkWindow.id,
-      class: superTalkWindow.object.class,
-      ...superTalkWindow.object.data,
+      class: superTalkWindow.class,
+      ...superTalkData,
     };
     const delivered = await deliverTalkMessage({
       caller: { thread: aliceRoot, talkWindow: superTalkView },

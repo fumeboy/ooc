@@ -1,7 +1,7 @@
 /**
  * method_exec_form —— 调用某 method 时的临时 form 的 **object data** 结构（types.ts = 纯 Data）。
  *
- * 只含业务字段；**不含**窗的元信息字段（id/class/parentObjectId/title/createdAt/元信息 status）——那些由 runtime 管理。
+ * 只含业务字段；**不含**窗的元信息字段（id/class/parentWindowId/title/createdAt/元信息 status）——那些由 runtime 管理。
  *
  * 字段：
  * - 由 `exec` tool 在目标 method 声明了 `route` 且 route 未返回 quickSubmit 时创建

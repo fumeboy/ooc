@@ -6,6 +6,7 @@ import * as observableModule from "../index";
 import type { ThreadContext } from "../../thinkable/context";
 import type { LlmGenerateResult, LlmInputItem, LlmTool } from "../../thinkable/llm/types";
 import { FILE_CLASS_ID } from "../../_shared/types/constants";
+import { setSessionObject } from "../../runtime/session-object-table";
 import { createFlowObject } from "../../persistable";
 import {
   llmInputFile,
@@ -211,7 +212,7 @@ describe("observable persistable debug files", () => {
       id: "root",
       status: "running",
       events: [],
-      // Wave4 对象模型：file 窗 = OocObjectInstance 实例，业务字段 path 下沉 inst.data。
+      // Wave4 对象模型：file 窗 = OocObjectRef 实例，业务字段 path 下沉 inst.data。
       contextWindows: [
         {
           id: "w_file_a",
@@ -293,17 +294,19 @@ describe("observable persistable debug files", () => {
       status: "running",
       events: [],
       // Wave4：file 窗 path 下沉 inst.data（computeFileDiff 读 w.data.path）。
+      // B→A：file 窗 = 纯 ref（id/class/视角态）；path data 进 session 对象表（下方 setSessionObject）。
       contextWindows: [
         {
           id: "w_file_tracked",
+          class: FILE_CLASS_ID,
           title: "tracked.ts",
           status: "open",
           createdAt: 1,
-          object: { class: FILE_CLASS_ID, data: { path: filePath } },
-        } as never,
+        },
       ],
       persistence: { ...flowRef, threadId: "root" }
     };
+    setSessionObject(thread, { id: "w_file_tracked", class: FILE_CLASS_ID, data: { path: filePath } });
     const inputItems: LlmInputItem[] = [{ type: "message", role: "system", content: "<context />" }];
     const tools: LlmTool[] = [];
     const result: LlmGenerateResult = {

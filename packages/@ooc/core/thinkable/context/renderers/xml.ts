@@ -1,7 +1,7 @@
 /**
  * XmlRenderer — renders a ContextSnapshot to the XML format used by the LLM.
  *
- * Wave 4 对象模型：thread 持 `OocObjectInstance`（身份元信息 + 业务 data + 投影态 win），
+ * Wave 4 对象模型：thread 持 `OocObjectRef`（身份元信息 + 业务 data + 投影态 win），
  * 渲染走 **readable 投影**：
  *   `resolveReadable(inst.class)?.readable(ctx, inst.data, inst.win)` → `ReadableProjection{class, content}`
  * —— class 是动态投影窗 class（同 object 不同视角可不同），content 是 `XmlNode[]`（直接用）或 string
@@ -30,8 +30,12 @@
  *   </context>
  */
 import type { ContextSnapshot } from "../snapshot.js";
-import type { OocObjectInstance } from "../../../runtime/ooc-class.js";
+import type { OocObjectRef } from "../../../runtime/ooc-class.js";
 import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../../../_shared/types/context-window.js";
+import {
+  getSessionObjectTable,
+  setSessionObject,
+} from "../../../runtime/session-object-table.js";
 import {
   builtinRegistry,
   type ObjectRegistry,
@@ -278,7 +282,7 @@ export function projectByCompressLevel(nodes: XmlNode[], level: 0 | 1 | 2 | unde
  * fail-soft：任何一步抛错都不崩 think loop，落 placeholder。
  */
 export async function resolveProjection(
-  inst: OocObjectInstance,
+  inst: OocObjectRef,
   thread: ThreadContext,
   registry: ObjectRegistry,
   persistence: { baseDir: string; sessionId?: string } | undefined,
@@ -293,15 +297,18 @@ export async function resolveProjection(
   // **该对象的 persistable.load** 读盘——renderer 不再直接 readSelf（对象模型核心 9：self.md
   // 只属 agent 实例，读取下沉为 persistable.load 经 registry 派发）。hydrate 后 Step1 的
   // agent readable 拿到 data.self 渲身份。无 persistence / 非 self 门面窗 / 已有 data → 跳过。
+  const table = getSessionObjectTable(thread);
   const isSelfWindow = (inst.win as { isSelfWindow?: boolean } | undefined)?.isSelfWindow === true;
-  const dataEmpty = !objectDataOf(inst) || Object.keys(objectDataOf(inst) as Record<string, unknown>).length === 0;
+  const dataEmpty =
+    !objectDataOf(inst, table) ||
+    Object.keys(objectDataOf(inst, table) as Record<string, unknown>).length === 0;
   if (isSelfWindow && dataEmpty && persistence) {
     const load = registry.resolvePersistable(classOf(inst))?.load;
     const ref = runtimeObjectRef(thread, inst);
     if (load && ref) {
       try {
         const loaded = await load(persistableCtx(ref));
-        if (loaded) inst = { ...inst, object: { ...inst.object, data: loaded } };
+        if (loaded) setSessionObject(thread, { id: inst.id, class: classOf(inst), data: loaded });
       } catch {
         // hydrate 失败 fail-soft：data 仍为空，Step1 readable 渲空身份。
       }
@@ -312,7 +319,7 @@ export async function resolveProjection(
   const mod = registry.resolveReadable(classOf(inst));
   if (mod) {
     try {
-      return await mod.readable(readableCtx, objectDataOf(inst), inst.win);
+      return await mod.readable(readableCtx, objectDataOf(inst, table), inst.win);
     } catch (err) {
       return {
         class: classOf(inst),
@@ -350,10 +357,10 @@ export async function resolveProjection(
 // ─────────────────────────── window node rendering ───────────────────────────
 
 async function renderWindowNode(
-  inst: OocObjectInstance,
+  inst: OocObjectRef,
   projection: ReadableProjection,
   thread: ThreadContext,
-  allWindows: Array<{ inst: OocObjectInstance; projection: ReadableProjection }>,
+  allWindows: Array<{ inst: OocObjectRef; projection: ReadableProjection }>,
 ): Promise<XmlNode> {
   const children: XmlNode[] = [xmlElement("title", {}, [xmlText(inst.title)])];
 
@@ -361,7 +368,7 @@ async function renderWindowNode(
   const compressLevel = (inst.win as { compressLevel?: 0 | 1 | 2 } | undefined)?.compressLevel;
   children.push(...projectByCompressLevel(projectionContentNodes(projection.content), compressLevel));
 
-  const subWindows = allWindows.filter((w) => w.inst.parentObjectId === inst.id);
+  const subWindows = allWindows.filter((w) => w.inst.parentWindowId === inst.id);
   if (subWindows.length > 0) {
     const subNodes = await Promise.all(
       subWindows.map((sub) => renderWindowNode(sub.inst, sub.projection, thread, allWindows)),
@@ -380,13 +387,13 @@ async function renderWindowNode(
 }
 
 async function renderContextWindowsNode(
-  projected: Array<{ inst: OocObjectInstance; projection: ReadableProjection }>,
+  projected: Array<{ inst: OocObjectRef; projection: ReadableProjection }>,
   thread: ThreadContext,
 ): Promise<XmlNode | null> {
   if (projected.length === 0) return null;
 
   const topLevel = projected.filter(
-    (w) => !w.inst.parentObjectId || w.inst.parentObjectId === ROOT_WINDOW_ID,
+    (w) => !w.inst.parentWindowId || w.inst.parentWindowId === ROOT_WINDOW_ID,
   );
   const children = await Promise.all(
     topLevel.map((w) => renderWindowNode(w.inst, w.projection, thread, projected)),

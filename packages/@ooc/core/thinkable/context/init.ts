@@ -22,7 +22,8 @@ import {
   threadWindowIdOf,
 } from "../../_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
-import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { OocObjectRef } from "../../runtime/ooc-class.js";
+import { materializeWindow } from "../../runtime/session-object-table.js";
 import type { ThreadContext } from "../context.js";
 import {
   deriveStoneFromThread,
@@ -140,21 +141,22 @@ export function initContextWindows(
           target: thread.creatorObjectId!,
           targetThreadId: creatorThreadId,
         };
-  const threadWindow: OocObjectInstance = {
+  const threadWindow: OocObjectRef = materializeWindow(thread, {
     id: threadWindowId,
-    parentObjectId: ROOT_WINDOW_ID,
+    class: THREAD_CLASS_ID,
+    data: threadData,
+    parentWindowId: ROOT_WINDOW_ID,
     title: opts.initialTaskTitle,
     status: "open",
     createdAt: Date.now(),
     // 结构窗：thread 与 creator 的恒在通道（construct 期标）→ close 原语拒关（spec §5）。
     closable: false,
-    object: { class: THREAD_CLASS_ID, data: threadData },
     // 过程窗每轮 init 幂等重注入（transient：不单独落 data.json 死 _ref）。transcriptViewport
     // 不在此预填——thread 的 readable 投影时惰性兜底默认（conversation-render `?? DEFAULT_TRANSCRIPT_VIEWPORT`），
     // core 不硬编码 thread 的投影默认。注：transient 不影响 inline 持久化——THREAD_CLASS_ID inline 类整窗落
     // thread-context.json，win（含 folds）随之跨 reload 存活（reload 后 hydrate 还原 → 本幂等检查命中即跳过）。
     win: { transient: true },
-  };
+  });
 
   thread.contextWindows = [threadWindow, ...list];
 }
@@ -182,19 +184,20 @@ function injectSelfWindowIfObjectThread(thread: ThreadContext): void {
   const list = thread.contextWindows ?? (thread.contextWindows = []);
   if (list.some((w) => w.id === id)) return;
 
-  const selfWindow: OocObjectInstance = {
+  const selfWindow: OocObjectRef = materializeWindow(thread, {
     id,
-    parentObjectId: ROOT_WINDOW_ID,
+    class: objectId,
+    data: {},
+    parentWindowId: ROOT_WINDOW_ID,
     title: objectId,
     status: "open",
     createdAt: Date.now(),
     // 结构窗：object 的自我门面（恒在通道，construct 期标）→ close 原语拒关（spec §5）。
     closable: false,
-    object: { class: objectId, data: {} },
     // self 门面窗每次 init 幂等重注入、无独立 data.json → win.transient 标记为不持久化，
     // 否则 thread-context.json 落死 _ref，reload 刷屏 `references missing object <id>`。
     win: { transient: true, isSelfWindow: true },
-  };
+  });
 
   // 紧跟 root 之后；creator window 仍由后续路径插到这之前/之后均可
   thread.contextWindows = [selfWindow, ...list];
@@ -243,19 +246,22 @@ export async function injectPeerWindowsIfObjectThread(thread: ThreadContext): Pr
 
   const now = Date.now();
   const existingIds = new Set(list.map((w) => w.id));
-  const newInstances: OocObjectInstance[] = [];
+  const newInstances: OocObjectRef[] = [];
   for (const peerId of peers) {
     if (existingIds.has(peerId)) continue;
-    newInstances.push({
-      id: peerId,
-      parentObjectId: ROOT_WINDOW_ID,
-      title: `peer: ${peerId}`,
-      status: "open",
-      createdAt: now,
-      object: { class: peerId, data: {} },
-      // peer 窗每轮幂等重注入（discover 派生）→ 非持久化。
-      win: { transient: true },
-    });
+    newInstances.push(
+      materializeWindow(thread, {
+        id: peerId,
+        class: peerId,
+        data: {},
+        parentWindowId: ROOT_WINDOW_ID,
+        title: `peer: ${peerId}`,
+        status: "open",
+        createdAt: now,
+        // peer 窗每轮幂等重注入（discover 派生）→ 非持久化。
+        win: { transient: true },
+      }),
+    );
   }
   if (newInstances.length > 0) {
     // 位置：放在 self window 之后、creator window 之前；与 self window 同属
@@ -313,7 +319,7 @@ async function readDeclaredMembers(ref: StoneObjectRef): Promise<string[]> {
 
 /**
  * 组合注入 —— 把 agent 类声明持有的 tool-object 成员（如 filesystem）作为 first-class
- * 可 exec 的 object 实例（`OocObjectInstance`）注入 thread.contextWindows。
+ * 可 exec 的 object 实例（`OocObjectRef`）注入 thread.contextWindows。
  *
  * 设计：成员是单例 builtin 类型（registry 已 seed + 全局注册，无需每轮 type 注册）。member 实例：
  * - id = class = 成员 type 串（singleton：id 稳定 = type）
@@ -361,18 +367,21 @@ export async function injectMemberWindowsIfObjectThread(thread: ThreadContext): 
   const list = thread.contextWindows ?? (thread.contextWindows = []);
   const existingIds = new Set(list.map((w) => w.id));
   const now = Date.now();
-  const newInstances: OocObjectInstance[] = [];
+  const newInstances: OocObjectRef[] = [];
   for (const memberType of members) {
     if (existingIds.has(memberType)) continue;
-    newInstances.push({
-      id: memberType,
-      parentObjectId: ROOT_WINDOW_ID,
-      title: `member: ${memberType}`,
-      status: "open",
-      createdAt: now,
-      object: { class: memberType, data: {} },
-      win: { transient: true, isMemberWindow: true },
-    });
+    newInstances.push(
+      materializeWindow(thread, {
+        id: memberType,
+        class: memberType,
+        data: {},
+        parentWindowId: ROOT_WINDOW_ID,
+        title: `member: ${memberType}`,
+        status: "open",
+        createdAt: now,
+        win: { transient: true, isMemberWindow: true },
+      }),
+    );
   }
   if (newInstances.length > 0) {
     thread.contextWindows = [...list, ...newInstances];

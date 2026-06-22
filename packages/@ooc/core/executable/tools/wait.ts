@@ -10,10 +10,11 @@
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
 import type { ThreadContext } from "../../thinkable/context.js";
-import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { OocObjectRef, OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";
 import { isSelfThreadWindow, objectDataOf, classOf } from "../../_shared/types/context-window.js";
+import { getSessionObjectTable } from "../../runtime/session-object-table.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 interface WaitCandidate {
@@ -21,22 +22,23 @@ interface WaitCandidate {
   hint: string;
 }
 
-/** 从实例读 talk 业务数据（Wave 4：业务字段落 inst.data=TalkData）。 */
-function talkDataOf(w: OocObjectInstance): Partial<TalkData> {
-  return (objectDataOf(w) ?? {}) as Partial<TalkData>;
+/** 从实例读 talk 业务数据（Wave 4：业务字段落 inst.data=TalkData，经对象表解析）。 */
+function talkDataOf(w: OocObjectRef, table: Map<string, OocObjectInstance>): Partial<TalkData> {
+  return (objectDataOf(w, table) ?? {}) as Partial<TalkData>;
 }
 
 /** open/可作为未来 IO 来源的 window 列表，附 hint 帮 LLM 自纠时选对。 */
 function listValidWaitTargets(thread: ThreadContext): WaitCandidate[] {
   const out: WaitCandidate[] = [];
-  // contextWindows 是 OocObjectInstance[]：会话窗 inst.class 一律 = `_builtin/thread`（唯一会话载体
+  const table = getSessionObjectTable(thread);
+  // contextWindows 是 OocObjectRef[]：会话窗 inst.class 一律 = `_builtin/thread`（唯一会话载体
   // 注册 class）；isForkWindow/target/targetThreadId 从 inst.data 读，creator 窗身份按 id 派生
   // （isSelfThreadWindow）。
   for (const w of thread.contextWindows ?? []) {
     // 会话窗（thread 实例：creator / peer / fork）= 唯一可产生未来 IO 的 window；alive=open。
     if (classOf(w) !== THREAD_CLASS_ID) continue;
     if (w.status !== "open") continue;
-    const d = talkDataOf(w);
+    const d = talkDataOf(w, table);
     if (d.isForkWindow) {
       // fork 子线程窗：等子线程（或父线程，creator fork 窗）回报。
       out.push({
@@ -64,7 +66,7 @@ function hasOutgoingSayOnTalk(thread: ThreadContext, talkId: string): boolean {
   return (thread.outbox ?? []).some((m) => m.windowId === talkId);
 }
 
-function findWindow(thread: ThreadContext, id: string): OocObjectInstance | undefined {
+function findWindow(thread: ThreadContext, id: string): OocObjectRef | undefined {
   return (thread.contextWindows ?? []).find((w) => w.id === id);
 }
 
@@ -166,7 +168,7 @@ export async function handleWaitTool(
     );
   }
 
-  const targetData = talkDataOf(target);
+  const targetData = talkDataOf(target, getSessionObjectTable(thread));
 
   // 已收窄到会话窗（inst.class=`_builtin/thread`）；会话窗一律 alive=open。
   if (target.status !== "open") {

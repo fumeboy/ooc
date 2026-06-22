@@ -16,7 +16,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-// budget 只读 id/title；用 canonical ContextWindow（= OocObjectInstance）。
+// budget 只读 id/title；用 canonical ContextWindow（= OocObjectRef）。
 import type { ContextWindow } from "../../_shared/types/context-window.js";
 import { deriveStoneFromThread, stoneDir } from "../../persistable/common";
 import type { ThreadContext } from "./index";

@@ -17,6 +17,7 @@ import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { isSelfThreadWindow, objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import type { ThreadContext, ProcessEvent } from "@ooc/core/thinkable/context.js";
 import { addSummarizedRange } from "@ooc/core/_shared/utils/summarized-ranges.js";
 import { loadBudgetThresholds } from "@ooc/core/thinkable/context/budget.js";
@@ -92,9 +93,10 @@ export async function spawnSummarizerFork(
   if (!childId) return undefined;
 
   // 移除 instantiate 留下的父侧 summarizer fork 窗——summarizer 是内部 fork：child 在 childThreads
-  // 由 scheduler 跑、harvest 直读 child.endSummary、不经父侧窗回报，故父无需该窗。
+  // 由 scheduler 跑、harvest 直读 child.endSummary、不经父侧窗回报，故父无需该窗（否则污染 agent 窗列表 + wait 候选）。
+  const table = getSessionObjectTable(thread);
   thread.contextWindows = (thread.contextWindows ?? []).filter((w) => {
-    const d = (objectDataOf(w) ?? {}) as { targetThreadId?: string; isForkWindow?: boolean };
+    const d = (objectDataOf(w, table) ?? {}) as { targetThreadId?: string; isForkWindow?: boolean };
     return !(d.isForkWindow === true && d.targetThreadId === childId);
   });
 

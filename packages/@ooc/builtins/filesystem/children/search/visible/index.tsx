@@ -1,11 +1,10 @@
 import type { Data as SearchData } from "../types.js";
-import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class";
-import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class";
 import React from "react";
 
 /** Search window 详情面板（业务字段读自实例 `data`）。 */
-export default function SearchWindowDetail({ window }: { window: OocObjectInstance<SearchData> }) {
-  const data = objectDataOf(window);
+export default function SearchWindowDetail({ window }: { window: OocObjectRef & { data: SearchData } }) {
+  const data = window.data;
   return (
     <>
       <div className="llm-input-attrs">

@@ -3,7 +3,12 @@ import "@ooc/core/runtime/register-builtins.js";
 import { OOC_TOOLS, buildAvailableTools } from "../tools/index";
 import { dispatchToolCall } from "../tools";
 import { makeThread } from "../../__tests__/make-thread";
-import { type ContextWindow, isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
+import {
+  type ContextWindow,
+  isSelfThreadWindow,
+  objectDataOf,
+} from "@ooc/core/_shared/types/context-window.js";
+import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { ThreadPersistenceRef } from "../../persistable/common";
 
@@ -20,14 +25,14 @@ const persistenceOf = (threadId = "t_root"): ThreadPersistenceRef => ({
  * 经 exec 调 agency 时把 window_id 指向一个 class 解析得到 `_builtin/agent` 的窗。
  * Wave 4 裁决：form 收集机制废弃——args 由本次 exec 直传，method 在目标窗上立即执行。
  */
-const AGENT_WIN = {
+// B→A：context window = OocObjectRef（顶层 class，不持 data）；agency 窗 data 空，无 reader 需要。
+const AGENT_WIN: ContextWindow = {
   id: "agent",
+  class: "_builtin/agent",
   title: "agent",
   status: "open",
   createdAt: Date.now(),
-  // class="_builtin/agent" 是继承类、非 ContextWindow union discriminant → 经 unknown 转。
-  object: { class: "_builtin/agent", data: {} },
-} as unknown as ContextWindow;
+};
 
 /**
  * tools.test — 3 原语在 Wave 4 对象模型下的行为验证。
@@ -73,11 +78,15 @@ describe("executable tools (object model)", () => {
     expect(parsed.executed).toBe(true);
 
     // form 机制已废：不再产生 method_exec 窗，而是直接造一个 plan 对象（class 归一为 plan）。
-    expect((thread.contextWindows as ContextWindow[]).some((w) => w.object.class === "method_exec")).toBe(false);
-    const planWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.object.class === "_builtin/agent/plan");
+    expect((thread.contextWindows as ContextWindow[]).some((w) => w.class === "method_exec")).toBe(false);
+    const planWindow = (thread.contextWindows as ContextWindow[]).find((w) => w.class === "_builtin/agent/plan");
     expect(planWindow).toBeDefined();
-    // args.plan 落入 plan 对象 Data.description。
-    expect((planWindow!.object.data as { description?: string }).description).toBe("先 reshape，再迁移测试");
+    // args.plan 落入 plan 对象 Data.description（data 经 session 对象表按 ref.id 解析）。
+    const planData = objectDataOf<{ description?: string }>(
+      planWindow!,
+      getSessionObjectTable(thread),
+    );
+    expect(planData.description).toBe("先 reshape，再迁移测试");
   });
 
   it("exec 失败：method 未注册在目标窗上时返回结构化 ok:false（fail-loud，不静默）", async () => {
@@ -100,7 +109,7 @@ describe("executable tools (object model)", () => {
     // close 原语 honor 之、拒关报错（取代旧 Wave-4「关任何窗」+ 已退役的 onClose 拒绝 hook）。
     const thread = makeThread({ persistence: persistenceOf() });
     const creator = (thread.contextWindows as ContextWindow[]).find(
-      (w) => w.object.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
+      (w) => w.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
     );
     expect(creator).toBeDefined();
     expect(creator!.closable).toBe(false);
@@ -146,7 +155,7 @@ describe("executable tools (object model)", () => {
   it("wait 把线程切到 waiting 并记录 inboxSnapshotAtWait + waitingOn", async () => {
     const thread = makeThread({ inbox: [] });
     const creator = (thread.contextWindows as ContextWindow[]).find(
-      (w) => w.object.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
+      (w) => w.class === THREAD_CLASS_ID && isSelfThreadWindow(w.id),
     );
     expect(creator).toBeDefined();
     const output = await dispatchToolCall(thread, {

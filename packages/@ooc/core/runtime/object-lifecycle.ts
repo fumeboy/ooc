@@ -8,14 +8,14 @@
  * 本模块**泛型、零 thread builtin import**——只 import core 内部类型/谓词；通知语义等
  * thread-specific policy 活在 thread builtin 的 unactive body。
  */
-import type { OocObjectInstance } from "./ooc-class.js";
+import type { OocObjectRef, OocObjectInstance } from "./ooc-class.js";
 import type { ThreadContext } from "../_shared/types/thread.js";
 import type { ObjectRegistry } from "./object-registry.js";
 import type { LifecycleContext } from "../executable/contract.js";
 import { isSelfThreadWindow, objectDataOf, classOf } from "../_shared/types/context-window.js";
 import { isTalkLikeClass } from "../_shared/types/constants.js";
 import { objectDir, type FlowObjectRef } from "../persistable/common.js";
-import { evictObjectFromTable } from "./session-object-table.js";
+import { evictObjectFromTable, getSessionObjectTable } from "./session-object-table.js";
 import { rm } from "node:fs/promises";
 
 /** refcount 活动态：退出态 done/failed 排除（spec §2.2/§3.2，D1 confirmed）。 */
@@ -32,10 +32,13 @@ const ACTIVE_STATUS = new Set(["running", "waiting", "paused"]);
  *
  * peer 跨对象 / self / root（既无 objectRef 又非 fork）一律 undefined（不派发，spec §3.1/§3.4）。
  */
-export function referencedObjectId(w: OocObjectInstance): string | undefined {
+export function referencedObjectId(
+  w: OocObjectRef,
+  table: Map<string, OocObjectInstance>,
+): string | undefined {
   if (w.objectRef) return w.objectRef.objectId;
   if (isTalkLikeClass(classOf(w))) {
-    const d = (objectDataOf(w) ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
+    const d = (objectDataOf(w, table) ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
     if (d.isForkWindow && d.targetThreadId && !isSelfThreadWindow(w.id)) {
       return d.targetThreadId;
     }
@@ -67,11 +70,12 @@ function reachableThreads(start: ThreadContext): Map<string, ThreadContext> {
  * 退出态 {done, failed} 的线程持有的窗不计数（spec §2.2/§3.2）。v1 不盘扫。
  */
 export function countSessionReferences(ctxThread: ThreadContext, targetId: string): number {
+  const table = getSessionObjectTable(ctxThread);
   let n = 0;
   for (const t of reachableThreads(ctxThread).values()) {
     if (!ACTIVE_STATUS.has(t.status)) continue;
     for (const w of t.contextWindows ?? []) {
-      if (referencedObjectId(w) === targetId) n++;
+      if (referencedObjectId(w, table) === targetId) n++;
     }
   }
   return n;
@@ -154,9 +158,10 @@ async function removeObjectFromSession(
     };
     await rm(objectDir(ref), { recursive: true, force: true });
   }
+  const table = getSessionObjectTable(ctxThread);
   ctxThread.contextWindows = (ctxThread.contextWindows ?? []).filter(
-    (w) => referencedObjectId(w) !== targetId,
+    (w) => referencedObjectId(w, table) !== targetId,
   );
-  // B→A：末-ref-evict —— 从 session 对象表删表项，杜绝残窗解析到悬空共享引用（核心 10「绝不留悬空引用」）。
+  // B→A：末-ref-evict —— 从 session 对象表删表项，杜绝残窗解析到悬空引用（核心 10「绝不留悬空引用」）。
   evictObjectFromTable(ctxThread, targetId);
 }

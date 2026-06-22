@@ -9,9 +9,10 @@ import {
 } from "./budget.js";
 import { clampTranscriptToBudget } from "./transcript-clamp.js";
 import { XmlRenderer } from "./renderers/xml.js";
-import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { OocObjectRef } from "../../runtime/ooc-class.js";
 import { isTalkLikeClass } from "../../_shared/types/constants.js";
 import { isSelfThreadWindow, objectDataOf, classOf } from "../../_shared/types/context-window.js";
+import { getSessionObjectTable } from "../../runtime/session-object-table.js";
 import {
   normalizeSummarizedRanges,
   projectSummarizedRanges,
@@ -64,9 +65,10 @@ function resolveInboxWindowId(thread: ThreadContext, inboxMessage: ThreadMessage
   if (inboxMessage.replyToWindowId) return inboxMessage.replyToWindowId;
   const fromThreadId = inboxMessage.fromThreadId;
   if (!fromThreadId) return undefined;
+  const table = getSessionObjectTable(thread);
   const candidates = thread.contextWindows.filter((w) => {
     if (!isTalkLikeClass(classOf(w))) return false;
-    const d = (objectDataOf(w) ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
+    const d = (objectDataOf(w, table) ?? {}) as { isForkWindow?: boolean; targetThreadId?: string };
     return d.isForkWindow === true && d.targetThreadId === fromThreadId;
   });
   if (candidates.length === 0) return undefined;
@@ -285,7 +287,7 @@ function processEventToItems(thread: ThreadContext, event: ProcessEvent): LlmInp
  * id === type (by ooc-6 Object window convention) and the type
  * is not a builtin Object id.
  */
-function isPeerWindow(w: OocObjectInstance): boolean {
+function isPeerWindow(w: OocObjectRef): boolean {
   if (w.id !== classOf(w)) return false;
   if (isBuiltinObjectId(classOf(w))) return false;
   return true;
@@ -300,7 +302,7 @@ function isPeerWindow(w: OocObjectInstance): boolean {
  */
 function reconcilePeerWindowsIntoContext(
   thread: ThreadContext,
-  snapshotWindows: readonly OocObjectInstance[],
+  snapshotWindows: readonly OocObjectRef[],
 ): void {
   if (!snapshotWindows.length) return;
   const list = thread.contextWindows ?? (thread.contextWindows = []);

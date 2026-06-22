@@ -6,7 +6,7 @@
  * buildInputItems 是本 pipeline 的薄封装。
  */
 import type { ThreadContext } from "./index.js";
-import type { OocObjectInstance } from "../../runtime/ooc-class.js";
+import type { OocObjectRef } from "../../runtime/ooc-class.js";
 import type { ContextSnapshot } from "./snapshot.js";
 import { BudgetManager, loadBudgetThresholds } from "./budget.js";
 import { SystemProcessor } from "./processors/system.js";
@@ -15,11 +15,11 @@ import { PeerProcessor } from "./processors/peer.js";
 
 export interface PipelinePhase {
   name: string;
-  run(thread: ThreadContext, ctx: PipelineContext): OocObjectInstance[] | Promise<OocObjectInstance[]>;
+  run(thread: ThreadContext, ctx: PipelineContext): OocObjectRef[] | Promise<OocObjectRef[]>;
 }
 
 export interface PipelineContext {
-  windows: OocObjectInstance[];  // accumulated so far
+  windows: OocObjectRef[];  // accumulated so far
 }
 
 export class ContextPipeline {
@@ -30,7 +30,7 @@ export class ContextPipeline {
   }
 
   async run(thread: ThreadContext): Promise<ContextSnapshot> {
-    // thread.contextWindows 已是 OocObjectInstance[]——pipeline 直接以实例为流通单元。
+    // thread.contextWindows 已是 OocObjectRef[]——pipeline 直接以实例为流通单元。
     const ctx: PipelineContext = { windows: [...(thread.contextWindows ?? [])] };
 
     for (const phase of this.phases) {

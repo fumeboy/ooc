@@ -126,7 +126,7 @@ async function execFork(ctx: ConstructorContext, selfObjectId: string): Promise<
 
 /**
  * construct —— 创建 talk_window。target=自己 objectId ⇒ fork 子线程；否则 peer 会话。
- * 返回新实例的 Data（runtime 据此包成 OocObjectInstance 实例）。会话身份（conversationId）恒等于
+ * 返回新实例的 Data（runtime 据此包成 OocObjectRef 实例）。会话身份（conversationId）恒等于
  * runtime 分配的实例 id——不入 Data，readable/say 一律用 ctx.object.id。
  */
 const talkConstructor: ObjectConstructor<Data> = {
