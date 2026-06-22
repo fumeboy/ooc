@@ -39,9 +39,9 @@ const execMethod: ObjectMethod<Data> = {
     if (!(lang && code)) {
       return "[interpreter_process.exec] 缺少执行参数。请重新 exec(window_id=\"<interpreter_process_id>\", method=\"exec\", args={ language: \"ts\"|\"js\", code: \"...\" })。";
     }
-    // self.data.userData 是活引用：sandbox self.setData 直接写它、经 reportDataEdit 随默认 data.json 落盘。
+    // self.data.userData 是活引用：sandbox 内 self.data.userData.* 的写入随默认 data.json 落盘。
     if (!self.data.userData) self.data.userData = {};
-    const record = await runInterpreterExec(ctx.persistence, lang, code, self.data.userData, ctx.runtime, ctx.reportDataEdit);
+    const record = await runInterpreterExec(lang, code, self, ctx);
     self.data.history.push(record);
     await ctx.reportDataEdit?.();
     return undefined;

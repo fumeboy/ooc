@@ -33,7 +33,7 @@ export interface RuntimeHandle {
   /**
    * 委托调当前 thread 内某 object 的 **object method**（解析目标 object 的 class →
    * resolveObjectMethod → 三参 exec）。用于一个 method 内编排别的对象的 method
-   * （如 interpreter_process 的 `self.callMethod` 跨窗调用）。
+   * （如 interpreter_process 的 sandbox 经 `ctx.runtime.callMethod` 跨窗调用）。
    * 找不到 object / method 时抛清晰错误；返回该 method 的结果文本（或 undefined）。
    */
   callMethod?(

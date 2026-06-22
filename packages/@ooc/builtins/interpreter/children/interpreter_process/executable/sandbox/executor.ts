@@ -9,14 +9,17 @@ let counter = 0;
 
 /**
  * 执行一段 ts/js 用户代码（in-process 动态 import）。
- * - self 注入到包装函数的第二个入参；为 null 时用户代码访问 self.* 会抛 NPE
- * - console.log/warn/error 进 stdout
- * - _result_ 进 returnValue
+ *
+ * 注入与标准 object method 同构的 `(ctx, self)`——用户脚本即一段即席 object method body：
+ * - self：object method 的 self-proxy（`self.data` 读写本对象业务数据、`self.methods.x()` 自调）
+ * - ctx：object method 的 ExecutableContext（`ctx.runtime.callMethod(id, method, args)` 跨窗调别的对象）
+ * - console.log/warn/error 进 stdout；`_result_` 进 returnValue
  * - 异常进 error，附带原始堆栈中能解析到的行号
  */
 export async function executeUserCode(
   code: string,
-  self: unknown
+  self: unknown,
+  ctx: unknown
 ): Promise<InterpreterExecutionResult> {
   const dir = join(tmpdir(), "ooc", "exec");
   await mkdir(dir, { recursive: true });
@@ -30,8 +33,8 @@ export async function executeUserCode(
   try {
     await writeFile(file, moduleSource, "utf8");
     const mod = await import(`${file}?t=${id}`);
-    const fn = mod.default as (console: unknown, self: unknown) => Promise<unknown>;
-    const returnValue = await fn(cap.console, self);
+    const fn = mod.default as (console: unknown, self: unknown, ctx: unknown) => Promise<unknown>;
+    const returnValue = await fn(cap.console, self, ctx);
     return {
       success: true,
       returnValue: returnValue ?? undefined,
