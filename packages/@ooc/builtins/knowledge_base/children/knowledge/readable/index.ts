@@ -16,6 +16,7 @@ import type {
   WindowMethod,
   ReadableModule,
 } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import {
   DEFAULT_VIEWPORT,
   applyViewport,
@@ -49,7 +50,7 @@ const setViewportMethod: WindowMethod<Data, KnowledgeWin> = {
       column_end: { type: "number", description: "结束字符列（不含）" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: KnowledgeWin, args: Record<string, unknown>) => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: KnowledgeWin, args: Record<string, unknown>) => {
     const merged = mergeViewport(before?.viewport ?? DEFAULT_VIEWPORT, args);
     if (!merged.ok) throw new Error(`[knowledge.set_viewport] ${merged.error}`);
     return { viewport: merged.viewport };
@@ -68,7 +69,7 @@ const resizeMethod: WindowMethod<Data, KnowledgeWin> = {
       level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: KnowledgeWin, args: Record<string, unknown>): KnowledgeWin => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: KnowledgeWin, args: Record<string, unknown>): KnowledgeWin => {
     const raw = (args as { level?: number }).level;
     const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
     return { ...before, compressLevel: level };
@@ -76,18 +77,18 @@ const resizeMethod: WindowMethod<Data, KnowledgeWin> = {
 };
 
 const readable: ReadableModule<Data, KnowledgeWin> = {
-  readable: async (ctx: ReadableContext, self: Data, win: KnowledgeWin) => {
-    const children: XmlNode[] = [xmlElement("path", {}, [xmlText(self.path)])];
-    if (self.source) {
-      children.push(xmlElement("source", {}, [xmlText(self.source)]));
+  readable: async (ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: KnowledgeWin) => {
+    const children: XmlNode[] = [xmlElement("path", {}, [xmlText(self.data.path)])];
+    if (self.data.source) {
+      children.push(xmlElement("source", {}, [xmlText(self.data.source)]));
     }
-    if (self.presentation) {
-      children.push(xmlElement("presentation", {}, [xmlText(self.presentation)]));
+    if (self.data.presentation) {
+      children.push(xmlElement("presentation", {}, [xmlText(self.data.presentation)]));
     }
-    if (self.description) {
-      children.push(xmlElement("description", {}, [xmlText(self.description)]));
+    if (self.data.description) {
+      children.push(xmlElement("description", {}, [xmlText(self.data.description)]));
     }
-    const useViewport = self.source === "explicit" || !self.source;
+    const useViewport = self.data.source === "explicit" || !self.data.source;
     const viewport: Viewport | undefined = useViewport
       ? win?.viewport ?? DEFAULT_VIEWPORT
       : undefined;
@@ -109,27 +110,27 @@ const readable: ReadableModule<Data, KnowledgeWin> = {
       const sliced = viewport ? applyViewport(raw, viewport) : raw;
       return truncateBytes(sliced, MAX_KNOWLEDGE_BYTES);
     };
-    if (typeof self.body === "string" && self.body.length > 0) {
-      children.push(xmlElement("content", {}, [xmlText(renderBody(self.body))]));
+    if (typeof self.data.body === "string" && self.data.body.length > 0) {
+      children.push(xmlElement("content", {}, [xmlText(renderBody(self.data.body))]));
       return { class: "knowledge", content: children };
     }
-    if (self.presentation === "summary") {
+    if (self.data.presentation === "summary") {
       return { class: "knowledge", content: children };
     }
-    const persistence = ctx.thread?.persistence;
+    const persistence = ctx.persistence;
     if (!persistence) {
-      children.push(xmlElement("error", {}, [xmlText("thread 无 persistence ref")]));
+      children.push(xmlElement("error", {}, [xmlText("无 persistence ref")]));
       return { class: "knowledge", content: children };
     }
     try {
       const stoneRef = deriveStoneFromThread(persistence);
       const poolRef = derivePoolFromThread(persistence);
       const index = await loadKnowledgeIndex({ stone: stoneRef, pool: poolRef });
-      const doc = index.byPath.get(self.path);
+      const doc = index.byPath.get(self.data.path);
       if (!doc) {
-        children.push(xmlElement("error", {}, [xmlText(`knowledge "${self.path}" 不存在`)]));
+        children.push(xmlElement("error", {}, [xmlText(`knowledge "${self.data.path}" 不存在`)]));
       } else {
-        if (doc.frontmatter.description && !self.description) {
+        if (doc.frontmatter.description && !self.data.description) {
           children.push(xmlElement("description", {}, [xmlText(doc.frontmatter.description)]));
         }
         children.push(xmlElement("content", {}, [xmlText(renderBody(doc.body))]));

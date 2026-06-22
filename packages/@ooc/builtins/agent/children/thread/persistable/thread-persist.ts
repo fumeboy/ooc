@@ -40,6 +40,15 @@ import {
   readInboxMessages,
 } from "./inbox-store.js";
 import type { PersistableContext } from "@ooc/core/persistable/contract.js";
+
+/**
+ * thread 容器持久化的 ctx —— 在通用 `PersistableContext` 上加 thread **二级寻址** `threadId`
+ * （thread 实例落 `{objectDir}/threads/{threadId}`，定位一个 thread blob 需 objectId+threadId）。
+ *
+ * `threadId` 是 thread builtin 自有的寻址段，**不**属通用持久化契约（点 1 退潮：从 core
+ * `PersistableContext` 删除）；故由本 builtin 在自己的 ctx 上重新声明。
+ */
+export type ThreadPersistableContext = PersistableContext & { threadId?: string };
 import {
   ROOT_WINDOW_ID,
   isNonPersistedWindow,
@@ -203,7 +212,7 @@ async function hydrateContextWindows(
  * 标准 `persistable.save` —— 把整个 thread（thread.json + thread-context.json + 各独立子窗
  * data.json + inbox）落盘。thread（ctx 的 data）自带 persistence ref（权威定位）；未携带则静默跳过。
  */
-export async function saveThread(_ctx: PersistableContext, thread: ThreadContext): Promise<void> {
+export async function saveThread(_ctx: ThreadPersistableContext, thread: ThreadContext): Promise<void> {
   if (!thread.persistence) return;
   const registry = builtinRegistry;
   await mkdir(threadDir(thread.persistence), { recursive: true });
@@ -227,7 +236,7 @@ export async function saveThread(_ctx: PersistableContext, thread: ThreadContext
  * 标准 `persistable.load` —— 从盘 hydrate 一个 thread，并把 persistence ref 重新挂上。
  * ctx 携带 thread 二级寻址（baseDir/sessionId/objectId + threadId）；缺 threadId 视为不可定位 → undefined。
  */
-export async function loadThread(ctx: PersistableContext): Promise<ThreadContext | undefined> {
+export async function loadThread(ctx: ThreadPersistableContext): Promise<ThreadContext | undefined> {
   if (!ctx.threadId) return undefined;
   const registry = builtinRegistry;
   const persistence: ThreadPersistenceRef = {

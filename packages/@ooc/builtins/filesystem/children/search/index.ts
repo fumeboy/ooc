@@ -51,11 +51,11 @@ async function buildGrepData(
   pattern: string,
   args: SearchArgs,
 ): Promise<Data> {
-  const thread = ctx.thread;
+  const persistence = ctx.persistence;
   const rawPath = typeof args.path === "string" ? args.path : "";
   const path = rawPath
-    ? resolveSessionPath(thread, rawPath)
-    : resolveSessionPath(thread, ".");
+    ? resolveSessionPath(persistence, rawPath)
+    : resolveSessionPath(persistence, ".");
   const glob = typeof args.glob === "string" ? args.glob : undefined;
   const caseInsensitive = args.case_insensitive === true;
   const opts = { pattern, path, glob, caseInsensitive };
@@ -98,11 +98,11 @@ function buildGlobData(
   pattern: string,
   args: SearchArgs,
 ): Data {
-  const thread = ctx.thread;
+  const persistence = ctx.persistence;
   const rawCwd = typeof args.cwd === "string" ? args.cwd : "";
   const cwd = rawCwd
-    ? resolveSessionPath(thread, rawCwd)
-    : resolveSessionPath(thread, ".");
+    ? resolveSessionPath(persistence, rawCwd)
+    : resolveSessionPath(persistence, ".");
   let matchesRaw: string[];
   try {
     const g = new Glob(pattern);

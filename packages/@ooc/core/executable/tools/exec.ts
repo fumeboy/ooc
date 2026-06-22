@@ -22,6 +22,7 @@ import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../../_shared/types/conte
 import { getSessionObjectTable } from "../../runtime/session-object-table.js";
 import { builtinRegistry, type ObjectRegistry } from "../../runtime/object-registry.js";
 import { WindowManager } from "../../runtime/window-manager.js";
+import { makeSelfProxy } from "../../runtime/self-proxy.js";
 import { MARK_PARAM, TITLE_PARAM } from "./schema.js";
 
 export const EXEC_TOOL: LlmTool = {
@@ -124,8 +125,8 @@ export async function handleExecTool(
       const methodEntry = registry.resolveObjectMethod(targetClass, method)!;
       if (methodEntry.route) {
         const routeResult = await methodEntry.route(
-          { thread, object: { id: target.id, class: targetClass }, runtime: mgr, args: nestedArgs },
-          objectDataOf(target, getSessionObjectTable(thread)),
+          { persistence: thread.persistence, object: { id: target.id, class: targetClass }, runtime: mgr, args: nestedArgs },
+          makeSelfProxy(objectDataOf(target, getSessionObjectTable(thread)) ?? {}, target.id, mgr),
           nestedArgs,
         );
         if (!routeResult?.quickSubmit) {

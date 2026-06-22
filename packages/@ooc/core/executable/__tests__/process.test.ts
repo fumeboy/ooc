@@ -11,6 +11,7 @@ import { createStoneObject, ensureStoneRepo } from "../../persistable";
 import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
 import { makeThread } from "../../__tests__/make-thread";
+import { makeSelfProxy } from "@ooc/core/runtime/self-proxy.js";
 
 /**
  * Wave 4 对象模型：terminal / interpreter 是 tool-object，run 经 ctx.runtime.instantiate 委托
@@ -18,7 +19,7 @@ import { makeThread } from "../../__tests__/make-thread";
  * history）后返回纯 Data（runtime 据此建窗）。旧 `{ ok, window }` 返回形态 + 单参
  * `executeTerminalRun({thread,args})` + ContextWindow union `TerminalProcessWindow` 均已退役。
  *
- * runBashExec(thread, code) / runInterpreterExec(thread, lang, code) 是 construct 与对应 process
+ * runBashExec(thread.persistence, code) / runInterpreterExec(thread.persistence, lang, code) 是 construct 与对应 process
  * window.exec object method 共用的运行时，签名不变。
  */
 
@@ -30,7 +31,7 @@ function ctxOf(thread: ReturnType<typeof makeThread>) {
 describe("terminal_process runtime — runBashExec", () => {
   it("returns formatted result for a successful bash exec", async () => {
     const thread = makeThread({ id: "t" });
-    const rec = await runBashExec(thread, "echo hello");
+    const rec = await runBashExec(thread.persistence, "echo hello");
     expect(rec.ok).toBe(true);
     expect(rec.output).toContain("$ echo hello");
     expect(rec.output).toContain("[stdout]");
@@ -40,13 +41,13 @@ describe("terminal_process runtime — runBashExec", () => {
 
   it("captures non-zero exit code", async () => {
     const thread = makeThread({ id: "t" });
-    const rec = await runBashExec(thread, "exit 7");
+    const rec = await runBashExec(thread.persistence, "exit 7");
     expect(rec.output).toContain("[exit 7]");
   });
 
   it("captures stderr", async () => {
     const thread = makeThread({ id: "t" });
-    const rec = await runBashExec(thread, "echo bad >&2; exit 1");
+    const rec = await runBashExec(thread.persistence, "echo bad >&2; exit 1");
     expect(rec.output).toContain("[stderr]");
     expect(rec.output).toContain("bad");
     expect(rec.output).toContain("[exit 1]");
@@ -54,13 +55,13 @@ describe("terminal_process runtime — runBashExec", () => {
 
   it("truncates oversize stdout", async () => {
     const thread = makeThread({ id: "t" });
-    const rec = await runBashExec(thread, "head -c 8192 /dev/zero | tr '\\0' 'a'");
+    const rec = await runBashExec(thread.persistence, "head -c 8192 /dev/zero | tr '\\0' 'a'");
     expect(rec.output).toContain("...[truncated, original");
   });
 
   it("rejects missing bash code", async () => {
     const thread = makeThread({ id: "t" });
-    const rec = await runBashExec(thread, undefined);
+    const rec = await runBashExec(thread.persistence, undefined);
     expect(rec.output).toContain("缺少 code 参数");
     expect(rec.ok).toBe(false);
   });
@@ -82,7 +83,7 @@ describe("terminal_process runtime — runBashExec", () => {
         id: "t",
         persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
       });
-      const rec = await runBashExec(thread, "echo \"$OOC_SELF_DIR\"");
+      const rec = await runBashExec(thread.persistence, "echo \"$OOC_SELF_DIR\"");
       expect(rec.output).toContain(`${tempRoot}/flows/s1/objects/agent`);
       expect(rec.output).toContain("[exit 0]");
     } finally {
@@ -92,7 +93,7 @@ describe("terminal_process runtime — runBashExec", () => {
 
   it("does not set OOC_SELF_DIR when thread has no persistence", async () => {
     const thread = makeThread({ id: "t" });
-    const rec = await runBashExec(thread, "echo \"[${OOC_SELF_DIR:-UNSET}]\"");
+    const rec = await runBashExec(thread.persistence, "echo \"[${OOC_SELF_DIR:-UNSET}]\"");
     expect(rec.output).toContain("[UNSET]");
   });
 });
@@ -115,7 +116,7 @@ describe("interpreter_process runtime — runInterpreterExec (ts/js)", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
     });
-    const rec = await runInterpreterExec(thread, "ts", "_result_ = 2 + 3;", {});
+    const rec = await runInterpreterExec(thread.persistence, "ts", "_result_ = 2 + 3;", {});
     expect(rec.output).toContain("[returnValue]");
     expect(rec.output).toContain("5");
     expect(rec.output).toContain("[exit 0]");
@@ -128,21 +129,8 @@ describe("interpreter_process runtime — runInterpreterExec (ts/js)", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
     });
-    const rec = await runInterpreterExec(thread, "ts", "_result_ = self.dir;", {});
+    const rec = await runInterpreterExec(thread.persistence, "ts", "_result_ = self.dir;", {});
     expect(rec.output).toContain("agent");
-  });
-
-  test("ts mode getThreadLocal/setThreadLocal share state across exec", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
-    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    const thread = makeThread({
-      id: "t",
-      persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
-    });
-    await runInterpreterExec(thread, "ts", "self.setThreadLocal('counter', 1);", {});
-    const second = await runInterpreterExec(thread, "ts", "_result_ = self.getThreadLocal('counter');", {});
-    expect(second.output).toContain("[returnValue]");
-    expect(second.output).toContain("1");
   });
 
   test("ts mode getData/setData read/write the instance userData + trigger reportDataEdit", async () => {
@@ -156,10 +144,10 @@ describe("interpreter_process runtime — runInterpreterExec (ts/js)", () => {
     const userData: Record<string, unknown> = {};
     let edits = 0;
     const reportDataEdit = async () => { edits += 1; };
-    await runInterpreterExec(thread, "ts", "await self.setData('k', 42);", userData, undefined, reportDataEdit);
+    await runInterpreterExec(thread.persistence, "ts", "await self.setData('k', 42);", userData, undefined, reportDataEdit);
     expect(userData.k).toBe(42);
     expect(edits).toBe(1);
-    const second = await runInterpreterExec(thread, "ts", "_result_ = await self.getData('k');", userData, undefined, reportDataEdit);
+    const second = await runInterpreterExec(thread.persistence, "ts", "_result_ = await self.getData('k');", userData, undefined, reportDataEdit);
     expect(second.output).toContain("[returnValue]");
     expect(second.output).toContain("42");
   });
@@ -196,7 +184,7 @@ describe("terminal_process.exec object method — missing-args error path", () =
     const thread = makeThread({ id: "t_pw_exec_no_args" });
     const execMethod = TerminalProcessClass.executable!.methods.find((m) => m.name === "exec")!;
     const self: TerminalProcessData = { history: [] };
-    const result = await execMethod.exec(ctxOf(thread), self, {});
+    const result = await execMethod.exec(ctxOf(thread), makeSelfProxy(self, "t_pw_exec_no_args", undefined), {});
     expect(typeof result).toBe("string");
     expect(result as string).toContain("缺少 code 参数");
     expect(result as string).toContain("exec");

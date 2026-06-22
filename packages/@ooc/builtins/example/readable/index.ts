@@ -19,6 +19,7 @@ import {
   type Viewport,
 } from "./viewport.js";
 import { xmlElement, xmlText, truncateBytes } from "@ooc/core/_shared/types/xml.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 const MAX_EXAMPLE_BYTES = 8192;
@@ -40,7 +41,7 @@ const setViewportMethod: WindowMethod<Data, ExampleWin> = {
       column_end: { type: "number", description: "结束字符列（不含）" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: ExampleWin, args: Record<string, unknown>) => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: ExampleWin, args: Record<string, unknown>) => {
     const merged = mergeViewport(before?.viewport ?? DEFAULT_VIEWPORT, args);
     if (!merged.ok) throw new Error(`[example.set_viewport] ${merged.error}`);
     return { viewport: merged.viewport };
@@ -48,13 +49,13 @@ const setViewportMethod: WindowMethod<Data, ExampleWin> = {
 };
 
 const readable: ReadableModule<Data, ExampleWin> = {
-  readable: (_ctx: ReadableContext, self: Data, win: ExampleWin) => {
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: ExampleWin) => {
     const viewport = win?.viewport ?? DEFAULT_VIEWPORT;
-    const body = applyViewport(self.message ?? "", viewport);
+    const body = applyViewport(self.data.message ?? "", viewport);
     return {
       class: "example",
       content: [
-        xmlElement("bump_count", {}, [xmlText(String(self.bumpCount ?? 0))]),
+        xmlElement("bump_count", {}, [xmlText(String(self.data.bumpCount ?? 0))]),
         xmlElement("message", {}, [xmlText(truncateBytes(body, MAX_EXAMPLE_BYTES))]),
       ],
     };

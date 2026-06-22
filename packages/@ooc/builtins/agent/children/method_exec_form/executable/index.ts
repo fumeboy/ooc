@@ -9,6 +9,7 @@ import type {
   ExecutableModule,
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import { buildFillState } from "../schema-fill.js";
 import type { Data } from "../types.js";
 
@@ -19,22 +20,22 @@ import type { Data } from "../types.js";
 const refine: ObjectMethod<Data> = {
   name: "refine",
   description: "Accumulate more args into this form (key/value merge); does not execute.",
-  exec: async (ctx: ExecutableContext, self: Data, args: Record<string, unknown>) => {
-    if (self.status !== "open" && self.status !== "failed") {
-      return { err: `form 不在 open/failed 状态（当前 ${self.status}），无法 refine。` };
+  exec: async (ctx: ExecutableContext, self: SelfProxy<Data>, args: Record<string, unknown>) => {
+    if (self.data.status !== "open" && self.data.status !== "failed") {
+      return { err: `form 不在 open/failed 状态（当前 ${self.data.status}），无法 refine。` };
     }
     if (!args || typeof args !== "object" || Array.isArray(args) || Object.keys(args).length === 0) {
       return { err: "refine 需要至少一个参数键值对；要执行请用 submit。" };
     }
-    self.accumulatedArgs = { ...self.accumulatedArgs, ...args };
-    self.fill = buildFillState(self.schema, self.accumulatedArgs, self.fill);
-    const revived = self.status === "failed";
-    if (revived) self.status = "open";
+    self.data.accumulatedArgs = { ...self.data.accumulatedArgs, ...args };
+    self.data.fill = buildFillState(self.data.schema, self.data.accumulatedArgs, self.data.fill);
+    const revived = self.data.status === "failed";
+    if (revived) self.data.status = "open";
     // 重跑目标 method 的 route：累积参数后刷新 tip / intentPaths（渐进意图 → phase-2 知识激活的来源）。
-    const routed = await ctx.runtime?.runRoute?.(self.targetObjectId, self.method, self.accumulatedArgs);
+    const routed = await ctx.runtime?.runRoute?.(self.data.targetObjectId, self.data.method, self.data.accumulatedArgs);
     if (routed) {
-      self.tip = routed.tip;
-      if (routed.intents && routed.intents.length > 0) self.intentPaths = routed.intents;
+      self.data.tip = routed.tip;
+      if (routed.intents && routed.intents.length > 0) self.data.intentPaths = routed.intents;
     }
     await ctx.reportDataEdit?.();
     return `已累积参数：${Object.keys(args).join(", ")}${revived ? "（form 已从 failed 复活回 open）" : ""}。`;
@@ -51,30 +52,30 @@ const refine: ObjectMethod<Data> = {
 const submit: ObjectMethod<Data> = {
   name: "submit",
   description: "Submit this form: execute the routed method with the accumulated args.",
-  exec: async (ctx: ExecutableContext, self: Data) => {
-    if (self.status !== "open") {
-      return { err: `form 不在 open 状态（当前 ${self.status}），无法 submit。` };
+  exec: async (ctx: ExecutableContext, self: SelfProxy<Data>) => {
+    if (self.data.status !== "open") {
+      return { err: `form 不在 open 状态（当前 ${self.data.status}），无法 submit。` };
     }
     if (!ctx.runtime?.callMethod) {
       return { err: "缺少 runtime.callMethod，无法 submit。" };
     }
-    self.status = "executing";
+    self.data.status = "executing";
     try {
       const result = await ctx.runtime.callMethod(
-        self.targetObjectId,
-        self.method,
-        self.accumulatedArgs,
+        self.data.targetObjectId,
+        self.data.method,
+        self.data.accumulatedArgs,
       );
-      self.status = "success";
+      self.data.status = "success";
       // 成功：从 context 移除本 form（生命周期元信息管理归 runtime）。
       await ctx.runtime.close?.(ctx.object.id);
-      return `[form success] "${self.method}" 已执行并释放。${result ?? ""}`.trimEnd();
+      return `[form success] "${self.data.method}" 已执行并释放。${result ?? ""}`.trimEnd();
     } catch (err) {
-      self.status = "failed";
-      self.result = (err as Error).message;
+      self.data.status = "failed";
+      self.data.result = (err as Error).message;
       await ctx.reportDataEdit?.();
       return {
-        err: `[form failed] "${self.method}" 执行失败：${self.result}。refine 修正参数后可重 submit。`,
+        err: `[form failed] "${self.data.method}" 执行失败：${self.data.result}。refine 修正参数后可重 submit。`,
       };
     }
   },

@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import type { XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { ReadableContext } from "@ooc/core/readable/contract.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
+import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import readable from "../readable/index";
 import { branchSkillsDir, clearStoneSkillsCache, objectSkillsDir } from "../scan";
 import type { Data, SkillEntry } from "../types";
@@ -66,11 +67,8 @@ const EMPTY_DATA: Data = { status: "active", skills: [] as SkillEntry[] };
 
 function ctxFor(thread: ReturnType<typeof makeThread>): ReadableContext {
   return {
-    thread,
     object: { id: "_builtin/agent/skill_index", class: "_builtin/agent/skill_index" },
-    persistence: thread.persistence
-      ? { baseDir: thread.persistence.baseDir, sessionId: thread.persistence.sessionId }
-      : undefined,
+    persistence: thread.persistence,
   };
 }
 
@@ -81,7 +79,7 @@ describe("skill_index readable 渲染期自算", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
     });
-    const projection = await readable.readable(ctxFor(thread), EMPTY_DATA, {});
+    const projection = await readable.readable(ctxFor(thread), makeReadonlySelfProxy(EMPTY_DATA), {});
     expect(extractSkills(projection.content)).toEqual([]);
   });
 
@@ -97,7 +95,7 @@ describe("skill_index readable 渲染期自算", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
     });
-    const skills = extractSkills((await readable.readable(ctxFor(thread), EMPTY_DATA, {})).content);
+    const skills = extractSkills((await readable.readable(ctxFor(thread), makeReadonlySelfProxy(EMPTY_DATA), {})).content);
     expect(skills.length).toBe(3);
     expect(skills.map((s) => s.name).sort()).toEqual(["common", "private", "shared"]);
     const shared = skills.find((s) => s.name === "shared");
@@ -112,7 +110,7 @@ describe("skill_index readable 渲染期自算", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
     });
-    const skills = extractSkills((await readable.readable(ctxFor(thread), EMPTY_DATA, {})).content);
+    const skills = extractSkills((await readable.readable(ctxFor(thread), makeReadonlySelfProxy(EMPTY_DATA), {})).content);
     expect(skills.length).toBe(1);
     expect(skills[0]?.scope).toBe("workspace");
   });
@@ -125,7 +123,7 @@ describe("skill_index readable 渲染期自算", () => {
       id: "t",
       persistence: { baseDir: tempRoot, sessionId: "s", objectId: "agent", threadId: "t" },
     });
-    const skills = extractSkills((await readable.readable(ctxFor(thread), EMPTY_DATA, {})).content);
+    const skills = extractSkills((await readable.readable(ctxFor(thread), makeReadonlySelfProxy(EMPTY_DATA), {})).content);
     expect(skills.length).toBe(1);
     expect(skills[0]?.scope).toBe("object");
   });
@@ -133,7 +131,7 @@ describe("skill_index readable 渲染期自算", () => {
   test("thread 无 persistence → 跳过（count=0）", async () => {
     const thread = makeThread({ id: "t" });
     expect(thread.persistence).toBeUndefined();
-    const skills = extractSkills((await readable.readable(ctxFor(thread), EMPTY_DATA, {})).content);
+    const skills = extractSkills((await readable.readable(ctxFor(thread), makeReadonlySelfProxy(EMPTY_DATA), {})).content);
     expect(skills).toEqual([]);
   });
 });

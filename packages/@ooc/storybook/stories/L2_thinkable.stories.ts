@@ -6,6 +6,7 @@
 import { join } from "node:path";
 import { postJson, getJson } from "../_harness/control-plane";
 import { story, check, skip, type Story } from "../_harness/story";
+import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 
 export const L2_STORIES: Story[] = [
   story({
@@ -106,7 +107,7 @@ export const L2_STORIES: Story[] = [
       );
       const resize = reg.resolveWindowMethod("content_win", "resize");
       check(!!resize, "content_win 声明的 resize 未解析");
-      const set2 = (await resize!.exec({} as never, {}, { compressLevel: 0 } as never, { level: 2 } as never)) as { compressLevel: number };
+      const set2 = (await resize!.exec({} as never, makeReadonlySelfProxy({}), { compressLevel: 0 } as never, { level: 2 } as never)) as { compressLevel: number };
       check(set2.compressLevel === 2, `resize(level=2) 应设 compressLevel=2，得 ${set2.compressLevel}`);
 
       // 读出侧：level 0 原样、level 2 仅句柄 → 显著变短。
@@ -140,9 +141,9 @@ export const L2_STORIES: Story[] = [
       check(!!compress && !!resize, "thread class 未声明 compress/resize（v2 协议缺失）");
 
       // compress 无参 → 置 compressIntent；resize(level=2) → 设 autoCompressLevel。
-      const ci = (await compress!.exec({} as never, {}, {} as never, {} as never)) as { compressIntent?: boolean };
+      const ci = (await compress!.exec({} as never, makeReadonlySelfProxy({}), {} as never, {} as never)) as { compressIntent?: boolean };
       check(ci.compressIntent === true, "compress 应置 compressIntent=true");
-      const rl = (await resize!.exec({} as never, {}, {} as never, { level: 2 } as never)) as { autoCompressLevel?: number };
+      const rl = (await resize!.exec({} as never, makeReadonlySelfProxy({}), {} as never, { level: 2 } as never)) as { autoCompressLevel?: number };
       check(rl.autoCompressLevel === 2, `resize(level=2) 应设 autoCompressLevel=2，得 ${rl.autoCompressLevel}`);
 
       // 触发判定（transcript-gated）：档位→阈值（2=soft/2 / 1=soft / 0=hard）；超阈值/intent 触发、在途不触发。

@@ -3,8 +3,7 @@
  *
  * 由 interpreter 对象构造（args: code, language: ts/js）。每次 exec 跑一段 ts/js 脚本
  * （独立 sandbox），结果作为一条 ProcessExecRecord 追加进 history。ts/js sandbox 通过
- * self.getData/setData 读写本实例自身的 userData（随默认 data.json 持久化、跨 exec/reload 存活）、
- * 通过 self.getThreadLocal/setThreadLocal 跨 exec 共享 in-memory 数据。非单例。
+ * self.getData/setData 读写本实例自身的 userData（随默认 data.json 持久化、跨 exec/reload 存活）。非单例。
  *
  * 业务字段：history（exec 记录）+ userData（用户脚本经 getData/setData 读写的持久 scratch，
  * 与 history 投影隔离）。**不含**窗的元信息（id/class/title/status/createdAt）——由 runtime 管理；

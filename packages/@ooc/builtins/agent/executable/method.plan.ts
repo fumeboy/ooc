@@ -10,6 +10,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 const PLAN_TIP = `plan 把任务拆成可执行步骤，以 plan_window 挂在 context。
@@ -27,7 +28,7 @@ export const planMethod: ObjectMethod<Data> = {
       steps: { type: "array", required: false, description: "步骤列表 [{ id?, text, status? }]" },
     },
   },
-  exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
+  exec: async (ctx: ExecutableContext, _self: SelfProxy<Data>, args: Record<string, unknown>) => {
     if (!ctx.runtime) return `[plan] ${PLAN_TIP}\n（runtime 不可用，无法实例化 plan 对象）`;
     const id = await ctx.runtime.instantiate("_builtin/agent/plan", args);
     return `已创建 plan 对象（id=${id}）。`;

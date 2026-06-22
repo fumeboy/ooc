@@ -24,6 +24,7 @@ import {
 } from "./viewport.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import { asTuple } from "@ooc/builtins/_shared/executable/utils.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 const MAX_FILE_WINDOW_BYTES = 32768;
@@ -70,7 +71,7 @@ const setViewportMethod: WindowMethod<Data, FileWin> = {
       column_end: { type: "number", description: "结束字符列（不含）" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: FileWin, args: Record<string, unknown>): FileWin => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: FileWin, args: Record<string, unknown>): FileWin => {
     const merged = mergeViewport(before?.viewport ?? DEFAULT_VIEWPORT, args);
     if (!merged.ok) throw new Error(`[file.set_viewport] ${merged.error}`);
     return { ...before, viewport: merged.viewport };
@@ -87,7 +88,7 @@ const setRangeMethod: WindowMethod<Data, FileWin> = {
       columns: { type: "array", description: "可选 [start, end]，调整可见列范围" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: FileWin, args: Record<string, unknown>): FileWin => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: FileWin, args: Record<string, unknown>): FileWin => {
     const lines = asTuple(args.lines);
     const columns = asTuple(args.columns);
     return {
@@ -111,7 +112,7 @@ const resizeMethod: WindowMethod<Data, FileWin> = {
       level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: FileWin, args: Record<string, unknown>): FileWin => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: FileWin, args: Record<string, unknown>): FileWin => {
     const raw = (args as { level?: number }).level;
     const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
     return { ...before, compressLevel: level };
@@ -119,11 +120,11 @@ const resizeMethod: WindowMethod<Data, FileWin> = {
 };
 
 const readable: ReadableModule<Data, FileWin> = {
-  readable: async (_ctx: ReadableContext, self: Data, win: FileWin) => {
+  readable: async (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: FileWin) => {
     const viewport: Viewport = win?.viewport ?? DEFAULT_VIEWPORT;
     const lines = win?.lines;
     const columns = win?.columns;
-    const children: XmlNode[] = [xmlElement("path", {}, [xmlText(self.path)])];
+    const children: XmlNode[] = [xmlElement("path", {}, [xmlText(self.data.path)])];
     children.push(
       xmlElement(
         "viewport",
@@ -143,7 +144,7 @@ const readable: ReadableModule<Data, FileWin> = {
       children.push(xmlElement("columns", {}, [xmlText(`${columns[0]}-${columns[1]}`)]));
     }
     try {
-      const raw = await readFile(self.path, "utf8");
+      const raw = await readFile(self.data.path, "utf8");
       let body = applyViewport(raw, viewport);
       if (lines || columns) {
         body = sliceByLinesColumns(body, lines, columns);

@@ -30,6 +30,7 @@ import {
   appendInbox,
 } from "@ooc/builtins/agent/thread/executable/talk-fork.js";
 import type { TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
+import { runningThread } from "./running-thread.js";
 import type { Data } from "../types.js";
 
 // ─────────────────────────── say ──────────────────────────────
@@ -59,8 +60,7 @@ async function executeSay(
   self: Data,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
-  const thread = ctx.thread;
-  if (!thread) return "[thread.say] 缺少 thread context。";
+  const thread = runningThread(ctx);
   const content = typeof args.msg === "string" ? args.msg : "";
   if (!content.trim()) return "[thread.say] 缺少 msg 参数（消息正文）。";
 
@@ -90,7 +90,7 @@ function sayToForkPeer(
   self: Data,
   content: string,
 ): string | undefined {
-  const thread = ctx.thread as ThreadContext;
+  const thread = runningThread(ctx);
   const targetThreadId = self.targetThreadId;
   if (!targetThreadId) return "[thread.say] fork 子窗缺少 targetThreadId。";
   const peer = findThreadInScope(thread, targetThreadId);
@@ -117,7 +117,7 @@ export const sayMethod: ObjectMethod<Data> = {
   schema: SAY_SCHEMA,
   permission: () => "allow",
   public: true,
-  exec: (ctx, self, args) => executeSay(ctx, self, args),
+  exec: (ctx, self, args) => executeSay(ctx, self.data, args),
 };
 
 export const sessionMethods: ObjectMethod<Data>[] = [sayMethod];

@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
+import { makeSelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import { construct as fileConstruct } from "@ooc/builtins/filesystem/file/executable/construct.js";
 import { Class as FileClass } from "@ooc/builtins/filesystem/file";
 import type { Data as FileData } from "@ooc/builtins/filesystem/file/types";
@@ -55,7 +56,7 @@ async function newWorld(agents: string[]): Promise<string> {
   return baseDir;
 }
 
-/** 最小 ConstructorContext / ExecutableContext stub（construct / edit 只用到 thread + args + self）。 */
+/** 最小 ConstructorContext / ExecutableContext stub（construct / edit 用 persistence + args + self）。 */
 function ctxFor(
   baseDir: string,
   objectId: string,
@@ -63,12 +64,8 @@ function ctxFor(
   args: Record<string, unknown>,
   self?: FileData,
 ) {
-  const thread = {
-    persistence: { baseDir, objectId, sessionId, threadId: "t" },
-    contextWindows: [] as unknown[],
-    events: [] as unknown[],
-  };
-  return { thread, args, self, runtime: undefined, reportDataEdit: async () => {} } as never;
+  const persistence = { baseDir, objectId, sessionId, threadId: "t" };
+  return { persistence, args, self, runtime: undefined, reportDataEdit: async () => {} } as never;
 }
 
 function mainObjectsDir(baseDir: string): string {
@@ -127,7 +124,7 @@ describe("file worktree redirect", () => {
     const self: FileData = { path: join(mainObjectsDir(baseDir), "alice", "self.md") };
     const err = await editMethod.exec(
       ctxFor(baseDir, "alice", "s1", { old: "alice v1", new: "alice v2-edited" }, self),
-      self,
+      makeSelfProxy(self, "w_file_alice", undefined),
       { old: "alice v1", new: "alice v2-edited" },
     );
     expect(err).toBeUndefined();
@@ -147,13 +144,13 @@ describe("file worktree redirect", () => {
     const self: FileData = { path: join(mainObjectsDir(baseDir), "alice", "self.md") };
     await editMethod.exec(
       ctxFor(baseDir, "alice", "s1", { old: "alice v1", new: "line-A" }, self),
-      self,
+      makeSelfProxy(self, "w_file_alice", undefined),
       { old: "alice v1", new: "line-A" },
     );
     // 第二次 edit：old 应在 worktree 当前内容里（line-A），不是 main（alice v1）
     const err = await editMethod.exec(
       ctxFor(baseDir, "alice", "s1", { old: "line-A", new: "line-B" }, self),
-      self,
+      makeSelfProxy(self, "w_file_alice", undefined),
       { old: "line-A", new: "line-B" },
     );
     expect(err).toBeUndefined();
@@ -167,7 +164,7 @@ describe("file worktree redirect", () => {
     const self: FileData = { path: join(mainObjectsDir(baseDir), "alice", "self.md") };
     await editMethod.exec(
       ctxFor(baseDir, "alice", "super", { old: "alice v1", new: "alice super-edit" }, self),
-      self,
+      makeSelfProxy(self, "w_file_alice", undefined),
       { old: "alice v1", new: "alice super-edit" },
     );
     expect(await readFile(join(mainObjectsDir(baseDir), "alice", "self.md"), "utf8")).toBe(

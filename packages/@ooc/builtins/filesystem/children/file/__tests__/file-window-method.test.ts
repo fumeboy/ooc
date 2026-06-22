@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import "@ooc/core/runtime/register-builtins.js"; // 全量 boot：注册 file class
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
+import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import fileReadable from "@ooc/builtins/filesystem/file/readable/index.js";
 import type { Data as FileData } from "@ooc/builtins/filesystem/file/types.js";
 import type { FileWin } from "@ooc/builtins/filesystem/file/readable/index.js";
@@ -40,7 +41,7 @@ test("file readable 从投影态 win.viewport 读 viewport 渲染 <viewport line
     await writeFile(path, "alpha\nbravo\ncharlie\n", "utf8");
     const self: FileData = { path };
     const win: FileWin = { viewport: { lineStart: 0, lineEnd: 1, columnStart: 0, columnEnd: 80 } };
-    const proj = await fileReadable.readable({} as never, self, win);
+    const proj = await fileReadable.readable({} as never, makeReadonlySelfProxy(self), win);
     const viewportNode = (proj.content as any[]).find((n: any) => n.tag === "viewport");
     expect(viewportNode?.attrs?.line_end).toBe("1");
   } finally {
@@ -54,7 +55,7 @@ test("file readable 缺投影态走 DEFAULT_VIEWPORT 兜底（不崩，class=fil
     const path = join(tmp, "hostname.txt");
     await writeFile(path, "x\ny\nz\n", "utf8");
     const self: FileData = { path };
-    const proj = await fileReadable.readable({} as never, self, {} as FileWin);
+    const proj = await fileReadable.readable({} as never, makeReadonlySelfProxy(self), {} as FileWin);
     expect(proj.class).toBe("file");
     const viewportNode = (proj.content as any[]).find((n: any) => n.tag === "viewport");
     expect(viewportNode).toBeDefined();
@@ -66,7 +67,7 @@ test("file readable 缺投影态走 DEFAULT_VIEWPORT 兜底（不崩，class=fil
 test("file set_viewport window method 返回新 win（不可变，写 win.viewport）", () => {
   const wm = windowMethod("set_viewport")!;
   const before: FileWin = { viewport: { lineStart: 0, lineEnd: 100, columnStart: 0, columnEnd: 200 } };
-  const after = wm.exec({} as never, { path: "/x" }, before, { line_start: 5, line_end: 9 }) as FileWin;
+  const after = wm.exec({} as never, makeReadonlySelfProxy({ path: "/x" }), before, { line_start: 5, line_end: 9 }) as FileWin;
   expect(after).not.toBe(before);
   expect(after.viewport.lineStart).toBe(5);
   expect(after.viewport.lineEnd).toBe(9);

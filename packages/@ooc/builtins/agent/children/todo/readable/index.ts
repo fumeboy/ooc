@@ -11,6 +11,7 @@ import type {
   ReadableContext,
   ReadableModule,
 } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import {
   xmlElement,
   xmlText,
@@ -23,12 +24,12 @@ import type { Data } from "../types.js";
 export type TodoWin = Record<string, never>;
 
 const readable: ReadableModule<Data, TodoWin> = {
-  readable: (_ctx: ReadableContext, self: Data) => {
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>) => {
     const children: XmlNode[] = [
-      xmlElement("content", {}, [xmlText(self.content)]),
+      xmlElement("content", {}, [xmlText(self.data.content)]),
     ];
-    if (self.activatesOn && self.activatesOn.length > 0) {
-      children.push(renderPathList("activates_on", self.activatesOn)!);
+    if (self.data.activatesOn && self.data.activatesOn.length > 0) {
+      children.push(renderPathList("activates_on", self.data.activatesOn)!);
     }
     return {
       class: "todo",

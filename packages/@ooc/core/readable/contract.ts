@@ -12,18 +12,20 @@
  * —— 与 executable 维度的 object method 维度隔离（同名 fail-loud）。
  */
 
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadPersistenceRef } from "../_shared/types/thread.js";
 import type { MethodCallSchema } from "../_shared/types/intent.js";
 import type { XmlNode } from "../_shared/types/xml.js";
+import type { ReadonlySelfProxy } from "../_shared/types/self-proxy.js";
 
 /** readable / window method 的执行上下文（读侧；不携带改业务数据的能力）。 */
 export interface ReadableContext {
-  /** 正在「看」这个对象的 thread（视角来源；readable 可据此动态算 class）。 */
-  thread?: ThreadContext;
   /** 被投影对象的身份元信息（id / class）。 */
   object: { id: string; class: string };
-  /** persistence 定位（readable 需读盘时用，如 file 读文件内容）。 */
-  persistence?: { baseDir: string; sessionId?: string };
+  /**
+   * 实例的**盘上定位**（中立持久化 ref，非 thread 运行态）——readable 需读盘时用：
+   * file 读文件内容、knowledge/skill_index 推导 stone/pool ref。取代旧的 `ctx.thread.persistence`。
+   */
+  persistence?: ThreadPersistenceRef;
 }
 
 /**
@@ -44,7 +46,7 @@ export interface ReadableProjection {
  * window method —— 调展示**程度/范围**（详细/部分/总结/压缩、viewport…）。
  *
  * 签名 `(ctx, self, before_win, args)` → **新的 win**：
- *   - self       : Data（只读；据业务数据算合法投影范围，如行数上限）
+ *   - self       : ReadonlySelfProxy<Data>（`self.data` 只读；据业务数据算合法投影范围，如行数上限）
  *   - before_win : 当前投影态
  *   - 返回       : 新投影态（不可变；runtime 写回对象的 win）
  */
@@ -54,7 +56,7 @@ export interface WindowMethod<Data = any, Win = any, Args = any> {
   schema?: MethodCallSchema;
   exec: (
     ctx: ReadableContext,
-    self: Data,
+    self: ReadonlySelfProxy<Data>,
     before_win: Win,
     args: Args,
   ) => Win | Promise<Win>;
@@ -76,7 +78,7 @@ export interface WindowClassDecl<Data = any, Win = any> {
 export interface ReadableModule<Data = any, Win = any> {
   readable: (
     ctx: ReadableContext,
-    self: Data,
+    self: ReadonlySelfProxy<Data>,
     win: Win,
   ) => ReadableProjection | Promise<ReadableProjection>;
   window: WindowClassDecl<Data, Win>[];

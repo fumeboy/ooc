@@ -14,6 +14,7 @@ import type {
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import { runBashExec } from "./runtime.js";
 export { runBashExec } from "./runtime.js";
 import type { Data } from "../types.js";
@@ -26,15 +27,14 @@ const execMethod: ObjectMethod<Data> = {
       code: { type: "string", required: true, description: "待执行 bash 脚本" },
     },
   },
-  exec: async (ctx: ExecutableContext, self: Data, args: { code?: string }) => {
-    const thread = ctx.thread;
-    if (!thread) return "[terminal_process.exec] 缺少 thread context。";
+  exec: async (ctx: ExecutableContext, self: SelfProxy<Data>, args: { code?: string }) => {
+    const persistence = ctx.persistence;
     const code = args?.code;
     if (typeof code !== "string" || code.trim() === "") {
       return "[terminal_process.exec] 缺少 code 参数。请重新 exec(window_id=\"<terminal_process_id>\", method=\"exec\", args={ code: \"...\" })。";
     }
-    const record = await runBashExec(thread, code);
-    self.history = [...self.history, record];
+    const record = await runBashExec(persistence, code);
+    self.data.history = [...self.data.history, record];
     await ctx.reportDataEdit?.();
     return undefined;
   },

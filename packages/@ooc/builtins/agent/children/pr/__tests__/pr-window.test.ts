@@ -34,6 +34,7 @@ import {
   getSessionObjectTable,
 } from "@ooc/core/runtime/session-object-table.js";
 import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import type { ReadableContext } from "@ooc/core/readable/contract.js";
 import type { ExecutableContext } from "@ooc/core/executable/contract.js";
 import {
@@ -146,11 +147,10 @@ function prClass() {
 async function renderPr(baseDir: string, thread: ThreadContext, data: PrData): Promise<string> {
   const cls = prClass();
   const ctx: ReadableContext = {
-    thread,
     object: { id: prWindowId(data.issueId), class: "pr" },
-    persistence: { baseDir },
+    persistence: thread.persistence,
   };
-  const proj = await cls.readable!.readable(ctx, data, undefined);
+  const proj = await cls.readable!.readable(ctx, makeReadonlySelfProxy(data), undefined);
   return serializeXml(xmlElement("pr_window", {}, proj.content as never));
 }
 
@@ -200,11 +200,11 @@ describe("pr object method", () => {
     const data: PrData = { issueId, reviewerObjectId: "supervisor", authorObjectId: "foo" };
     const thread = reviewerThread(baseDir, "supervisor", "t1");
     const ctx: ExecutableContext = {
-      thread,
+      persistence: thread.persistence,
       object: { id: prWindowId(issueId), class: "pr" },
       args: {},
     };
-    const out = await approve.exec(ctx, data, {});
+    const out = await approve.exec(ctx, makeSelfProxy(data, prWindowId(issueId), undefined), {});
     const parsed = JSON.parse(out as string);
     expect(parsed.ok).toBe(true);
     expect(parsed.verdict).toBe("ready-to-merge");
@@ -234,11 +234,11 @@ describe("pr object method", () => {
     };
     const thread = reviewerThread(baseDir, "supervisor", "t1");
     const ctx: ExecutableContext = {
-      thread,
+      persistence: thread.persistence,
       object: { id: prWindowId(issueId), class: "pr" },
       args: {},
     };
-    const out = await reject.exec(ctx, data, {});
+    const out = await reject.exec(ctx, makeSelfProxy(data, prWindowId(issueId), undefined), {});
     const parsed = JSON.parse(out as string);
     expect(parsed.ok).toBe(true);
     expect(parsed.verdict).toBe("rejected");

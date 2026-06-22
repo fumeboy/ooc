@@ -16,11 +16,6 @@ export interface PersistableContext {
   objectId: string;
   /** 运行时 session（flow）id；缺省 = stone（类/身份）层。 */
   sessionId?: string;
-  /**
-   * thread 容器的**二级寻址**：thread 实例落在 `{objectDir}/threads/{threadId}`，故定位一个
-   * thread blob 需 (objectId, threadId) 两段。普通 object 不用此字段（缺省）。
-   */
-  threadId?: string;
   /** 系统已解析好的默认序列化目录（自定义实现可改用别处，但通常基于它）。 */
   dir: string;
 }

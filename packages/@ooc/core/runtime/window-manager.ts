@@ -41,6 +41,7 @@ import type {
 import type { ReadableContext } from "../readable/contract.js";
 import { referencedObjectId, dispatchActiveIfFirst } from "./object-lifecycle.js";
 import { setSessionObject, getSessionObject, getSessionObjectTable } from "./session-object-table.js";
+import { makeSelfProxy, makeReadonlySelfProxy } from "./self-proxy.js";
 
 /** 可选的持久化回调（persist leaf 在构造时挂接；缺省 no-op，使墙内自洽）。 */
 export interface WindowManagerHooks {
@@ -136,7 +137,7 @@ export class WindowManager implements RuntimeHandle {
       );
     }
     const ctorCtx: ConstructorContext = {
-      thread: this.threadRef,
+      persistence: this.threadRef?.persistence,
       runtime: this,
       args,
     };
@@ -224,7 +225,7 @@ export class WindowManager implements RuntimeHandle {
     const method = this.registry.resolveObjectMethod(instance.class, methodName);
     if (!method?.route) return undefined;
     const ctx: ExecutableContext = {
-      thread: this.threadRef,
+      persistence: this.threadRef?.persistence,
       object: { id: instance.id, class: instance.class },
       runtime: this,
       args,
@@ -232,7 +233,7 @@ export class WindowManager implements RuntimeHandle {
     const self = this.threadRef
       ? getSessionObject(this.threadRef, targetObjectId)?.data ?? {}
       : {};
-    return method.route(ctx, self, args);
+    return method.route(ctx, makeSelfProxy(self, targetObjectId, this), args);
   }
 
   /** 关闭/卸载一个对象实例（从 thread 移除）。 */
@@ -271,16 +272,17 @@ export class WindowManager implements RuntimeHandle {
       );
     }
     const ctx: ExecutableContext = {
-      thread,
+      persistence: thread.persistence,
       object: { id: instance.id, class: instance.class },
       runtime: this,
       args,
       reportDataEdit: () => this.hooks.reportDataEdit?.(objectId) ?? Promise.resolve(),
       reportContextEdit: () => this.hooks.reportContextEdit?.() ?? Promise.resolve(),
     };
-    // self = session 对象表中该 objectId 的 data（method 就地改它 → reportDataEdit 刷盘）。
+    // self = session 对象表中该 objectId 的 data（method 经 self.data 就地改它 → reportDataEdit 刷盘；
+    // self.methods.x 自调对象自己的另一条 object method）。
     const self = getSessionObject(thread, objectId)?.data ?? {};
-    const result = await method.exec(ctx, self, args);
+    const result = await method.exec(ctx, makeSelfProxy(self, objectId, this), args);
     await this.hooks.reportDataEdit?.(objectId);
     // exec 返回形态规范化（ObjectMethodResult / 裸 string / void）→ 取面向 LLM 的结果文本。
     const r = normalizeMethodResult(result);
@@ -310,11 +312,11 @@ export class WindowManager implements RuntimeHandle {
       );
     }
     const ctx: ReadableContext = {
-      thread,
+      persistence: thread.persistence,
       object: { id: instance.id, class: instance.class },
     };
     const self = getSessionObject(thread, objectId)?.data ?? {};
-    const nextWin = await method.exec(ctx, self, instance.win, args);
+    const nextWin = await method.exec(ctx, makeReadonlySelfProxy(self), instance.win, args);
     // 不可变 upsert：spread 新实例对象写回 win。
     this.instances.set(objectId, { ...instance, win: nextWin });
     await this.hooks.reportContextEdit?.();

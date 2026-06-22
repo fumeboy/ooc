@@ -3,13 +3,13 @@ import { resolve, join } from "node:path";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { __testing, resolveSessionPath } from "@ooc/core/executable/session-path.js";
-import type { ThreadContext } from "@ooc/core/thinkable/context";
+import type { ThreadPersistenceRef } from "@ooc/core/_shared/types/thread.js";
 
 const { rewritePackagesPath, rewritePoolsPath, classifyPackagesPath } = __testing;
 
-/** 构造带 persistence.baseDir 的最小 thread（resolveSessionPath 只读 baseDir）。 */
-function threadWithBase(baseDir: string): ThreadContext {
-  return { persistence: { baseDir, sessionId: "s", objectId: "o", threadId: "t" } } as ThreadContext;
+/** 构造带 baseDir 的最小 persistence ref（resolveSessionPath 只读 baseDir）。 */
+function threadWithBase(baseDir: string): ThreadPersistenceRef {
+  return { baseDir, sessionId: "s", objectId: "o", threadId: "t" };
 }
 
 describe("resolveSessionPath 安全：data 原语不得逃逸 world 根（harness executable 回归）", () => {

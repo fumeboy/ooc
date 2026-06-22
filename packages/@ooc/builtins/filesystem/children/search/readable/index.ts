@@ -20,6 +20,7 @@ import {
   type TranscriptViewport,
 } from "./transcript-viewport.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 /** search window 的默认 results viewport：末 50 条 match。 */
@@ -83,7 +84,7 @@ const setResultsWindowMethod: WindowMethod<Data, SearchWin> = {
   },
   exec: (
     _ctx: ReadableContext,
-    _self: Data,
+    _self: ReadonlySelfProxy<Data>,
     before: SearchWin,
     args: Record<string, unknown>,
   ): SearchWin => {
@@ -116,7 +117,7 @@ const resizeMethod: WindowMethod<Data, SearchWin> = {
       level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
     },
   },
-  exec: (_ctx: ReadableContext, _self: Data, before: SearchWin, args: Record<string, unknown>): SearchWin => {
+  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: SearchWin, args: Record<string, unknown>): SearchWin => {
     const raw = (args as { level?: number }).level;
     const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
     return { ...before, compressLevel: level };
@@ -124,24 +125,24 @@ const resizeMethod: WindowMethod<Data, SearchWin> = {
 };
 
 const readable: ReadableModule<Data, SearchWin> = {
-  readable: (_ctx: ReadableContext, self: Data, win: SearchWin) => {
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: SearchWin) => {
     const children: XmlNode[] = [
-      xmlElement("kind", {}, [xmlText(self.kind)]),
-      xmlElement("query", {}, [xmlText(self.query)]),
+      xmlElement("kind", {}, [xmlText(self.data.kind)]),
+      xmlElement("query", {}, [xmlText(self.data.query)]),
     ];
-    if (self.searchRoot) {
-      children.push(xmlElement("search_root", {}, [xmlText(self.searchRoot)]));
+    if (self.data.searchRoot) {
+      children.push(xmlElement("search_root", {}, [xmlText(self.data.searchRoot)]));
     }
 
     const viewport: TranscriptViewport =
       win?.resultsViewport ?? DEFAULT_RESULTS_VIEWPORT;
     const { visible, earlierCount } = applyTranscriptViewport(
-      self.matches,
+      self.data.matches,
       viewport,
     );
 
     const viewportAttrs: Record<string, string> = {
-      total: String(self.matches.length),
+      total: String(self.data.matches.length),
     };
     if (typeof viewport.tail === "number") {
       viewportAttrs.tail = String(viewport.tail);
@@ -170,8 +171,8 @@ const readable: ReadableModule<Data, SearchWin> = {
       xmlElement(
         "matches",
         {
-          count: String(self.matches.length),
-          truncated: self.truncated ? "true" : "false",
+          count: String(self.data.matches.length),
+          truncated: self.data.truncated ? "true" : "false",
         },
         matchNodes,
       ),

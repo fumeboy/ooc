@@ -25,6 +25,7 @@ import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { generateWindowId } from "@ooc/core/_shared/types/context-window.js";
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
+import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import { serializeXml, xmlElement, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 
@@ -42,7 +43,7 @@ const searchOpenMatch = SearchClass.executable!.methods.find((m) => m.name === "
 
 /** 渲染 search readable 投影 → XML（外层包 <window>）。 */
 function renderSearchXml(self: SearchData, win: { resultsViewport?: unknown } = {}): string {
-  const node = searchReadable.readable({} as never, self, win as never) as {
+  const node = searchReadable.readable({} as never, makeReadonlySelfProxy(self), win as never) as {
     class: string;
     content: XmlNode[];
   };
@@ -149,7 +150,7 @@ async function runEdit(name: string, body: string, args: Record<string, unknown>
   await writeFile(path, body, "utf8");
   const thread = makeThread({ id: `t_edit_${name.replace(/\W+/g, "_")}` });
   const self: FileData = { path };
-  const result = await fileEdit.exec(ctxOf(thread, undefined, self), self, args);
+  const result = await fileEdit.exec(ctxOf(thread, undefined, self), makeSelfProxy(self, "w_file_edit", undefined), args);
   return { result, path };
 }
 
@@ -206,7 +207,7 @@ describe("U2: file.edit object method", () => {
   it("edge: file does not exist on disk → error mentions read failure", async () => {
     const thread = makeThread({ id: "t_missing_file" });
     const self: FileData = { path: join(TEMP, "does-not-exist.txt") };
-    const result = await fileEdit.exec(ctxOf(thread, undefined, self), self, { old: "a", new: "b" });
+    const result = await fileEdit.exec(ctxOf(thread, undefined, self), makeSelfProxy(self, "w_file_edit", undefined), { old: "a", new: "b" });
     expect(result as string).toContain("读取");
   });
 
@@ -370,7 +371,7 @@ describe("U4: search.construct glob + open_match", () => {
         return "w_file_stub";
       },
     };
-    const out = await searchOpenMatch.exec(ctxOf(thread, runtime, data), data, { index: 1 });
+    const out = await searchOpenMatch.exec(ctxOf(thread, runtime, data), makeSelfProxy(data, "w_search", undefined), { index: 1 });
     expect(out).toBeUndefined();
     expect(instantiated).toHaveLength(1);
     // open_match 用注册 class id "_builtin/filesystem/file" 实例化（裸 "file" resolve 不到 constructor）。
@@ -383,7 +384,7 @@ describe("U4: search.construct glob + open_match", () => {
     const dir = await makeGlobFixtureDir("glob-oor", ["only.ts"]);
     const thread = makeThread({ id: "t_open_match_oor" });
     const data = await runGlob(thread, "*.ts", dir);
-    const out = await searchOpenMatch.exec(ctxOf(thread, { instantiate: async () => "x" }, data), data, { index: 99 });
+    const out = await searchOpenMatch.exec(ctxOf(thread, { instantiate: async () => "x" }, data), makeSelfProxy(data, "w_search", undefined), { index: 99 });
     expect(out as string).toContain("不存在");
   });
 
@@ -391,7 +392,7 @@ describe("U4: search.construct glob + open_match", () => {
     const dir = await makeGlobFixtureDir("glob-no-idx", ["a.ts"]);
     const thread = makeThread({ id: "t_open_match_no_idx" });
     const data = await runGlob(thread, "*.ts", dir);
-    const out = await searchOpenMatch.exec(ctxOf(thread, undefined, data), data, {});
+    const out = await searchOpenMatch.exec(ctxOf(thread, undefined, data), makeSelfProxy(data, "w_search", undefined), {});
     expect(out as string).toContain("缺少 index");
   });
 });
@@ -475,7 +476,7 @@ describe("U5: search.construct grep + runJsFallback", () => {
         return "w_file_stub";
       },
     };
-    await searchOpenMatch.exec(ctxOf(thread, runtime, data), data, { index: 0 });
+    await searchOpenMatch.exec(ctxOf(thread, runtime, data), makeSelfProxy(data, "w_search", undefined), { index: 0 });
     const lineRange = instantiated[0]!.args.lines as [number, number];
     expect(lineRange[0]).toBeLessThanOrEqual(40);
     expect(lineRange[1]).toBeGreaterThanOrEqual(40);

@@ -12,6 +12,7 @@ import type {
   ReadableContext,
   ReadableModule,
 } from "@ooc/core/readable/contract.js";
+import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import type { Data } from "../types.js";
 
@@ -41,9 +42,9 @@ function renderFeishuApp(self: Data): XmlNode[] {
 }
 
 const readable: ReadableModule<Data> = {
-  readable: (_ctx: ReadableContext, self: Data) => ({
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>) => ({
     class: "feishu_app",
-    content: renderFeishuApp(self),
+    content: renderFeishuApp(self.data),
   }),
   window: [
     {

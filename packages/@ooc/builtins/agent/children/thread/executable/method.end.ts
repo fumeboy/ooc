@@ -15,6 +15,8 @@ import type {
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { hasCreatorChannel, objectDataOf } from "@ooc/core/_shared/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+import { runningThread } from "./running-thread.js";
 import type { Data } from "../types.js";
 
 /**
@@ -32,9 +34,9 @@ type CreatorWindow = {
 };
 
 function findCreatorWindow(ctx: ExecutableContext): CreatorWindow | undefined {
-  if (!ctx.thread) return undefined;
-  const list = ctx.thread.contextWindows ?? [];
-  const table = getSessionObjectTable(ctx.thread);
+  const thread = runningThread(ctx);
+  const list = thread.contextWindows ?? [];
+  const table = getSessionObjectTable(thread);
   for (const inst of list) {
     // 本 thread 的过程窗（self-view）每 thread 唯一，身份编码在 id（id=`w_creator_<thread.id>`）。
     // auto-reply 只对**有上游 creator 通道**的过程窗（hasCreatorChannel：data 带 target/isForkWindow）；
@@ -67,7 +69,7 @@ async function autoReplyTalk(
   creator: CreatorWindow,
   result: string,
 ): Promise<void> {
-  const thread = ctx.thread!;
+  const thread = runningThread(ctx);
   if (ctx.runtime?.say) {
     try {
       await ctx.runtime.say(creator.id, result);
@@ -103,8 +105,8 @@ export const endMethod: ObjectMethod<Data> = {
       },
     },
   },
-  exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
-    if (!ctx.thread) return undefined;
+  exec: async (ctx: ExecutableContext, _self: SelfProxy<Data>, args: Record<string, unknown>) => {
+    const thread = runningThread(ctx);
 
     const reason = typeof args.reason === "string" ? args.reason : undefined;
     const summary = typeof args.summary === "string" ? args.summary : undefined;
@@ -115,9 +117,9 @@ export const endMethod: ObjectMethod<Data> = {
       const creator = findCreatorWindow(ctx);
       if (!creator) {
         console.warn(
-          `[end.result] thread ${ctx.thread.id} 无 creator window（self-driven root？），result 被忽略：${result.slice(0, 100)}${result.length > 100 ? "..." : ""}`,
+          `[end.result] thread ${thread.id} 无 creator window（self-driven root？），result 被忽略：${result.slice(0, 100)}${result.length > 100 ? "..." : ""}`,
         );
-        ctx.thread.events.push({
+        thread.events.push({
           category: "context_change",
           kind: "inject",
           text: "[end.result] 当前 thread 无 creator window（self-driven root），result 参数被忽略；仅 endSummary 仍会记录。",
@@ -127,18 +129,18 @@ export const endMethod: ObjectMethod<Data> = {
       }
     }
 
-    ctx.thread.endReason = reason;
-    ctx.thread.endSummary = summary;
-    ctx.thread.status = "done";
+    thread.endReason = reason;
+    thread.endSummary = summary;
+    thread.status = "done";
 
-    const persistence = ctx.thread.persistence ?? ctx.ownerThreadRef;
+    const persistence = thread.persistence ?? ctx.ownerThreadRef;
     if (persistence) {
       const creator = findCreatorWindow(ctx);
       if (creator) {
         // fork 子窗（isForkWindow）：caller = 同对象的父 thread；peer 窗：caller = creator.target 对象。
         const callerObjectId = creator.isForkWindow ? persistence.objectId : creator.target;
         const callerThreadId = creator.targetThreadId;
-        const callerSessionId = ctx.thread.creatorSessionId ?? persistence.sessionId;
+        const callerSessionId = thread.creatorSessionId ?? persistence.sessionId;
         if (callerObjectId && callerThreadId && callerObjectId !== "user") {
           notifyThreadActivated({
             sessionId: callerSessionId,

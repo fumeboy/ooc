@@ -16,9 +16,8 @@ import {
   type FlowObjectRef,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable/common.js";
-import type { PersistableContext } from "@ooc/core/persistable/contract.js";
 import type { ThreadContext } from "@ooc/core/thinkable/context.js";
-import { saveThread, loadThread } from "./thread-persist.js";
+import { saveThread, loadThread, type ThreadPersistableContext } from "./thread-persist.js";
 
 /** 单个线程的 `thread.json` 绝对路径（path 原语）。 */
 export function threadFile(ref: ThreadPersistenceRef): string {
@@ -31,7 +30,7 @@ export function threadFile(ref: ThreadPersistenceRef): string {
  */
 export async function writeThread(thread: ThreadContext): Promise<void> {
   const p = thread.persistence;
-  const ctx: PersistableContext = p
+  const ctx: ThreadPersistableContext = p
     ? { baseDir: p.baseDir, objectId: p.objectId, sessionId: p.sessionId, threadId: p.threadId, dir: threadDir(p) }
     : { baseDir: "", objectId: "", dir: "" };
   await saveThread(ctx, thread);
@@ -43,7 +42,7 @@ export async function readThread(
   threadId: string,
 ): Promise<ThreadContext | undefined> {
   const refWithThread: ThreadPersistenceRef = { ...ref, threadId };
-  const ctx: PersistableContext = {
+  const ctx: ThreadPersistableContext = {
     baseDir: ref.baseDir,
     objectId: ref.objectId,
     sessionId: ref.sessionId,

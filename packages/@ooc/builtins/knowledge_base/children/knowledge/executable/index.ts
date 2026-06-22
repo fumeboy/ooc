@@ -13,20 +13,21 @@ import type {
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 const reloadMethod: ObjectMethod<Data> = {
   name: "reload",
   description:
     "Force knowledge re-activation next turn (loader auto-invalidates by mtime; this is a semantic hint).",
-  exec: (_ctx: ExecutableContext, _self: Data) => undefined,
+  exec: (_ctx: ExecutableContext, _self: SelfProxy<Data>) => undefined,
 };
 
 const closeMethod: ObjectMethod<Data> = {
   name: "close",
   description:
     "Close this explicit knowledge window (protocol/activator knowledge cannot be closed).",
-  exec: (_ctx: ExecutableContext, _self: Data) => undefined,
+  exec: (_ctx: ExecutableContext, _self: SelfProxy<Data>) => undefined,
 };
 
 const executable: ExecutableModule<Data> = {

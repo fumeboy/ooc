@@ -14,6 +14,7 @@ import type {
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 const FEISHU_CHAT_CLASS = "_builtin/feishu_app/feishu_chat";
@@ -55,7 +56,7 @@ const openChatMethod: ObjectMethod<Data> = {
       chat_type: chatType,
       tail_count: tailCount,
     });
-    self.openedChatObjectIds = [...(self.openedChatObjectIds ?? []), id];
+    self.data.openedChatObjectIds = [...(self.data.openedChatObjectIds ?? []), id];
     return `已创建 feishu_chat（id=${id}, chat=${chatId}）；建议立即 exec(method="refresh") 验证拉取链路。`;
   },
 };
@@ -87,7 +88,7 @@ const openDocMethod: ObjectMethod<Data> = {
       doc_kind: docKind,
       doc_title: docTitle,
     });
-    self.openedDocObjectIds = [...(self.openedDocObjectIds ?? []), id];
+    self.data.openedDocObjectIds = [...(self.data.openedDocObjectIds ?? []), id];
     return `已创建 feishu_doc（id=${id}, doc_token=${docToken}, kind=${docKind}）；建议立即 exec(method="read") 验证拉取链路。`;
   },
 };

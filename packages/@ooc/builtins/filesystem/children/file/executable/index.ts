@@ -21,6 +21,7 @@ import type {
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 import { isString } from "@ooc/builtins/_shared/executable/utils.js";
 import { classifyPackagesPath } from "@ooc/core/executable/session-path.js";
@@ -105,28 +106,28 @@ const editMethod: ObjectMethod<Data> = {
       edits: { type: "array", description: "批量替换 [{old, new}, ...]，与 old/new 二选一" },
     },
   },
-  exec: async (ctx: ExecutableContext, self: Data, args: Record<string, unknown>) => {
+  exec: async (ctx: ExecutableContext, self: SelfProxy<Data>, args: Record<string, unknown>) => {
     const edits = parseEdits(args);
     if (!edits) {
       return "[file_window.edit] 缺少 args={ old, new } 或 args={ edits: [{old, new}, ...] }。";
     }
 
-    const wtTarget = await resolveStoneWorktreeTarget(ctx.thread, self.path, "write");
-    let readPath = self.path;
-    let writePath = self.path;
+    const wtTarget = await resolveStoneWorktreeTarget(ctx.persistence, self.data.path, "write");
+    let readPath = self.data.path;
+    let writePath = self.data.path;
     let toWorktree = false;
     if (wtTarget) {
       readPath = wtTarget;
       writePath = wtTarget;
       toWorktree = true;
     } else {
-      const baseDir = ctx.thread?.persistence?.baseDir;
-      const sessionId = ctx.thread?.persistence?.sessionId;
+      const baseDir = ctx.persistence?.baseDir;
+      const sessionId = ctx.persistence?.sessionId;
       if (baseDir && sessionUsesWorktree(sessionId)) {
-        const stoneClass = classifyPackagesPath(self.path, baseDir);
+        const stoneClass = classifyPackagesPath(self.data.path, baseDir);
         if (stoneClass.kind === "package-object") {
           return (
-            `[file_window.edit] 无法为 session ${sessionId} 建立 worktree 落点（${self.path}）；` +
+            `[file_window.edit] 无法为 session ${sessionId} 建立 worktree 落点（${self.data.path}）；` +
             `绝不裸写 main 绕过版本化。`
           );
         }
@@ -152,18 +153,8 @@ const editMethod: ObjectMethod<Data> = {
       return `[file_window.edit] 写回 ${writePath} 失败：${(err as Error).message}`;
     }
 
-    if (toWorktree && ctx.thread?.events) {
-      const onFeatBranch = !!ctx.thread.persistence?.stonesBranch;
-      ctx.thread.events.push({
-        category: "context_change",
-        kind: "inject",
-        text: onFeatBranch
-          ? `[file_window.edit] 改动落在 feat 分支 worktree（${writePath}），main 未变。` +
-            `编辑完调 create_pr_and_invite_reviewers 提交并开 PR 交 review 合入。`
-          : `[file_window.edit] 改动落在本 session 的 worktree（${writePath}），main 未变。` +
-            `经 super flow new_feat_branch + 直接编辑 + create_pr_and_invite_reviewers 开 PR 合入 main 才永久生效。`,
-      });
-    }
+    // TODO(thread-core-boundary): worktree 落点提示原经 ctx.thread.events 注入运行 thread；
+    // 中立 ctx 无 events 流，暂缺该提示，待「运行 thread 获取」路径接入后回填。
 
     return undefined;
   },

@@ -10,14 +10,15 @@ import type {
   ObjectMethod,
   ExecutableModule,
 } from "@ooc/core/executable/contract.js";
+import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
 import type { Data } from "../types.js";
 
 const bumpMethod: ObjectMethod<Data> = {
   name: "bump",
   description: "Increment the example object's bump counter.",
-  exec: (_ctx: ExecutableContext, self: Data) => {
-    self.bumpCount = (self.bumpCount ?? 0) + 1;
-    return `bumped → ${self.bumpCount}`;
+  exec: (_ctx: ExecutableContext, self: SelfProxy<Data>) => {
+    self.data.bumpCount = (self.data.bumpCount ?? 0) + 1;
+    return `bumped → ${self.data.bumpCount}`;
   },
 };
 

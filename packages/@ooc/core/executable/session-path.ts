@@ -16,7 +16,7 @@
 
 import { existsSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep, join } from "node:path";
-import type { ThreadContext } from "../thinkable/context";
+import type { ThreadPersistenceRef } from "../_shared/types/thread";
 import { nestedObjectPath } from "../_shared/types/thread";
 import { readWorldConfigSync } from "../persistable/index.js";
 import { rewritePackagesPath, rewritePoolsPath } from "../_shared/utils/session-path.js";
@@ -24,13 +24,13 @@ import { rewritePackagesPath, rewritePoolsPath } from "../_shared/utils/session-
 /**
  * 把 LLM 传入的路径解析为绝对路径：
  * - 绝对路径：原样返回
- * - 相对路径 + thread.persistence.baseDir 已知：相对 baseDir 解析；
+ * - 相对路径 + persistence.baseDir 已知：相对 baseDir 解析；
  *   形如 `packages/<id>/...` 的路径直接使用（bun workspace 结构）；
  *   形如 `pools/<id>/...` 的路径保持原样（不注入 `objects/`）
  * - 相对路径 + baseDir 未知：回退 process.cwd()（仅纯内存测试场景）
  */
-export function resolveSessionPath(thread: ThreadContext | undefined, p: string): string {
-  const baseDir = thread?.persistence?.baseDir;
+export function resolveSessionPath(persistence: ThreadPersistenceRef | undefined, p: string): string {
+  const baseDir = persistence?.baseDir;
   if (!baseDir) {
     // 无 world 根（纯内存测试场景）：无边界可 clamp，保持旧行为。
     return isAbsolute(p) ? p : resolve(process.cwd(), p);

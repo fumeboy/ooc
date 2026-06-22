@@ -30,9 +30,9 @@ import type {
  * 旧的独立 writeFileExec 已退役，写盘逻辑下沉到 file construct——这里直接驱动 construct.exec
  * 模拟 super(foo) 在 feat 绑定下用 write_file 落 feat worktree。
  */
-async function executeWriteFileMethod(ctx: { thread?: unknown; args: Record<string, unknown> }): Promise<{ ok: true; path: string }> {
+async function executeWriteFileMethod(ctx: { persistence?: unknown; thread?: unknown; args: Record<string, unknown> }): Promise<{ ok: true; path: string }> {
   const data = await fileConstruct.exec(
-    { thread: ctx.thread, args: ctx.args } as unknown as ConstructorContext,
+    { persistence: ctx.persistence, args: ctx.args } as unknown as ConstructorContext,
     ctx.args,
   );
   return { ok: true, path: (data as { path: string }).path };
@@ -70,24 +70,20 @@ async function newWorld(agents: string[]): Promise<string> {
 
 /** 业务 session ctx（create_object 落 worktree）。 */
 function bizCtx(baseDir: string, objectId: string, sessionId: string, args: Record<string, unknown>) {
+  const persistence = { baseDir, objectId, sessionId, threadId: "t" };
   return {
-    thread: {
-      persistence: { baseDir, objectId, sessionId, threadId: "t" },
-      contextWindows: [],
-      events: [],
-    },
+    persistence,
+    thread: { persistence, contextWindows: [], events: [] },
     args,
   } as unknown as ExecutableContext;
 }
 
 /** super(foo) ctx：super flow，objectId=foo。 */
 function superCtx(baseDir: string, objectId: string, args: Record<string, unknown>) {
+  const persistence = { baseDir, objectId, sessionId: "super", threadId: "tS" };
   return {
-    thread: {
-      persistence: { baseDir, objectId, sessionId: "super", threadId: "tS" },
-      contextWindows: [],
-      events: [],
-    },
+    persistence,
+    thread: { persistence, contextWindows: [], events: [] },
     args,
   } as unknown as ExecutableContext;
 }

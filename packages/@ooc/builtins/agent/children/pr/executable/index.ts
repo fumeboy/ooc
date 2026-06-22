@@ -56,9 +56,9 @@ async function execReview(
   self: Data,
   action: PrApproveAction,
 ): Promise<string> {
-  const baseDir = ctx.thread?.persistence?.baseDir;
+  const baseDir = ctx.persistence?.baseDir;
   if (!baseDir) {
-    return `[pr.${action}] thread 无 persistence ref。`;
+    return `[pr.${action}] 无 persistence ref。`;
   }
   const r = await applyPrApproval({
     baseDir,
@@ -73,21 +73,21 @@ const approveMethod: ObjectMethod<Data> = {
   name: "approve",
   description:
     "As this PR's reviewer, approve the diff (counts toward merge when all reviewers approve).",
-  exec: (ctx, self) => execReview(ctx, self, "approve"),
+  exec: (ctx, self) => execReview(ctx, self.data, "approve"),
 };
 
 const rejectMethod: ObjectMethod<Data> = {
   name: "reject",
   description:
     "As this PR's reviewer, reject the diff (one reject vetoes the PR; author gets a repair message).",
-  exec: (ctx, self) => execReview(ctx, self, "reject"),
+  exec: (ctx, self) => execReview(ctx, self.data, "reject"),
 };
 
 const requestChangesMethod: ObjectMethod<Data> = {
   name: "request_changes",
   description:
     "As this PR's reviewer, request changes (PR stays open; author gets a repair message to revise).",
-  exec: (ctx, self) => execReview(ctx, self, "request-changes"),
+  exec: (ctx, self) => execReview(ctx, self.data, "request-changes"),
 };
 
 const executable: ExecutableModule<Data> = {
