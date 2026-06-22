@@ -291,6 +291,7 @@ export async function resolveProjection(
   const readableCtx: ReadableContext = {
     object: { id: inst.id, class: classOf(inst) },
     persistence: thread.persistence,
+    ownerThread: thread,
   };
 
   // self 门面窗 hydrate：self 门面窗注入时 data 为空（init.ts），其身份正文（self.md）由

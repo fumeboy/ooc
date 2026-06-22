@@ -30,9 +30,9 @@ import type {
  * 旧的独立 writeFileExec 已退役，写盘逻辑下沉到 file construct——这里直接驱动 construct.exec
  * 模拟 super(foo) 在 feat 绑定下用 write_file 落 feat worktree。
  */
-async function executeWriteFileMethod(ctx: { persistence?: unknown; thread?: unknown; args: Record<string, unknown> }): Promise<{ ok: true; path: string }> {
+async function executeWriteFileMethod(ctx: { persistence?: unknown; ownerThread?: unknown; args: Record<string, unknown> }): Promise<{ ok: true; path: string }> {
   const data = await fileConstruct.exec(
-    { persistence: ctx.persistence, args: ctx.args } as unknown as ConstructorContext,
+    { persistence: ctx.persistence, ownerThread: ctx.ownerThread, args: ctx.args } as unknown as ConstructorContext,
     ctx.args,
   );
   return { ok: true, path: (data as { path: string }).path };
@@ -220,7 +220,7 @@ describe("create_object (建新对象原语)", () => {
       events: [] as unknown[],
     };
     const ctx = (args: Record<string, unknown>) =>
-      ({ thread: superThread, args }) as unknown as ExecutableContext;
+      ({ ownerThread: superThread, args }) as unknown as ExecutableContext;
 
     await executeNewFeatBranch(ctx({ intent: "introduce report-writer" }), { intent: "introduce report-writer" });
     await executeWriteFileMethod(

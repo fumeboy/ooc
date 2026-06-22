@@ -102,6 +102,7 @@ export async function dispatchUnactiveIfZero(
   const ctx: LifecycleContext = {
     persistence: ctxThread.persistence,
     runtime: undefined,
+    ownerThread: ctxThread,
     args: {},
     targetId,
   };
@@ -133,6 +134,7 @@ export async function dispatchActiveIfFirst(
   const ctx: LifecycleContext = {
     persistence: ctxThread.persistence,
     runtime: undefined,
+    ownerThread: ctxThread,
     args: {},
     targetId,
   };

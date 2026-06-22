@@ -53,7 +53,8 @@ function renderSearchXml(self: SearchData, win: { resultsViewport?: unknown } = 
 
 /** 最小 ctx stub（construct / method 只用到 thread / args / self / runtime）。 */
 function ctxOf(thread: unknown, runtime?: unknown, self?: unknown) {
-  return { thread, runtime, args: {}, self, reportDataEdit: async () => {} } as never;
+  // ownerThread = 运行 thread（construct/edit 经 ctx.ownerThread 取 persistence/events，见 running-thread.ts）。
+  return { thread, ownerThread: thread, runtime, args: {}, self, reportDataEdit: async () => {} } as never;
 }
 
 let TEMP = "";

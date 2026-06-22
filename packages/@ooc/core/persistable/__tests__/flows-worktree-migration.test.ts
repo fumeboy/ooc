@@ -77,7 +77,7 @@ function bizCtx(
   args: Record<string, unknown>,
 ): ConstructorContext {
   return {
-    thread: {
+    ownerThread: {
       persistence: { baseDir, objectId, sessionId, threadId: "t" },
       contextWindows: [],
       events: [],

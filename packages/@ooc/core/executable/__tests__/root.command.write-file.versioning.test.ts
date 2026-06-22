@@ -75,7 +75,12 @@ function writeFile_construct(
   if (objectId !== undefined) persistence.objectId = objectId;
   if (overrides.stonesBranch) persistence.stonesBranch = overrides.stonesBranch;
   return fileConstruct.exec(
-    { persistence, args } as unknown as ConstructorContext,
+    {
+      persistence,
+      // 运行 thread 提供 write-through 提示注入的 events 流（construct 经 ctx.ownerThread.events 注入）。
+      ownerThread: { persistence, events: overrides.events ?? [] },
+      args,
+    } as unknown as ConstructorContext,
     args,
   ) as Promise<FileData>;
 }
