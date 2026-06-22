@@ -20,7 +20,7 @@ export function wrapUserCode(code: string): string {
 
   return [
     ...importLines,
-    "export default async function(console, self) {",
+    "export default async function(console, self, ctx) {",
     "  let _result_;",
     bodyLines.join("\n"),
     "  return _result_;",

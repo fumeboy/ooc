@@ -7,6 +7,7 @@
 
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
 import type { ConstructorContext } from "@ooc/core/executable/contract.js";
+import { makeSelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import { runInterpreterExec, type InterpreterLang } from "./executable/runtime.js";
@@ -34,10 +35,14 @@ export const Class: OocClass<Data> = {
       if (!(lang && code)) {
         throw new Error("[interpreter_process] 缺少执行参数；需要 language+code。");
       }
-      // 实例 data 刚创建：userData 是活引用，construct 内 self.setData 的写入随返回的 Data 落盘。
-      const userData: Record<string, unknown> = {};
-      const record = await runInterpreterExec(ctx.persistence, lang, code, userData, ctx.runtime);
-      return { history: [record], userData };
+      // 实例尚未存在（construct 无 self-proxy）：在 nascent data 上建临时 self-proxy，sandbox 内
+      // self.data.* 的写入随返回的 Data 落盘。self.methods 自调在 construct 期不可用（实例 id 未分配，
+      // runtime.callMethod 会抛 object-not-found）——首段脚本不应自调本对象方法。
+      const data: Data = { history: [], userData: {} };
+      const self = makeSelfProxy<Data>(data, "<constructing>", ctx.runtime);
+      const record = await runInterpreterExec(lang, code, self, ctx);
+      data.history.push(record);
+      return data;
     },
   },
   executable,

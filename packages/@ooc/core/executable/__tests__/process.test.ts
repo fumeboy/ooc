@@ -7,6 +7,8 @@ import { runInterpreterExec } from "@ooc/builtins/interpreter/interpreter_proces
 import { Class as TerminalProcessClass } from "@ooc/builtins/terminal/terminal_process";
 import { Class as InterpreterProcessClass } from "@ooc/builtins/interpreter/interpreter_process";
 import type { Data as TerminalProcessData } from "@ooc/builtins/terminal/terminal_process";
+import type { Data as InterpreterProcessData } from "@ooc/builtins/interpreter/interpreter_process";
+import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
 import { createStoneObject, ensureStoneRepo } from "../../persistable";
 import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader";
@@ -19,8 +21,9 @@ import { makeSelfProxy } from "@ooc/core/runtime/self-proxy.js";
  * history）后返回纯 Data（runtime 据此建窗）。旧 `{ ok, window }` 返回形态 + 单参
  * `executeTerminalRun({thread,args})` + ContextWindow union `TerminalProcessWindow` 均已退役。
  *
- * runBashExec(thread.persistence, code) / runInterpreterExec(thread.persistence, lang, code) 是 construct 与对应 process
- * window.exec object method 共用的运行时，签名不变。
+ * runBashExec(thread.persistence, code) 是 terminal 的运行时；runInterpreterExec(lang, code, self, ctx)
+ * 已与 thread/persistence 解耦——sandbox 注入与标准 object method 同构的 (self, ctx)：self.data 读写本
+ * 实例业务数据、ctx.runtime.callMethod 跨窗调别的对象。construct 与 exec object method 共用该运行时。
  */
 
 /** 最小 ConstructorContext / ExecutableContext stub（construct / exec 只用到 thread + reportDataEdit）。 */
@@ -110,44 +113,40 @@ describe("interpreter_process runtime — runInterpreterExec (ts/js)", () => {
   });
 
   test("ts mode runs user code and returns _result_", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
-    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    const thread = makeThread({
-      id: "t",
-      persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
-    });
-    const rec = await runInterpreterExec(thread.persistence, "ts", "_result_ = 2 + 3;", {});
+    const data: InterpreterProcessData = { history: [], userData: {} };
+    const self = makeSelfProxy(data, "ip", undefined);
+    const rec = await runInterpreterExec("ts", "_result_ = 2 + 3;", self, { runtime: undefined, args: {} } as never);
     expect(rec.output).toContain("[returnValue]");
     expect(rec.output).toContain("5");
     expect(rec.output).toContain("[exit 0]");
   });
 
-  test("ts mode injects self with stone dir", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
-    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    const thread = makeThread({
-      id: "t",
-      persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
-    });
-    const rec = await runInterpreterExec(thread.persistence, "ts", "_result_ = self.dir;", {});
-    expect(rec.output).toContain("agent");
+  test("ts mode exposes cross-window call via ctx.runtime.callMethod", async () => {
+    let called: [string, string] | undefined;
+    const runtime: RuntimeHandle = {
+      instantiate: async () => "x",
+      callMethod: async (id, m) => { called = [id, m]; return "OK"; },
+    };
+    const data: InterpreterProcessData = { history: [], userData: {} };
+    const self = makeSelfProxy(data, "ip", runtime);
+    const rec = await runInterpreterExec(
+      "ts",
+      "_result_ = await ctx.runtime.callMethod('root', 'program', {});",
+      self,
+      { runtime, args: {} } as never,
+    );
+    expect(rec.output).toContain("OK");
+    expect(called).toEqual(["root", "program"]);
   });
 
-  test("ts mode getData/setData read/write the instance userData + trigger reportDataEdit", async () => {
-    tempRoot = await mkdtemp(join(tmpdir(), "ooc-prog-"));
-    await createStoneObject({ baseDir: tempRoot, objectId: "agent" });
-    const thread = makeThread({
-      id: "t",
-      persistence: { baseDir: tempRoot, sessionId: "s1", objectId: "agent", threadId: "t" },
-    });
-    // 同一 userData 引用串两次 exec：setData 写、getData 读，落在实例自身 data 上（非草稿文件）。
-    const userData: Record<string, unknown> = {};
-    let edits = 0;
-    const reportDataEdit = async () => { edits += 1; };
-    await runInterpreterExec(thread.persistence, "ts", "await self.setData('k', 42);", userData, undefined, reportDataEdit);
-    expect(userData.k).toBe(42);
-    expect(edits).toBe(1);
-    const second = await runInterpreterExec(thread.persistence, "ts", "_result_ = await self.getData('k');", userData, undefined, reportDataEdit);
+  test("ts mode reads/writes self.data.userData across execs (live ref)", async () => {
+    const data: InterpreterProcessData = { history: [], userData: {} };
+    const self = makeSelfProxy(data, "ip", undefined);
+    const ctx = { runtime: undefined, args: {} } as never;
+    // self.data 是活引用：同一 self-proxy 串两次 exec，写入跨 exec 存活（随默认 data.json 落盘的语义）。
+    await runInterpreterExec("ts", "self.data.userData.k = 42;", self, ctx);
+    expect(data.userData!.k).toBe(42);
+    const second = await runInterpreterExec("ts", "_result_ = self.data.userData.k;", self, ctx);
     expect(second.output).toContain("[returnValue]");
     expect(second.output).toContain("42");
   });
