@@ -23,7 +23,7 @@ import {
   sessionMetadataFile,
   __resetSerialQueueForTests,
 } from "@ooc/core/persistable";
-import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import { scanRunningThreads } from "@ooc/core/app/server/runtime/thread-query";
 import { construct as fileConstruct } from "@ooc/builtins/filesystem/children/file/executable/construct.js";
 import type { ConstructorContext } from "@ooc/core/executable/contract.js";

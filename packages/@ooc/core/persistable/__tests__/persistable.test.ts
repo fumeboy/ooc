@@ -12,7 +12,7 @@ import {
   writeDebugInput,
   writeDebugOutput,
 } from "@ooc/core/observable/debug-file";
-import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import { writeThreadContext } from "@ooc/builtins/agent/thread/persistable/flow-thread-context";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 // 触发 builtin class 注册（loadThread/hydrate 用 builtinRegistry.has 判定保留/丢弃窗）。

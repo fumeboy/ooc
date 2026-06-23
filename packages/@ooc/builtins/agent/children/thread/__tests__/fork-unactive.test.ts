@@ -12,7 +12,7 @@ import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { openForkChild } from "@ooc/builtins/agent/thread/executable/fork.js";
 import { handleCloseTool } from "@ooc/core/executable/tools/close.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
-import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
+import { writeThread, readThread } from "@ooc/core/persistable/thread-container-io.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 

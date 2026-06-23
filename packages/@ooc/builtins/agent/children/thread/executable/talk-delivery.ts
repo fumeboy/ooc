@@ -35,7 +35,7 @@
  */
 
 import { createFlowObject, createFlowSession, sessionMetadataFile, resolveSuperActor } from "@ooc/core/persistable/index.js";
-import { readThread, writeThread } from "../persistable/thread-json.js";
+import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import { stat } from "node:fs/promises";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";

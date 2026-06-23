@@ -35,7 +35,7 @@ import {
   createStoneObject,
 } from "@ooc/core/persistable";
 import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
-import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
 import {

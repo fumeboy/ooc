@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFlowObject } from "@ooc/core/persistable";
 import { llmOutputFile } from "@ooc/core/observable/debug-file";
-import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import { resumePausedThread } from "./resume";
 
 describe("resumePausedThread", () => {

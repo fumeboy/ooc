@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeThread, readThread } from "../persistable/thread-json";
+import { writeThread, readThread } from "@ooc/core/persistable/thread-container-io.js";
 import { persistInboxMessages, readInboxMessages } from "../persistable/inbox-store";
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 

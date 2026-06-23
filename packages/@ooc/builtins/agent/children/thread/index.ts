@@ -32,7 +32,7 @@ import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import thinkable from "./thinkable/index.js";
 import persistable from "./persistable/index.js";
-import { writeThread } from "./persistable/thread-json.js";
+import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import type { Data } from "./types.js";
 
 /**

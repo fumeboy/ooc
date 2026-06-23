@@ -28,7 +28,7 @@ import {
   stoneDir,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
-import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { writeThread, readThread } from "@ooc/core/persistable/thread-container-io.js";
 import * as contextModule from "@ooc/builtins/agent/thread/thinkable/context/index";
 import type {
   LlmClient,

@@ -19,7 +19,7 @@ import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 // 重型依赖（Elysia / openai / executable 全家桶）走 lazy import — 测试 skip 时不触发，
 // 避免因 node_modules 未完整安装而连"能不能加载该 spec"都失败。
 type BuildServer = typeof import("@ooc/core/app/server")["buildServer"];
-type ReadThread = typeof import("@ooc/builtins/agent/thread/persistable/thread-json")["readThread"];
+type ReadThread = typeof import("@ooc/core/persistable/thread-container-io")["readThread"];
 type CreatePauseStore = typeof import("@ooc/core/app/server/runtime/pause-store")["createPauseStore"];
 type CreateJobManager = typeof import("@ooc/core/app/server/runtime/job-manager")["createJobManager"];
 type StartJobWorker = typeof import("@ooc/core/app/server/runtime/worker")["startJobWorker"];
@@ -44,7 +44,7 @@ async function loadDeps() {
     { startJobWorker },
   ] = await Promise.all([
     import("@ooc/core/app/server"),
-    import("@ooc/builtins/agent/thread/persistable/thread-json"),
+    import("@ooc/core/persistable/thread-container-io"),
     import("@ooc/core/app/server/runtime/pause-store"),
     import("@ooc/core/app/server/runtime/job-manager"),
     import("@ooc/core/app/server/runtime/worker"),

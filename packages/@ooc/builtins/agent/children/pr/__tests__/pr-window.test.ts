@@ -25,7 +25,7 @@ import {
 } from "@ooc/core/persistable";
 import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { readPrIssue } from "../persistable/pr-issue.js";
-import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";

@@ -6,11 +6,16 @@
  * - `mode:"inline"`：thread **作为别的 context 里的一个窗**时，整窗随所属 thread 的
  *   `thread-context.json` inline 落盘、不写独立 data.json（会话窗 self/peer/fork/reflect_request
  *   投影都是 thread 实例）。
- * - `save` / `load`：thread **作为运行会话容器**时的持久化（thread.json + thread-context.json +
- *   inbox + hydrate），实现在 `./thread-persist`。thread 的落盘 API（`writeThread`/`readThread` +
- *   thread.json/thread-context/inbox 文件原语）现在**全在本 builtin**（`./thread-json`、
- *   `./flow-thread-context`、`./inbox-store`）；core 不再持有 thread 序列化入口或 registry-dispatch
- *   壳——runtime 引擎直接 import 本 builtin 的 `writeThread`/`readThread`（object-model 核心 7）。
+ * - `save` / `load`（`saveThread`/`loadThread`，实现在 `./thread-persist`）：thread **作为运行会话容器**
+ *   时的持久化（thread.json + thread-context.json + inbox + hydrate）。这是 thread 容器持久化的**唯一**
+ *   逻辑入口；文件原语在本 builtin（`./thread-json` 的 `threadFile`、`./flow-thread-context`、`./inbox-store`）。
+ *
+ *   **core 经 seam 派发、不具名 import 本实现**（thread 去特权化，见
+ *   `docs/issues/2026-06-23-thread-deprivileging.md` P1）：core/app 引擎落盘/读回一条 thread 容器时调
+ *   `core/persistable/thread-container-io.ts` 的 `writeThread`/`readThread`——它经
+ *   `resolvePersistable(THREAD_CLASS_ID).save/load` 派发到本 `save`/`load`（**thread 自主持久化**：序列化
+ *   逻辑归 thread、core 只触发；object-model 核心 7 = 持久化经 seam 自定义）。本 builtin 不再导出
+ *   `writeThread`/`readThread` adapter。
  */
 import type { PersistableModule } from "@ooc/core/persistable/contract.js";
 import { saveThread, loadThread } from "./thread-persist.js";

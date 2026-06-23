@@ -23,7 +23,7 @@ import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type { ProcessEvent } from "@ooc/core/_shared/types/thread.js";
 import { buildInputItems } from "@ooc/builtins/agent/thread/thinkable/context/index";
 import { createFlowObject } from "@ooc/core/persistable";
-import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import {
   threadWindowIdOf,
   ROOT_WINDOW_ID,

@@ -7,7 +7,7 @@ import {
   threadDir,
   STONE_CHILDREN_SUBDIR,
 } from "@ooc/core/persistable";
-import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
+import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
 import { resolveStoneIdentityRef } from "@ooc/core/persistable";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";

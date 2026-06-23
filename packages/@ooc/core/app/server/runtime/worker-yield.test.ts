@@ -6,7 +6,7 @@ import { createJobManager } from "./job-manager";
 import { runJob, processQueuedJobs, type RuntimeJobResult } from "./worker";
 import type { ServerConfig } from "../bootstrap/config";
 import { nestedObjectPath } from "@ooc/core/persistable";
-import { readThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { readThread } from "@ooc/core/persistable/thread-container-io.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { RuntimeJob } from "./types";
 

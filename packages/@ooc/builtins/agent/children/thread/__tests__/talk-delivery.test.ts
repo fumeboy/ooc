@@ -23,7 +23,7 @@ import {
   stoneDir,
   STONES_MAIN_BRANCH,
 } from "@ooc/core/persistable/index.js";
-import { readThread, writeThread } from "../persistable/thread-json";
+import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID, THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createFlowObject } from "@ooc/core/persistable";
-import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { scanPausedThreads, scanRunningThreads } from "./thread-query";
 

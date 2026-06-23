@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureStoneRepo } from "@ooc/core/persistable";
-import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
+import { writeThread, readThread } from "@ooc/core/persistable/thread-container-io.js";
 // side-effect：让 builtinRegistry 持有 filesystem/search 等窗类型（resolveObjectMethod / constructor）。
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";

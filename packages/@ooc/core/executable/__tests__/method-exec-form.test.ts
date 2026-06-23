@@ -26,7 +26,7 @@ import { buildInputItems } from "@ooc/builtins/agent/thread/thinkable/context/in
 import formReadable from "@ooc/builtins/agent/method_exec_form/readable/index.js";
 import type { Data as FormData } from "@ooc/builtins/agent/method_exec_form/types.js";
 import { createFlowObject } from "@ooc/core/persistable/flow-object.js";
-import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
+import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import type { ThreadPersistenceRef } from "@ooc/core/_shared/types/thread.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

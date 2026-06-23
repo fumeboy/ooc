@@ -1,4 +1,4 @@
-import { readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
+import { readThread } from "@ooc/core/persistable/thread-container-io.js";
 import type { createJobManager } from "./job-manager";
 import { listSessionIds, scanPausedThreads } from "./thread-query";
 import { canResumeThread } from "./thread-transition";

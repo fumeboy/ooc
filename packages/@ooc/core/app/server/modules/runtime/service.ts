@@ -29,7 +29,7 @@ import {
   loopMetaFile,
   loopOutputFile,
 } from "@ooc/core/observable/debug-file";
-import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
+import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import { applyPrApproval } from "@ooc/builtins/agent/pr/approval-flow";
 import type { ListLoopsResponse, LoopListEntry, LoopMeta } from "./model";
 import { readLlmEnv } from "@ooc/core/thinkable/llm/env";

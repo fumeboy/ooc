@@ -1,7 +1,7 @@
 import { decidePermission, type PendingToolCall } from "../executable/permissions";
 import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
-import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
+import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
 import type { ProcessEvent } from "../_shared/types/thread.js"
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 // thinkable 模块经 registry 解析（thinkableOf）调用——core 不再静态 import thread builtin 的
