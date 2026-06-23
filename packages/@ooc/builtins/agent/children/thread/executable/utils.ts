@@ -1,9 +1,5 @@
 /**
- * talk fork 消息原语 —— fork / peer / 派送共用的消息构造与 inbox 追加。
- *
- * fork 子线程窗（isForkWindow=true）是同对象内的父子双向通道；fork 的 caller-side wiring（造子 +
- * 父挂子 + 投初始消息）见 `fork.ts#openForkChild`，关 fork 子窗经 close 原语 → refcount 归 0 触发
- * thread.unactive 通知「无订阅者」（见 index.ts）。本文件只留消息原语（makeMessage / appendInbox）。
+ * thread 消息原语 —— 消息构造（makeMessage）与 inbox 追加（appendInbox）。
  */
 
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";

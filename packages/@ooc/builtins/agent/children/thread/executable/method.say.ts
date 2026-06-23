@@ -21,7 +21,7 @@ import type {
 } from "@ooc/core/executable/contract.js";
 import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import { TODO } from "@ooc/core/_shared/utils/todo.js";
-import { makeMessage } from "@ooc/builtins/agent/thread/executable/talk-fork.js";
+import { makeMessage } from "@ooc/builtins/agent/thread/executable/utils.js";
 import type { Data } from "../types.js";
 
 const SAY_SCHEMA: MethodCallSchema = {

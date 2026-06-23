@@ -93,7 +93,6 @@ export interface OocObjectInstance<Data = unknown> {
  * - class  : 缓存注册 class（`classOf` 免查表 + dispatch/narrow；权威在对象实例上）
  * - 视角态 : title / status / createdAt / parentWindowId / win / closable —— 本窗私有、与 object data 分离
  * - win    : 投影态（window method 读写、readable 读）
- * - objectRef : 独立对象引用标记（lifecycle refcount：set ⟺ 非 inline 持久化对象；`referencedObjectId` 据此解析）
  */
 export interface OocObjectRef<Win = unknown> {
   id: string;
@@ -105,5 +104,4 @@ export interface OocObjectRef<Win = unknown> {
   win?: Win;
   /** 结构窗保护：construct 标 false → close 原语拒关（缺省 undefined = 可关）。spec §5。 */
   closable?: boolean;
-  objectRef?: { objectId: string; class: string };
 }

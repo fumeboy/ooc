@@ -16,6 +16,7 @@ import type { FlowObjectRef, ThreadPersistenceRef } from "../_shared/types/threa
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { MethodCallSchema } from "../_shared/types/intent.js";
 import type { SelfProxy } from "../_shared/types/self-proxy.js";
+import type { OocObjectRef } from "../runtime/ooc-class.js";
 
 /**
  * runtime 句柄 —— 让 method / constructor 行使「需要 runtime 协助」的副作用。
@@ -161,7 +162,9 @@ export interface ObjectMethodIntents {
 export interface ObjectMethodResult {
   message?: string;
   data?: any;
-  err?: string
+  err?: string;
+  /** method 执行产出的 object 引用（context window）——runtime 据此把新对象挂进当前 thread。 */
+  refs?: OocObjectRef[];
 }
 
 /**

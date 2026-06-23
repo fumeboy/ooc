@@ -20,11 +20,10 @@
  * thread-context.json，由 runtime/persistence 管理。
  */
 
-import type { OocObjectRef, OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type {
   ProcessEvent,
   ThreadStatus,
-  ThreadPersistenceRef,
 } from "@ooc/core/_shared/types/thread.js";
 import type { TranscriptViewport } from "./transcript-viewport.js";
 import type { SummarizedRange } from "@ooc/core/_shared/utils/summarized-ranges.js";
@@ -72,13 +71,6 @@ export type ThreadMessage = {
 export type ThreadContext = {
   /** 线程唯一标识；同时用于 XML context 中的 thread id。 */
   id: string;
-  /**
-   * 本对象的注册 class（恒 `_builtin/agent/thread`）——让运行时 thread 像 `OocObjectInstance{id,class,data}`
-   * 一样**自带 class 标识**，使 core 能**按 class 泛型持久化**（`saveObject(obj)` 读 `obj.class` →
-   * `resolvePersistable(class).save`），而非被告知"这是 thread"。buildThread / loadThread 恒置；
-   * thread 去特权化（issue 2026-06-23-thread-deprivileging P1）。
-   */
-  class: string;
   /** 调度状态；status="waiting" 表示等待 inbox 新消息，不再有 waitingType 细分。 */
   status: ThreadStatus;
   /** 当前线程的过程事件流，会被转换成 system message 之后的普通 LLM messages。 */
@@ -111,22 +103,12 @@ export type ThreadContext = {
   creatorSessionId?: string;
   /** 子线程 ID 列表，保留创建顺序，便于展示和调试。 */
   childThreadIds?: string[];
-  /** 子线程实体表；当前内存实现直接嵌套，不引入独立存储层。 */
-  childThreads?: Record<string, ThreadContext>;
   /**
    * compress v2：本线程是 framework fork 的 **summarizer 子线程**（生成摘要后由 scheduler harvest
    * 读其 endSummary 记入父窗 summarizedRanges）。标记使 emitChildEndNotifications 不对它发 child-end
    * 通知（避免污染父会话 + 双记，C2）；它的产出经 harvest 内部回收、不进父的协作叙事。
    */
   isSummarizer?: boolean;
-  /**
-   * 父 thread 反向引用（运行时设置，不持久化）。
-   *
-   * 用于 do_window.move 等命令需要从子 thread 访问父 thread 的场景；
-   * 由 fork 路径（root.do executeDoMethod）在创建 child 时建立。
-   * thread.json 序列化时被 strip（避免循环引用）。
-   */
-  _parentThreadRef?: ThreadContext;
   /** 其他线程投递给当前线程的消息。 */
   inbox?: ThreadMessage[];
   /** 当前线程发出的协作消息记录。 */
@@ -163,50 +145,8 @@ export type ThreadContext = {
   llmTimeoutMs?: number;
   /** 最近一次被 scheduler 执行的时间，用于公平选择下一个 running thread。 */
   lastExecutedAt?: number;
-  /**
-   * 入眠时刻 inbox 长度快照；scheduler 唤醒时对比当前 inbox.length 判断是否有新消息。
-   * status="waiting" 时由 wait tool 写入；唤醒后由 scheduler 重置为 undefined。
-   * 见等待语义的简化。
-   */
-  inboxSnapshotAtWait?: number;
-  /**
-   * status="waiting" 时由 wait tool 写入：本次 wait 引用的 IO 来源 window id。
-   * 唤醒后由 scheduler 清空。observability/debug 用，不参与 wakeup 决策
-   * （任何 inbox 新消息都唤醒）；未来可能据此做精确路由。
-   */
-  waitingOn?: string;
-  /**
-   * Transient observability mirror of the windows the ContextPipeline actually
-   * rendered into the LLM input on the latest buildInputItems pass (base windows
-   * PLUS pipeline-derived ones: protocol/system knowledge, activator knowledge,
-   * peer/children Objects, form-scoped knowledge).
-   *
-   * Populated at the end of buildInputItems; read by finishLlmLoop so that the
-   * loop debug windowsSnapshot reflects what the LLM saw — not just the persisted
-   * thread.contextWindows (which omits all derived windows, making activator/
-   * protocol knowledge look "未激活" in the debug snapshot). Runtime-only; never
-   * persisted. Undefined falls back to thread.contextWindows.
-   */
-  _renderedWindows?: OocObjectRef[];
-  /**
-   * session 对象表（B→A）：`objectId → 唯一一个持 data 的 OocObjectInstance`，挂内存线程树**根** thread。
-   * context window（OocObjectRef）是对它的引用、不持 data。Runtime-only；never persisted（磁盘真相在
-   * 各 object 的 data.json / inline thread-context）；随 job 执行而在、随根 thread GC 而释放。
-   * owner/解析见 `runtime/session-object-table.ts`。
-   */
-  _objectTable?: Map<string, OocObjectInstance>;
-  /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
-  persistence?: ThreadPersistenceRef;
 
   // ─────────────── 会话窗指针字段（旧 `interface Data` 合并入；全 optional）───────────────
-  /**
-   * 会话窗指向的对端 objectId（peer 会话）或自己的 objectId（fork 子线程）。
-   * 自我视角 thread 窗的 creator 通道 / caller 侧指向 callee 的会话窗引用都用它表达；
-   * self-driven root / 纯运行时线程不设。
-   */
-  target?: string;
-  /** 对端 thread id；peer 首条 say 时回填，fork 建窗即知。 */
-  targetThreadId?: string;
   /** true ⇒ fork 子线程窗（同对象，旧 do_window）；缺省 ⇒ peer 跨对象会话窗。 */
   isForkWindow?: boolean;
 };
