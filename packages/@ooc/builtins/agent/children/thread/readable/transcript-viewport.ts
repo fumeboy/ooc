@@ -76,11 +76,15 @@ export function hasAnyTranscriptViewportField(args: Record<string, unknown>): bo
  */
 export function applyTranscriptViewport<M>(
   messages: M[],
-  viewport: TranscriptViewport,
+  viewport?: TranscriptViewport,
 ): { visible: M[]; earlierCount: number } {
   const total = messages.length;
   if (total === 0) {
     return { visible: [], earlierCount: 0 };
+  }
+
+  if (!viewport) {
+    return { visible: messages, earlierCount: 0 };
   }
 
   if (typeof viewport.tail === "number" && viewport.tail >= 1) {

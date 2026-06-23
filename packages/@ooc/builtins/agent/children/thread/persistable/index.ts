@@ -24,12 +24,12 @@ function threadFile(dir: string): string {
   return join(dir, "thread.json");
 }
 
-async function saveThread(ctx: PersistableContext, thread: ThreadContext): Promise<void> {
+async function save(ctx: PersistableContext, thread: ThreadContext): Promise<void> {
   await mkdir(ctx.dir, { recursive: true });
   await writeFile(threadFile(ctx.dir), toJson(thread), "utf8");
 }
 
-async function loadThread(ctx: PersistableContext): Promise<ThreadContext | undefined> {
+async function load(ctx: PersistableContext): Promise<ThreadContext | undefined> {
   let raw: string;
   try {
     raw = await readFile(threadFile(ctx.dir), "utf8");
@@ -44,9 +44,8 @@ async function loadThread(ctx: PersistableContext): Promise<ThreadContext | unde
 // save/load 操作**整份会话 blob**（ThreadContext），而 readable/executable 的窗 Data 是 per-conversation
 // TalkData。OocClass<Data> 的 persistable 泛型只能取其一，故此处用 PersistableModule（Data=any）解耦。
 const persistable: PersistableModule = {
-  mode: "inline",
-  save: saveThread,
-  load: loadThread,
+  save,
+  load,
 };
 
 export default persistable;

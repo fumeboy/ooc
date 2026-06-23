@@ -1,52 +1,16 @@
-/**
- * readable 维度契约 —— ooc object **怎么投影成 context window** 给 LLM 看 + window method。
- *
- * 设计权威：`.ooc-world-meta/.../children/object/self.md`（对象模型单一权威）
- * 接口模板：同目录 `example.md`。本文件是该模板在 core 的**可编译落字**。
- *
- * 对象模型核心 4：object 持自身 Data（业务数据），由 readable 把 Data **投影**成 context window
- * —— 按视角动态算出 window 的 **class** 与展示 **content**。window 的投影态（`win`，如 viewport）
- * 与 object Data **分离**，由 **window method** 读写。
- *
- * window method **只动投影态、返回新的 win 对象（不可变）**，不改 object data、不产副作用
- * —— 与 executable 维度的 object method 维度隔离（同名 fail-loud）。
- */
-
-import type { ThreadPersistenceRef } from "../_shared/types/thread.js"
-import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { MethodCallSchema } from "../_shared/types/intent.js";
 import type { XmlNode } from "../_shared/types/xml.js";
 import type { ReadonlySelfProxy } from "../_shared/types/self-proxy.js";
+import { OocObjectRef } from "@src/runtime/ooc-class.js";
 
 /** readable / window method 的执行上下文（读侧；不携带改业务数据的能力）。 */
 export interface ReadableContext {
-  /** 被投影对象的身份元信息（id / class）。 */
-  object: { id: string; class: string };
-  /**
-   * 实例的**盘上定位**（中立持久化 ref，非 thread 运行态）——readable 需读盘时用：
-   * file 读文件内容、knowledge/skill_index 推导 stone/pool ref。取代旧的 `ctx.thread.persistence`。
-   */
-  persistence?: ThreadPersistenceRef;
-  /**
-   * **运行 thread**（正在被渲染的那条线程）——由 WindowManager.fromThread 注入。
-   * thread 类 readable 投影 transcript（按运行 thread 的 events/inbox/outbox 归属）经
-   * `runningThreadForRender(ctx)` 读取；缺则降级（不渲 transcript、不崩 render）。其它 class readable 忽略。
-   */
-  ownerThread?: ThreadContext;
+
 }
 
-/**
- * readable 投影结果 —— object 经 readable 算出的「这一刻它作为 context window 的样子」。
- * - class   : 动态算出的 window class（同一 object 不同视角/状态可投影成不同 class）
- * - content : 渲染内容（结构化 XmlNode[] 或纯文本）
- * - consumedMessageIds : 本窗 transcript **已渲染**的 thread inbox/outbox 消息 id（会话窗投影把
- *   归属本窗的消息收进 transcript）。渲染器据此从顶层 `<inbox>`/`<outbox>` 兜底里**剔除**这些消息，
- *   保证「信息只渲一次」（context.md 核心 10）——一条消息要么进某窗 transcript、要么进顶层兜底，不重复。
- */
-export interface ReadableProjection {
-  class: string;
+export interface ReadableOutput<WinData = any> {
   content: XmlNode[] | string;
-  consumedMessageIds?: string[];
+  win?: WinData
 }
 
 /**
@@ -81,12 +45,11 @@ export interface WindowClassDecl<Data = any, Win = any> {
   window_methods: WindowMethod<Data, Win>[];
 }
 
-/** readable 维度模块 —— `readable/index.ts`（或 `readable.ts`）的 default export。 */
 export interface ReadableModule<Data = any, Win = any> {
   readable: (
     ctx: ReadableContext,
     self: ReadonlySelfProxy<Data>,
-    win: Win,
-  ) => ReadableProjection | Promise<ReadableProjection>;
+    win: OocObjectRef<Win>,
+  ) => ReadableOutput | Promise<ReadableOutput>;
   window: WindowClassDecl<Data, Win>[];
 }

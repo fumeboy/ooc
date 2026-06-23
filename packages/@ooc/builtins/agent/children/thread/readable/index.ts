@@ -20,24 +20,17 @@ import type {
   WindowMethod,
 } from "@ooc/core/readable/contract.js";
 import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
-import type { XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { computeProjectionClass } from "./projection-class.js";
-import { isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
+import { xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
+import { OocObjectRef } from "@ooc/core/_shared/types/context-window.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
   hasAnyTranscriptViewportField,
-} from "../transcript-viewport.js";
-import { renderTranscriptOrHandle } from "./conversation-render.js";
-import { runningThreadForRender } from "../executable/running-thread.js";
-import { threadCompress, threadResize } from "./compress-events.js";
-import {
-  filterTalkMessages,
-  renderHead,
-} from "@ooc/builtins/agent/thread/readable/talk-render.js";
+  applyTranscriptViewport,
+} from "./transcript-viewport.js";
 import type { Data, ThreadWin } from "../types.js";
 
-const setTranscriptWindowMethod: WindowMethod<Data, ThreadWin> = {
+const setTranscript: WindowMethod<Data, ThreadWin> = {
   name: "set_transcript_window",
   description: "Adjust which portion of the transcript is rendered (tail N or fixed range).",
   schema: {
@@ -60,63 +53,60 @@ const setTranscriptWindowMethod: WindowMethod<Data, ThreadWin> = {
   },
 };
 
-const readable: ReadableModule<Data, ThreadWin> = {
-  readable: (ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: ThreadWin) => {
-    const thread = runningThreadForRender(ctx);
-    // 投影 class：POV 派生（self-view 非 super→thread / other-view→talk / self-view super→reflect_request）。
-    const projectionClass = thread
-      ? computeProjectionClass({ id: ctx.object.id }, thread)
-      : "thread";
+export const compress: WindowMethod<unknown, ThreadWin> = {
+  name: "compress",
+  description: "压缩本 thread 历史信息",
+  schema: { args: {} },
+  exec: (_ctx, _self, before_win) => {
+    // TODO 执行一次信息总结
+    return { ...before_win };
+  },
+};
 
-    const children: XmlNode[] = renderHead(self.data, ctx.object.id);
-    let consumedMessageIds: string[] | undefined;
-    if (thread) {
-      const messages = filterTalkMessages(ctx.object.id, self.data, thread);
-      // 这些消息已进本窗 transcript → 报给渲染器，从顶层 inbox/outbox 兜底剔除（信息只渲一次）。
-      consumedMessageIds = messages.map((m) => m.id);
-      children.push(
-        ...renderTranscriptOrHandle(
-          {
-            isCreator: isSelfThreadWindow(ctx.object.id),
-            transcriptViewport: win?.transcriptViewport,
-            summarizedRanges: win?.summarizedRanges,
-          },
-          messages,
-        ),
-      );
+/** thread 窗 resize：设自动压缩档位 autoCompressLevel（0 不主动 / 1 适度 / 2 激进）。 */
+export const resize: WindowMethod<unknown, ThreadWin> = {
+  name: "resize",
+  description: "调本 thread 历史信息的自动压缩档位 level：0=不主动压缩，1=适度，2=激进（越高越早自动折叠早期历史）",
+  schema: {
+    args: {
+      level: {
+        type: "number",
+        required: true,
+        enum: [0, 1, 2],
+        description: "自动压缩档位：0 不主动 / 1 适度 / 2 激进",
+      },
+    },
+  },
+  exec: (_ctx, _self, before_win, args) => {
+    // TODO 按照新的自动档位进行一次压缩
+    return { ...before_win, autoCompressLevel: args.level ?? 0 };
+  },
+};
+
+
+const readable: ReadableModule<Data, ThreadWin> = {
+  readable: (ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ThreadWin>) => {
+    const children: XmlNode[] = []
+
+    if (win.class == "this_thread") {
+      // TODO 展示 thread events & messages
+    } else { // talk window 只展示 messages
+      const { visible: messages } = applyTranscriptViewport(self.data.messages, win.data?.transcriptViewport);
+      children.push(...messages.map(m => xmlText(m.from=="caller"? `[self:] ${m.content}`:`[callee:] ${m.content}`)));
     }
-    return { class: projectionClass, content: children, consumedMessageIds };
+
+    return { content: children };
   },
   window: [
-    // self-view 非 super：thread 与 creator 的恒在通道。结构窗（construct 标 closable:false）→ close
-    // 原语拒关（取代旧 close method 里的 data.isCreatorWindow 检查）。
     {
-      class: "thread",
-      object_methods: ["say", "end", "todo"],
-      window_methods: [setTranscriptWindowMethod, threadCompress, threadResize],
+      class: "this_thread",
+      object_methods: ["reply", "end", "todo"],
+      window_methods: [setTranscript, compress, resize],
     },
-    // other-view：与对端 peer/sub 的对话（含父侧 fork 子窗）；可关（关窗经 close 原语、非 method——
-    // 关 fork 子窗触发 thread.unactive 通知「无订阅者」、自决）。
-    // **不挂 compress/resize**（Case E 裁决，2026-06-21）：summarizer-fold 是自我视角能力——折自己那条
-    // append-only 主历史（thread.events，单写者、index 稳）。talk transcript 是 filterTalkMessages 跨双流
-    // createdAt 重排的**派生视图**（index 不稳、且 harvest 从不写 talk 窗）。talk 压缩走 window-overflow +
-    // transcriptViewport（set_transcript_window 末 N/区间）+ inbox/outbox 持久可拉回，不 fold。
     {
       class: "talk",
-      object_methods: ["reply"],
-      window_methods: [setTranscriptWindowMethod],
-    },
-    // self-view super：反思自视（恒在通道，同样不 surface close）；会话 method + 2 个 reflectable 沉淀 method。
-    // **保留 compress/resize**：reflect_request 是 self-view（isSelfThreadWindow）、折 thread.events（events
-    // 坐标、index 稳），summarizer-fold 与 self-view thread 同命、完全适用。
-    {
-      class: "reflect_request",
-      object_methods: [
-        "say",
-        "new_feat_branch",
-        "create_pr_and_invite_reviewers",
-      ],
-      window_methods: [setTranscriptWindowMethod, threadCompress, threadResize],
+      object_methods: ["say"],
+      window_methods: [setTranscript, compress, resize],
     },
   ],
 };

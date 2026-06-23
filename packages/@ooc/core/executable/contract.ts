@@ -12,8 +12,6 @@
  *   - args : 调用参数
  */
 
-import type { FlowObjectRef, ThreadPersistenceRef } from "../_shared/types/thread.js"
-import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { MethodCallSchema } from "../_shared/types/intent.js";
 import type { SelfProxy } from "../_shared/types/self-proxy.js";
 import type { OocObjectRef } from "../runtime/ooc-class.js";
@@ -26,9 +24,7 @@ import type { OocObjectRef } from "../runtime/ooc-class.js";
  */
 export interface RuntimeHandle {
   /** 调某 class 的 constructor 造新对象、挂进当前 thread；返回新对象 id。 */
-  instantiate(classId: string, args?: Record<string, unknown>): Promise<string>;
-  /** 关闭/卸载一个对象（窗）。 */
-  close?(objectId: string): void | Promise<void>;
+  instantiate(_:{class: string, childId?: string, args?: Record<string, unknown>}): Promise<OocObjectRef>;
   /**
    * 委托调当前 thread 内某 object 的 **object method**（解析目标 object 的 class →
    * resolveObjectMethod → 三参 exec）。用于一个 method 内编排别的对象的 method
@@ -40,15 +36,7 @@ export interface RuntimeHandle {
     methodName: string,
     args?: Record<string, unknown>,
   ): Promise<string | undefined>;
-  /**
-   * 经一个会话窗（talk-like：creator / peer / fork）把一段消息派给对端。
-   *
-   * 最小通道：复用 talk object method `say`——`windowId` 指向当前 thread 内某 talk-like
-   * 窗实例（典型为 creator 会话窗），`msg` 为消息正文。peer 走磁盘 talk-delivery、
-   * fork 走内存树派送由该窗自身 TalkData 分流。用于 agent.end 把 result 经 creator 窗回报。
-   * 找不到窗 / 该窗 class 无 say 时抛清晰错误。
-   */
-  say?(windowId: string, msg: string): Promise<string | undefined>;
+
   /**
    * 对目标 object 的某 method 跑一次 `route`（填表式渐进执行的意图/提示重算）——解析目标 class 的
    * method，若声明了 route 则用目标对象 data + 给定 args 求值返回 `ObjectMethodIntents`；无 route /
@@ -70,29 +58,10 @@ export interface RuntimeHandle {
 export interface ExecutableContext {
   /** 接收者对象的身份元信息（id / class）。业务数据经 self 入参，**不**在此。 */
   object: { id: string; class: string };
-  /**
-   * 实例的**盘上定位**（中立持久化 ref，非 thread 运行态）——method 需读写自己所属
-   * flow object 的盘上位置时用（如 file 解析 worktree、knowledge 推导 stone/pool、
-   * runtime.create_object 落 session worktree）。取代旧的 `ctx.thread.persistence`。
-   */
-  persistence?: ThreadPersistenceRef;
   /** runtime 句柄 —— 实例化子对象 / 关窗等需 runtime 协助的副作用。 */
-  runtime?: RuntimeHandle;
-  /**
-   * **运行 thread**（在其 runtime 中调用本 method 的那条线程）——由 WindowManager.fromThread 注入。
-   *
-   * 仅 **thread 类自己的载体 method**（end / new_feat_branch / create_pr 等需操作运行 thread 树的方法）
-   * 经 `runningThread(ctx)` 读取；非 thread builtin（file/search/interpreter…）忽略它、仍用中立
-   * `ctx.persistence`（point-1 的非 thread 中立化不回退）。是 point-1 `runningThread(ctx)` TODO 的归宿。
-   */
-  ownerThread?: ThreadContext;
-  /** method 跑在独立 flow object 上时设置。 */
-  ownerFlowObjectRef?: FlowObjectRef;
-  /** method 跑在持久化 thread 中时设置。 */
-  ownerThreadRef?: ThreadPersistenceRef;
-  /** 通知 runtime：本 method 改了 object data / context，需重新持久化。 */
-  reportDataEdit?: () => Promise<void>;
-  reportContextEdit?: () => Promise<void>;
+  runtime: RuntimeHandle;
+  /** 通知 runtime：本 method 改了 object data，需重新持久化。 */
+  reportDataEdit: () => Promise<void>;
   /** 调用参数副本（与 exec 的 args 入参同源；onFormChange 等无 args 入参的场景从此取）。 */
   args: Record<string, unknown>;
 }
@@ -103,18 +72,7 @@ export interface ExecutableContext {
  * *_process）从此取运行时环境。
  */
 export interface ConstructorContext {
-  /** 新实例的盘上定位（中立持久化 ref）；取代旧的 `ctx.thread.persistence`。 */
-  persistence?: ThreadPersistenceRef;
   runtime?: RuntimeHandle;
-  /**
-   * **运行 thread**（在其 runtime 中调用本 construct/lifecycle 的那条线程）——由 WindowManager.fromThread 注入。
-   *
-   * thread 类 construct（fork 形态需父 thread 挂子线程）与 lifecycle（unactive 需 scope thread 找目标子线程）
-   * 经 `runningThread(ctx)` 读取。非 thread 类 construct（file/search/interpreter…）忽略它。
-   */
-  ownerThread?: ThreadContext;
-  ownerFlowObjectRef?: FlowObjectRef;
-  ownerThreadRef?: ThreadPersistenceRef;
   args: Record<string, unknown>;
 }
 
@@ -125,7 +83,6 @@ export interface ConstructorContext {
  * - description : LLM 面向的方法描述（必填）
  * - schema      : 可选参数 schema（结构化渲染 + fail-soft 校验）
  * - public      : 是否对 peer object 可见可调
- * - for_reflectable: 是否仅在 super flow（反思 session）下 surface
  * - exec        : (ctx, self, args) → 结果（`ObjectMethodResult`{message?/data?/err?}，或裸 string = sugar for {message}，或 void/undefined）；**可改 self、可副作用**
  */
 export interface ObjectMethod<Data = any, Args = any> {
@@ -133,10 +90,8 @@ export interface ObjectMethod<Data = any, Args = any> {
   description: string;
   schema?: MethodCallSchema;
   public?: boolean;
-  for_reflectable?: boolean;
   /** 权限谓词：调用前按 args 算 `allow` / `ask` / `deny`（缺省 allow）；判定归 observable 的 permission 模型。 */
   permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
-
   intents?: {name: string, description: string}[]
   route?: (ctx: ExecutableContext, self: SelfProxy<Data>, args: Args) => ObjectMethodIntents;
   exec: (
@@ -207,6 +162,7 @@ export interface ObjectConstructor<Data = any, Args = any> {
 export interface LifecycleContext extends ConstructorContext {
   /** refcount 跨 0↔1 的对象 id（钩子 body 据此定位自己要操作的对象）。 */
   targetId: string;
+  reportDataEdit: () => Promise<void>;
 }
 
 /** unactive 返回值：delete:true → core 把 object 彻底从 session 移除（含持久化文件）；缺省=只停用。 */

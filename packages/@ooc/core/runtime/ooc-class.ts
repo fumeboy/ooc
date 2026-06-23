@@ -20,7 +20,6 @@ import type { ReadableModule } from "../readable/contract.js";
 import type { PersistableModule } from "../persistable/contract.js";
 import type { ThinkableModule } from "../thinkable/contract.js";
 import type { VisibleServerModule } from "../_shared/types/visible-server.js";
-import type { WindowStatus } from "../_shared/types/context-window.js";
 
 /**
  * OOC World 运行时句柄 —— class 的 `init` 在 World 启动时拿到它。
@@ -45,7 +44,7 @@ export interface World {
  * - thinkable   : 一个 class 如何把自己组织进 thinkloop 的一轮 think（buildInputItems / appendEvents /
  *                 compress 钩子 / onSchedulerTick）；core thinkloop/scheduler 经 registry 解析后调用。
  *                 **仅跑 thinkloop 的 thread 类实际注册**——任意 class 可声明，但只有 thread 被调度行使。
- * - visibleServer : 人类侧服务端 API（HTTP 控制面编辑 object data；无 thinkloop thread）
+ * - visible : 面向前端的服务端 API（HTTP 控制面编辑 object data；无 thinkloop thread）
  *
  * 注：constructor 槽位命名为 **`construct`** 而非 `constructor` —— JS `Object.prototype.constructor`
  * 会遮蔽该键（`({}).constructor === Object` 恒真 → 单例无法被识别；TS 也会拿 `Function` 去比对类型而报错）。
@@ -60,7 +59,7 @@ export interface OocClass<Data = any> {
   readable?: ReadableModule<Data>;
   persistable?: PersistableModule<Data>;
   thinkable?: ThinkableModule<Data>;
-  visibleServer?: VisibleServerModule<Data>;
+  visible?: VisibleServerModule<Data>;
 }
 
 /**
@@ -74,34 +73,17 @@ export interface OocPackageMeta {
   class?: string;
 }
 
-/**
- * **object 实例** —— 一个 objectId 一份、持业务 `data`（object-model 核心 1/4）。活在 session
- * 对象表（`Map<objectId, OocObjectInstance>`，挂内存线程树根、runtime-only）。object method 经
- * `self` 入参读写 `data`。**context window 是对它的引用**（见 `OocObjectRef`）——窗不持 data。
- */
 export interface OocObjectInstance<Data = unknown> {
   id: string;
   class: string;
   data: Data;
 }
 
-/**
- * **context window** —— 对一个 object 的引用 + 本窗视角态（object-model 核心 4：window=ref）。
- * 活在 `thread.contextWindows`；**不持 object data**（data 在 session 对象表/data.json）。
- *
- * - id     : 所引用对象的 objectId（= session 对象表 key；窗身份与对象身份 1:1）
- * - class  : 缓存注册 class（`classOf` 免查表 + dispatch/narrow；权威在对象实例上）
- * - 视角态 : title / status / createdAt / parentWindowId / win / closable —— 本窗私有、与 object data 分离
- * - win    : 投影态（window method 读写、readable 读）
- */
-export interface OocObjectRef<Win = unknown> {
+export interface OocObjectRef<WinData = unknown> {
   id: string;
   class: string;
-  parentWindowId?: string;
-  title: string;
-  status: WindowStatus;
+  title?: string;
   createdAt: number;
-  win?: Win;
-  /** 结构窗保护：construct 标 false → close 原语拒关（缺省 undefined = 可关）。spec §5。 */
+  data?: WinData;
   closable?: boolean;
 }

@@ -21,8 +21,8 @@ import type {
 } from "@ooc/core/executable/contract.js";
 import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
 import { TODO } from "@ooc/core/_shared/utils/todo.js";
-import { makeMessage } from "@ooc/builtins/agent/thread/executable/utils.js";
-import type { Data } from "../types.js";
+import { generateMessageId } from "@ooc/builtins/agent/thread/executable/utils.js";
+import type { Data, ThreadMessage } from "../types.js";
 
 const SAY_SCHEMA: MethodCallSchema = {
   args: {
@@ -31,39 +31,15 @@ const SAY_SCHEMA: MethodCallSchema = {
 };
 
 /**
- * 把 args.msg 包成 ThreadMessage 写进本 thread 的指定 box（self.data 活引用，随默认 data.json 落盘），
- * 再经 runtime 触发对端调度。两个 method（say→outbox / reply→inbox）共用此体。
- */
-async function writeBoxAndSchedule(
-  ctx: ExecutableContext,
-  self: Data,
-  args: Record<string, unknown>,
-  box: "inbox" | "outbox",
-): Promise<string | undefined> {
-  const content = typeof args.msg === "string" ? args.msg : "";
-  if (!content.trim()) {
-    return `[thread.${box === "outbox" ? "say" : "reply"}] 缺少 msg 参数（消息正文）。`;
-  }
-
-  const message = makeMessage(ctx.persistence?.threadId ?? "", self.targetThreadId ?? "", content);
-  message.windowId = ctx.object.id;
-  message.fromObjectId = ctx.persistence?.objectId;
-  self[box] = [...(self[box] ?? []), message];
-  await ctx.reportDataEdit?.();
-
-  return triggerRuntimeSchedule(ctx, self);
-}
-
-/**
  * TODO(thread-say-schedule)：say/reply 写盘后经 runtime 触发对端调度
  * （say→本 thread 的 creator / reply→窗所代表的 child 子线程）。
  * enqueueThread 机制待建（thread-core-boundary issue 后续点），本轮留 TODO 占位。
  */
-function triggerRuntimeSchedule(_ctx: ExecutableContext, _self: Data): never {
+function triggerRuntimeSchedule(_ctx: ExecutableContext): never {
   return TODO("runtime 触发 say/reply 对端调度（enqueueThread 待建）");
 }
 
-/** self-view 窗（thread / reflect_request）：本 thread → creator，写 outbox。 */
+// caller(thread creator) say to callee thread
 export const sayMethod: ObjectMethod<Data> = {
   name: "say",
   description:
@@ -71,10 +47,20 @@ export const sayMethod: ObjectMethod<Data> = {
   schema: SAY_SCHEMA,
   permission: () => "allow",
   public: true,
-  exec: (ctx, self, args) => writeBoxAndSchedule(ctx, self.data, args, "outbox"),
+  exec: (ctx, self, args) => {
+    const msg = {
+      id: generateMessageId(),
+      createdAt: Date.now(),
+      content: args.msg,
+      from: "caller",
+    } as ThreadMessage;
+    self.data.messages.push(msg)
+    ctx.reportDataEdit();
+    triggerRuntimeSchedule(ctx);
+  }
 };
 
-/** creator-view 窗（talk）：creator → child，写 child（窗所代表 thread）的 inbox。 */
+// thread reply to caller (thread creator)
 export const replyMethod: ObjectMethod<Data> = {
   name: "reply",
   description:
@@ -82,7 +68,15 @@ export const replyMethod: ObjectMethod<Data> = {
   schema: SAY_SCHEMA,
   permission: () => "allow",
   public: true,
-  exec: (ctx, self, args) => writeBoxAndSchedule(ctx, self.data, args, "inbox"),
+  exec: (ctx, self, args) => {
+    const msg = {
+      id: generateMessageId(),
+      content: args.msg,
+      createdAt: Date.now(),
+      from: "callee",
+    } as ThreadMessage;
+    self.data.messages.push(msg)
+    ctx.reportDataEdit();
+    triggerRuntimeSchedule(ctx);
+  }
 };
-
-export const sessionMethods: ObjectMethod<Data>[] = [sayMethod, replyMethod];
