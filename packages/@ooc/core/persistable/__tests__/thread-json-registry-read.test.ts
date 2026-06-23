@@ -75,9 +75,9 @@ describe("readThread — thread-context.json 单一权威读路径", () => {
 
   // 回归 gate：self 门面窗的 contextWindows 整体不进 thread.json（stripVolatileForPersist
   // 剥掉 contextWindows 字段，避免 thread.json 含 self / thread-context.json 不含 self 的双写
-  // 漂移），reload 时由 readThread→initContextWindows→injectSelfWindowIfObjectThread 幂等重注入。
+  // 漂移），reload 时由 readThread→initThreadContextWindows 幂等重注入 self/thread/member 窗。
   it("self window 不落 thread.json，reload 经 init 重现（双写漂移根治）", async () => {
-    // makeThread（不 skipCreatorWindow）经 initContextWindows 注入 self window（objectId=agent_p52，非 user）。
+    // makeThread（不 skipCreatorWindow）经 initThreadContextWindows 注入 self window（objectId=agent_p52，非 user）。
     // Wave4：isSelfWindow 标记落在窗的投影态 win 上（win.isSelfWindow），非顶层字段。
     const thread = makeThread({ id: "t_main", persistence });
     const selfInMem = thread.contextWindows.find(

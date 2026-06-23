@@ -10,7 +10,7 @@
  */
 import { builtinRegistry } from "../runtime/object-registry.js";
 import { THREAD_CLASS_ID } from "../_shared/types/constants.js";
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { ThinkableModule } from "./contract.js";
 
 /**

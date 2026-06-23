@@ -22,7 +22,7 @@
 import { mkdir, readFile, writeFile, readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { threadDir, type ThreadPersistenceRef } from "@ooc/core/persistable/common.js";
-import type { ThreadMessage } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 
 /** `<threadDir>/inbox/` —— per-message 文件目录。 */
 export function inboxDir(ref: ThreadPersistenceRef): string {

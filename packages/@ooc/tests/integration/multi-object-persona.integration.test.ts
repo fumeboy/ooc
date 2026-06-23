@@ -34,8 +34,8 @@ import {
   llm,
   setupTempFlow,
 } from "./_fixture";
-import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 const ALICE_SELF = `
 你叫 Alice。每次 end 时，summary 必须以 "ALICE-TOKEN-7421:" 开头。
@@ -135,7 +135,7 @@ async function makeThread(flow: {
     creatorThreadId: "root",
     persistence: { ...flow, threadId: "root" },
   };
-  initContextWindows(thread, { initialTaskTitle: "persona check" });
+  initThreadContextWindows(thread, { title: "persona check" });
   return thread;
 }
 

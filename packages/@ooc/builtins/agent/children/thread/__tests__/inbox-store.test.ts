@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeThread, readThread } from "../persistable/thread-json";
 import { persistInboxMessages, readInboxMessages } from "../persistable/inbox-store";
-import type { ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread";
+import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 
 /**
  * Inbox 独立存储 — collaborable 并发回报竞态根治回归（thread builtin 自有持久化逻辑）。

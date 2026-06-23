@@ -13,7 +13,7 @@
  * - `runningThreadForRender(ctx)`：**返 undefined**——给 readable 投影。readable 每轮渲染都跑，
  *   原契约容忍「无 viewing thread → 降级（class=thread、不渲 transcript）」，故降级而非抛、不崩 render。
  */
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 /** 载体方法（executable/constructor/lifecycle）取运行 thread；缺 ownerThread fail-loud。 */
 export function runningThread(ctx: { ownerThread?: ThreadContext }): ThreadContext {

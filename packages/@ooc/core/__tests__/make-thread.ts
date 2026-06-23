@@ -4,10 +4,10 @@
  * Step 1 重构后 ThreadContext.contextWindows 必填；不少老测试用对象字面量直接 new 一个 thread，
  * 通过这个 helper 集中处理 contextWindows 的初始化（含 creator talk_window 注入）。
  */
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { ThreadPersistenceRef } from "../persistable/common";
 import type { OocObjectRef } from "../runtime/ooc-class";
-import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
 import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 
 export interface MakeThreadOpts {
@@ -28,7 +28,7 @@ export interface MakeThreadOpts {
   /** 初始 contextWindows（除自动注入的 creator window 外的额外 window）。 */
   extraWindows?: ThreadContext["contextWindows"];
   /** creator window 的 title；缺省 = "test-thread"。 */
-  initialTaskTitle?: string;
+  title?: string;
   /** 跳过自动 creator talk_window 注入（当测试明确不想要时）。 */
   skipCreatorWindow?: boolean;
 }
@@ -76,11 +76,11 @@ export function makeThread(opts: MakeThreadOpts = {}): ThreadContext {
   }
   if (!opts.skipCreatorWindow) {
     // 兼容老单元测试默认行为：注入一个指向 placeholder parent 的 creator talk_window。
-    // 产品端 initContextWindows 现在要求"真有 creator info"才注入（避免 phantom），
+    // 产品端 initThreadContextWindows 现在要求"真有 creator info"才注入（避免 phantom），
     // 所以这里显式给个 placeholder thread id（即使是假的，对单元测试来说也是合理 stub）。
-    initContextWindows(thread, {
-      creatorThreadId: opts.creatorThreadId ?? "t_test_creator",
-      initialTaskTitle: opts.initialTaskTitle ?? "test-thread",
+    initThreadContextWindows(thread, {
+      callerThreadId: opts.creatorThreadId ?? "t_test_creator",
+      title: opts.title ?? "test-thread",
     });
   }
   return thread;

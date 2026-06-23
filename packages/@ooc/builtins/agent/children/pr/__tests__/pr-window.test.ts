@@ -27,7 +27,7 @@ import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { readPrIssue } from "../persistable/pr-issue.js";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import {
   materializeWindow,

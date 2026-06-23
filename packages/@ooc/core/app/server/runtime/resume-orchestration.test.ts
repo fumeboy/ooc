@@ -6,7 +6,7 @@ import { createJobManager } from "./job-manager";
 import { resumePausedThreadsInSession } from "./resume-orchestration";
 import { nestedObjectPath } from "@ooc/core/persistable";
 import { readThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 /**
  * Resume 编排回归（修「pause 后 resume 100% 崩溃」）。

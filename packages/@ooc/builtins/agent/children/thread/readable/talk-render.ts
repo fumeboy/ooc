@@ -9,7 +9,7 @@
  * core，供 thread builtin / delivery / fork / flows 复用。
  */
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import type { ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 import type { TalkData } from "../types.js";
 
 /**

@@ -16,7 +16,7 @@ import {
   type FlowObjectRef,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable/common.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { saveThread, loadThread, type ThreadPersistableContext } from "./thread-persist.js";
 
 /** 单个线程的 `thread.json` 绝对路径（path 原语）。 */

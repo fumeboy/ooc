@@ -11,7 +11,7 @@
  *
  * 所有 IO 失败 fail-soft（observeWarn，不抛），写盘不阻塞 LLM think loop。
  */
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { ROOT_WINDOW_ID, objectDataOf, classOf } from "../_shared/types/context-window.js";
 import { getSessionObjectTable } from "../runtime/session-object-table.js";
 import type { OocObjectRef } from "../runtime/ooc-class.js";

@@ -24,7 +24,7 @@
  *   `object::` / `method::` AST，evaluateTrigger 只需要处理新的 kind 名
  */
 
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectRef, OocObjectInstance } from "@ooc/core/runtime/ooc-class";
 import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";

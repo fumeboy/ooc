@@ -26,7 +26,7 @@ import {
   getSessionObjectTable,
   materializeWindow,
 } from "@ooc/core/runtime/session-object-table.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
 // 触发 builtin class 注册（含 _builtin/agent + method_exec_form）。

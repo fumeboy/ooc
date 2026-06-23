@@ -36,8 +36,8 @@ import {
   writeReadable,
 } from "@ooc/core/persistable";
 import { hasLlmEnv, llm, setupTempFlow } from "./_fixture";
-import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 const CRITIC_READABLE = `
 我是 critic。我从两个角度审视代码方案:
@@ -106,7 +106,7 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
       contextWindows: [],
       persistence: { ...assistantFlow, threadId: "root" },
     };
-    initContextWindows(assistantThread, { initialTaskTitle: "write relation about critic" });
+    initThreadContextWindows(assistantThread, { title: "write relation about critic" });
 
     // 3) 走 worker 完整调度(deliverTalkMessage 内的 notifyThreadActivated 把 callee
     //    thread 直接 enqueue,保证 critic 跑一轮 LLM 回复;事件驱动改造后 worker 不再

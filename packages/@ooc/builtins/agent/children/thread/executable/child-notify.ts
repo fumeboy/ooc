@@ -10,7 +10,7 @@
  *
  * 幂等：同一 (parentId, childId, 本次 end 实例=child.lastExecutedAt) 只写一次。
  */
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { makeMessage } from "@ooc/builtins/agent/thread/executable/talk-fork.js";
 
 function* iterateThreads(root: ThreadContext): Iterable<ThreadContext> {

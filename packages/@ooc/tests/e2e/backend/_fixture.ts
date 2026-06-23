@@ -12,7 +12,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, mkdtem
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { nestedObjectPath } from "@ooc/core/persistable";
-import type { ThreadContext, ProcessEvent, ThreadMessage } from "@ooc/core/_shared/types/thread.js";
+import type { ProcessEvent } from "@ooc/core/_shared/types/thread.js"
+import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 
 // 重型依赖（Elysia / openai / executable 全家桶）走 lazy import — 测试 skip 时不触发，

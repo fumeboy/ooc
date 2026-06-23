@@ -20,7 +20,7 @@
 import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 import { isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
 import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 /** talk-family 投影 class 的取值域。 */
 export type ProjectionClass = "talk" | "reflect_request" | "thread";

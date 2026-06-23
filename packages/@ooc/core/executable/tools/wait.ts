@@ -9,7 +9,7 @@
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
-import type { ThreadContext } from "../../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectRef, OocObjectInstance } from "../../runtime/ooc-class.js";
 import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import { THREAD_CLASS_ID } from "../../_shared/types/constants.js";

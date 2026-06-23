@@ -1,14 +1,15 @@
 /**
- * Thread 运行时上下文类型 + flow/stone 引用类型 + 纯路径函数 —— canonical 源
- * （从 `thinkable/context/index.ts` 与 `persistable/common.ts` 迁入）。
+ * flow/stone 引用类型 + 纯路径函数 + 线程过程事件（ProcessEvent / ThreadStatus）—— core 侧
+ * canonical 源。
  *
- * 只含**纯类型**与**纯函数**：ThreadContext 的运行时构造（buildContext /
- * buildInputItems / processEventToItems / loadSelfInstructions）留在 thinkable；
- * 带 IO / 路径路由的 objectDir / threadDir / stoneDir / resolveStoneDir 留在
- * persistable。
+ * 只含 core 仍需的**纯类型**与**纯函数**：flow/stone 引用、路径派生、`ProcessEvent`（thinkloop
+ * 单轮事件流，core engine 直接读写）、`ThreadStatus`（调度状态枚举）。
+ *
+ * 注（thinkable-module 后续：thread 与 core 解耦）：`ThreadContext`（thread class 统一业务 data）
+ * 与 `ThreadMessage`（inbox/outbox 消息）已迁入 thread builtin
+ * （`@ooc/builtins/agent/thread/types.ts`）——core engine 经 `import type` 引用其类型（运行时擦除、
+ * 无环），具体形状归 thread class 所有。
  */
-
-import type { OocObjectRef, OocObjectInstance } from "../../runtime/ooc-class.js";
 
 // ─────────────────────────── flow / stone 引用类型 ───────────────────────────
 
@@ -354,39 +355,6 @@ export type ProcessEvent = ProcessEventCommon & (
     }
 );
 
-/** 线程之间通过 inbox/outbox 传递的最小消息模型。 */
-export type ThreadMessage = {
-  /** 消息唯一标识；当前由创建方生成，不要求全局可排序。 */
-  id: string;
-  /** 发送消息的线程 ID。 */
-  fromThreadId: string;
-  /** 接收消息的线程 ID。 */
-  toThreadId: string;
-  /** 发送方的 flow object id；跨对象 talk 时由 deliverTalkMessage 写入,便于 UI 标注发送方身份。
-   *  旧 thread.json 缺该字段;前端要兼容空值。 */
-  fromObjectId?: string;
-  /** 消息正文，直接作为接收线程可见的协作输入。 */
-  content: string;
-  /** 创建时间戳，用于排序和调试，不承担强一致时钟语义。 */
-  createdAt: number;
-  /** 消息来源；talk = 经 talk_window.say（peer 会话 + fork 子窗统一）；user = 控制面代用户派送；
-   *  "do" 是旧 fork 消息的历史 source 值（do→talk 合并后不再产生，保留以读旧 thread.json）。 */
-  source: "do" | "system" | "talk" | "user";
-  /**
-   * 消息归属的 window id；
-   * - 由 talk_window.say 写 outbox 时设置为该 talk_window 的 id
-   *   （fork 子窗的 say 视图实际用 targetThreadId 过滤，本字段非必需）
-   */
-  windowId?: string;
-  /**
-   * 该消息是哪个 window 的回复目标；
-   * - 由控制面 user-reply 路径填入：当 user 选择回复某个 talk_window 时，
-   *   写入新 inbox 消息的 replyToWindowId = 那个 talk_window 的 id
-   * - render 层据此把消息归入对应 talk_window 的 transcript
-   */
-  replyToWindowId?: string;
-};
-
 /**
  * 线程调度状态。status="waiting" 表示等待 inbox 新消息（不再有 waitingType 细分）。
  * 显式提取为具名 type，便于复用。
@@ -398,136 +366,3 @@ export type ThreadStatus =
   | "failed"
   | "paused";
 
-/**
- * 单个线程的运行时上下文。
- *
- * 这是 buildContext / think / scheduler 共享的最小结构，不等同于完整持久化模型。
- *
- * 重构：
- * - 删除 activeForms / windows / pinnedKnowledge / waitingType / awaitingChildren
- * - 新增 contextWindows（统一抽象）
- * - status="waiting" 单独表达"等待 inbox 新消息"，不再细分 waitingType（等待语义的简化）
- */
-export type ThreadContext = {
-  /** 线程唯一标识；同时用于 XML context 中的 thread id。 */
-  id: string;
-  /** 调度状态；status="waiting" 表示等待 inbox 新消息，不再有 waitingType 细分。 */
-  status: ThreadStatus;
-  /** 当前线程的过程事件流，会被转换成 system message 之后的普通 LLM messages。 */
-  events: ProcessEvent[];
-  /** 线程树中的直接父线程；root thread 没有该字段。 */
-  parentThreadId?: string;
-  /** 创建本线程任务的线程，用于后续向 creator 汇报结果。 */
-  creatorThreadId?: string;
-  /**
-   * 创建本线程的 object id；与 thread.persistence.objectId 比较即可判断 creator 是否=自己：
-   * - 相同（含缺省，视为 fork） → creator 关系是 do（同 object 内派生子线程）
-   * - 不同 → creator 关系是 talk（跨 object 的 callee thread）
-   *
-   * 由 talk-delivery / fork helper 在创建 callee/child thread 时写入；
-   * 历史 thread.json 没有此字段时保守按"相同"处理（do）。
-   */
-  creatorObjectId?: string;
-  /**
-   * 创建本线程的 session id（cross-session notify 修复）。
-   *
-   * 大多数 thread 的 creator 与自己在同一 session，此时该字段与 persistence.sessionId 相等，
-   * 通常缺省。**关键场景**：super-alias 派送时 callee thread 在 "super" session，
-   * 但 caller thread 在 user session——此字段记录 caller 的 sessionId，让
-   * notifyThreadActivated / end({result}) auto-reply 知道把 enqueue 派到哪个 session。
-   *
-   * 缺省回退（向后兼容）：使用 thread.persistence.sessionId（同 session）。
-   *
-   * 由 talk-delivery 在跨 session 创建 callee thread 时写入；其他路径可不设。
-   */
-  creatorSessionId?: string;
-  /** 子线程 ID 列表，保留创建顺序，便于展示和调试。 */
-  childThreadIds?: string[];
-  /** 子线程实体表；当前内存实现直接嵌套，不引入独立存储层。 */
-  childThreads?: Record<string, ThreadContext>;
-  /**
-   * compress v2：本线程是 framework fork 的 **summarizer 子线程**（生成摘要后由 scheduler harvest
-   * 读其 endSummary 记入父窗 summarizedRanges）。标记使 emitChildEndNotifications 不对它发 child-end
-   * 通知（避免污染父会话 + 双记，C2）；它的产出经 harvest 内部回收、不进父的协作叙事。
-   */
-  isSummarizer?: boolean;
-  /**
-   * 父 thread 反向引用（运行时设置，不持久化）。
-   *
-   * 用于 do_window.move 等命令需要从子 thread 访问父 thread 的场景；
-   * 由 fork 路径（root.do executeDoMethod）在创建 child 时建立。
-   * thread.json 序列化时被 strip（避免循环引用）。
-   */
-  _parentThreadRef?: ThreadContext;
-  /** 其他线程投递给当前线程的消息。 */
-  inbox?: ThreadMessage[];
-  /** 当前线程发出的协作消息记录。 */
-  outbox?: ThreadMessage[];
-  /**
-   * 当前线程持有的 object 实例（Wave 4：元素类型从旧平铺 `ContextWindow` 改为
-   * `OocObjectRef` —— 身份元信息 + 业务 data + 投影态 win 分离）。**复用字段名**
-   * `contextWindows` 以最小破坏。访问方式：业务数据 `.data`、投影态 `.win`、元信息 `.id/.class/...`。
-   */
-  contextWindows: OocObjectRef[];
-  /** end method 写入的结束原因。 */
-  endReason?: string;
-  /** end method 写入的最终摘要。 */
-  endSummary?: string;
-  /**
-   * 结构化失败原因。
-   *
-   * 当 status="failed" 由 thinkloop catch 块写入时，给出机读的失败分类，让控制面 /
-   * GET .../threads/:id 不必去 events 里扒文本：
-   * - "llm_timeout"：LlmTimeoutError（LLM 调用超时兜底触发）
-   * - "think_error"：think 单轮中其他异常
-   *
-   * 仅失败终态写入；done/running/waiting/paused 不带此字段。
-   */
-  statusReason?: string;
-  /** 失败时的人读错误消息（与 statusReason 配套）。 */
-  lastError?: string;
-  /**
-   * 任务级 LLM 超时覆盖（ms）。
-   *
-   * 缺省时 think → llmClient.generate 回落全局默认（120s，由 OOC_LLM_TIMEOUT_MS 覆写）。
-   * 设置后本 thread 的每轮 generate 用此值兜底超时，让"已知慢任务"能申请更长超时，
-   * 而不必全局拔高（全局拔高会让真卡死 thread 拖更久才暴露，反伤 observability）。
-   */
-  llmTimeoutMs?: number;
-  /** 最近一次被 scheduler 执行的时间，用于公平选择下一个 running thread。 */
-  lastExecutedAt?: number;
-  /**
-   * 入眠时刻 inbox 长度快照；scheduler 唤醒时对比当前 inbox.length 判断是否有新消息。
-   * status="waiting" 时由 wait tool 写入；唤醒后由 scheduler 重置为 undefined。
-   * 见等待语义的简化。
-   */
-  inboxSnapshotAtWait?: number;
-  /**
-   * status="waiting" 时由 wait tool 写入：本次 wait 引用的 IO 来源 window id。
-   * 唤醒后由 scheduler 清空。observability/debug 用，不参与 wakeup 决策
-   * （任何 inbox 新消息都唤醒）；未来可能据此做精确路由。
-   */
-  waitingOn?: string;
-  /**
-   * Transient observability mirror of the windows the ContextPipeline actually
-   * rendered into the LLM input on the latest buildInputItems pass (base windows
-   * PLUS pipeline-derived ones: protocol/system knowledge, activator knowledge,
-   * peer/children Objects, form-scoped knowledge).
-   *
-   * Populated at the end of buildInputItems; read by finishLlmLoop so that the
-   * loop debug windowsSnapshot reflects what the LLM saw — not just the persisted
-   * thread.contextWindows (which omits all derived windows, making activator/
-   * protocol knowledge look "未激活" in the debug snapshot). Runtime-only; never
-   * persisted. Undefined falls back to thread.contextWindows.
-   */
-  _renderedWindows?: OocObjectRef[];
-  /**
-   * session 对象表（B→A）：`objectId → 唯一一个持 data 的 OocObjectInstance`，挂内存线程树**根** thread。
-   * context window（OocObjectRef）是对它的引用、不持 data。Runtime-only；never persisted（磁盘真相在
-   * 各 object 的 data.json / inline thread-context）；随 job 执行而在、随根 thread GC 而释放。
-   * owner/解析见 `runtime/session-object-table.ts`。
-   */
-  _objectTable?: Map<string, OocObjectInstance>;
-  /** 当前线程的持久化位置；缺失时系统只以内存模式运行。 */
-  persistence?: ThreadPersistenceRef;
-};

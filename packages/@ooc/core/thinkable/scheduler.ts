@@ -1,5 +1,5 @@
 import type { LlmClient } from "./llm/types";
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { think } from "./thinkloop";
 import { writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
 // thread 业务 policy（compress harvest + child-end 通知）经 thinkable 模块（thinkableOf）调用——

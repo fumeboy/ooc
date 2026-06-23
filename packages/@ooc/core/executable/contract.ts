@@ -12,11 +12,8 @@
  *   - args : 调用参数
  */
 
-import type {
-  FlowObjectRef,
-  ThreadPersistenceRef,
-  ThreadContext,
-} from "../_shared/types/thread.js";
+import type { FlowObjectRef, ThreadPersistenceRef } from "../_shared/types/thread.js"
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { MethodCallSchema } from "../_shared/types/intent.js";
 import type { SelfProxy } from "../_shared/types/self-proxy.js";
 
@@ -216,14 +213,16 @@ export interface UnactiveResult {
 
 /**
  * 对象生命周期钩子（active/unactive 共用）—— 与 construct 对称、按 refcount 0↔1 触发。
- * 与 construct 签名不同：作用于既有对象、不产 Data；body 经 ctx（targetId）自解析目标。
+ * 作用于**既有**对象（不产 Data）；`self` = refcount 跨界的**目标对象的业务 data**（由 runtime 解析
+ * `ctx.targetId` 注入），body 直接操作 `self`、不必从 ctx 自解析目标。无目标 data 时 `self` 为 undefined。
  * 皆可选。无独立 destruct —— OOC object 默认持久身份；unactive 可经返回 {delete:true} 自决彻底删除
  * （refcount-0-gated，故无悬空引用）。仅 unactive 路径 honor delete；active 返回值忽略。
  */
-export interface ObjectLifecycleHook {
+export interface ObjectLifecycleHook<Data = any> {
   description: string;
   exec: (
     ctx: LifecycleContext,
+    self: Data,
   ) => void | UnactiveResult | Promise<void | UnactiveResult>;
 }
 

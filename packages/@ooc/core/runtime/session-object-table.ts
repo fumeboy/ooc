@@ -14,7 +14,7 @@
  *   本表是 hydrate 出的运行态镜像。窗写盘走 ref + 边界重组（见 thread-persist：persist 合 ref+表 data、
  *   hydrate 拆成 窗(ref) + 表(object)）。
  */
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectInstance, OocObjectRef } from "./ooc-class.js";
 
 /** 走 `_parentThreadRef` 到内存线程树根（session 作用域的锚）。 */

@@ -4,7 +4,7 @@
  * 从 observable/index.ts 抽出为可实例化类。
  * 原有 module-level 导出保留为对 `defaultObservableStore` 的 thin wrapper。
  */
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type {
   LlmGenerateResult,
   LlmInputItem,

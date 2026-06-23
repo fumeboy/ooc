@@ -21,7 +21,7 @@ import {
   setSessionObject,
 } from "../session-object-table";
 import type { OocObjectRef } from "../ooc-class";
-import type { ThreadContext } from "../../_shared/types/thread";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 // ─────────────────────────── helpers ───────────────────────────
 

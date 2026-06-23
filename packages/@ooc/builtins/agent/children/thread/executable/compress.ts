@@ -13,12 +13,10 @@
  *
  * compress.md 的「零副本重投影」refinement（与 say 读侧重投影同一能力）归 thread-as-referencable-object。
  */
-import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
-import { WindowManager } from "@ooc/core/runtime/window-manager.js";
-import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import { isSelfThreadWindow, objectDataOf } from "@ooc/core/_shared/types/context-window.js";
-import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
-import type { ThreadContext, ProcessEvent } from "@ooc/core/_shared/types/thread.js";
+import { isSelfThreadWindow } from "@ooc/core/_shared/types/context-window.js";
+import { openForkChild } from "./fork.js";
+import type { ProcessEvent } from "@ooc/core/_shared/types/thread.js"
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { addSummarizedRange } from "@ooc/core/_shared/utils/summarized-ranges.js";
 import { loadBudgetThresholds } from "@ooc/builtins/agent/thread/thinkable/context/budget.js";
 import { shouldAutoCompress } from "@ooc/builtins/agent/thread/thinkable/context/compress-trigger.js";
@@ -77,28 +75,16 @@ export async function spawnSummarizerFork(
   if (!selfObjectId || toIdx < fromIdx) return undefined;
   const seed = buildSummarizerSeed(thread.events ?? [], fromIdx, toIdx);
 
-  const mgr = WindowManager.fromThread(thread, builtinRegistry);
-  await mgr.attachPersistence(thread);
-  const before = new Set(thread.childThreadIds ?? []);
-  // target=self → thread 构造走 execFork（同 object 内存树 sub-thread，同 job scheduler loop 内跑）。
-  await mgr.instantiate(THREAD_CLASS_ID, {
-    target: selfObjectId,
+  // summarizer 是**内部 fork**：openForkChild 只挂 childThreads（scheduler 同 job 内跑）+ 投 seed，
+  // 不在父侧建可见 fork 会话窗——harvest 直读 child.endSummary、不经父侧窗回报，故父无需该窗。
+  const child = openForkChild(thread, {
+    selfObjectId,
     msg: seed,
     wait: false,
     summarizer: true,
     title: "summarize early history",
   });
-  thread.contextWindows = mgr.toData();
-  const childId = (thread.childThreadIds ?? []).find((id) => !before.has(id));
-  if (!childId) return undefined;
-
-  // 移除 instantiate 留下的父侧 summarizer fork 窗——summarizer 是内部 fork：child 在 childThreads
-  // 由 scheduler 跑、harvest 直读 child.endSummary、不经父侧窗回报，故父无需该窗（否则污染 agent 窗列表 + wait 候选）。
-  const table = getSessionObjectTable(thread);
-  thread.contextWindows = (thread.contextWindows ?? []).filter((w) => {
-    const d = (objectDataOf(w, table) ?? {}) as { targetThreadId?: string; isForkWindow?: boolean };
-    return !(d.isForkWindow === true && d.targetThreadId === childId);
-  });
+  const childId = child.id;
 
   const selfWindow = thread.contextWindows?.find((w) => isSelfThreadWindow(w.id));
   if (selfWindow) {

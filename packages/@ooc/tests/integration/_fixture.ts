@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { createFlowObject } from "@ooc/core/persistable";
 import { createLlmClient } from "@ooc/core/thinkable/llm/client";
 import type { LlmClient } from "@ooc/core/thinkable/llm/types";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
-import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
+import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
 
 /** 当所有 OOC_* env 都设置时返回 true，否则集成测试自动 skip。 */
 export const hasLlmEnv = Boolean(
@@ -70,7 +70,7 @@ export async function makeRootThread(tempRoot: string, prompt: string): Promise<
     contextWindows: [],
     persistence: { ...flow, threadId: "root" },
   };
-  initContextWindows(thread, { initialTaskTitle: prompt.slice(0, 60) });
+  initThreadContextWindows(thread, { title: prompt.slice(0, 60) });
   return thread;
 }
 

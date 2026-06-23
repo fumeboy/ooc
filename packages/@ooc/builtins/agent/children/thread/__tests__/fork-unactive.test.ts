@@ -7,12 +7,13 @@ import { join } from "node:path";
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import { WindowManager } from "@ooc/core/runtime/window-manager.js";
+import { generateWindowId, ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
+import { openForkChild } from "@ooc/builtins/agent/thread/executable/fork.js";
 import { handleCloseTool } from "@ooc/core/executable/tools/close.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { writeThread, readThread } from "@ooc/builtins/agent/thread/persistable/thread-json.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
 /**
@@ -35,6 +36,26 @@ function lastSystemNotice(t: ThreadContext) {
   return (t.inbox ?? []).filter((m) => m.source === "system").at(-1);
 }
 
+/**
+ * fork 一条同对象子线程并在父侧建 fork 会话窗（复刻 agent.talk 的 fork wiring）：
+ * openForkChild 挂 childThreads + 投 msg；materializeWindow 在父侧建指向子的 fork 窗。
+ */
+function forkWithWindow(parent: ThreadContext, selfObjectId: string, msg: string) {
+  const child = openForkChild(parent, { selfObjectId, msg });
+  const forkId = generateWindowId(THREAD_CLASS_ID);
+  const forkWin = materializeWindow(parent, {
+    id: forkId,
+    class: THREAD_CLASS_ID,
+    data: { target: selfObjectId, targetThreadId: child.id, isForkWindow: true },
+    parentWindowId: ROOT_WINDOW_ID,
+    title: "fork",
+    status: "open",
+    createdAt: Date.now(),
+  });
+  parent.contextWindows = [...(parent.contextWindows ?? []), forkWin];
+  return { childId: child.id, forkId, child };
+}
+
 describe("thread.unactive（关 fork 窗 → 子线程收无订阅者通知、不 cancel，经 close 原语）", () => {
   it("关 fork 窗 → 子线程收 system 通知 + 保持 running（不 canceled、不级联）", async () => {
     const SELF = "alice";
@@ -43,11 +64,7 @@ describe("thread.unactive（关 fork 窗 → 子线程收无订阅者通知、�
     const parent = makeThread({ id: "t_parent", objectId: SELF, persistence });
 
     // fork 一条同对象子线程（talk(target=自己) ⇒ 父侧 fork 子窗 + child 进 childThreads）。
-    const mgr = WindowManager.fromThread(parent, builtinRegistry);
-    const forkId = await mgr.instantiate(THREAD_CLASS_ID, { target: SELF, msg: "子任务" });
-    parent.contextWindows = mgr.toData();
-    const childId = parent.childThreadIds![0]!;
-    const child = parent.childThreads![childId]!;
+    const { forkId, child } = forkWithWindow(parent, SELF, "子任务");
     expect(child.status).toBe("running");
 
     // 关 fork 窗（经真实 close 原语）→ 触发 thread.unactive → 子线程收通知、仍 running。
@@ -67,11 +84,7 @@ describe("thread.unactive（关 fork 窗 → 子线程收无订阅者通知、�
     const persistence: ThreadPersistenceRef = { baseDir, sessionId: "s", objectId: SELF, threadId: "t_p" };
     const parent = makeThread({ id: "t_p", objectId: SELF, persistence });
 
-    const mgr = WindowManager.fromThread(parent, builtinRegistry);
-    const forkId = await mgr.instantiate(THREAD_CLASS_ID, { target: SELF, msg: "子" });
-    parent.contextWindows = mgr.toData();
-    const childId = parent.childThreadIds![0]!;
-    const child = parent.childThreads![childId]!;
+    const { childId, forkId, child } = forkWithWindow(parent, SELF, "子");
 
     // 给 child 手挂一条孙线程 + child 持有指向它的 fork 窗（模拟 child 自己 fork 过）。
     const grandId = "t_grand";
@@ -106,11 +119,7 @@ describe("thread.unactive（关 fork 窗 → 子线程收无订阅者通知、�
     const persistence: ThreadPersistenceRef = { baseDir, sessionId: "s", objectId: SELF, threadId: "t_p" };
     const parent = makeThread({ id: "t_p", objectId: SELF, persistence });
 
-    const mgr = WindowManager.fromThread(parent, builtinRegistry);
-    const forkId = await mgr.instantiate(THREAD_CLASS_ID, { target: SELF, msg: "子" });
-    parent.contextWindows = mgr.toData();
-    const childId = parent.childThreadIds![0]!;
-    const child = parent.childThreads![childId]!;
+    const { childId, forkId, child } = forkWithWindow(parent, SELF, "子");
 
     // 模拟子线程跑过 ≥1 tick：其独立 thread.json 落盘为 running。
     await writeThread(child);

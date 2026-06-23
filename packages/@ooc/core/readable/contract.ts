@@ -12,7 +12,8 @@
  * —— 与 executable 维度的 object method 维度隔离（同名 fail-loud）。
  */
 
-import type { ThreadPersistenceRef, ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadPersistenceRef } from "../_shared/types/thread.js"
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { MethodCallSchema } from "../_shared/types/intent.js";
 import type { XmlNode } from "../_shared/types/xml.js";
 import type { ReadonlySelfProxy } from "../_shared/types/self-proxy.js";

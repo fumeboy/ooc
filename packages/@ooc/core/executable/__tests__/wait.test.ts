@@ -9,7 +9,7 @@
 import { describe, expect, it } from "bun:test";
 import { handleWaitTool } from "../tools/wait";
 import { makeThread } from "../../__tests__/make-thread";
-import type { ThreadContext } from "../../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectRef } from "../../runtime/ooc-class.js";
 import {
   generateWindowId,

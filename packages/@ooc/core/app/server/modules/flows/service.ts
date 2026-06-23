@@ -13,8 +13,9 @@ import { resolveStoneIdentityRef } from "@ooc/core/persistable";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import { dispatchVisibleServerMethod } from "../_shared/visible-server-dispatch";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
-import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
+import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
+import { injectPeerWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/peer-windows.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
 import {
@@ -67,7 +68,7 @@ function buildUserTalkWindow(
   thread: ThreadContext,
 ): { id: string; instance: OocObjectRef; view: TalkWindowView } {
   const id = generateWindowId("talk");
-  const data: TalkData = { target };
+  const data = { target }; // 会话窗指针 data（ThreadContext 指针字段子集）；materializeWindow 收 unknown。
   // 会话窗注册 class = `_builtin/thread`（唯一会话载体注册 class）；other-view 投影 class=talk 由 thread
   // readable 渲染期算。B→A：data 入 session 对象表、窗只持 ref（materializeWindow 一处搞定）。
   const instance = materializeWindow(thread, {
@@ -143,7 +144,7 @@ function appendInboxMessage(thread: ThreadContext, text: string, replyToWindowId
  * 都是每轮派生);explicit knowledge 与其它持久 window 的 id/createdAt 是真实状态,
  * 原样保留。
  *
- * 同样要剔除每轮 derive 的 skill_index member window：它由 injectMemberWindowsIfObjectThread
+ * 同样要剔除每轮 derive 的 skill_index member window：它由 initThreadContextWindows
  * 每次 readThread 幂等重注入，createdAt=Date.now() 每次都新（class=`_builtin/agent/skill_index`），
  * 否则 hash 永远翻动。skills 由其 readable 渲染期自算、不入本 payload，无需参与 hash。
  *
@@ -632,12 +633,11 @@ export function createFlowsService(deps: {
         contextWindows: [],
         persistence,
       } satisfies ThreadContext;
-      // 注入初始 creator talk_window：root thread 的 creator 是外部 session
-      initContextWindows(thread, {
-        initialTaskTitle: initialMessage ? initialMessage.slice(0, 60) : `flow ${objectId}`,
+      // 铺初始窗：self 门面 + 自我视角 thread 窗 + 全局单例工具成员（member 已并入）；peer 另 eager 注入。
+      initThreadContextWindows(thread, {
+        title: initialMessage ? initialMessage.slice(0, 60) : `flow ${objectId}`,
       });
       await injectPeerWindowsIfObjectThread(thread);
-      await injectMemberWindowsIfObjectThread(thread);
       await writeThread(initialMessage ? appendInboxMessage(thread, initialMessage) : thread);
       // 关键：只有 initialMessage 不为空才 enqueue job——
       // 空 events 的 thread 跑 LLM 会被 Claude 代理拒绝（messages 必须含 user role），

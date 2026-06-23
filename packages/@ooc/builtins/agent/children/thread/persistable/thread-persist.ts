@@ -56,12 +56,9 @@ import {
   objectDataOf,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
-import {
-  initContextWindows,
-  injectPeerWindowsIfObjectThread,
-  injectMemberWindowsIfObjectThread,
-} from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
+import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
+import { injectPeerWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/peer-windows.js";
 import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
@@ -274,13 +271,18 @@ export async function loadThread(ctx: ThreadPersistableContext): Promise<ThreadC
     ...((parsed.inbox ?? []).filter((m) => !seenInbox.has(m.id))),
   ];
   restored.contextWindows = await hydrateContextWindows(persistence, registry, restored);
-  // 兜底注入：缺 creator window 时补一个（初始 creator 对话 window）。
-  initContextWindows(restored, {
-    creatorThreadId: restored.creatorThreadId,
-    initialTaskTitle: `thread ${restored.id}`,
+  // 兜底铺设初始窗（self 门面 + 自我视角 thread 窗 + 全局单例工具成员；幂等）。
+  // fork vs peer 知 session 判定：同对象**且同 session** 才 fork（super-alias 跨 session 同对象=peer）。
+  const sameObj =
+    restored.creatorObjectId !== undefined &&
+    restored.creatorObjectId === restored.persistence?.objectId;
+  const sameSession =
+    (restored.creatorSessionId ?? restored.persistence?.sessionId) === restored.persistence?.sessionId;
+  initThreadContextWindows(restored, {
+    isFork: sameObj && sameSession,
+    title: `thread ${restored.id}`,
   });
-  // peer / member window 注入：冷恢复时补齐 sibling + children + 声明成员。
+  // peer window 注入：冷恢复时补齐 sibling + children。
   await injectPeerWindowsIfObjectThread(restored);
-  await injectMemberWindowsIfObjectThread(restored);
   return restored;
 }

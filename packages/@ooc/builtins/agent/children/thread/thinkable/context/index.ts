@@ -18,7 +18,8 @@ import {
   projectSummarizedRanges,
   type SummarizedRange,
 } from "@ooc/core/_shared/utils/summarized-ranges.js";
-import type { ProcessEvent, ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread.js";
+import type { ProcessEvent } from "@ooc/core/_shared/types/thread.js"
+import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 
 export type {
   MethodCallSchema,
@@ -32,17 +33,15 @@ export { ContextPipeline, createDefaultPipeline } from "./pipeline.js";
 export type { PipelinePhase, PipelineContext } from "./pipeline.js";
 
 /**
- * Thread 运行时类型 —— canonical 源在 `@ooc/core/_shared/types/thread.ts`；
- * 此处 re-export 保持旧 import 路径 (`thinkable/context`) 可用，并打破
- * thinkable → executable 的类型反向依赖（ContextWindow 现从 `_shared` 单向引入）。
+ * Thread 运行时类型 re-export —— 保持旧 import 路径 (`thinkable/context`) 可用。
+ * ProcessEvent/ThreadStatus canonical 在 core/_shared；ThreadContext/ThreadMessage 已迁 thread builtin。
  */
 export type {
   ProcessEventCommon,
   ProcessEvent,
-  ThreadMessage,
   ThreadStatus,
-  ThreadContext,
 } from "@ooc/core/_shared/types/thread.js";
+export type { ThreadMessage, ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 /** 基于 msgId 在 inbox 中查找实际消息正文。 */
 function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage | undefined {
@@ -413,7 +412,7 @@ export async function buildInputItems(
   // (id = type = objectId, type not a builtin window/Object type) that is
   // missing from thread.contextWindows gets persisted now. This guarantees
   // exec() → WindowManager.fromThread → requireParent succeeds for peer
-  // windows even if initContextWindows ran before the stone hierarchy was
+  // windows even if initThreadContextWindows ran before the stone hierarchy was
   // populated (dynamic child creation, etc.). Idempotent.
   reconcilePeerWindowsIntoContext(thread, snapshot.windows);
 

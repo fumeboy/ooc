@@ -15,7 +15,7 @@ import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry, createObjectRegistry, type ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { handleExecTool } from "../tools/exec.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import {
   materializeWindow,
   getSessionObjectTable,

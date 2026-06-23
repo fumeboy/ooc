@@ -10,7 +10,7 @@
  * message-or-summary 渲染单元（段内连续 messages 替换为一条 summary 占位），再叠 viewport 末 N 条
  * 节流——两者干净组合（applyTranscriptViewport 泛型作用于渲染单元）。
  */
-import type { ThreadMessage } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
 import {
   applyTranscriptViewport,

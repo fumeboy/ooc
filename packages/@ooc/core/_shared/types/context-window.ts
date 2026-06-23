@@ -144,8 +144,8 @@ export function hasCreatorChannel(
 /**
  * 不应持久化进 thread-context.json 的窗：self 门面窗 + member 门面窗。
  *
- * 两者都由 init 每轮从对象身份/类声明确定性重注入（initContextWindows /
- * injectMemberWindowsIfObjectThread），无独立 data.json，**不应持久化**——否则落成指向缺失
+ * 两者都由 init 每轮从对象身份/类声明确定性重注入（initThreadContextWindows /
+ * initThreadContextWindows），无独立 data.json，**不应持久化**——否则落成指向缺失
  * data.json 的死 _ref，reload 刷屏 `references missing object <id>`。
  *
  * 标记落在窗的**投影态 `win`** 上（`win:{transient:true,isSelfWindow:true}` /

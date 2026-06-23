@@ -6,7 +6,7 @@
  */
 
 import type { LlmTool } from "../../thinkable/llm/types.js";
-import type { ThreadContext } from "../../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 import { CLOSE_TOOL } from "./close.js";
 import { EXEC_TOOL } from "./exec.js";

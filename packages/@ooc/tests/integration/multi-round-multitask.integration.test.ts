@@ -11,7 +11,7 @@ import {
   llm,
   setupTempFlow,
 } from "./_fixture";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 /**
  * Long-horizon 多轮多任务压力测试。

@@ -12,7 +12,7 @@ import { stoneDir as realStoneDir, resolveBuiltinReadDir } from "@ooc/core/persi
 // executable/readable）；不 import 它 registry 为空，下面 getClass/resolveObjectMethod 全落空。
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry";
-import { injectMemberWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import {
   materializeWindow,
@@ -124,7 +124,7 @@ export async function runControlPlane(): Promise<StoryResult> {
     {
       const thread: any = { id: "root", status: "running",
         persistence: { baseDir, sessionId: "sb-comp", objectId: "supervisor", threadId: "root" }, contextWindows: [] };
-      await injectMemberWindowsIfObjectThread(thread);
+      initThreadContextWindows(thread);
       const memberClasses = new Set(
         thread.contextWindows.filter((w: any) => w.win?.isMemberWindow === true).map((w: any) => w.class),
       );

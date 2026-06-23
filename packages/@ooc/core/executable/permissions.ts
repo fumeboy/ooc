@@ -23,7 +23,7 @@ import { join } from "node:path";
 
 import { getPermissionDecider } from "../observable";
 import { deriveStoneFromThread, stoneDir } from "../persistable/common";
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { ObjectRegistry } from "../runtime/object-registry.js";
 import { builtinRegistry } from "../runtime/object-registry.js";
 import { classOf } from "../_shared/types/context-window.js";

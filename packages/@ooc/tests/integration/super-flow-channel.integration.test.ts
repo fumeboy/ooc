@@ -37,7 +37,7 @@ import {
 import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
 import { readThread, writeThread } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
-import { initContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
 import {
   ROOT_WINDOW_ID,
   generateWindowId,
@@ -54,7 +54,7 @@ import {
   llm,
   setupTempFlow,
 } from "./_fixture";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 const ALICE_SELF = `
 你叫 Alice，一个务实的工程师助手。
@@ -94,12 +94,12 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
       contextWindows: [],
       persistence: { ...aliceFlow, threadId: "root" },
     };
-    initContextWindows(aliceRoot, { initialTaskTitle: "alice main task" });
+    initThreadContextWindows(aliceRoot, { title: "alice main task" });
 
     // 3) alice 挂一个 target="super" 的会话窗（Wave4：stored class = THREAD_CLASS_ID，
     //    target 落 inst.data；talk 只是 readable 投影 class，按 isTalkLikeClass 认 thread class）。
     const talkWindowId = generateWindowId("talk");
-    const superTalkData: TalkData = { target: "super" };
+    const superTalkData = { target: "super" };
     // 窗=ref + object（target 落 data）入 session 对象表（materializeWindow 一处搞定）。
     const superTalkWindow: OocObjectRef = materializeWindow(aliceRoot, {
       id: talkWindowId,

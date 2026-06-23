@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { runScheduler } from "../scheduler";
 import { createFlowObject } from "../../persistable";
 import { threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";

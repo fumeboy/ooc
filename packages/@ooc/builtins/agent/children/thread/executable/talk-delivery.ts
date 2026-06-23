@@ -18,7 +18,7 @@
  *    - 若 talkWindow.targetThreadId 已设置 → readThread 拿到 callee
  *    - 否则 → createFlowObject(callee) 兜底（已存在则 no-op），新建一条 thread，
  *      thread id 由派送时生成；callee 携带 creatorObjectId=caller object，
- *      initContextWindows 据此自动注入指向 caller 的 creator talk_window
+ *      initThreadContextWindows 据此自动注入指向 caller 的 creator talk_window
  *    - 跨 session 派送（如 super alias）：必要时 createFlowSession 创建目标 session 目录
  *    - callee 创建好后 talkWindow.targetThreadId 回填，让下次 say 直接命中已有 thread
  *
@@ -38,8 +38,9 @@ import { createFlowObject, createFlowSession, sessionMetadataFile, resolveSuperA
 import { readThread, writeThread } from "../persistable/thread-json.js";
 import { stat } from "node:fs/promises";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
-import type { ThreadContext, ThreadMessage } from "@ooc/core/_shared/types/thread.js";
-import { initContextWindows, injectPeerWindowsIfObjectThread, injectMemberWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/init.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
+import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
+import { injectPeerWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/peer-windows.js";
 import { isSuperSessionId, SUPER_SESSION_ID, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
 import { threadWindowIdOf, isSelfThreadWindow, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
@@ -159,12 +160,12 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
         threadId: calleeThreadId,
       },
     };
-    initContextWindows(calleeThread, {
-      creatorThreadId: callerThread.id,
-      initialTaskTitle: deriveCalleeThreadTitle(content),
+    // callee 是 peer/super 路径（跨对象 或 super-alias 跨 session 同对象）→ 一律 peer 会话窗（isFork=false）。
+    initThreadContextWindows(calleeThread, {
+      isFork: false,
+      title: deriveCalleeThreadTitle(content),
     });
     await injectPeerWindowsIfObjectThread(calleeThread);
-    await injectMemberWindowsIfObjectThread(calleeThread);
 
     // 早些时候这里还 spawn 过一条 "回复创建者" todo 用作文本 nudge。
     // 现在结构性约束（wait 要求 on=合法 IO 来源 window）已接管它的作用——

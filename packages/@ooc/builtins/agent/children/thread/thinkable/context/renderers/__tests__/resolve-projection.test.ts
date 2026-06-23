@@ -19,7 +19,7 @@ import { clearServerLoaderCache } from "@ooc/core/runtime/server-loader.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import { setSessionObject } from "@ooc/core/runtime/session-object-table.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 describe("resolveProjection 默认投影视角分流", () => {
   let baseDir: string;

@@ -35,7 +35,7 @@ import {
   getSessionObjectTable,
   materializeWindow,
 } from "@ooc/core/runtime/session-object-table.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { TalkWindowView } from "@ooc/builtins/agent/thread/types.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { makeThread } from "../../__tests__/make-thread";

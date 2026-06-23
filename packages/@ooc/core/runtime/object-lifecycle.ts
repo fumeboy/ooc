@@ -9,7 +9,7 @@
  * thread-specific policy 活在 thread builtin 的 unactive body。
  */
 import type { OocObjectRef, OocObjectInstance } from "./ooc-class.js";
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { ObjectRegistry } from "./object-registry.js";
 import type { LifecycleContext } from "../executable/contract.js";
 import { isSelfThreadWindow, objectDataOf, classOf } from "../_shared/types/context-window.js";
@@ -106,7 +106,10 @@ export async function dispatchUnactiveIfZero(
     args: {},
     targetId,
   };
-  const r = await hook.exec(ctx);
+  // self = 目标对象业务 data：object 表（独立对象）兜不到则取内存线程树（fork child / thread 目标）。
+  const self =
+    getSessionObjectTable(ctxThread).get(targetId)?.data ?? reachableThreads(ctxThread).get(targetId);
+  const r = await hook.exec(ctx, self);
   if (r && (r as { delete?: boolean }).delete === true) {
     await removeObjectFromSession(ctxThread, targetId);
   }
@@ -119,7 +122,7 @@ export async function dispatchUnactiveIfZero(
  *
  * v1 seam = `WindowManager.instantiate`（fork 窗在此诞生，是 referencedObjectId v1 唯一解析的窗）。
  * **扩展点**：phase-2 把 referencedObjectId 扩到 member/peer 窗时，init 注入路径
- * （initContextWindows / injectMember/PeerWindows，不经 instantiate）也须补本调用，否则对
+ * （initThreadContextWindows / initThreadContextWindows / injectPeerWindowsIfObjectThread，不经 instantiate）也须补本调用，否则对
  * init 注入的引用永不 fire active。active 不消费返回值（{delete} 仅 unactive honor）。
  */
 export async function dispatchActiveIfFirst(
@@ -138,7 +141,9 @@ export async function dispatchActiveIfFirst(
     args: {},
     targetId,
   };
-  await hook.exec(ctx);
+  const self =
+    getSessionObjectTable(ctxThread).get(targetId)?.data ?? reachableThreads(ctxThread).get(targetId);
+  await hook.exec(ctx, self);
 }
 
 /**

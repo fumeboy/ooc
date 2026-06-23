@@ -8,7 +8,7 @@ import {
 } from "../session-object-table.js";
 import { objectDataOf } from "../../_shared/types/context-window.js";
 import type { OocObjectRef } from "../ooc-class.js";
-import type { ThreadContext } from "../../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 /**
  * session-object-table —— B→A 回归网：钉死「一 session 一 objectId 一持 data 实例 + window=对它的

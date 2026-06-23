@@ -16,7 +16,8 @@
  * **纯类型、零 thread builtin import**：只引 core 的 ThreadContext / ProcessEvent / LlmInputItem。
  */
 
-import type { ThreadContext, ProcessEvent } from "../_shared/types/thread.js";
+import type { ProcessEvent } from "../_shared/types/thread.js"
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { LlmInputItem } from "./llm/types.js";
 
 /**

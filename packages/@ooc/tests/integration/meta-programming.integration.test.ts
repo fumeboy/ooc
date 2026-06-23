@@ -9,7 +9,7 @@ import {
   llm,
   setupTempFlow,
 } from "./_fixture";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 describe.skipIf(!hasLlmEnv)("integration: meta-programming", () => {
   let tempRoot: string;

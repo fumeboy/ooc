@@ -10,7 +10,7 @@ import {
 import { harvestSummarizerForks } from "@ooc/builtins/agent/thread/executable/compress.js";
 import { threadWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 const THRESHOLDS = { soft: 100000, hard: 180000 };
 

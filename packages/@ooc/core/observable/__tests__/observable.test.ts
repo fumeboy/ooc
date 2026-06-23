@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "bun:test";
 import * as observableModule from "../index";
-import type { ThreadContext } from "../../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { LlmGenerateResult, LlmInputItem, LlmTool } from "../../thinkable/llm/types";
 import { FILE_CLASS_ID } from "../../_shared/types/constants";
 import { setSessionObject } from "../../runtime/session-object-table";

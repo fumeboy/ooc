@@ -17,7 +17,7 @@ import {
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { TalkData } from "@ooc/builtins/agent/thread/types.js";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
   let tempRoot: string;
@@ -61,7 +61,7 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
       materializeWindow(root, {
         id: creatorTalkId,
         class: THREAD_CLASS_ID,
-        data: { target: "user" } satisfies TalkData,
+        data: { target: "user" },
         parentWindowId: ROOT_WINDOW_ID,
         title: "creator",
         status: "open",

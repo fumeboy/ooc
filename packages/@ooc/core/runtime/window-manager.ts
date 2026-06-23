@@ -24,7 +24,7 @@
  *   thread.contextWindows = mgr.toData();
  */
 
-import type { ThreadContext } from "../_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectRef } from "./ooc-class.js";
 import {
   ROOT_WINDOW_ID,

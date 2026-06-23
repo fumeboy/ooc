@@ -16,7 +16,7 @@ import {
   llm,
   setupTempFlow,
 } from "./_fixture";
-import type { ThreadContext } from "@ooc/core/_shared/types/thread.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 /**
  * 验证 knowledge 自动激活闭环：
