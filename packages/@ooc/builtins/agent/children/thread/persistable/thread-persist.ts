@@ -56,6 +56,7 @@ import {
   objectDataOf,
   type ContextWindow,
 } from "@ooc/core/_shared/types/context-window.js";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
 import { injectPeerWindowsIfObjectThread } from "@ooc/builtins/agent/thread/thinkable/context/peer-windows.js";
@@ -260,6 +261,7 @@ export async function loadThread(ctx: ThreadPersistableContext): Promise<ThreadC
   }
   const restored: ThreadContext = {
     ...parsed,
+    class: THREAD_CLASS_ID, // loadThread 恒 load thread——显式置 class（兼容缺 class 的旧 thread.json）。
     contextWindows: [],
     persistence,
   };

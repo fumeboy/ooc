@@ -67,6 +67,7 @@ describe.skipIf(!hasLlmEnv)("integration: meta-programming", () => {
     );
     const root: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       inbox,
       events,

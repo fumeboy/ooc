@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import {
   disableDebug,
   enableDebug,
@@ -29,7 +30,7 @@ import {
   loopMetaFile,
   loopOutputFile,
 } from "@ooc/core/observable/debug-file";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { applyPrApproval } from "@ooc/builtins/agent/pr/approval-flow";
 import type { ListLoopsResponse, LoopListEntry, LoopMeta } from "./model";
 import { readLlmEnv } from "@ooc/core/thinkable/llm/env";
@@ -382,7 +383,7 @@ export function createRuntimeService(deps: {
         objectId: ref.objectId,
         threadId: ref.threadId,
       };
-      const thread = await readThread(ref, ref.threadId);
+      const thread = await loadObject(THREAD_CLASS_ID, ref, ref.threadId);
       if (!thread) {
         throw new AppServerError(
           "NOT_FOUND",
@@ -466,7 +467,7 @@ export function createRuntimeService(deps: {
         events: thread.events.map((ev) => (ev === target ? decidedEvent : ev)),
         status: "running" as const,
       };
-      await writeThread(updated);
+      await saveObject(updated);
       // 触发 worker 调度 (与 talk-delivery / end auto-reply 同款唤醒路径)
       notifyThreadActivated({
         sessionId: ref.sessionId,

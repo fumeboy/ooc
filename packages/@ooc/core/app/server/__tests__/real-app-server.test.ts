@@ -1,8 +1,9 @@
 import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "bun:test";
-import { readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { readServerConfig } from "../bootstrap/config";
 import { buildServer } from "../index";
 
@@ -96,7 +97,7 @@ describe.skipIf(!shouldRunRealTest)("real app server e2e", () => {
 
     expect(job.status).toBe("done");
 
-    const thread = await readThread(
+    const thread = await loadObject(THREAD_CLASS_ID, 
       { baseDir, sessionId: "real-app-session", objectId: "real-app-object" },
       "root"
     );

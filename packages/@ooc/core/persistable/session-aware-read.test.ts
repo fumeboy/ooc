@@ -44,6 +44,7 @@ async function pathExists(p: string): Promise<boolean> {
 function mkThread(baseDir: string, sessionId: string, objectId: string): ThreadContext {
   return {
     id: "t_test",
+    class: "_builtin/agent/thread",
     status: "running",
     events: [],
     contextWindows: [],

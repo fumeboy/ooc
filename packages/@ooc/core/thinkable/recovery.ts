@@ -10,7 +10,7 @@ import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
  *     await think(nextThread, llmClient);   // 内部 beginLlmLoop 写 llm.input.json
  *                                           // 然后 push call_started + writeThread 落盘
  *                                           // 然后 await llmClient.generate(...)  ← 可能被 SIGKILL / hang
- *     await writeThread(nextThread);
+ *     await saveObject(nextThread);
  *
  * 任何在 generate 期间进程被打断 / 网络挂死的情况:
  *   - llm.input.json 已落盘

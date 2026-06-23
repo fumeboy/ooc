@@ -77,7 +77,7 @@ export const L1_STORIES: Story[] = [
     id: "L1-THREAD-JSON",
     layer: "session",
     expectation: "和某对象会话后 flows/<sid>/objects/<oid>/threads/<tid>/thread.json 出现",
-    design: "thinkable/flow：thread 状态落 thread.json（core seam 派发 @ooc/core/persistable/thread-container-io.ts:writeThread → thread persistable.saveThread）",
+    design: "thinkable/flow：thread 状态落 thread.json（泛型 seam @ooc/core/persistable/runtime-object-io.ts:saveObject → resolvePersistable(thread.class).save=saveThread）",
     run: async ({ app, baseDir }) => {
       const sid = "sb-s-thread";
       const target = "obj_thread";

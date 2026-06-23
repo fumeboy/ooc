@@ -43,6 +43,7 @@ describe("observable llm snapshots", () => {
 
     const thread: ThreadContext = {
       id: "thread-observable",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: []
@@ -106,6 +107,7 @@ describe("observable persistable debug files", () => {
     });
     const thread: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: [],
@@ -137,6 +139,7 @@ describe("observable persistable debug files", () => {
   it("does not touch the disk when thread has no persistence ref", async () => {
     const thread: ThreadContext = {
       id: "ephemeral",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: []
@@ -161,6 +164,7 @@ describe("observable persistable debug files", () => {
     });
     const thread: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: [],
@@ -210,6 +214,7 @@ describe("observable persistable debug files", () => {
     });
     const thread: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       // Wave4 对象模型：file 窗 = OocObjectRef 实例，业务字段 path 下沉 inst.data。
@@ -291,6 +296,7 @@ describe("observable persistable debug files", () => {
 
     const thread: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       // Wave4：file 窗 path 下沉 inst.data（computeFileDiff 读 w.data.path）。

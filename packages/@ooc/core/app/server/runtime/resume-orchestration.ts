@@ -1,5 +1,6 @@
-import { readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 import type { createJobManager } from "./job-manager";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { listSessionIds, scanPausedThreads } from "./thread-query";
 import { canResumeThread } from "./thread-transition";
 
@@ -44,7 +45,7 @@ export async function resumePausedThreadsInSession(
   const resumed: ResumedThread[] = [];
   for (const { objectId, threadId } of paused) {
     const ref = { baseDir: deps.baseDir, sessionId, objectId };
-    const thread = await readThread(ref, threadId);
+    const thread = await loadObject(THREAD_CLASS_ID, ref, threadId);
     if (!thread || !canResumeThread(thread)) {
       continue;
     }

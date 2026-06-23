@@ -44,6 +44,7 @@ describe.skipIf(!shouldRunRealTest)("real thinkloop integration", () => {
     const client = createLlmClient();
     const thread: contextModule.ThreadContext = {
       id: "real-thinkloop",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: []

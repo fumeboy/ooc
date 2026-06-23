@@ -35,7 +35,7 @@ import {
   createStoneObject,
 } from "@ooc/core/persistable";
 import { writeSelf } from "@ooc/builtins/agent/persistable/self-md.js";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
 import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
 import {
@@ -89,6 +89,7 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
 
     const aliceRoot: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: [],
@@ -111,7 +112,7 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
       createdAt: Date.now(),
     });
     aliceRoot.contextWindows = [...aliceRoot.contextWindows, superTalkWindow];
-    await writeThread(aliceRoot);
+    await saveObject(aliceRoot);
 
     // 4) 直接调 deliverTalkMessage 模拟 alice say()——避免依赖 LLM 真的 open
     //    talk method（那是 U1 的 happy path 验证；此处验证 delivery 落点正确）。
@@ -143,7 +144,7 @@ describe.skipIf(!hasLlmEnv)("integration: super-flow-channel", () => {
       sessionId: "super",
       objectId: "alice",
     };
-    const superAlice = await readThread(superAliceRef, delivered.calleeThreadId);
+    const superAlice = await loadObject(THREAD_CLASS_ID, superAliceRef, delivered.calleeThreadId);
     expect(superAlice).toBeDefined();
     expect(superAlice!.persistence?.sessionId).toBe("super");
     expect(superAlice!.persistence?.objectId).toBe("alice");

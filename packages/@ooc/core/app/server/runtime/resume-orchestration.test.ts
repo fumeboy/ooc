@@ -1,17 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createJobManager } from "./job-manager";
 import { resumePausedThreadsInSession } from "./resume-orchestration";
 import { nestedObjectPath } from "@ooc/core/persistable";
-import { readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 /**
  * Resume 编排回归（修「pause 后 resume 100% 崩溃」）。
  *
- * 旧 bug：编排层在入队 resume-thread job 前先 writeThread(applyResumeTransition) 把
+ * 旧 bug：编排层在入队 resume-thread job 前先 saveObject(applyResumeTransition) 把
  * paused→running 落盘；job handler(resume.ts) readThread 后断言 canResumeThread(=paused)
  * → 读到 running → 抛 "is not paused" → thread 永久卡 running。
  *
@@ -35,6 +36,7 @@ describe("resume-orchestration: 编排不预翻转 paused→running", () => {
     await writeFile(join(objectDir, ".flow.json"), JSON.stringify({ class: objectId }), "utf8");
     const fixture: ThreadContext = {
       id: threadId,
+      class: "_builtin/agent/thread",
       status: "paused",
       events: [],
       contextWindows: [],
@@ -55,7 +57,7 @@ describe("resume-orchestration: 编排不预翻转 paused→running", () => {
 
     // 2) 关键：thread **仍 paused**（编排不预翻转）。handler 接手后才转 running——
     //    若回归预翻转成 running，handler 的 canResumeThread 断言会抛 "is not paused"。
-    const reloaded = await readThread({ baseDir, sessionId, objectId }, threadId);
+    const reloaded = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId }, threadId);
     expect(reloaded?.status).toBe("paused");
   });
 
@@ -73,6 +75,7 @@ describe("resume-orchestration: 编排不预翻转 paused→running", () => {
     // status=running：scanPausedThreads 不会扫到它（只扫 paused），故不入队。
     const fixture: ThreadContext = {
       id: threadId,
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: [],

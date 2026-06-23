@@ -182,6 +182,7 @@ export function buildThread(opts: BuildThreadOpts): ThreadContext {
   const objectId = opts.objectId ?? opts.persistence?.objectId;
   const thread: ThreadContext = {
     id,
+    class: THREAD_CLASS_ID,
     status: opts.status ?? "running",
     events: [],
     creatorThreadId: opts.callerThreadId,

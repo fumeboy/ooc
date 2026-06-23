@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect } from "bun:test";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry, createObjectRegistry, type ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { handleExecTool } from "../tools/exec.js";
@@ -26,7 +27,7 @@ import { buildInputItems } from "@ooc/builtins/agent/thread/thinkable/context/in
 import formReadable from "@ooc/builtins/agent/method_exec_form/readable/index.js";
 import type { Data as FormData } from "@ooc/builtins/agent/method_exec_form/types.js";
 import { createFlowObject } from "@ooc/core/persistable/flow-object.js";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import type { ThreadPersistenceRef } from "@ooc/core/_shared/types/thread.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -399,9 +400,9 @@ describe("form inline 持久化往返", () => {
           createdAt: 1,
         }),
       ];
-      await writeThread(thread);
+      await saveObject(thread);
 
-      const restored = await readThread(
+      const restored = await loadObject(THREAD_CLASS_ID, 
         { baseDir, sessionId: "sess_form", objectId: "agent_f" },
         "t_form",
       );

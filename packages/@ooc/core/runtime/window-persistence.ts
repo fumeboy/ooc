@@ -15,7 +15,7 @@ import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectRef } from "./ooc-class.js";
 import type { ObjectRegistry } from "./object-registry.js";
 import { saveObjectData } from "../persistable/object-data.js";
-import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { observeWarn } from "../observable/log-aggregator.js";
 
 export class WindowPersistence {
@@ -44,7 +44,7 @@ export class WindowPersistence {
       reportContextEdit: async () => {
         // manager 的 live 实例 map 是窗状态权威；同步进 thread.contextWindows 后整份落盘。
         thread.contextWindows = Array.from(this.instances.values());
-        await writeThread(thread, this.registry).catch((e) => {
+        await saveObject(thread, this.registry).catch((e) => {
           observeWarn(
             "WindowPersistence.reportContextEdit",
             `[WindowPersistence] writeThread failed: ${(e as Error).message}`,

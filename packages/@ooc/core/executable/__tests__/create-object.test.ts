@@ -15,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 // 注册 builtin class（含 thread persistable）——create_pr 路径经 seam readThread 解析 thread persistable，
-// 须先 register-builtins seed builtinRegistry（否则 thread-container-io fail-loud）。
+// 须先 register-builtins seed builtinRegistry（否则 runtime-object-io fail-loud）。
 import "@ooc/core/runtime/register-builtins.js";
 import { ensureStoneRepo, __resetSerialQueueForTests } from "@ooc/core/persistable";
 import { readSelf } from "@ooc/builtins/agent/persistable/self-md.js";

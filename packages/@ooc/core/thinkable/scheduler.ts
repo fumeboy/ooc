@@ -1,7 +1,7 @@
 import type { LlmClient } from "./llm/types";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { think } from "./thinkloop";
-import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 // thread 业务 policy（compress harvest + child-end 通知）经 thinkable 模块（thinkableOf）调用——
 // core scheduler 只调一个每-tick 钩子、不静态 import thread builtin、不内联读 thread 业务字段。
 import { thinkableOf } from "./resolve.js";
@@ -96,6 +96,6 @@ export async function runScheduler(
     const nextThread = selectNextThread(runningThreads);
     nextThread.lastExecutedAt = Date.now();
     await think(nextThread, llmClient);
-    await writeThread(nextThread);
+    await saveObject(nextThread);
   }
 }

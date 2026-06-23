@@ -15,6 +15,7 @@
  */
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,7 +29,7 @@ import {
   stoneDir,
   type ThreadPersistenceRef,
 } from "@ooc/core/persistable";
-import { writeThread, readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject, loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 import * as contextModule from "@ooc/builtins/agent/thread/thinkable/context/index";
 import type {
   LlmClient,
@@ -197,8 +198,8 @@ describe("[q0c] permission HITL — A. approve 闭环", () => {
       expect(dispatchSpy).not.toHaveBeenCalled();
 
       // 把 paused thread 写盘 (service.decidePermission 走 readThread / writeThread 路径)
-      await writeThread(thread);
-      const persisted = await readThread(ref, ref.threadId);
+      await saveObject(thread);
+      const persisted = await loadObject(THREAD_CLASS_ID, ref, ref.threadId);
       expect(persisted?.status).toBe("paused");
 
       // 2) 调 service.decidePermission(approve)
@@ -212,7 +213,7 @@ describe("[q0c] permission HITL — A. approve 闭环", () => {
       expect(resp.newStatus).toBe("running");
 
       // 3) 重新 readThread 检查 decided 字段 + status
-      const afterDecide = await readThread(ref, ref.threadId);
+      const afterDecide = await loadObject(THREAD_CLASS_ID, ref, ref.threadId);
       expect(afterDecide).toBeDefined();
       expect(afterDecide!.status).toBe("running");
       const askEv2 = afterDecide!.events.find(
@@ -289,7 +290,7 @@ describe("[q0c] permission HITL — B. reject 闭环", () => {
       const llmAsk = makeLlmClient(makeGenerateResult("about to call", [toolCall]));
       await think(thread, llmAsk);
       expect(thread.status).toBe("paused");
-      await writeThread(thread);
+      await saveObject(thread);
 
       const service = makeRuntimeService();
       const resp = await service.decidePermission({
@@ -299,7 +300,7 @@ describe("[q0c] permission HITL — B. reject 闭环", () => {
       });
       expect(resp.newStatus).toBe("running");
 
-      const afterDecide = await readThread(ref, ref.threadId);
+      const afterDecide = await loadObject(THREAD_CLASS_ID, ref, ref.threadId);
       expect(afterDecide!.status).toBe("running");
       const askEv = afterDecide!.events.find(
         (e) => e.category === "permission" && e.kind === "permission_ask",
@@ -382,7 +383,7 @@ describe("[q0c] permission HITL — C. 错误路径", () => {
         id: ref.threadId,
         status: "running",
       });
-      await writeThread(thread);
+      await saveObject(thread);
 
       const service = makeRuntimeService();
       let threw: AppServerError | undefined;
@@ -409,7 +410,7 @@ describe("[q0c] permission HITL — C. 错误路径", () => {
         id: ref.threadId,
         status: "paused",
       });
-      await writeThread(thread);
+      await saveObject(thread);
 
       const service = makeRuntimeService();
       let threw: AppServerError | undefined;
@@ -445,7 +446,7 @@ describe("[q0c] permission HITL — C. 错误路径", () => {
           },
         ],
       });
-      await writeThread(thread);
+      await saveObject(thread);
 
       const service = makeRuntimeService();
       let threw: AppServerError | undefined;
@@ -481,7 +482,7 @@ describe("[q0c] permission HITL — C. 错误路径", () => {
           },
         ],
       });
-      await writeThread(thread);
+      await saveObject(thread);
 
       const service = makeRuntimeService();
       let threw: AppServerError | undefined;

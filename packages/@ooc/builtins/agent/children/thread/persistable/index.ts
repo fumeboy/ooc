@@ -12,7 +12,7 @@
  *
  *   **core 经 seam 派发、不具名 import 本实现**（thread 去特权化，见
  *   `docs/issues/2026-06-23-thread-deprivileging.md` P1）：core/app 引擎落盘/读回一条 thread 容器时调
- *   `core/persistable/thread-container-io.ts` 的 `writeThread`/`readThread`——它经
+ *   `core/persistable/runtime-object-io.ts` 的 `saveObject`/`loadObject`——它经
  *   `resolvePersistable(THREAD_CLASS_ID).save/load` 派发到本 `save`/`load`（**thread 自主持久化**：序列化
  *   逻辑归 thread、core 只触发；object-model 核心 7 = 持久化经 seam 自定义）。本 builtin 不再导出
  *   `writeThread`/`readThread` adapter。

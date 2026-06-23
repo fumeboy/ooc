@@ -23,7 +23,7 @@ import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type { ProcessEvent } from "@ooc/core/_shared/types/thread.js";
 import { buildInputItems } from "@ooc/builtins/agent/thread/thinkable/context/index";
 import { createFlowObject } from "@ooc/core/persistable";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import {
   threadWindowIdOf,
   ROOT_WINDOW_ID,
@@ -116,8 +116,8 @@ describe("[caseA] events 折叠跨 job（scheduler_yielded → reload）持久�
     expect(summarizedRangesOf(thread, threadWinId).length).toBe(1);
 
     // 持久化 + reload（模拟 scheduler_yielded → reload）。
-    await writeThread(thread);
-    const restored = await readThread({ baseDir, sessionId, objectId: "agent_c" }, "t_main");
+    await saveObject(thread);
+    const restored = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId: "agent_c" }, "t_main");
     expect(restored).toBeDefined();
 
     // 折叠态跨 reload 存活（inline thread 窗，无后门、无冷启动丢窗）。
@@ -156,8 +156,8 @@ describe("[caseA] events 折叠跨 job（scheduler_yielded → reload）持久�
     foldDirectly(thread, threadWinId, { fromIdx: 0, toIdx: 3, summary: "root 早期摘要" });
     expect(summarizedRangesOf(thread, threadWinId).length).toBe(1);
 
-    await writeThread(thread);
-    const restored = await readThread({ baseDir, sessionId, objectId: "agent_root" }, "t_root_self");
+    await saveObject(thread);
+    const restored = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId: "agent_root" }, "t_root_self");
     expect(restored).toBeDefined();
     expect(summarizedRangesOf(restored!, threadWinId).length).toBe(1);
 
@@ -182,8 +182,8 @@ describe("[caseA] events 折叠跨 job（scheduler_yielded → reload）持久�
       toIdx: 3,
     };
 
-    await writeThread(thread);
-    const restored = await readThread({ baseDir, sessionId, objectId: "agent_if" }, "t_if");
+    await saveObject(thread);
+    const restored = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId: "agent_if" }, "t_if");
     expect(restored).toBeDefined();
     // inFlightCompress 随 inline thread 窗跨 reload 存活 → reload 后 harvest 能找回 fork、force-wait 仍生效。
     expect(inFlightOf(restored!, threadWinId)).toEqual({ forkThreadId: "t_fork_x", fromIdx: 0, toIdx: 3 });

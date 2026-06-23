@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { dispatchToolCall } from "@ooc/core/executable/tools";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { type ThreadPersistenceRef } from "@ooc/core/persistable";
 import { llmOutputFile } from "@ooc/core/observable/debug-file";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { applyResumeTransition, canResumeThread } from "./thread-transition";
 
 type SavedToolCall = {
@@ -18,7 +19,7 @@ type SavedLlmOutput = {
 };
 
 export async function resumePausedThread(ref: ThreadPersistenceRef) {
-  const thread = await readThread(ref, ref.threadId);
+  const thread = await loadObject(THREAD_CLASS_ID, ref, ref.threadId);
   if (!thread) {
     throw new Error(`thread not found: ${ref.threadId}`);
   }
@@ -52,6 +53,6 @@ export async function resumePausedThread(ref: ThreadPersistenceRef) {
     });
   }
 
-  await writeThread(resumedThread);
+  await saveObject(resumedThread);
   return resumedThread;
 }

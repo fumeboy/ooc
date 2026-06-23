@@ -1,8 +1,9 @@
 import { readdir } from "node:fs/promises";
 import type { Dirent } from "node:fs";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { join } from "node:path";
 import { STONE_CHILDREN_SUBDIR } from "@ooc/core/persistable";
-import { readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 
 /**
  * 扫 flows/{sessionId}/objects/ 下所有 object 的 threads/，
@@ -143,7 +144,7 @@ async function walkObjectDir(
     }
     for (const td of threadDirs) {
       if (!td.isDirectory()) continue;
-      const thread = await readThread({ baseDir, sessionId, objectId }, td.name);
+      const thread = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId }, td.name);
       if (thread?.status && wanted.has(thread.status)) {
         found.push({ objectId, threadId: td.name });
       }

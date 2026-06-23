@@ -64,6 +64,7 @@ export async function makeRootThread(tempRoot: string, prompt: string): Promise<
   const { inbox, events } = bootstrapInboxFromPrompt(prompt);
   const thread: ThreadContext = {
     id: "root",
+    class: "_builtin/agent/thread",
     status: "running",
     inbox,
     events,

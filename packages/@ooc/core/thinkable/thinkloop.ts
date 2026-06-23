@@ -1,7 +1,7 @@
 import { decidePermission, type PendingToolCall } from "../executable/permissions";
 import { dispatchToolCall, getAvailableTools } from "../executable/tools";
 import { beginLlmLoop, finishLlmLoop, isPausing } from "../observable";
-import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import type { ProcessEvent } from "../_shared/types/thread.js"
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 // thinkable 模块经 registry 解析（thinkableOf）调用——core 不再静态 import thread builtin 的
@@ -395,7 +395,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
     // compress v2 force-wait：context 超 hard 且有在途 compress → 切 waiting、本轮不 LLM call
     // （等 summarizer 富摘要、不给 LLM 看 lossy clamp）；无在途则照走 buildInputItems clamp floor。
     if (thinkableOf(thread).maybeForceWaitForCompress({ thread }, llmInput.transcriptTokens ?? 0)) {
-      await writeThread(thread);
+      await saveObject(thread);
       return;
     }
 
@@ -415,7 +415,7 @@ export async function think(thread: ThreadContext, llmClient: LlmClient): Promis
       kind: "call_started",
       loopIndex: loopHandle.loopIndex,
     });
-    await writeThread(thread);
+    await saveObject(thread);
 
     const result = await llmClient.generate({
       input: llmInput.input,

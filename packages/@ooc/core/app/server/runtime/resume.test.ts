@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createFlowObject } from "@ooc/core/persistable";
 import { llmOutputFile } from "@ooc/core/observable/debug-file";
-import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject } from "@ooc/core/persistable/runtime-object-io.js";
+import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { resumePausedThread } from "./resume";
 
 describe("resumePausedThread", () => {
@@ -15,13 +16,15 @@ describe("resumePausedThread", () => {
       const flowRef = await createFlowObject({ baseDir, sessionId: "s1", objectId: "agent" });
       const persistence = { ...flowRef, threadId: "root" } as const;
 
-      await writeThread({
+      const seed: ThreadContext = {
         id: "root",
+        class: "_builtin/agent/thread",
         status: "paused",
         events: [],
-      contextWindows: [],
+        contextWindows: [],
         persistence,
-      });
+      };
+      await saveObject(seed);
 
       await Bun.write(
         llmOutputFile(persistence),

@@ -23,7 +23,8 @@ import {
   sessionMetadataFile,
   __resetSerialQueueForTests,
 } from "@ooc/core/persistable";
-import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import "@ooc/core/runtime/register-builtins.js"; // seed builtinRegistry → saveObject 经 seam resolve thread persistable
+import { saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { scanRunningThreads } from "@ooc/core/app/server/runtime/thread-query";
 import { construct as fileConstruct } from "@ooc/builtins/filesystem/children/file/executable/construct.js";
 import type { ConstructorContext } from "@ooc/core/executable/contract.js";
@@ -192,8 +193,9 @@ describe("flows-worktree-migration（方案 A 真实-world 实测）", () => {
     await createFlowObject({ baseDir, sessionId: sid, objectId });
 
     // 写一个完整 thread（用 writeThread 走真实落盘路径），确保 listThreads 能枚举。
-    await writeThread(
+    await saveObject(
       {
+        class: "_builtin/agent/thread",
         persistence: { baseDir, objectId, sessionId: sid, threadId: "root" },
         contextWindows: [],
         events: [],

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createFlowObject } from "@ooc/core/persistable";
-import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { scanPausedThreads, scanRunningThreads } from "./thread-query";
 
@@ -33,12 +33,13 @@ async function setupThread(
   const ref = await createFlowObject({ baseDir, sessionId, objectId });
   const thread: ThreadContext = {
     id: threadId,
+    class: "_builtin/agent/thread",
     status,
     events: [],
     contextWindows: [],
     persistence: { ...ref, threadId },
   };
-  await writeThread(thread);
+  await saveObject(thread);
 }
 
 describe("scanThreadsByStatus recursion", () => {

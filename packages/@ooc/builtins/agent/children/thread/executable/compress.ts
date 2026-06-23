@@ -20,7 +20,7 @@ import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import { addSummarizedRange } from "@ooc/core/_shared/utils/summarized-ranges.js";
 import { loadBudgetThresholds } from "@ooc/builtins/agent/thread/thinkable/context/budget.js";
 import { shouldAutoCompress } from "@ooc/builtins/agent/thread/thinkable/context/compress-trigger.js";
-import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import type { ThreadWin } from "@ooc/builtins/agent/thread/types.js";
 
 /** 自动压缩保留的末尾 event 条数（保最近叙事；折早期段）。可调。 */
@@ -92,7 +92,7 @@ export async function spawnSummarizerFork(
     win.inFlightCompress = { forkThreadId: childId, fromIdx, toIdx };
     win.compressIntent = undefined;
   }
-  await writeThread(thread);
+  await saveObject(thread);
   return childId;
 }
 

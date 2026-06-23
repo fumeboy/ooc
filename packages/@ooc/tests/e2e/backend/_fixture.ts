@@ -9,6 +9,7 @@
  */
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { nestedObjectPath } from "@ooc/core/persistable";
@@ -19,7 +20,7 @@ import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
 // 重型依赖（Elysia / openai / executable 全家桶）走 lazy import — 测试 skip 时不触发，
 // 避免因 node_modules 未完整安装而连"能不能加载该 spec"都失败。
 type BuildServer = typeof import("@ooc/core/app/server")["buildServer"];
-type ReadThread = typeof import("@ooc/core/persistable/thread-container-io")["readThread"];
+type ReadThread = typeof import("@ooc/core/persistable/runtime-object-io")["loadObject"];
 type CreatePauseStore = typeof import("@ooc/core/app/server/runtime/pause-store")["createPauseStore"];
 type CreateJobManager = typeof import("@ooc/core/app/server/runtime/job-manager")["createJobManager"];
 type StartJobWorker = typeof import("@ooc/core/app/server/runtime/worker")["startJobWorker"];
@@ -27,7 +28,7 @@ type StartJobWorker = typeof import("@ooc/core/app/server/runtime/worker")["star
 let _deps:
   | {
       buildServer: BuildServer;
-      readThread: ReadThread;
+      loadObject: ReadThread;
       createPauseStore: CreatePauseStore;
       createJobManager: CreateJobManager;
       startJobWorker: StartJobWorker;
@@ -38,18 +39,18 @@ async function loadDeps() {
   if (_deps) return _deps;
   const [
     { buildServer },
-    { readThread },
+    { loadObject },
     { createPauseStore },
     { createJobManager },
     { startJobWorker },
   ] = await Promise.all([
     import("@ooc/core/app/server"),
-    import("@ooc/core/persistable/thread-container-io"),
+    import("@ooc/core/persistable/runtime-object-io"),
     import("@ooc/core/app/server/runtime/pause-store"),
     import("@ooc/core/app/server/runtime/job-manager"),
     import("@ooc/core/app/server/runtime/worker"),
   ]);
-  _deps = { buildServer, readThread, createPauseStore, createJobManager, startJobWorker };
+  _deps = { buildServer, loadObject, createPauseStore, createJobManager, startJobWorker };
   return _deps;
 }
 
@@ -323,16 +324,16 @@ export async function readCalleeThread(
   objectId: string,
   threadId: string,
 ): Promise<ThreadContext | undefined> {
-  const { readThread } = await loadDeps();
-  return await readThread({ baseDir, sessionId, objectId }, threadId);
+  const { loadObject } = await loadDeps();
+  return await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId }, threadId);
 }
 
 export async function readUserRootThread(
   baseDir: string,
   sessionId: string,
 ): Promise<ThreadContext | undefined> {
-  const { readThread } = await loadDeps();
-  return await readThread({ baseDir, sessionId, objectId: "user" }, "root");
+  const { loadObject } = await loadDeps();
+  return await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId: "user" }, "root");
 }
 
 export function readFile(baseDir: string, relPath: string): string {
@@ -532,7 +533,7 @@ export async function waitForSuperFlow(
   selfId: string,
   opts: { timeoutMs?: number; intervalMs?: number } = {},
 ): Promise<{ threadId?: string; status?: string }> {
-  const { readThread } = await loadDeps();
+  const { loadObject } = await loadDeps();
   const timeoutMs = opts.timeoutMs ?? 300_000;
   const intervalMs = opts.intervalMs ?? 1_000;
   const deadline = Date.now() + timeoutMs;
@@ -542,7 +543,7 @@ export async function waitForSuperFlow(
     if (threadIds.length > 0) {
       // 取最近创建的一条（id 含时间编码，字典序近似时间序——足够本场景单反思请求用）
       const threadId = threadIds.slice().sort().at(-1)!;
-      const thread = await readThread(
+      const thread = await loadObject(THREAD_CLASS_ID, 
         { baseDir, sessionId: "super", objectId: selfId },
         threadId,
       );

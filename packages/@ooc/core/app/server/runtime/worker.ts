@@ -1,7 +1,8 @@
 import { createLlmClient } from "@ooc/core/thinkable/llm/client";
 import { resolveSuperActor } from "@ooc/core/persistable";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { llmInputFile } from "@ooc/core/observable/debug-file";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { runScheduler } from "@ooc/core/thinkable/scheduler";
 import { detectInterruptedThread, markInterrupted } from "@ooc/core/thinkable/recovery";
 import { stat } from "node:fs/promises";
@@ -74,7 +75,7 @@ export async function runJob(
     return;
   }
 
-  const rootThread = await readThread(
+  const rootThread = await loadObject(THREAD_CLASS_ID, 
     {
       baseDir: config.baseDir,
       sessionId: job.sessionId,
@@ -107,7 +108,7 @@ export async function runJob(
       reason: "max_ticks",
       rounds,
     });
-    await writeThread(rootThread);
+    await saveObject(rootThread);
   }
 
   // scheduler 原地推进 rootThread 并落盘；返回其终态供 processQueuedJobs 对账。
@@ -229,7 +230,7 @@ async function maybeMarkInterrupted(
 ): Promise<void> {
   try {
     const ref = { baseDir, sessionId, objectId, threadId };
-    const thread = await readThread(ref, threadId);
+    const thread = await loadObject(THREAD_CLASS_ID, ref, threadId);
     if (!thread) return;
     let debugInputExists = false;
     try {
@@ -239,7 +240,7 @@ async function maybeMarkInterrupted(
     const detection = detectInterruptedThread(thread, { debugInputExists });
     if (!detection.interrupted) return;
     markInterrupted(thread);
-    await writeThread(thread);
+    await saveObject(thread);
   } catch (err) {
     console.warn(
       `[worker] maybeMarkInterrupted failed for ${sessionId}/${objectId}/${threadId}: ${err instanceof Error ? err.message : String(err)}`,
@@ -296,7 +297,7 @@ async function syncCrossObjectCalleeEnds(
     const calleeRef = { baseDir, sessionId: calleeSessionId, objectId: calleeObjectId };
     let callee: ThreadContext | undefined;
     try {
-      callee = await readThread(calleeRef, view.targetThreadId!);
+      callee = await loadObject(THREAD_CLASS_ID, calleeRef, view.targetThreadId!);
     } catch {
       continue;
     }
@@ -345,7 +346,7 @@ async function syncCrossObjectCalleeEnds(
     caller.waitingOn = undefined;
   }
 
-  await writeThread(caller);
+  await saveObject(caller);
 }
 
 export function startJobWorker(config: ServerConfig): { stop(): void } {

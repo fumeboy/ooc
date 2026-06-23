@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ensureStoneRepo } from "@ooc/core/persistable";
-import { writeThread, readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject, loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 // side-effect：让 builtinRegistry 持有 filesystem/search 等窗类型（resolveObjectMethod / constructor）。
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
@@ -37,6 +37,7 @@ const FILESYSTEM_MEMBER_ID = "_builtin/filesystem";
 function mkSupervisorThread(baseDir: string): any {
   return {
     id: "root",
+    class: "_builtin/agent/thread",
     status: "running",
     events: [],
     persistence: { baseDir, sessionId: "_test_comp", objectId: "supervisor", threadId: "root" },
@@ -120,7 +121,7 @@ test("非持久化往返：member 窗不入 thread-context.json；inline 会话�
       thread.contextWindows.some((w: OocObjectRef) => w.class === FILESYSTEM_MEMBER_ID),
     ).toBe(true);
 
-    await writeThread(thread);
+    await saveObject(thread);
 
     // 落盘的 thread-context.json **不含** filesystem 成员窗（win.isMemberWindow 被
     // isNonPersistedWindow 剔除）。
@@ -138,7 +139,7 @@ test("非持久化往返：member 窗不入 thread-context.json；inline 会话�
 
     // readThread 冷恢复时**内部**重注入 member 窗（thread-persist 末尾调
     // initThreadContextWindows）→ 再次可见、可 exec；会话窗 inline 整窗 hydrate 回。
-    const reread = await readThread({ baseDir, sessionId: "_test_comp", objectId: "supervisor" }, "root");
+    const reread = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId: "_test_comp", objectId: "supervisor" }, "root");
     expect(
       reread?.contextWindows?.some((w: OocObjectRef) => w.class === FILESYSTEM_MEMBER_ID),
     ).toBe(true);

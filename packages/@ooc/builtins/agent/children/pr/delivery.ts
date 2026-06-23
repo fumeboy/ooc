@@ -17,12 +17,13 @@
  */
 
 import { stat } from "node:fs/promises";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import {
   createFlowObject,
   createFlowSession,
   sessionMetadataFile,
 } from "@ooc/core/persistable/index.js";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import { SUPER_SESSION_ID, PR_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
@@ -93,13 +94,14 @@ export async function deliverPrWindowToReviewers(
     const threadId = prReviewThreadId(reviewerObjectId, issueId);
     await createFlowObject({ baseDir, sessionId: SUPER_SESSION_ID, objectId: reviewerObjectId });
 
-    let thread = await readThread(
+    let thread = await loadObject(THREAD_CLASS_ID, 
       { baseDir, sessionId: SUPER_SESSION_ID, objectId: reviewerObjectId },
       threadId,
     );
     if (!thread) {
       thread = {
         id: threadId,
+        class: "_builtin/agent/thread",
         status: "running",
         events: [],
         contextWindows: [],
@@ -143,7 +145,7 @@ export async function deliverPrWindowToReviewers(
       thread.waitingOn = undefined;
     }
 
-    await writeThread(thread);
+    await saveObject(thread);
     notifyThreadActivated({ sessionId: SUPER_SESSION_ID, objectId: reviewerObjectId, threadId });
     delivered.push({ reviewerObjectId, threadId, windowId });
   }
@@ -177,7 +179,7 @@ export async function routePrRepairMessage(
   if (!authorThreadId || !authorThreadId.trim()) {
     return { ok: false, code: "NO_AUTHOR_THREAD", message: "authorThreadId required for repair routing" };
   }
-  const thread = await readThread(
+  const thread = await loadObject(THREAD_CLASS_ID, 
     { baseDir, sessionId: SUPER_SESSION_ID, objectId: authorObjectId },
     authorThreadId,
   );
@@ -209,7 +211,7 @@ export async function routePrRepairMessage(
     thread.inboxSnapshotAtWait = undefined;
     thread.waitingOn = undefined;
   }
-  await writeThread(thread as ThreadContext);
+  await saveObject(thread as ThreadContext);
   notifyThreadActivated({
     sessionId: SUPER_SESSION_ID,
     objectId: authorObjectId,

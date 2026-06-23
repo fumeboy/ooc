@@ -72,6 +72,13 @@ export type ThreadMessage = {
 export type ThreadContext = {
   /** 线程唯一标识；同时用于 XML context 中的 thread id。 */
   id: string;
+  /**
+   * 本对象的注册 class（恒 `_builtin/agent/thread`）——让运行时 thread 像 `OocObjectInstance{id,class,data}`
+   * 一样**自带 class 标识**，使 core 能**按 class 泛型持久化**（`saveObject(obj)` 读 `obj.class` →
+   * `resolvePersistable(class).save`），而非被告知"这是 thread"。buildThread / loadThread 恒置；
+   * thread 去特权化（issue 2026-06-23-thread-deprivileging P1）。
+   */
+  class: string;
   /** 调度状态；status="waiting" 表示等待 inbox 新消息，不再有 waitingType 细分。 */
   status: ThreadStatus;
   /** 当前线程的过程事件流，会被转换成 system message 之后的普通 LLM messages。 */

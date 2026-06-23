@@ -48,6 +48,7 @@ describe("think", () => {
   it("执行单轮 think 并记录 text、function_call 与 function_call_output 事件", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-1",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: []
@@ -118,6 +119,7 @@ describe("think", () => {
   it("pause 时在 tool 执行前把线程改为 paused", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-2",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: []
@@ -145,6 +147,7 @@ describe("think", () => {
   it("llm 失败时写入 inject 并把线程改为 failed", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-3",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: []
@@ -176,6 +179,7 @@ describe("think", () => {
   it("tool 失败时写入 inject 且停止后续 tool", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-4",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: []
@@ -215,6 +219,7 @@ describe("think", () => {
   it("text-only response does not implicitly wait without a wait tool call", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-text-only",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [
         {
@@ -251,6 +256,7 @@ describe("think", () => {
   it("连续多轮 think 可以跑通 open（args 给齐时 open 立即提交 form）触发 todo_window 直建", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-5",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       // end/todo 已从 agent agency 迁回 thread 作用域（注册 `_builtin/agent/thread`）；exec 须经
@@ -315,6 +321,7 @@ describe("think", () => {
   it("buildInputItems 产出的 system xml 会进入 llm 输入", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-6",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [
         {
@@ -398,6 +405,7 @@ describe("think", () => {
   it("observable 记录的 llm 输入输出可以检查 think 过程", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-7",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [
         {
@@ -518,6 +526,7 @@ describe("think 失败终态结构化 (observability)", () => {
   it("LLM 超时 → thread.status='failed' + statusReason='llm_timeout' + lastError 有内容", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-timeout",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: []
@@ -550,6 +559,7 @@ describe("think 失败终态结构化 (observability)", () => {
   it("其他 think 异常 → statusReason='think_error'", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-err",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: []
@@ -576,6 +586,7 @@ describe("think 失败终态结构化 (observability)", () => {
   it("透传 thread.llmTimeoutMs 到 generate 的 params.timeoutMs (plumbing)", async () => {
     const thread: contextModule.ThreadContext = {
       id: "thread-task-timeout",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: [],

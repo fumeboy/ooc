@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createJobManager } from "./job-manager";
 import { runJob, processQueuedJobs, type RuntimeJobResult } from "./worker";
 import type { ServerConfig } from "../bootstrap/config";
 import { nestedObjectPath } from "@ooc/core/persistable";
-import { readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { RuntimeJob } from "./types";
 
@@ -36,6 +37,7 @@ describe("runJob scheduler yield 自唤醒", () => {
     await mkdir(threadDir, { recursive: true });
     const fixture: ThreadContext = {
       id: threadId,
+      class: "_builtin/agent/thread",
       status: "running",
       events: [
         { category: "llm_interaction", kind: "call_started", loopIndex: 0 },
@@ -70,7 +72,7 @@ describe("runJob scheduler yield 自唤醒", () => {
     expect(result?.threadStatus).toBe("running");
 
     // 2) 落盘后的 thread.events 末尾多了一条 scheduler_yielded
-    const reloaded = await readThread({ baseDir, sessionId, objectId }, threadId);
+    const reloaded = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId }, threadId);
     expect(reloaded).toBeDefined();
     const last = reloaded!.events[reloaded!.events.length - 1];
     expect(last.category).toBe("context_change");
@@ -94,6 +96,7 @@ describe("runJob scheduler yield 自唤醒", () => {
     await mkdir(threadDir, { recursive: true });
     const fixture: ThreadContext = {
       id: threadId,
+      class: "_builtin/agent/thread",
       status: "done",
       events: [],
       contextWindows: [],
@@ -123,7 +126,7 @@ describe("runJob scheduler yield 自唤醒", () => {
 
     expect(result?.threadStatus).toBe("done");
 
-    const reloaded = await readThread({ baseDir, sessionId, objectId }, threadId);
+    const reloaded = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId }, threadId);
     // events 不应被追加
     expect(reloaded!.events).toHaveLength(0);
     // 不应有任何新 queued job

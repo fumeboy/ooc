@@ -53,6 +53,7 @@ function thread(overrides: Partial<ThreadContext> & { windows?: WinSpec[] }): Th
   const { windows, ...rest } = overrides;
   const t: ThreadContext = {
     id: "t",
+    class: "_builtin/agent/thread",
     status: "running",
     events: [],
     contextWindows: (windows ?? []).map((w) => w.ref),

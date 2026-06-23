@@ -11,10 +11,11 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeThread, readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject, loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import { materializeWindow } from "@ooc/core/runtime/session-object-table";
 import { __resetSerialQueueForTests } from "../index";
@@ -44,9 +45,9 @@ describe("readThread — thread-context.json 单一权威读路径", () => {
     // 不写任何 registry，验证 readThread 不会凭空投影出未被 thread-context.json 引用的对象。
     const thread = makeThread({ id: "t_main", persistence, skipCreatorWindow: true });
     thread.contextWindows = [];
-    await writeThread(thread);
+    await saveObject(thread);
 
-    const restored = await readThread(flowRef, "t_main");
+    const restored = await loadObject(THREAD_CLASS_ID, flowRef, "t_main");
     expect(restored).toBeDefined();
     const ghost = restored!.contextWindows.find((w) => w.id === "todo_ghost");
     expect(ghost).toBeUndefined();
@@ -67,9 +68,9 @@ describe("readThread — thread-context.json 单一权威读路径", () => {
         createdAt: 1,
       }),
     ];
-    await writeThread(thread);
+    await saveObject(thread);
 
-    const restored = await readThread(flowRef, "t_main");
+    const restored = await loadObject(THREAD_CLASS_ID, flowRef, "t_main");
     const ids = restored!.contextWindows.map((w) => w.id);
     expect(ids).toContain("todo_legacy");
   });
@@ -86,7 +87,7 @@ describe("readThread — thread-context.json 单一权威读路径", () => {
     );
     expect(selfInMem?.id).toBe("agent_p52"); // 内存中确有 self 门面窗
 
-    await writeThread(thread);
+    await saveObject(thread);
 
     // thread.json 落盘后整体不含 contextWindows 字段（stripVolatileForPersist 剥离）。
     const rawThreadJson = JSON.parse(await readFile(threadFile(persistence), "utf8")) as {
@@ -95,7 +96,7 @@ describe("readThread — thread-context.json 单一权威读路径", () => {
     expect(rawThreadJson.contextWindows).toBeUndefined();
 
     // reload 后 self window 由 init 幂等重注入，不丢
-    const restored = await readThread(flowRef, "t_main");
+    const restored = await loadObject(THREAD_CLASS_ID, flowRef, "t_main");
     const selfRestored = restored!.contextWindows.find((w) => w.id === "agent_p52");
     expect(selfRestored).toBeDefined();
     expect(

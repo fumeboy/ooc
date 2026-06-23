@@ -91,6 +91,7 @@ describe.skipIf(!hasLlmEnv)("integration: backend-relation-self-write-on-talk", 
     const msgId = `msg_init_${Math.random().toString(36).slice(2, 10)}`;
     const assistantThread: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       inbox: [
         {

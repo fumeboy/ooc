@@ -7,7 +7,7 @@ import {
   threadDir,
   STONE_CHILDREN_SUBDIR,
 } from "@ooc/core/persistable";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { defaultServerLoader } from "@ooc/core/runtime/server-loader";
 import { resolveStoneIdentityRef } from "@ooc/core/persistable";
 import { createObjectRegistry } from "@ooc/core/runtime/object-registry";
@@ -226,7 +226,7 @@ async function buildListThreadsItem(args: {
   // 读 thread.json：损坏 / ENOENT → 退化（保持 base 的 status="failed"）
   let thread;
   try {
-    thread = await readThread({ baseDir, sessionId, objectId }, threadId);
+    thread = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId, objectId }, threadId);
   } catch {
     return base;
   }
@@ -423,13 +423,14 @@ export function createFlowsService(deps: {
         objectId: USER_OBJECT_ID,
         threadId: "root",
       } as const;
-      let userThread: ThreadContext | undefined = await readThread(
+      let userThread: ThreadContext | undefined = await loadObject(THREAD_CLASS_ID, 
         { baseDir: deps.baseDir, sessionId, objectId: USER_OBJECT_ID },
         "root",
       );
       if (!userThread) {
         userThread = {
           id: "root",
+          class: THREAD_CLASS_ID,
           status: "running",
           events: [],
           // user.root 不注入 creator window：user 是一切交互的起点，没有"创建它的人"，
@@ -508,7 +509,7 @@ export function createFlowsService(deps: {
         objectId: USER_OBJECT_ID,
         threadId: "root",
       } as const;
-      const userThread = await readThread(
+      const userThread = await loadObject(THREAD_CLASS_ID, 
         { baseDir: deps.baseDir, sessionId, objectId: USER_OBJECT_ID },
         "root",
       );
@@ -578,7 +579,7 @@ export function createFlowsService(deps: {
 
       // initialMessage 缺省：仅持久化 talk_window；提供时走 deliverTalkMessage（同 seedSession）
       if (!initialMessage || !initialMessage.trim()) {
-        await writeThread(userThread);
+        await saveObject(userThread);
         return {
           sessionId,
           talkWindowId,
@@ -628,6 +629,7 @@ export function createFlowsService(deps: {
       const persistence = { ...ref, threadId: "root" } as const;
       const thread = {
         id: "root",
+        class: THREAD_CLASS_ID,
         status: "running",
         events: [],
         contextWindows: [],
@@ -638,7 +640,7 @@ export function createFlowsService(deps: {
         title: initialMessage ? initialMessage.slice(0, 60) : `flow ${objectId}`,
       });
       await injectPeerWindowsIfObjectThread(thread);
-      await writeThread(initialMessage ? appendInboxMessage(thread, initialMessage) : thread);
+      await saveObject(initialMessage ? appendInboxMessage(thread, initialMessage) : thread);
       // 关键：只有 initialMessage 不为空才 enqueue job——
       // 空 events 的 thread 跑 LLM 会被 Claude 代理拒绝（messages 必须含 user role），
       // 立即 status=failed，后续 continue 也救不回来。
@@ -774,7 +776,7 @@ export function createFlowsService(deps: {
      */
     async getThread({ sessionId, objectId, threadId }: { sessionId: string; objectId: string; threadId: string }) {
       await ensureFlowObjectExists(sessionId, objectId);
-      const thread = await readThread({ baseDir: deps.baseDir, sessionId, objectId }, threadId);
+      const thread = await loadObject(THREAD_CLASS_ID, { baseDir: deps.baseDir, sessionId, objectId }, threadId);
       if (!thread) {
         throw new AppServerError(
           "NOT_FOUND",
@@ -825,7 +827,7 @@ export function createFlowsService(deps: {
       targetWindowId?: string;
     }) {
       await ensureSessionExists(sessionId);
-      const userThread = await readThread(
+      const userThread = await loadObject(THREAD_CLASS_ID, 
         { baseDir: deps.baseDir, sessionId, objectId: USER_OBJECT_ID },
         "root",
       );

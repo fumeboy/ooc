@@ -5,6 +5,7 @@ import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 function makeThread(events: ThreadContext["events"]): ThreadContext {
   return {
     id: "t1",
+    class: "_builtin/agent/thread",
     status: "running",
     events,
     contextWindows: [],

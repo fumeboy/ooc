@@ -35,7 +35,8 @@
  */
 
 import { createFlowObject, createFlowSession, sessionMetadataFile, resolveSuperActor } from "@ooc/core/persistable/index.js";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { stat } from "node:fs/promises";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
@@ -104,7 +105,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   //   且创建者在另一个 session（callerThread.creatorSessionId 与自身 session 不同，典型
   //   super-alice 在 "super" session 回报 user-session 的创建者）→ 派回 creatorSessionId。
   //   这条覆盖 reflectable super→origin 回报通道：creator talk_window 必须能跨 session
-  //   找到创建者 thread，否则 readThread(calleeSessionId=自身 session) 永远找不到对端。
+  //   找到创建者 thread，否则 loadObject(THREAD_CLASS_ID, calleeSessionId=自身 session) 永远找不到对端。
   const isCreatorReply = isSelfThreadWindow(callerWindow.id) && callerWindow.target === callerRef.objectId;
   const crossSessionCreatorReply =
     isCreatorReply &&
@@ -121,7 +122,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   let calleeThread: ThreadContext | undefined;
 
   if (calleeThreadId) {
-    calleeThread = await readThread(
+    calleeThread = await loadObject(THREAD_CLASS_ID, 
       { baseDir: callerRef.baseDir, sessionId: calleeSessionId, objectId: calleeObjectId },
       calleeThreadId,
     );
@@ -143,6 +144,7 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
     calleeThreadId = generateCalleeThreadId(callerRef.objectId);
     calleeThread = {
       id: calleeThreadId,
+      class: THREAD_CLASS_ID,
       status: "running",
       events: [],
       contextWindows: [],
@@ -212,8 +214,8 @@ export async function deliverTalkMessage(input: TalkDeliveryInput): Promise<Talk
   }
 
   // 4) 持久化双方
-  await writeThread(callerThread);
-  await writeThread(calleeThread);
+  await saveObject(callerThread);
+  await saveObject(calleeThread);
 
   // 5) 状态翻转 → 通知 runtime。callback 自己决定要不要入队 worker。
   //    历史上这里对 user 短路（避免 user 被 worker 跑），现在改在 buildServer 的

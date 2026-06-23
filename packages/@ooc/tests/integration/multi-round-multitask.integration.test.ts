@@ -72,6 +72,7 @@ describe.skipIf(!hasLlmEnv)("integration: multi-round-multitask", () => {
     );
     const root: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       inbox,
       events,

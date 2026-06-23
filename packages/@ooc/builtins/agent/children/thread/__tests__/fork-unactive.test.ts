@@ -12,7 +12,7 @@ import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { openForkChild } from "@ooc/builtins/agent/thread/executable/fork.js";
 import { handleCloseTool } from "@ooc/core/executable/tools/close.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
-import { writeThread, readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject, loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 
@@ -89,7 +89,7 @@ describe("thread.unactive（关 fork 窗 → 子线程收无订阅者通知、�
     // 给 child 手挂一条孙线程 + child 持有指向它的 fork 窗（模拟 child 自己 fork 过）。
     const grandId = "t_grand";
     const grand: ThreadContext = {
-      id: grandId, status: "running", events: [], contextWindows: [],
+      id: grandId, class: "_builtin/agent/thread", status: "running", events: [], contextWindows: [],
       parentThreadId: childId, creatorThreadId: childId, creatorObjectId: SELF,
     };
     child.childThreads = { [grandId]: grand };
@@ -122,13 +122,13 @@ describe("thread.unactive（关 fork 窗 → 子线程收无订阅者通知、�
     const { childId, forkId, child } = forkWithWindow(parent, SELF, "子");
 
     // 模拟子线程跑过 ≥1 tick：其独立 thread.json 落盘为 running。
-    await writeThread(child);
+    await saveObject(child);
     // 关 fork 窗 → unactive 给 child 发通知 + 即时刷盘。
     await handleCloseTool(parent, { window_id: forkId, reason: "弃" }, builtinRegistry);
     expect(child.status).toBe("running");
 
     // reload：从盘读回 child → 仍 running + inbox 留有 system 通知。
-    const reloaded = await readThread({ baseDir, sessionId: "s", objectId: SELF }, childId);
+    const reloaded = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId: "s", objectId: SELF }, childId);
     expect(reloaded?.status).toBe("running");
     expect((reloaded?.inbox ?? []).some((m) => m.source === "system" && m.content.includes("无消息订阅者"))).toBe(true);
   });

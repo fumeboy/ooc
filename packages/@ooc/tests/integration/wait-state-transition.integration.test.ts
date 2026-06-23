@@ -48,6 +48,7 @@ describe.skipIf(!hasLlmEnv)("integration: wait-state-transition", () => {
     );
     const root: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       inbox,
       events,

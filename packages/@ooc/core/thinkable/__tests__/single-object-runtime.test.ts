@@ -1,5 +1,6 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 // 注册 builtin 窗类型（_builtin/agent + agent/plan…）—— scheduler 经 runtime.instantiate
@@ -11,7 +12,7 @@ import {
   llmOutputFile,
   loopMetaFile,
 } from "../../observable/debug-file";
-import { readThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { LlmClient, LlmGenerateResult, LlmToolCall } from "../llm/types";
@@ -61,6 +62,7 @@ describe("single object runtime", () => {
     });
     const root: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       // agency 方法（plan/...）已从 root 迁到 `_builtin/agent` 类；exec 须经 agent 面窗调用。
@@ -136,7 +138,7 @@ describe("single object runtime", () => {
     // _ref，权威字段在 plan 的 data.json。reload 经 readThread（thread-context.json → data.json
     // hydrate）才能拿到完整 plan window —— 直接 parse thread.json 不再含 contextWindows。
     expect(savedThread.contextWindows).toBeUndefined();
-    const reloaded = await readThread(ref, "root");
+    const reloaded = await loadObject(THREAD_CLASS_ID, ref, "root");
     const savedPlanWindow = (reloaded?.contextWindows ?? []).find(
       (w) => w.class === "_builtin/agent/plan",
     );

@@ -32,7 +32,7 @@ import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import thinkable from "./thinkable/index.js";
 import persistable from "./persistable/index.js";
-import { writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import type { Data } from "./types.js";
 
 /**
@@ -95,7 +95,7 @@ const unactive: ObjectLifecycleHook = {
       source: "system",
     };
     appendInbox(t, notice); // 写自身 inbox + push inbox_message_arrived 事件（waiting 由此唤醒）
-    if (t.persistence) await writeThread(t);
+    if (t.persistence) await saveObject(t);
   },
 };
 

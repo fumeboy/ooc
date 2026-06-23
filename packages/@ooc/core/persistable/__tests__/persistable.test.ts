@@ -1,5 +1,6 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, test } from "bun:test";
 import {
@@ -12,7 +13,7 @@ import {
   writeDebugInput,
   writeDebugOutput,
 } from "@ooc/core/observable/debug-file";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { writeThreadContext } from "@ooc/builtins/agent/thread/persistable/flow-thread-context";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 // 触发 builtin class 注册（loadThread/hydrate 用 builtinRegistry.has 判定保留/丢弃窗）。
@@ -54,14 +55,15 @@ describe("persistable single object flow", () => {
     });
     const thread: ThreadContext = {
       id: "root",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: [],
       persistence: { ...ref, threadId: "root" }
     };
 
-    await writeThread(thread);
-    const restored = await readThread(ref, "root");
+    await saveObject(thread);
+    const restored = await loadObject(THREAD_CLASS_ID, ref, "root");
 
     expect(restored?.id).toBe("root");
     expect(restored?.status).toBe("running");
@@ -83,12 +85,13 @@ describe("persistable single object flow", () => {
     // 先写一份最小 thread.json（不含 contextWindows，退役后的形态）。
     const thread: ThreadContext = {
       id: "legacy",
+      class: "_builtin/agent/thread",
       status: "running",
       events: [],
       contextWindows: [],
       persistence
     };
-    await writeThread(thread);
+    await saveObject(thread);
     // 直接构造 thread-context.json：inline 一个悬空 type ("issue"，无 class 字段) + 一个
     // 已注册 class 的窗 (agent/todo)。issue 无 class → drop；todo 已注册 → 保留。
     await writeThreadContext(persistence, [
@@ -104,7 +107,7 @@ describe("persistable single object flow", () => {
       },
     ]);
 
-    const restored = await readThread(ref, "legacy");
+    const restored = await loadObject(THREAD_CLASS_ID, ref, "legacy");
 
     expect(restored).toBeDefined();
     expect(restored?.id).toBe("legacy");
@@ -122,7 +125,7 @@ describe("persistable single object flow", () => {
       objectId: "obj"
     });
 
-    const restored = await readThread(ref, "missing");
+    const restored = await loadObject(THREAD_CLASS_ID, ref, "missing");
 
     expect(restored).toBeUndefined();
   });

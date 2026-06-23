@@ -26,7 +26,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFlowObject, __resetSerialQueueForTests } from "../index";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { threadFile } from "@ooc/builtins/agent/thread/persistable/thread-json";
 import type { FlowObjectRef, ThreadPersistenceRef } from "../common";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
@@ -110,7 +110,7 @@ describe("thread-context bypass reload regression", () => {
         createdAt: 1,
       }),
     ];
-    await writeThread(thread);
+    await saveObject(thread);
 
     // thread.json 磁盘内容：contextWindows 字段已退役，不应出现。
     const rawThreadJson = JSON.parse(await readFile(threadFile(persistence), "utf8")) as Record<
@@ -120,7 +120,7 @@ describe("thread-context bypass reload regression", () => {
     expect(rawThreadJson.contextWindows).toBeUndefined();
 
     // readThread 完全靠 thread-context.json hydrate（builtin todo inline）。
-    const restored = await readThread(
+    const restored = await loadObject(THREAD_CLASS_ID, 
       { baseDir, sessionId: "sess_retire", objectId: "agent_r" },
       "t_main",
     );
@@ -143,7 +143,7 @@ describe("thread-context bypass reload regression", () => {
     callerThread.contextWindows = [talkWindow];
 
     // deliverTalkMessage 内部：createFlowObject(callee) + init 注入 builtin 窗 +
-    // writeThread(callerThread) & writeThread(calleeThread)（单点刷 thread-context.json）。
+    // saveObject(callerThread) & saveObject(calleeThread)（单点刷 thread-context.json）。
     const result = await deliverTalkMessage({
       caller: { thread: callerThread, talkWindow: viewOf(talkWindow, callerThread) },
       content: "hello callee",
@@ -152,7 +152,7 @@ describe("thread-context bypass reload regression", () => {
     expect(result.calleeObjectId).toBe("agent_callee");
 
     // reload callee thread —— 无 fallback，纯靠 thread-context.json round-trip。
-    const calleeReloaded = await readThread(
+    const calleeReloaded = await loadObject(THREAD_CLASS_ID, 
       { baseDir, sessionId: "sess_deliver", objectId: "agent_callee" },
       result.calleeThreadId,
     );
@@ -162,7 +162,7 @@ describe("thread-context bypass reload regression", () => {
     expect((calleeReloaded?.contextWindows ?? []).length).toBeGreaterThan(0);
 
     // caller 会话窗（builtin thread class，inline）也经 writeThread 单点刷 → reload 还原。
-    const callerReloaded = await readThread(callerRef, "root");
+    const callerReloaded = await loadObject(THREAD_CLASS_ID, callerRef, "root");
     const callerIds = (callerReloaded?.contextWindows ?? []).map((w) => w.id);
     expect(callerIds).toContain(talkWindowId);
   });
@@ -180,10 +180,10 @@ describe("thread-context bypass reload regression", () => {
     const userThread = makeThread({ id: "root", persistence: userPersist, skipCreatorWindow: true });
     const talkWindow = makeThreadWindow(userThread, talkWindowId, "agent_t");
     userThread.contextWindows = [...(userThread.contextWindows ?? []), talkWindow];
-    await writeThread(userThread);
+    await saveObject(userThread);
 
     // reload user.root —— 会话窗（builtin inline）经 thread-context.json round-trip 还原。
-    const reloaded = await readThread(userRef, "root");
+    const reloaded = await loadObject(THREAD_CLASS_ID, userRef, "root");
     const ids = (reloaded?.contextWindows ?? []).map((w) => w.id);
     expect(ids).toContain(talkWindowId);
   });

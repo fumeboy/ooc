@@ -47,6 +47,7 @@ export interface MakeThreadOpts {
 export function makeThread(opts: MakeThreadOpts = {}): ThreadContext {
   const thread: ThreadContext = {
     id: opts.id ?? "t_root",
+    class: "_builtin/agent/thread",
     status: opts.status ?? "running",
     events: opts.events ?? [],
     parentThreadId: opts.parentThreadId,

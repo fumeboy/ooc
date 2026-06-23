@@ -8,6 +8,7 @@ import {
 function makeThread(overrides: Partial<ThreadContext> = {}): ThreadContext {
   return {
     id: "root",
+    class: "_builtin/agent/thread",
     status: "running",
     events: [],
     contextWindows: [],

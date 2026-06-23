@@ -127,6 +127,7 @@ async function makeThread(flow: {
   const { inbox, events } = bootstrapInboxFromPrompt(PROMPT);
   const thread: ThreadContext = {
     id: "root",
+    class: "_builtin/agent/thread",
     status: "running",
     inbox,
     events,

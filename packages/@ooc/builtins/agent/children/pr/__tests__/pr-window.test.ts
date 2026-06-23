@@ -15,6 +15,7 @@
  * （new_feat_branch / create_pr_and_invite_reviewers）归位到 thread class（reflect_request 投影窗 surface）。
  */
 import { mkdir, mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -25,7 +26,7 @@ import {
 } from "@ooc/core/persistable";
 import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { readPrIssue } from "../persistable/pr-issue.js";
-import { readThread, writeThread } from "@ooc/core/persistable/thread-container-io.js";
+import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
@@ -111,6 +112,7 @@ async function openPr(
 function reviewerThread(baseDir: string, reviewerObjectId: string, threadId: string): ThreadContext {
   return {
     id: threadId,
+    class: "_builtin/agent/thread",
     status: "running",
     events: [],
     contextWindows: [],
@@ -220,7 +222,7 @@ describe("pr object method", () => {
     // 先建 super(foo) thread（PR 由它发起；authorThreadId 指向它）
     const superFooThreadId = "t_superfoo";
     const superFoo = reviewerThread(baseDir, "foo", superFooThreadId);
-    await writeThread(superFoo);
+    await saveObject(superFoo);
 
     const { issueId } = await openPr(
       baseDir, "foo", "share into supervisor land",
@@ -246,7 +248,7 @@ describe("pr object method", () => {
     expect(parsed.repair_routed).toBe(true);
 
     // super(foo) thread 收到回修 message
-    const reloaded = await readThread({ baseDir, sessionId: "super", objectId: "foo" }, superFooThreadId);
+    const reloaded = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId: "super", objectId: "foo" }, superFooThreadId);
     const repairMsg = reloaded?.inbox?.find((m) => m.content.includes("被 reject"));
     expect(repairMsg).toBeDefined();
     expect(reloaded?.status).toBe("running");
@@ -279,7 +281,7 @@ describe("deliverPrWindowToReviewers（投递）", () => {
 
     for (const reviewer of reviewers) {
       const tid = prReviewThreadId(reviewer, issueId);
-      const t = await readThread({ baseDir, sessionId: "super", objectId: reviewer }, tid);
+      const t = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId: "super", objectId: reviewer }, tid);
       expect(t).toBeDefined();
       const win = t!.contextWindows?.find((w) => w.id === prWindowId(issueId));
       expect(win?.class).toBe(PR_CLASS_ID);
@@ -298,7 +300,7 @@ describe("deliverPrWindowToReviewers（投递）", () => {
     await deliverPrWindowToReviewers({ baseDir, issueId, reviewers, authorObjectId: "foo", title: "x" });
     await deliverPrWindowToReviewers({ baseDir, issueId, reviewers, authorObjectId: "foo", title: "x" });
     const tid = prReviewThreadId("supervisor", issueId);
-    const t = await readThread({ baseDir, sessionId: "super", objectId: "supervisor" }, tid);
+    const t = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId: "super", objectId: "supervisor" }, tid);
     const prWins = (t!.contextWindows ?? []).filter((w) => w.class === PR_CLASS_ID);
     expect(prWins.length).toBe(1);
   });
@@ -322,7 +324,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
 
     // super(foo) thread（沉淀发起者）
     const superFoo = reviewerThread(baseDir, "foo", "t_superfoo");
-    await writeThread(superFoo);
+    await saveObject(superFoo);
 
     // ① new_feat_branch(intent) 绑定（method 签名 (ctx, args)）
     const open1 = await executeNewFeatBranch({ ownerThread: superFoo, args: {} } as never, { intent: "share into bob" });
@@ -348,7 +350,7 @@ describe("resume 回修循环（new_feat_branch 重绑 + re-submit）", () => {
       expect(rc.verdict).toBe("changes-requested");
       expect(rc.repairRouted).toBe(true);
     }
-    const afterRc = await readThread({ baseDir, sessionId: "super", objectId: "foo" }, "t_superfoo");
+    const afterRc = await loadObject(THREAD_CLASS_ID, { baseDir, sessionId: "super", objectId: "foo" }, "t_superfoo");
     expect(afterRc?.inbox?.some((m) => m.content.includes("需修改"))).toBe(true);
 
     // resume：同 intent 重绑（request_changes 时旧 worktree + 编辑都在）
