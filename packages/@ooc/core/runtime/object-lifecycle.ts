@@ -5,8 +5,10 @@
  * `.ooc-world-meta/.../children/object/self.md`（对象生命周期核心）。
  *
  * `ContextWindow` 是对 object 的引用；`close` 移除一个引用；引用计数清空触发可选的 `unactive`。
- * 本模块**泛型、零 thread builtin import**——只 import core 内部类型/谓词；通知语义等
- * thread-specific policy 活在 thread builtin 的 unactive body。
+ * 本模块是**泛型引用计数 / active·unactive 派发引擎**——派发 policy body 全归各 class 的钩子，core 不
+ * special-case 任何 class。**不 value-import 任何 builtin**；仅 `import type` thread 的 `ThreadContext`
+ * （运行时擦除、无环）作 refcount 遍历的形状，并据此走内存线程树（`reachableThreads`：`_parentThreadRef`/
+ * `childThreads`）统计引用 + 解析钩子 self。通知语义等 thread-specific policy 活在 thread builtin 的 unactive body。
  */
 import type { OocObjectRef, OocObjectInstance } from "./ooc-class.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";

@@ -71,7 +71,7 @@ export const talkMethod: ObjectMethod<Data> = {
       });
       // 父侧 fork 会话窗（指向子线程；say 经 targetThreadId 走内存树派送）。
       const forkWin = materializeWindow(ownerThread, {
-        id: generateWindowId(THREAD_CLASS_ID),
+        id: generateWindowId("talk"),
         class: THREAD_CLASS_ID,
         data: { target: selfObjectId, targetThreadId: child.id, isForkWindow: true },
         parentWindowId: ROOT_WINDOW_ID,

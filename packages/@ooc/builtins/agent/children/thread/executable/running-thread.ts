@@ -8,8 +8,9 @@
  * （清掉 point-1 遗留的 deferred-red）。
  *
  * 两个变体：
- * - `runningThread(ctx)`：**抛**——给 executable 载体方法（end/new_feat_branch/create_pr/fork construct/unactive）。
+ * - `runningThread(ctx)`：**抛**——给 executable 载体方法（end / new_feat_branch / create_pr）。
  *   缺 ownerThread 是配置错误（这些方法只在 thinkloop 内被调、runtime 必注入），须 fail-loud。
+ *   注：construct 已改纯工厂（用 args + ctx.persistence、不取运行 thread）、unactive 改收 self——二者不再用本函数。
  * - `runningThreadForRender(ctx)`：**返 undefined**——给 readable 投影。readable 每轮渲染都跑，
  *   原契约容忍「无 viewing thread → 降级（class=thread、不渲 transcript）」，故降级而非抛、不崩 render。
  */
@@ -20,7 +21,7 @@ export function runningThread(ctx: { ownerThread?: ThreadContext }): ThreadConte
   if (!ctx.ownerThread) {
     throw new Error(
       "[thread] runningThread(ctx)：ctx.ownerThread 缺失——thread 载体方法须在 WindowManager.fromThread " +
-        "绑定的 runtime 下调用（construct/end/unactive 等）。",
+        "绑定的 runtime 下调用（end / new_feat_branch / create_pr 等）。",
     );
   }
   return ctx.ownerThread;

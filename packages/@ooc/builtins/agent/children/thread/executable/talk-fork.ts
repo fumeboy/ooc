@@ -1,9 +1,9 @@
 /**
- * talk fork —— talk(target=自己 objectId) 派生子线程的机制（旧 do_window 并入）。
+ * talk fork 消息原语 —— fork / peer / 派送共用的消息构造与 inbox 追加。
  *
- * fork 子线程窗（isForkWindow=true）是同对象内的父子双向通道：
- * - `say` 走内存树寻址（findThreadInScope，同 session 同 job、不付磁盘 IO）
- * - 关 fork 子窗：经 close 原语 → refcount 归 0 触发 thread.unactive 通知「无订阅者」、由其自决（见 index.ts）。
+ * fork 子线程窗（isForkWindow=true）是同对象内的父子双向通道；fork 的 caller-side wiring（造子 +
+ * 父挂子 + 投初始消息）见 `fork.ts#openForkChild`，关 fork 子窗经 close 原语 → refcount 归 0 触发
+ * thread.unactive 通知「无订阅者」（见 index.ts）。本文件只留消息原语（makeMessage / appendInbox）。
  */
 
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
@@ -31,34 +31,3 @@ export function appendInbox(thread: ThreadContext, message: ThreadMessage): void
   ];
 }
 
-/** 在父 thread 的子树里按 id 找子线程。 */
-export function findChild(parent: ThreadContext, childId: string): ThreadContext | null {
-  if (parent.id === childId) return parent;
-  for (const child of Object.values(parent.childThreads ?? {})) {
-    const found = findChild(child, childId);
-    if (found) return found;
-  }
-  return null;
-}
-
-/**
- * 子→父 reply 协议：当 fork 子线程窗的 say 由子 thread 在自身 creator 窗上调用时，
- * targetThreadId 指向**祖先**而非后裔。先尝试 findChild（兼容 parent→child 用法）；
- * 没找到再沿 `_parentThreadRef` 链向上查找。
- *
- * _parentThreadRef 是运行时反向引用（fork 创建 child 时建立），不参与持久化；
- * 磁盘恢复的 thread 没有这条链，此时子→父 reply 仍可能失败——recovery 路径的
- * supplement 由 persistable 层负责。
- */
-export function findThreadInScope(self: ThreadContext, targetId: string): ThreadContext | null {
-  const downward = findChild(self, targetId);
-  if (downward) return downward;
-  let cur: ThreadContext | undefined = self._parentThreadRef;
-  while (cur) {
-    if (cur.id === targetId) return cur;
-    const sibling = findChild(cur, targetId);
-    if (sibling) return sibling;
-    cur = cur._parentThreadRef;
-  }
-  return null;
-}

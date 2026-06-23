@@ -42,7 +42,7 @@ function lastSystemNotice(t: ThreadContext) {
  */
 function forkWithWindow(parent: ThreadContext, selfObjectId: string, msg: string) {
   const child = openForkChild(parent, { selfObjectId, msg });
-  const forkId = generateWindowId(THREAD_CLASS_ID);
+  const forkId = generateWindowId("talk");
   const forkWin = materializeWindow(parent, {
     id: forkId,
     class: THREAD_CLASS_ID,

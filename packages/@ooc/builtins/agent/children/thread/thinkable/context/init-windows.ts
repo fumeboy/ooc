@@ -166,11 +166,14 @@ export interface BuildThreadOpts {
 }
 
 /**
- * **集中的 thread 出生函数** —— 产出一条新线程的完整 `ThreadContext`（含初始 contextWindows）。
+ * thread 出生工厂 —— 产出一条新线程的完整 `ThreadContext`（含初始 contextWindows）：统一身份/血缘字段
+ * + 初始窗铺设。**纯函数、零 IO、不 mutate 任何父线程**——parent-attach / 投初始消息 / wait 等调用方
+ * 副作用归 caller。
  *
- * `threadConstructor`（runtime.instantiate 入口）与各创建路径（flows root / talk-delivery 懒建 callee /
- * fork 子线程）共用本函数：统一身份/血缘字段 + 初始窗铺设。**纯函数、零 IO、不 mutate 任何父线程**——
- * parent-attach / 投初始消息 / wait 等调用方副作用归 caller。
+ * 当前活调用方：`openForkChild`（fork 子线程）。`threadConstructor`（Class.construct）经本函数实现、是
+ * thread-as-object 经 runtime.instantiate 出生的**声明契约**，但尚无调用方 instantiate thread（talk 走
+ * caller-side wiring 而非 generic instantiate；统一收口留 thread-as-referencable-object 那轮）。flows root /
+ * talk-delivery 懒建 callee 仍各自字面量构造 + 调 `initThreadContextWindows`（未收口本工厂）——见该 issue 风险 #3。
  */
 export function buildThread(opts: BuildThreadOpts): ThreadContext {
   // 新线程恒得新 id（persistence 只提供 baseDir/session/objectId——其 threadId 是 caller/parent 的，
