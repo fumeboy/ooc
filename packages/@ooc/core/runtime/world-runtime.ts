@@ -1,17 +1,3 @@
-/**
- * WorldRuntime — per-world 运行时状态聚合。
- *
- * 把原 module-level singleton 集中封装到一个 WorldRuntime 实例里：stoneRegistry
- * （stones/ 扫描与元数据解析）+ serverLoader（executable/readable 动态加载缓存）+
- * observable + serialQueue。
- *
- * Object 类型注册不在此聚合：think/exec/render 经全局 builtinRegistry，world stone
- * 的对象类型由渲染期 `thinkable/context/object-windows.ts` 的 lazy ensure 注册。
- */
-import {
-  createObservableStore,
-  ObservableStore,
-} from "./observable-store.js";
 import {
   createSerialQueue,
   SerialQueue,
@@ -35,7 +21,6 @@ export interface WorldRuntimeConfig {
 
 export interface WorldRuntime {
   readonly worldPath: string;
-  readonly observable: ObservableStore;
   readonly serialQueue: SerialQueue;
   readonly serverLoader: ServerLoader;
   readonly stoneRegistry: StoneRegistry;
@@ -59,7 +44,6 @@ export interface WorldRuntime {
  *     （下次渲染期 lazy ensure 读到最新）
  */
 export function createWorldRuntime(config: WorldRuntimeConfig): WorldRuntime {
-  const observable = createObservableStore();
   const serialQueue = createSerialQueue();
   const serverLoader = createServerLoader();
   const stoneRegistry = createStoneRegistry(config.worldPath, { autoDiscover: true });
@@ -82,7 +66,6 @@ export function createWorldRuntime(config: WorldRuntimeConfig): WorldRuntime {
 
   const runtime: WorldRuntime = {
     worldPath: config.worldPath,
-    observable,
     serialQueue,
     serverLoader,
     stoneRegistry,

@@ -9,8 +9,8 @@
 import type {
   ReadableContext,
   ReadableModule,
-} from "@ooc/core/readable/contract.js";
-import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
+} from "@ooc/core/types";
+import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
 import type { Data } from "../types.js";
 
 /** terminal 无投影态。 */

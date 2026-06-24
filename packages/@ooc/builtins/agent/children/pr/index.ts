@@ -15,9 +15,10 @@ import readable from "./readable/index.js";
 import type { Data } from "./types.js";
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/agent/pr",
   executable,
   readable,
-  persistable: { mode: "inline" },
+  persistable: { },
 };
 
 export type { Data } from "./types.js";

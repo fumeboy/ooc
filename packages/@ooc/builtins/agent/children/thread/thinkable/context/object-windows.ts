@@ -24,11 +24,11 @@ import type { ObjectRegistry, RegisteredClass } from "@ooc/core/runtime/object-r
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
-import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { objectDataOf, classOf } from "@ooc/core/types/context-window.js";
 import { getSessionObjectTable, materializeWindow } from "@ooc/core/runtime/session-object-table.js";
-import type { ReadableContext, ReadableProjection } from "@ooc/core/readable/contract.js";
-import { SUPER_ALIAS_TARGET, isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
-import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
+import type { ReadableContext, ReadableProjection } from "@ooc/core/types";
+import { SUPER_ALIAS_TARGET, isTalkLikeClass } from "@ooc/core/types/constants.js";
+import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
 import { defaultServerLoader } from "@ooc/core/runtime/server-loader.js";
 
 /**

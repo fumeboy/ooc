@@ -25,7 +25,7 @@ import {
 } from "@ooc/core/persistable/index.js";
 import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { deliverTalkMessage } from "@ooc/builtins/agent/thread/executable/talk-delivery.js";
-import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID, THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { SUPER_ALIAS_TARGET, SUPER_SESSION_ID, THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import { initThreadContextWindows } from "@ooc/builtins/agent/thread/thinkable/context/init-windows.js";
 import {
   ROOT_WINDOW_ID,
@@ -33,7 +33,7 @@ import {
   isSelfThreadWindow,
   objectDataOf,
   classOf,
-} from "@ooc/core/_shared/types/context-window.js";
+} from "@ooc/core/types/context-window.js";
 import {
   materializeWindow,
   getSessionObjectTable,
@@ -120,7 +120,7 @@ describe("talk-delivery target='super' alias", () => {
       );
       await expect(stat(bobThreadDir)).resolves.toBeDefined();
       // 显式断言 callee thread persistence 写的就是 caller 的 sessionId，不是 super
-      const callee = await loadObject(THREAD_CLASS_ID, 
+      const callee = await loadObject(THREAD_CLASS_ID,
         { baseDir: tempRoot, sessionId: "web-test", objectId: "bob" },
         delivered.calleeThreadId,
       );
@@ -149,7 +149,7 @@ describe("talk-delivery target='super' alias", () => {
       );
       await expect(stat(superAliceThreadDir)).resolves.toBeDefined();
       // 读 callee thread 验证 persistence 字段
-      const callee = await loadObject(THREAD_CLASS_ID, 
+      const callee = await loadObject(THREAD_CLASS_ID,
         { baseDir: tempRoot, sessionId: SUPER_SESSION_ID, objectId: "alice" },
         delivered.calleeThreadId,
       );
@@ -291,7 +291,7 @@ describe("talk-delivery target='super' alias", () => {
       // 4) 回报必须落到 user session 的原始创建者 thread（不是 super session）
       expect(delivered.calleeObjectId).toBe("alice");
       expect(delivered.calleeThreadId).toBe("root");
-      const userCallee = await loadObject(THREAD_CLASS_ID, 
+      const userCallee = await loadObject(THREAD_CLASS_ID,
         { baseDir: tempRoot, sessionId: "web-test", objectId: "alice" },
         "root",
       );

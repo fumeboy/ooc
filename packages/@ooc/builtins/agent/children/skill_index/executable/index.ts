@@ -5,7 +5,7 @@
  * 打开具体 SKILL.md 由 filesystem 的 open_file 完成（见 readable 的 hint）。
  */
 
-import type { ExecutableModule } from "@ooc/core/executable/contract.js";
+import type { ExecutableModule } from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 const executable: ExecutableModule<Data> = {

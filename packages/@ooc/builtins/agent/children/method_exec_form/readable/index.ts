@@ -5,15 +5,15 @@
  * intent paths / schema / fill_state / next_steps，并经 window 声明暴露 refine / submit 方法菜单。
  */
 
-import type { ReadableContext, ReadableModule } from "@ooc/core/readable/contract.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+import type { ReadableContext, ReadableModule } from "@ooc/core/types";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
 import {
   xmlElement,
   xmlText,
   renderPathList,
   appendNode,
   type XmlNode,
-} from "@ooc/core/_shared/types/xml.js";
+} from "@ooc/core/types/xml.js";
 import type { Data } from "../types.js";
 
 /** method_exec 无 viewport 投影态。 */

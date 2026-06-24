@@ -7,7 +7,7 @@ import { describe, expect, it } from "bun:test";
 import "@ooc/core/runtime/register-builtins.js"; // 注册窗类型
 import { buildInputItems } from "../index";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
-import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import type { ContextWindow } from "@ooc/core/types/context-window.js";
 
 // Wave4 会话窗：stored class=_builtin/agent/thread；creator 身份编码在 id（w_creator_<threadId>）；
 // target / isForkWindow / targetThreadId 落 inst.data（talk-render 读 self.* = inst.data）。

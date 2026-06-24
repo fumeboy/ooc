@@ -26,7 +26,7 @@
  */
 
 import * as lark from "@larksuiteoapi/node-sdk";
-import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import type { ServerConfig } from "@ooc/core/app/server/bootstrap/config.js";
 import type { ThreadActivationRef } from "@ooc/core/observable";
 import { readWorldConfig } from "@ooc/core/persistable";
@@ -379,7 +379,7 @@ async function doForwardToLark(ref: ThreadActivationRef): Promise<void> {
   // readThread 才能拿到 merge 后的 thread.inbox；直读 thread.json 永远是 undefined。
   let thread;
   try {
-    thread = await loadObject(THREAD_CLASS_ID, 
+    thread = await loadObject(THREAD_CLASS_ID,
       { baseDir: state.config.baseDir, sessionId: ref.sessionId, objectId: ref.objectId },
       ref.threadId,
     );

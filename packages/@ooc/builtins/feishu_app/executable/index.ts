@@ -13,8 +13,8 @@
 import type {
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 const FEISHU_CHAT_CLASS = "_builtin/feishu_app/feishu_chat";

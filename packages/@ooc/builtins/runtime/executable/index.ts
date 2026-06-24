@@ -12,9 +12,9 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
+} from "@ooc/core/types";
 import { createObjectInSession } from "@ooc/core/persistable/index.js";
-import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
+import { isSuperSessionId } from "@ooc/core/types/constants.js";
 import type { Data } from "../types.js";
 
 function asString(v: unknown): string | undefined {
@@ -40,9 +40,8 @@ export async function executeCreateObject(
   _self: Data,
   args: Record<string, unknown>,
 ): Promise<string | undefined> {
-  const persistence = ctx.persistence;
-  if (!persistence) return "[create_object] 缺少 persistence context。";
-  const { baseDir, sessionId, objectId: authorObjectId } = persistence;
+  const sessionId = ctx.sessionId;
+  const baseDir = ctx.worldDir;
   if (isSuperSessionId(sessionId) || !sessionId || !sessionId.trim()) {
     return `[create_object] 仅业务 session 可建对象（当前 session='${sessionId ?? ""}'）。`;
   }
@@ -58,7 +57,7 @@ export async function executeCreateObject(
     return "[create_object] knowledge 必须是 { filename → string content } 形态。";
   }
   const r = await createObjectInSession({
-    baseDir, sessionId, authorObjectId, newObjectId, selfMd, readableMd,
+    baseDir, sessionId, newObjectId, selfMd, readableMd,
     ...(knowledge ? { knowledge } : {}),
   });
   if (!r.ok) return `[create_object:${r.code}] ${r.message}`;

@@ -19,8 +19,8 @@
 import type {
   ReadableContext,
   ReadableModule,
-} from "@ooc/core/readable/contract.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 /** self 门面窗的投影态（init 注入 `{ transient, isSelfWindow }`）。 */

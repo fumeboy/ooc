@@ -8,8 +8,8 @@
  * 调用方（exec/construct）从自己的 ctx 直接透传——本模块不再 deriveStoneFromThread、不再自建
  * bespoke self。
  */
-import type { ExecutableContext, ConstructorContext } from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+import type { ExecutableContext, ConstructorContext } from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 import type { ProcessExecRecord } from "../types.js";
 import { generateExecId, isOkResult, formatInterpreterResult } from "./exec-record.js";

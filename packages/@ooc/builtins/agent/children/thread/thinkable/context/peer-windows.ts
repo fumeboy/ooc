@@ -13,7 +13,7 @@
  * - IO 失败静默吞（debug log），不阻塞 thread 启动。
  */
 
-import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
+import { ROOT_WINDOW_ID } from "@ooc/core/types/context-window.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";

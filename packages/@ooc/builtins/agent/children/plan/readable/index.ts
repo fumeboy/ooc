@@ -10,13 +10,13 @@
 import type {
   ReadableContext,
   ReadableModule,
-} from "@ooc/core/readable/contract.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
 import {
   xmlElement,
   xmlText,
   type XmlNode,
-} from "@ooc/core/_shared/types/xml.js";
+} from "@ooc/core/types/xml.js";
 import type { Data } from "../types.js";
 
 /** plan 的投影态：plan 无展示态切片（整棵 step 树直投）。 */

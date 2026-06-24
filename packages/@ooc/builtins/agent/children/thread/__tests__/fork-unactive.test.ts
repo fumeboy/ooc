@@ -6,8 +6,8 @@ import { join } from "node:path";
 // side-effect：注册 thread class（含 unactive 生命周期钩子）。
 import "@ooc/core/runtime/register-builtins.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
-import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import { generateWindowId, ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
+import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
+import { generateWindowId, ROOT_WINDOW_ID } from "@ooc/core/types/context-window.js";
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { openForkChild } from "@ooc/builtins/agent/thread/executable/fork.js";
 import { handleCloseTool } from "@ooc/core/executable/tools/close.js";

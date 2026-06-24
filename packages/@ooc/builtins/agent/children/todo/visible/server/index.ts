@@ -12,7 +12,7 @@
 import type {
   VisibleServerMethod,
   VisibleServerModule,
-} from "@ooc/core/_shared/types/visible-server.js";
+} from "@ooc/core/types/visible-server.js";
 import type { Data } from "../../types.js";
 
 const setContent: VisibleServerMethod<Data> = {

@@ -6,7 +6,7 @@
  */
 
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
-import type { ConstructorContext } from "@ooc/core/executable/contract.js";
+import type { ConstructorContext } from "@ooc/core/types";
 import { makeSelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
@@ -20,6 +20,7 @@ function normLang(args: Record<string, unknown>): InterpreterLang | undefined {
 }
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/interpreter/interpreter_process",
   construct: {
     description: "Run a ts/js snippet; result appears as a new interpreter_process window.",
     schema: {

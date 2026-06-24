@@ -12,8 +12,8 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 const reloadMethod: ObjectMethod<Data> = {

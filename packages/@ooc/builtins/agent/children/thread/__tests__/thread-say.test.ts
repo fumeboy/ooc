@@ -7,10 +7,10 @@ import "@ooc/core/runtime/register-builtins.js";
 
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { sayMethod, replyMethod } from "@ooc/builtins/agent/thread/executable/session-methods.js";
-import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import { WindowManager } from "@ooc/core/runtime/window-manager.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
-import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import { objectDataOf } from "@ooc/core/types/context-window.js";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type { ThreadPersistenceRef } from "@ooc/core/persistable/common";
 

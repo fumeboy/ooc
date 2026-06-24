@@ -31,7 +31,7 @@
  */
 import type { ContextSnapshot } from "../snapshot.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
-import { ROOT_WINDOW_ID, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { ROOT_WINDOW_ID, objectDataOf, classOf } from "@ooc/core/types/context-window.js";
 import {
   getSessionObjectTable,
   setSessionObject,
@@ -40,11 +40,11 @@ import {
   builtinRegistry,
   type ObjectRegistry,
 } from "@ooc/core/runtime/object-registry.js";
-import type { ReadableContext, ReadableProjection } from "@ooc/core/readable/contract.js";
+import type { ReadableContext, ReadableProjection } from "@ooc/core/types";
 import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import { extractBasicDescription, conciseDescription } from "@ooc/builtins/agent/thread/thinkable/context/method-description.js";
 import type { ThreadContext, ThreadMessage } from "../index.js";
-import { isSuperSessionId } from "@ooc/core/_shared/types/constants.js";
+import { isSuperSessionId } from "@ooc/core/types/constants.js";
 import { readReadable, resolveStoneIdentityRef, type StoneObjectRef } from "@ooc/core/persistable/index.js";
 import { persistableCtx, runtimeObjectRef } from "@ooc/core/persistable/object-data.js";
 import {
@@ -55,7 +55,7 @@ import {
   xmlElement,
   xmlText,
   type XmlNode,
-} from "@ooc/core/_shared/types/xml.js";
+} from "@ooc/core/types/xml.js";
 
 // ─────────────────────────── helpers (inbox/outbox) ──────────────────────────
 
@@ -87,7 +87,7 @@ const COMMAND_DESC_MAX = 200;
  * 只渲染 required===true 的参数（可选参数不进 eager）；无 schema / 无必填参数 → 空数组。
  * enum 作属性带上（治「猜值」）；fail-soft 不抛。
  */
-function renderRequiredArgNodes(schema: { args?: Record<string, import("@ooc/core/_shared/types/intent.js").MethodArgSpec> } | undefined): XmlNode[] {
+function renderRequiredArgNodes(schema: { args?: Record<string, import("@ooc/core/types").MethodArgSpec> } | undefined): XmlNode[] {
   const args = schema?.args;
   if (!args) return [];
   const nodes: XmlNode[] = [];
@@ -136,8 +136,8 @@ export function computeVisibleMethodSet(
   const inSuperFlow = isSuperSessionId(thread.persistence?.sessionId ?? "");
 
   type AnyMethod =
-    | import("@ooc/core/executable/contract.js").ObjectMethod
-    | import("@ooc/core/readable/contract.js").WindowMethod;
+    | import("@ooc/core/types").ObjectMethod
+    | import("@ooc/core/types").WindowMethod;
   const merged = new Map<string, AnyMethod>();
 
   // object method：沿继承链合并。self 窗取全部自有方法名；非 self 按 decl.object_methods 引用名挑选。

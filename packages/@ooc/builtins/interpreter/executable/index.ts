@@ -12,7 +12,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
+} from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 const LANG_ENUM = ["ts", "typescript", "js", "javascript"];

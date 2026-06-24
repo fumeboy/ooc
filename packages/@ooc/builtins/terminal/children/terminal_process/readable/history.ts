@@ -6,14 +6,14 @@
  * `(ctx, self, before_win, args) => 新 win`。用本 class 的 transcript-viewport.ts 纯函数；
  * history_* 前缀在此 remap 到 tail / range_start / range_end。
  */
-import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
+import { xmlElement, xmlText, xmlComment, truncateBytes, type XmlNode } from "@ooc/core/types/xml.js";
 import {
   applyTranscriptViewport,
   mergeTranscriptViewport,
   type TranscriptViewport,
 } from "./transcript-viewport.js";
-import type { WindowMethod, ReadableContext } from "@ooc/core/readable/contract.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+import type { WindowMethod, ReadableContext } from "@ooc/core/types";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
 import type { Data, ProcessExecRecord } from "../types.js";
 
 /** terminal_process 窗的投影态（与 Data 分离）：history 视口 + 展示档位。 */

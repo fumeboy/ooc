@@ -12,7 +12,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
+} from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 const TERMINAL_PROCESS_CLASS = "_builtin/terminal/terminal_process";
@@ -29,7 +29,7 @@ const runMethod: ObjectMethod<Data> = {
     if (!ctx.runtime) {
       throw new Error("[terminal.run] runtime 句柄缺失，无法实例化 terminal_process。");
     }
-    const id = await ctx.runtime.instantiate(TERMINAL_PROCESS_CLASS, args as Record<string, unknown>);
+    const id = await ctx.runtime.instantiate({class: TERMINAL_PROCESS_CLASS, args: args as Record<string, unknown>});
     return `terminal_process 已创建（${id}）：bash 脚本已执行，结果进 history。`;
   },
 };

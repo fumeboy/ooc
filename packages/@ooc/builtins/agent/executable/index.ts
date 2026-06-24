@@ -9,7 +9,7 @@
  * end/todo 是 thread 作用域操作，归 thread/executable（见 children/thread/executable/index.ts）。
  */
 
-import type { ExecutableModule } from "@ooc/core/executable/contract.js";
+import type { ExecutableModule } from "@ooc/core/types";
 import type { Data } from "../types.js";
 import { talkMethod } from "./method.talk.js";
 import { planMethod } from "./method.plan.js";

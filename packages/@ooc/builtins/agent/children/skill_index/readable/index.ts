@@ -15,9 +15,9 @@
 import type {
   ReadableContext,
   ReadableModule,
-} from "@ooc/core/readable/contract.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
-import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
+} from "@ooc/core/types";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
+import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
 import {
   deriveStoneFromThread,
   readWorldConfig,

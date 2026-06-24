@@ -2,7 +2,7 @@ import { test, expect } from "bun:test";
 import "@ooc/core/runtime/register-builtins.js"; // 全量 boot：注册 filesystem class + 委托目标 search/file
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
-import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
+import type { RuntimeHandle } from "@ooc/core/types";
 
 function objMethod(classId: string, name: string) {
   const cls = builtinRegistry.getClass(classId);

@@ -11,8 +11,7 @@
 
 import { Glob } from "bun";
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
-import type { ConstructorContext } from "@ooc/core/executable/contract.js";
-import { resolveSessionPath } from "@ooc/core/executable/session-path.js";
+import type { ConstructorContext } from "@ooc/core/types";
 import {
   runRipgrep,
   runJsFallback,
@@ -51,11 +50,8 @@ async function buildGrepData(
   pattern: string,
   args: SearchArgs,
 ): Promise<Data> {
-  const persistence = ctx.persistence;
   const rawPath = typeof args.path === "string" ? args.path : "";
   const path = rawPath
-    ? resolveSessionPath(persistence, rawPath)
-    : resolveSessionPath(persistence, ".");
   const glob = typeof args.glob === "string" ? args.glob : undefined;
   const caseInsensitive = args.case_insensitive === true;
   const opts = { pattern, path, glob, caseInsensitive };
@@ -98,11 +94,8 @@ function buildGlobData(
   pattern: string,
   args: SearchArgs,
 ): Data {
-  const persistence = ctx.persistence;
   const rawCwd = typeof args.cwd === "string" ? args.cwd : "";
   const cwd = rawCwd
-    ? resolveSessionPath(persistence, rawCwd)
-    : resolveSessionPath(persistence, ".");
   let matchesRaw: string[];
   try {
     const g = new Glob(pattern);
@@ -124,6 +117,7 @@ function buildGlobData(
 }
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/filesystem/search",
   construct: {
     description:
       "Search files by name (glob) or content (grep); results appear as a search window.",

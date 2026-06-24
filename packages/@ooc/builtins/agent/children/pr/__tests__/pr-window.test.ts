@@ -15,7 +15,7 @@
  * （new_feat_branch / create_pr_and_invite_reviewers）归位到 thread class（reflect_request 投影窗 surface）。
  */
 import { mkdir, mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
-import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -27,17 +27,17 @@ import {
 import { commitAndOpenPr } from "@ooc/builtins/agent/pr/open";
 import { readPrIssue } from "../persistable/pr-issue.js";
 import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
-import { serializeXml, xmlElement } from "@ooc/core/_shared/types/xml";
+import { serializeXml, xmlElement } from "@ooc/core/types/xml";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import {
   materializeWindow,
   getSessionObjectTable,
 } from "@ooc/core/runtime/session-object-table.js";
-import { objectDataOf } from "@ooc/core/_shared/types/context-window.js";
+import { objectDataOf } from "@ooc/core/types/context-window.js";
 import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
-import type { ReadableContext } from "@ooc/core/readable/contract.js";
-import type { ExecutableContext } from "@ooc/core/executable/contract.js";
+import type { ReadableContext } from "@ooc/core/types";
+import type { ExecutableContext } from "@ooc/core/types";
 import {
   deliverPrWindowToReviewers,
   routePrRepairMessage,

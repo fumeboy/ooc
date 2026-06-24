@@ -15,8 +15,8 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 /** open_match 在 file 对象上套的上下文行数（match.line ± 该值）。 */
@@ -25,15 +25,6 @@ const FILE_WINDOW_LINE_CONTEXT = 40;
 // file 对象的注册 class id（与 filesystem.open_file 的 FILE_CLASS 一致）；
 // 裸名 "file" 在 registry 解析不到 constructor（注册键为 _builtin/filesystem/file）。
 const FILE_CLASS = "_builtin/filesystem/file";
-
-const closeMethod: ObjectMethod<Data> = {
-  name: "close",
-  description: "Close this search window (does not affect matched files).",
-  exec: (ctx: ExecutableContext) => {
-    void ctx.runtime?.close?.(ctx.object.id);
-    return undefined;
-  },
-};
 
 const openMatchMethod: ObjectMethod<Data> = {
   name: "open_match",
@@ -77,13 +68,13 @@ const openMatchMethod: ObjectMethod<Data> = {
       ? match.path
       : resolve(self.data.searchRoot ?? process.cwd(), match.path);
 
-    await runtime.instantiate(FILE_CLASS, { path: absPath, lines });
+    await runtime.instantiate({ class: FILE_CLASS, args: { path: absPath, lines } });
     return undefined;
   },
 };
 
 const executable: ExecutableModule<Data> = {
-  methods: [closeMethod, openMatchMethod],
+  methods: [openMatchMethod],
 };
 
 export default executable;

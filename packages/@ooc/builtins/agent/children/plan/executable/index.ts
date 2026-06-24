@@ -10,8 +10,8 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import { isString } from "@ooc/builtins/_shared/executable/utils.js";
 import type { Data, PlanWindowStep } from "../types.js";
 

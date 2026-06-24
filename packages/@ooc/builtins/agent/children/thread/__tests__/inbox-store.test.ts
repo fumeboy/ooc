@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
-import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { saveObject, loadObject } from "@ooc/core/persistable/runtime-object-io.js";

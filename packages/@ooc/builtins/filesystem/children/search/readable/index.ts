@@ -12,120 +12,24 @@ import type {
   ReadableContext,
   WindowMethod,
   ReadableModule,
-} from "@ooc/core/readable/contract.js";
+} from "@ooc/core/types";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   applyTranscriptViewport,
   mergeTranscriptViewport,
   type TranscriptViewport,
 } from "./transcript-viewport.js";
-import { xmlElement, xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+import { xmlElement, xmlText, type XmlNode } from "@ooc/core/types/xml.js";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
+import { OocObjectRef } from "@src/runtime/ooc-class.js";
 
-/** search window 的默认 results viewport：末 50 条 match。 */
-export const DEFAULT_RESULTS_VIEWPORT: TranscriptViewport = Object.freeze({
-  tail: 50,
-});
-
-/** search 的**投影态**（与 Data 分离）：matches 渲染视口（末 N 条 / 固定区间）。 */
 export interface SearchWin {
-  resultsViewport?: TranscriptViewport;
-  /** compress v2：展示档位（本窗 resize 设；renderer projectByCompressLevel 据此投影详略）。 */
-  compressLevel?: 0 | 1 | 2;
 }
 
-/**
- * set_results_window 字段命名采用 search-specific 前缀 matches_*（与通用 tail / range_* 同结构）：
- *   matches_tail → tail / matches_start → range_start / matches_end → range_end。
- * 内部翻译为通用字段后复用 `mergeTranscriptViewport`（fail-loud + tail/range 互斥）。
- */
-const MATCHES_TAIL = "matches_tail";
-const MATCHES_START = "matches_start";
-const MATCHES_END = "matches_end";
-
-function hasAnyResultsViewportField(args: Record<string, unknown>): boolean {
-  return MATCHES_TAIL in args || MATCHES_START in args || MATCHES_END in args;
-}
-
-function translateMatchesArgs(
-  args: Record<string, unknown>,
-): Record<string, unknown> {
-  const translated: Record<string, unknown> = {};
-  if (MATCHES_TAIL in args) translated.tail = args[MATCHES_TAIL];
-  if (MATCHES_START in args) translated.range_start = args[MATCHES_START];
-  if (MATCHES_END in args) translated.range_end = args[MATCHES_END];
-  return translated;
-}
-
-/** window method：调整 matches 渲染视口（返回新 win；不碰 Data）。 */
-const setResultsWindowMethod: WindowMethod<Data, SearchWin> = {
-  name: "set_results_window",
-  description:
-    "Adjust which portion of the search matches are rendered (tail N or fixed range).",
-  schema: {
-    args: {
-      matches_tail: {
-        type: "number",
-        description:
-          "Show last N matches (positive integer; mutually exclusive with matches_start/matches_end)",
-      },
-      matches_start: {
-        type: "number",
-        description:
-          "Start of range (non-negative integer; must pair with matches_end)",
-      },
-      matches_end: {
-        type: "number",
-        description:
-          "End of range (non-negative integer; must pair with matches_start)",
-      },
-    },
-  },
-  exec: (
-    _ctx: ReadableContext,
-    _self: ReadonlySelfProxy<Data>,
-    before: SearchWin,
-    args: Record<string, unknown>,
-  ): SearchWin => {
-    const current = before?.resultsViewport ?? DEFAULT_RESULTS_VIEWPORT;
-    if (!hasAnyResultsViewportField(args)) {
-      // no-op：保持当前视口（fail-soft，对齐旧 adapter 的「字段缺失返回原 state」）
-      return { resultsViewport: current };
-    }
-    const merged = mergeTranscriptViewport(current, translateMatchesArgs(args));
-    if (!merged.ok) {
-      const msg = merged.error
-        .replace(/range_start/g, MATCHES_START)
-        .replace(/range_end/g, MATCHES_END)
-        .replace(/\btail\b/g, MATCHES_TAIL);
-      throw new Error(`[search.set_results_window] ${msg}`);
-    }
-    return { resultsViewport: merged.viewport };
-  },
-};
-
-/**
- * window method：调本搜索窗展示档位 compressLevel（compress v2 resize 协议，本 class 自实现）。
- * 0=全文 / 1=缩略 / 2=仅句柄——读出侧 xml.ts:projectByCompressLevel 据此投影 matches 详略。
- */
-const resizeMethod: WindowMethod<Data, SearchWin> = {
-  name: "resize",
-  description: "调本搜索窗展示档位 level：0=全部匹配，1=缩略，2=仅句柄。",
-  schema: {
-    args: {
-      level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
-    },
-  },
-  exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: SearchWin, args: Record<string, unknown>): SearchWin => {
-    const raw = (args as { level?: number }).level;
-    const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
-    return { ...before, compressLevel: level };
-  },
-};
 
 const readable: ReadableModule<Data, SearchWin> = {
-  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: SearchWin) => {
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<SearchWin>) => {
     const children: XmlNode[] = [
       xmlElement("kind", {}, [xmlText(self.data.kind)]),
       xmlElement("query", {}, [xmlText(self.data.query)]),
@@ -133,40 +37,7 @@ const readable: ReadableModule<Data, SearchWin> = {
     if (self.data.searchRoot) {
       children.push(xmlElement("search_root", {}, [xmlText(self.data.searchRoot)]));
     }
-
-    const viewport: TranscriptViewport =
-      win?.resultsViewport ?? DEFAULT_RESULTS_VIEWPORT;
-    const { visible, earlierCount } = applyTranscriptViewport(
-      self.data.matches,
-      viewport,
-    );
-
-    const viewportAttrs: Record<string, string> = {
-      total: String(self.data.matches.length),
-    };
-    if (typeof viewport.tail === "number") {
-      viewportAttrs.tail = String(viewport.tail);
-    } else if (
-      typeof viewport.rangeStart === "number" &&
-      typeof viewport.rangeEnd === "number"
-    ) {
-      viewportAttrs.matches_start = String(viewport.rangeStart);
-      viewportAttrs.matches_end = String(viewport.rangeEnd);
-    }
-    if (earlierCount > 0) {
-      viewportAttrs.earlier_omitted = String(earlierCount);
-    }
-    children.push(xmlElement("results_viewport", viewportAttrs));
-
-    const matchNodes: XmlNode[] = visible.map((m) => {
-      const attrs: Record<string, string> = {
-        index: String(m.index),
-        path: m.path,
-      };
-      if (typeof m.line === "number") attrs.line = String(m.line);
-      return xmlElement("match", attrs, m.snippet ? [xmlText(m.snippet)] : []);
-    });
-
+    // TODO 展示搜索结果
     children.push(
       xmlElement(
         "matches",
@@ -174,7 +45,6 @@ const readable: ReadableModule<Data, SearchWin> = {
           count: String(self.data.matches.length),
           truncated: self.data.truncated ? "true" : "false",
         },
-        matchNodes,
       ),
     );
 
@@ -183,8 +53,8 @@ const readable: ReadableModule<Data, SearchWin> = {
   window: [
     {
       class: "search",
-      object_methods: ["open_match", "close"],
-      window_methods: [setResultsWindowMethod, resizeMethod],
+      object_methods: ["open_match"],
+      window_methods: [],
     },
   ],
 };

@@ -14,7 +14,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
+} from "@ooc/core/types";
 import type { PrApproveAction } from "../persistable/pr-issue.js";
 import { applyPrApproval } from "../approval-flow.js";
 import type { Data } from "../types.js";

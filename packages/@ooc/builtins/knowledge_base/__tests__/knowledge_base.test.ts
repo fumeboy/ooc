@@ -1,8 +1,8 @@
 import { test, expect } from "bun:test";
 import "@ooc/core/runtime/register-builtins.js"; // 全量 boot：注册 knowledge_base class + 委托目标 knowledge
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
-import { KNOWLEDGE_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
+import { KNOWLEDGE_CLASS_ID } from "@ooc/core/types/constants.js";
+import type { RuntimeHandle } from "@ooc/core/types";
 import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 
 function objMethod(name: string) {

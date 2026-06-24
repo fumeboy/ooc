@@ -13,10 +13,10 @@
 import type {
   ExecutableContext,
   ObjectMethod,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
-import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import { generateWindowId, ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
+import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
+import { generateWindowId, ROOT_WINDOW_ID } from "@ooc/core/types/context-window.js";
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import { openForkChild } from "@ooc/builtins/agent/thread/executable/fork.js";
 import { peerTargetExists } from "@ooc/builtins/agent/thread/executable/peer-target.js";

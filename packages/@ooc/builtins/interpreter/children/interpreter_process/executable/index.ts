@@ -11,8 +11,8 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import { runInterpreterExec, type InterpreterLang } from "./runtime.js";
 export { runInterpreterExec } from "./runtime.js";
 import type { Data } from "../types.js";

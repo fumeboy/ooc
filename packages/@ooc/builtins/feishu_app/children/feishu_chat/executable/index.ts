@@ -18,7 +18,7 @@
 import type {
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
+} from "@ooc/core/types";
 import { larkExec } from "@ooc/builtins/feishu_app/cli.js";
 import type { Data, FeishuChatMessage } from "../types.js";
 

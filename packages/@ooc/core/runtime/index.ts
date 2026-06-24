@@ -18,23 +18,6 @@
 export { createWorldRuntime } from "./world-runtime.js";
 export type { WorldRuntime, WorldRuntimeConfig } from "./world-runtime.js";
 
-export { createObjectRegistry, builtinRegistry } from "./object-registry.js";
-export type { ObjectRegistry } from "./object-registry.js";
-
-export { createObservableStore, defaultObservableStore } from "./observable-store.js";
-export type {
-  ObservableStore,
-  LlmObservation,
-  LlmLoopHandle,
-  ObservableDebugStatus,
-  PauseChecker,
-  RuntimePermissionDecision,
-  RuntimePendingToolCall,
-  RuntimePermissionDecider,
-  ThreadActivationRef,
-  ThreadActivationNotifier,
-} from "./observable-store.js";
-
 export { createSerialQueue, defaultSerialQueue } from "./serial-queue.js";
 export type { SerialQueue } from "./serial-queue.js";
 

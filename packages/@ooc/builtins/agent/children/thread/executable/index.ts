@@ -5,7 +5,7 @@
  *
  * 注：**wait 是 3 原语之一（非 method）**，经 `core/executable/tools/wait.ts` 独立 tool 入口。
  */
-import type { ExecutableModule } from "@ooc/core/executable/contract.js";
+import type { ExecutableModule } from "@ooc/core/types";
 import { sayMethod, replyMethod } from "./method.say.js";
 import { endMethod } from "./method.end.js";
 import { todoMethod } from "./method.todo.js";

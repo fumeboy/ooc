@@ -9,8 +9,8 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ObjectMethodResult,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 export const todoMethod: ObjectMethod<Data> = {

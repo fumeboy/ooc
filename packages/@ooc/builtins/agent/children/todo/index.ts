@@ -10,13 +10,14 @@
  */
 
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
-import type { ConstructorContext } from "@ooc/core/executable/contract.js";
+import type { ConstructorContext } from "@ooc/core/types";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import visibleServer from "./visible/server/index.js";
 import type { Data } from "./types.js";
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/agent/todo",
   construct: {
     description: "Create a visible todo item in context.",
     schema: {

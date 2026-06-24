@@ -7,8 +7,8 @@ import type {
   ObjectConstructor,
   LifecycleContext,
   ObjectLifecycleHook,
-} from "@ooc/core/executable/contract.js";
-import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
+} from "@ooc/core/types";
+import type { MethodCallSchema } from "@ooc/core/types";
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
@@ -55,7 +55,7 @@ const unactive: ObjectLifecycleHook = {
   description:
     "Notify the dereferenced thread (received as self) it lost its last subscriber; non-terminal threads receive an inbox notice and self-decide whether to end. No cancel / cascade / forced destruct.",
   exec: async (ctx: LifecycleContext, self: SelfProxy<ThreadContext>) => {
-    if (self.data.status === "done") return;
+    if (self.data.status === "done" || self.data.status === "failed") return;
     const notice: ThreadMessage = {
       id: generateMessageId(),
       createdAt: Date.now(),
@@ -68,6 +68,7 @@ const unactive: ObjectLifecycleHook = {
 };
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/agent/thread",
   construct,
   executable,
   readable,

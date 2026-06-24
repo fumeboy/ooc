@@ -17,9 +17,9 @@ import type {
   ReadableContext,
   ReadableModule,
   WindowClassDecl,
-} from "@ooc/core/readable/contract.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
-import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/_shared/types/xml.js";
+} from "@ooc/core/types";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
+import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/types/xml.js";
 import { readPrIssue, aggregatePrApproval } from "../persistable/pr-issue.js";
 import type { Data } from "../types.js";
 

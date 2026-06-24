@@ -17,7 +17,7 @@
  */
 
 import { stat } from "node:fs/promises";
-import { THREAD_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import {
   createFlowObject,
   createFlowSession,
@@ -25,8 +25,8 @@ import {
 } from "@ooc/core/persistable/index.js";
 import { loadObject, saveObject } from "@ooc/core/persistable/runtime-object-io.js";
 import { notifyThreadActivated } from "@ooc/core/observable/index.js";
-import { SUPER_SESSION_ID, PR_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
-import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
+import { SUPER_SESSION_ID, PR_CLASS_ID } from "@ooc/core/types/constants.js";
+import { ROOT_WINDOW_ID } from "@ooc/core/types/context-window.js";
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 import type { Data as PrData } from "./types.js";
@@ -94,7 +94,7 @@ export async function deliverPrWindowToReviewers(
     const threadId = prReviewThreadId(reviewerObjectId, issueId);
     await createFlowObject({ baseDir, sessionId: SUPER_SESSION_ID, objectId: reviewerObjectId });
 
-    let thread = await loadObject(THREAD_CLASS_ID, 
+    let thread = await loadObject(THREAD_CLASS_ID,
       { baseDir, sessionId: SUPER_SESSION_ID, objectId: reviewerObjectId },
       threadId,
     );
@@ -179,7 +179,7 @@ export async function routePrRepairMessage(
   if (!authorThreadId || !authorThreadId.trim()) {
     return { ok: false, code: "NO_AUTHOR_THREAD", message: "authorThreadId required for repair routing" };
   }
-  const thread = await loadObject(THREAD_CLASS_ID, 
+  const thread = await loadObject(THREAD_CLASS_ID,
     { baseDir, sessionId: SUPER_SESSION_ID, objectId: authorObjectId },
     authorThreadId,
   );

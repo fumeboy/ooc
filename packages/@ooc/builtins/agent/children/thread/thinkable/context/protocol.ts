@@ -7,7 +7,7 @@
  *   activates_on 对当前 thread 逐篇匹配，命中才注入——Object 只在相关交互面看到对应切片。
  * - **creator-reply 协议**：动态按 creator talk window 的 id 生成，不属于静态 builtin 知识。
  */
-import { hasCreatorChannel, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { hasCreatorChannel, objectDataOf, classOf } from "@ooc/core/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
@@ -15,7 +15,7 @@ import type { ObjectRegistry } from "@ooc/core/runtime/object-registry.js";
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
 import { computeActivations } from "@ooc/core/thinkable/knowledge/index.js";
 import { loadKnowledgeIndexFromDir } from "@ooc/builtins/knowledge_base/loader.js";
-import type { KnowledgeIndex } from "@ooc/core/_shared/types/knowledge.js";
+import type { KnowledgeIndex } from "@ooc/core/types/knowledge.js";
 import { dirname, join } from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 import type { ThreadContext } from "./index.js";

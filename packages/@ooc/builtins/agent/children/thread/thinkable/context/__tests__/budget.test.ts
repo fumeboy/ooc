@@ -12,7 +12,7 @@ import {
   estimateWindowTokens,
   estimateWindowsTokens,
 } from "../budget";
-import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
+import type { ContextWindow } from "@ooc/core/types/context-window.js";
 
 const bm = new BudgetManager();
 

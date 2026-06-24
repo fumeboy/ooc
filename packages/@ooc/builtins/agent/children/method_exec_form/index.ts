@@ -11,8 +11,8 @@
  */
 
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
-import type { ConstructorContext } from "@ooc/core/executable/contract.js";
-import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
+import type { ConstructorContext } from "@ooc/core/types";
+import type { MethodCallSchema } from "@ooc/core/types";
 import { buildFillState } from "./schema-fill.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
@@ -30,6 +30,7 @@ interface ConstructArgs {
 }
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/agent/method_exec_form",
   construct: {
     description: "Open a method-exec form to progressively fill a routed method's args.",
     exec: (_ctx: ConstructorContext, args: ConstructArgs): Data => {

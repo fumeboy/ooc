@@ -10,21 +10,21 @@ import {
 import { clampTranscriptToBudget } from "./transcript-clamp.js";
 import { XmlRenderer } from "./renderers/xml.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
-import { isTalkLikeClass } from "@ooc/core/_shared/types/constants.js";
-import { isSelfThreadWindow, objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { isTalkLikeClass } from "@ooc/core/types/constants.js";
+import { isSelfThreadWindow, objectDataOf, classOf } from "@ooc/core/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import {
   normalizeSummarizedRanges,
   projectSummarizedRanges,
   type SummarizedRange,
-} from "@ooc/core/_shared/utils/summarized-ranges.js";
-import type { ProcessEvent } from "@ooc/core/_shared/types/thread.js"
+} from "@ooc/core/utils/summarized-ranges.js";
+import type { ProcessEvent } from "../../types.js"
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 
 export type {
   MethodCallSchema,
   MethodArgSpec,
-} from "@ooc/core/_shared/types/intent.js";
+} from "@ooc/core/types";
 
 export { BudgetManager } from "./budget.js";
 export type { ContextSnapshot } from "./snapshot.js";
@@ -40,12 +40,12 @@ export type {
   ProcessEventCommon,
   ProcessEvent,
   ThreadStatus,
-} from "@ooc/core/_shared/types/thread.js";
+} from "../../types.js";
 export type { ThreadMessage, ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 
 /** 基于 msgId 在 inbox 中查找实际消息正文。 */
 function findInboxMessage(thread: ThreadContext, msgId: string): ThreadMessage | undefined {
-  return thread.inbox?.find((message) => message.id === msgId);
+  return thread.messages?.find((message) => message.id === msgId && message.from === "caller");
 }
 
 /**
@@ -527,8 +527,6 @@ export async function buildInputItems(
  * 用 system role 与 XML context message 平行 — 都属于"环境信息"。
  */
 async function buildPathsItem(thread: ThreadContext): Promise<LlmInputItem | undefined> {
-  const ref = thread.persistence;
-  if (!ref) return undefined;
   // worktree 模型：object_stone_dir 与 program shell $OOC_SELF_DIR 同源——business
   // session 命中 worktree（已建）时显示 flows/<sid>/objects/<id>/，否则 main。
   // 用 "read" 模式：被动每轮注入不应主动建 worktree（惰性，仅首次 identity 写才建）。
@@ -552,4 +550,3 @@ async function buildPathsItem(thread: ThreadContext): Promise<LlmInputItem | und
     content: lines.join("\n"),
   };
 }
-

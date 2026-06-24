@@ -10,8 +10,8 @@
  * （{ path, source, body, ...extra }）经 `materializeWindow` 登记进 session 对象表，渲染期
  * 用 `objectDataOf(w, table)` 取回。故本构造器需 thread 在手（取对象表）。
  */
-import { ROOT_WINDOW_ID } from "@ooc/core/_shared/types/context-window.js";
-import { KNOWLEDGE_CLASS_ID } from "@ooc/core/_shared/types/constants.js";
+import { ROOT_WINDOW_ID } from "@ooc/core/types/context-window.js";
+import { KNOWLEDGE_CLASS_ID } from "@ooc/core/types/constants.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { ThreadContext } from "./index.js";
 import { materializeWindow } from "@ooc/core/runtime/session-object-table.js";

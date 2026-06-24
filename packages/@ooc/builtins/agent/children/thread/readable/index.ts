@@ -18,10 +18,10 @@ import type {
   ReadableContext,
   ReadableModule,
   WindowMethod,
-} from "@ooc/core/readable/contract.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
-import { xmlText, type XmlNode } from "@ooc/core/_shared/types/xml.js";
-import { OocObjectRef } from "@ooc/core/_shared/types/context-window.js";
+} from "@ooc/core/types";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
+import { xmlText, type XmlNode } from "@ooc/core/types/xml.js";
+import { OocObjectRef } from "@ooc/core/types/context-window.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
@@ -88,8 +88,11 @@ const readable: ReadableModule<Data, ThreadWin> = {
   readable: (ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ThreadWin>) => {
     const children: XmlNode[] = []
 
+    // TODO 根据自动压缩档位判断一次是否需要执行信息总结
+
     if (win.class == "this_thread") {
       // TODO 展示 thread events & messages
+
     } else { // talk window 只展示 messages
       const { visible: messages } = applyTranscriptViewport(self.data.messages, win.data?.transcriptViewport);
       children.push(...messages.map(m => xmlText(m.from=="caller"? `[self:] ${m.content}`:`[callee:] ${m.content}`)));

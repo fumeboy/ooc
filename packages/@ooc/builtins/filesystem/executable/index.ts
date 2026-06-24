@@ -14,7 +14,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
+} from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 // 子对象的 class id（委托目标；instantiate 经 ctx.runtime 在 exec 期解析其 constructor）。
@@ -43,13 +43,13 @@ const grepMethod: ObjectMethod<Data> = {
     const pattern = typeof args.pattern === "string" ? args.pattern : "";
     if (!pattern) throw new Error("[filesystem.grep] 缺少必填参数 pattern");
     const runtime = requireRuntime(ctx, "grep");
-    await runtime.instantiate(SEARCH_CLASS, {
+    await runtime.instantiate({ class: SEARCH_CLASS, args: {
       pattern,
       path: args.path,
       glob: args.glob,
       case_insensitive: args.case_insensitive,
       mode: "grep",
-    });
+    }});
     return `opened search (grep) for ${pattern}`;
   },
 };
@@ -69,10 +69,12 @@ const globMethod: ObjectMethod<Data> = {
     const runtime = requireRuntime(ctx, "glob");
     // glob 通配符走 search 的 `pattern` 入参（glob 字段是 grep 的文件名过滤器，语义不同）；
     // 显式 mode="glob" 让 search 构造器走 glob 分支。
-    await runtime.instantiate(SEARCH_CLASS, {
-      pattern,
-      cwd: args.cwd,
-      mode: "glob",
+    await runtime.instantiate({
+      class: SEARCH_CLASS, args: {
+        pattern,
+        cwd: args.cwd,
+        mode: "glob",
+      }
     });
     return `opened search (glob) for ${pattern}`;
   },
@@ -92,10 +94,12 @@ const openFileMethod: ObjectMethod<Data> = {
     const path = typeof args.path === "string" ? args.path : "";
     if (!path) throw new Error("[filesystem.open_file] 缺少必填参数 path");
     const runtime = requireRuntime(ctx, "open_file");
-    await runtime.instantiate(FILE_CLASS, {
-      path,
-      lines: args.lines,
-      columns: args.columns,
+    await runtime.instantiate({
+      class: FILE_CLASS, args: {
+        path,
+        lines: args.lines,
+        columns: args.columns,
+      }
     });
     return `opened file ${path}`;
   },
@@ -115,9 +119,12 @@ const writeFileMethod: ObjectMethod<Data> = {
     const hasContent = typeof args.content === "string";
     if (!path || !hasContent) throw new Error("[filesystem.write_file] 缺少必填参数 path/content");
     const runtime = requireRuntime(ctx, "write_file");
-    await runtime.instantiate(FILE_CLASS, {
-      path,
-      content: args.content,
+    await runtime.instantiate({
+      class: FILE_CLASS,
+      args: {
+        path,
+        content: args.content,
+      }
     });
     return `wrote file ${path}`;
   },

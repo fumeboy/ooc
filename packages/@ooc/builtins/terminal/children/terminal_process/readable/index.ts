@@ -12,8 +12,8 @@ import type {
   ReadableContext,
   ReadableModule,
   WindowMethod,
-} from "@ooc/core/readable/contract.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
 import {
   renderProcessHistory,
   setHistoryWindowMethod,

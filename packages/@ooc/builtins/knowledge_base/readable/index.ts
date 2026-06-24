@@ -7,8 +7,8 @@
 import type {
   ReadableContext,
   ReadableModule,
-} from "@ooc/core/readable/contract.js";
-import { xmlElement, xmlText } from "@ooc/core/_shared/types/xml.js";
+} from "@ooc/core/types";
+import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
 import type { Data } from "../types.js";
 
 /** knowledge_base 的投影态：无（tool-object 成员不持展示态）。 */

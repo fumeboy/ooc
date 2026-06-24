@@ -9,8 +9,8 @@
 import type {
   ExecutableContext,
   ObjectMethod,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 const PLAN_TIP = `plan 把任务拆成可执行步骤，以 plan_window 挂在 context。

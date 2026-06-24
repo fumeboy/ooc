@@ -11,15 +11,15 @@ import type {
   ReadableContext,
   WindowMethod,
   ReadableModule,
-} from "@ooc/core/readable/contract.js";
+} from "@ooc/core/types";
 import {
   DEFAULT_VIEWPORT,
   applyViewport,
   mergeViewport,
   type Viewport,
 } from "./viewport.js";
-import { xmlElement, xmlText, truncateBytes } from "@ooc/core/_shared/types/xml.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+import { xmlElement, xmlText, truncateBytes } from "@ooc/core/types/xml.js";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 const MAX_EXAMPLE_BYTES = 8192;

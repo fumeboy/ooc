@@ -4,9 +4,9 @@
  * Matches active thread intents against knowledge index frontmatter triggers and produces
  * KnowledgeWindow entries with source="activator".
  */
-import { isKnowledgeClass } from "@ooc/core/_shared/types/constants.js";
+import { isKnowledgeClass } from "@ooc/core/types/constants.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
-import { objectDataOf, classOf } from "@ooc/core/_shared/types/context-window.js";
+import { objectDataOf, classOf } from "@ooc/core/types/context-window.js";
 import { getSessionObjectTable } from "@ooc/core/runtime/session-object-table.js";
 import type { Data as KnowledgeData } from "@ooc/builtins/knowledge_base/knowledge/types.js";
 import type { ThreadContext } from "./index.js";

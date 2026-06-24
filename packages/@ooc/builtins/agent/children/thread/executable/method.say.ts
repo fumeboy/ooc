@@ -18,9 +18,9 @@
 import type {
   ExecutableContext,
   ObjectMethod,
-} from "@ooc/core/executable/contract.js";
-import type { MethodCallSchema } from "@ooc/core/_shared/types/intent.js";
-import { TODO } from "@ooc/core/_shared/utils/todo.js";
+} from "@ooc/core/types";
+import type { MethodCallSchema } from "@ooc/core/types";
+import { TODO } from "@ooc/core/utils/todo.js";
 import { generateMessageId } from "@ooc/builtins/agent/thread/executable/utils.js";
 import type { Data, ThreadMessage } from "../types.js";
 

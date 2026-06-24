@@ -21,7 +21,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
+} from "@ooc/core/types";
 import { larkExec } from "@ooc/builtins/feishu_app/cli.js";
 import { readWorldConfig, DEFAULT_LARK_TENANT_HOST } from "@ooc/core/persistable";
 import type { Data } from "../types.js";

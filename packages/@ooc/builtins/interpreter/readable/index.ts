@@ -10,7 +10,7 @@
 import type {
   ReadableContext,
   ReadableModule,
-} from "@ooc/core/readable/contract.js";
+} from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 /** interpreter 无投影态。 */

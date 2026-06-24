@@ -1,7 +1,7 @@
 import { test, expect } from "bun:test";
 import "@ooc/core/runtime/register-builtins.js"; // 全量 boot：注册 terminal class + 委托目标 terminal_process
 import { builtinRegistry } from "@ooc/core/runtime/object-registry.js";
-import type { RuntimeHandle } from "@ooc/core/executable/contract.js";
+import type { RuntimeHandle } from "@ooc/core/types";
 import { makeSelfProxy } from "@ooc/core/runtime/self-proxy.js";
 
 const TERMINAL_PROCESS_CLASS = "_builtin/terminal/terminal_process";

@@ -16,10 +16,10 @@ import { describe, expect, it } from "bun:test";
 import { buildProtocolKnowledgeWindows } from "../protocol";
 import { makeThread } from "@ooc/core/__tests__/make-thread";
 import type { ThreadContext } from "../index.js";
-import type { ContextWindow } from "@ooc/core/_shared/types/context-window.js";
-import { objectDataOf, threadWindowIdOf } from "@ooc/core/_shared/types/context-window.js";
+import type { ContextWindow } from "@ooc/core/types/context-window.js";
+import { objectDataOf, threadWindowIdOf } from "@ooc/core/types/context-window.js";
 import { getSessionObjectTable, setSessionObject } from "@ooc/core/runtime/session-object-table.js";
-import { THREAD_CLASS_ID, isKnowledgeClass } from "@ooc/core/_shared/types/constants.js";
+import { THREAD_CLASS_ID, isKnowledgeClass } from "@ooc/core/types/constants.js";
 
 /** fixture 窗规格：ref 视角态 + 要登记进对象表的 data。 */
 interface WinSpec {

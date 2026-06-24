@@ -8,8 +8,8 @@ import type {
   ExecutableContext,
   ExecutableModule,
   ObjectMethod,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import { buildFillState } from "../schema-fill.js";
 import type { Data } from "../types.js";
 

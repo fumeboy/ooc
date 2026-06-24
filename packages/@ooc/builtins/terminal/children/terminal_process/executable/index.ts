@@ -13,8 +13,8 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
-import type { SelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+} from "@ooc/core/types";
+import type { SelfProxy } from "@ooc/core/types";
 import { runBashExec } from "./runtime.js";
 export { runBashExec } from "./runtime.js";
 import type { Data } from "../types.js";
@@ -28,12 +28,11 @@ const execMethod: ObjectMethod<Data> = {
     },
   },
   exec: async (ctx: ExecutableContext, self: SelfProxy<Data>, args: { code?: string }) => {
-    const persistence = ctx.persistence;
     const code = args?.code;
     if (typeof code !== "string" || code.trim() === "") {
       return "[terminal_process.exec] 缺少 code 参数。请重新 exec(window_id=\"<terminal_process_id>\", method=\"exec\", args={ code: \"...\" })。";
     }
-    const record = await runBashExec(persistence, code);
+    const record = await runBashExec(ctx.dir, code);
     self.data.history = [...self.data.history, record];
     await ctx.reportDataEdit?.();
     return undefined;

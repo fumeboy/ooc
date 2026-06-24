@@ -11,11 +11,21 @@
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
-import { construct } from "./executable/construct.js";
 import type { Data } from "./types.js";
 
 export const Class: OocClass<Data> = {
-  construct,
+  id: "_builtin/filesystem/file",
+  construct: {
+    description: "打开一个文件",
+    schema: {
+      path: { type: "string" },
+    },
+    exec: (_ctx, args) => {
+      return {
+        path: args.path,
+      };
+    }
+  },
   executable,
   readable,
 };

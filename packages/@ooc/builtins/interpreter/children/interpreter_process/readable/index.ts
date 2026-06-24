@@ -7,8 +7,8 @@
  * history 渲染 + viewport window method 实现见 ./history.ts（本 class 自有）。
  */
 
-import type { ReadableContext, ReadableModule, WindowMethod } from "@ooc/core/readable/contract.js";
-import type { ReadonlySelfProxy } from "@ooc/core/_shared/types/self-proxy.js";
+import type { ReadableContext, ReadableModule, WindowMethod } from "@ooc/core/types";
+import type { ReadonlySelfProxy } from "@ooc/core/types";
 import {
   renderProcessHistory,
   setHistoryWindowMethod,

@@ -10,7 +10,7 @@ import type {
   ExecutableContext,
   ObjectMethod,
   ExecutableModule,
-} from "@ooc/core/executable/contract.js";
+} from "@ooc/core/types";
 import type { Data } from "../types.js";
 
 const openKnowledgeMethod: ObjectMethod<Data> = {
@@ -25,7 +25,7 @@ const openKnowledgeMethod: ObjectMethod<Data> = {
     if (!ctx.runtime) {
       throw new Error("[open_knowledge] runtime handle 缺失，无法实例化 knowledge 子对象。");
     }
-    const id = await ctx.runtime.instantiate("_builtin/knowledge_base/knowledge", args);
+    const id = await ctx.runtime.instantiate({class:"_builtin/knowledge_base/knowledge", args});
     return `opened knowledge → ${id}`;
   },
 };

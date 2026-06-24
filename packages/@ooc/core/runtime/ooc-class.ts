@@ -15,11 +15,10 @@ import type {
   ExecutableModule,
   ObjectConstructor,
   ObjectLifecycleHook,
-} from "../executable/contract.js";
-import type { ReadableModule } from "../readable/contract.js";
-import type { PersistableModule } from "../persistable/contract.js";
-import type { ThinkableModule } from "../thinkable/contract.js";
-import type { VisibleServerModule } from "../_shared/types/visible-server.js";
+  ReadableModule,
+  PersistableModule,
+  VisibleServerModule
+} from "../types";
 
 /**
  * OOC World 运行时句柄 —— class 的 `init` 在 World 启动时拿到它。
@@ -51,6 +50,7 @@ export interface World {
  * example.md 示例里写的 `constructor:` 是该陷阱下的笔误，落地契约统一用 `construct`。
  */
 export interface OocClass<Data = any> {
+  id: string;
   construct?: ObjectConstructor<Data>;
   active?: ObjectLifecycleHook; // refcount 0→1 派发（object-lifecycle dispatchActiveIfFirst，seam=WindowManager.instantiate）
   unactive?: ObjectLifecycleHook;
@@ -58,9 +58,12 @@ export interface OocClass<Data = any> {
   executable?: ExecutableModule<Data>;
   readable?: ReadableModule<Data>;
   persistable?: PersistableModule<Data>;
-  thinkable?: ThinkableModule<Data>;
   visible?: VisibleServerModule<Data>;
+
+  // 仅 OOC Class 单例可以继承另外一个 class
+  inheritClass?: string | null;
 }
+
 
 /**
  * `package.json` 的 `ooc` 元信息（object-model 细节补充）。
@@ -79,6 +82,7 @@ export interface OocObjectInstance<Data = unknown> {
   data: Data;
 }
 
+export type ContextWindow = OocObjectRef;
 export interface OocObjectRef<WinData = unknown> {
   id: string;
   class: string;
