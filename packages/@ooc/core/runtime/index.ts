@@ -29,3 +29,5 @@ export type { StoneRegistry, StoneDefinition, StoneKind, StoneChangedEvent } fro
 
 export { startHotReloadWatcher, parseStoneChange } from "./hot-reload.js";
 export type { HotReloadWatcher, HotReloadOptions } from "./hot-reload.js";
+
+export { extendClass } from "./inherit.js";
