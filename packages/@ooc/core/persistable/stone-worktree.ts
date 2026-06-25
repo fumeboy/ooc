@@ -24,7 +24,33 @@ import {
   type StoneObjectRef,
 } from "./common";
 import { gitWorktreeAdd } from "./stone-git";
-import { SUPER_SESSION_ID } from "../types/constants";
+import { SUPER_SESSION_ID, isSuperSessionId } from "../types/constants";
+
+/**
+ * Internal symbol used by mergeFeatBranch / httpDirectMainWrite to bypass the
+ * `mode:"write", ref:"main"` guard. **Do not export to userland**——只允许
+ * persistable 内部少数受控入口持有。
+ *
+ * issue D `2026-06-26-reflectable-redesign-as-flow-dispatcher.md` 落地裁决 7。
+ */
+export const MERGE_FAST_FORWARD_INTERNAL: unique symbol = Symbol.for(
+  "@ooc/core/persistable/stone-worktree/MERGE_FAST_FORWARD_INTERNAL",
+);
+
+/**
+ * 业务 session 在非 super sessionId 下试图直写 stones/main 时抛出。
+ *
+ * 唯一合规路径：经 `talk(target="super")` 进 super flow，在 super session 内调
+ * `create_pr_for_versioned` / `create_pr_for_class_edits` 走 feat-branch PR；
+ * pool 沉淀走 `sediment_unversioned`。
+ */
+export class SuperSessionRequiredError extends Error {
+  readonly code = "SUPER_SESSION_REQUIRED";
+  constructor(message: string) {
+    super(message);
+    this.name = "SuperSessionRequiredError";
+  }
+}
 
 /** business session 的 stone 分支名：`session-<sid>`。 */
 export function sessionStoneBranch(sessionId: string): string {
@@ -153,8 +179,9 @@ async function ensureFeatBranchWorktreeReady(baseDir: string, branch: string): P
 export async function resolveStoneIdentityDir(
   ref: { baseDir: string; sessionId?: string; objectId: string; stonesBranch?: string },
   mode: "read" | "write",
+  __internal?: symbol,
 ): Promise<string> {
-  return stoneDir(await resolveStoneIdentityRef(ref, mode));
+  return stoneDir(await resolveStoneIdentityRef(ref, mode, __internal));
 }
 
 /**
@@ -162,13 +189,22 @@ export async function resolveStoneIdentityDir(
  * 命中 worktree 时带 `_stonesBranch="session-<sid>"`（否则裸 main ref）。
  *
  * 给 **ref-based 通道**用（loadSelfInstructions / ServerLoader feed / program shell）：
- * 这些通道下游靠 `stoneDir(ref)` / `readSelf(ref)` 路由，传 worktree-aware ref 即可让
+ * 这些通道下游靠 `stoneDir(ref)` / `readSelf(ref)` 路由,传 worktree-aware ref 即可让
  * 它们整体读 worktree 完整副本，无需各自手拼路径。路由语义与 `resolveStoneIdentityDir`
  * 完全一致（同一实现）。
+ *
+ * **issue D 守卫**：`mode:"write", ref:"main"`（即 sessionId 缺省 / super / 非 feat branch
+ * 解析到裸 main canonical）一律 throw `SuperSessionRequiredError`——业务 session 直写
+ * main 是 reflectable 重设计后的偷渡路径，必须经 `talk(target="super")` 在 super flow
+ * 内调 PR / sediment_unversioned method 走合规渠道。
+ *
+ * 唯一旁路：`mergeFeatBranch` / `httpDirectMainWrite` / `rollback` 等已决策入口持有
+ * `MERGE_FAST_FORWARD_INTERNAL` symbol 显式跳闸。
  */
 export async function resolveStoneIdentityRef(
   ref: { baseDir: string; sessionId?: string; objectId: string; stonesBranch?: string },
   mode: "read" | "write",
+  __internal?: symbol,
 ): Promise<StoneObjectRef> {
   const { baseDir, sessionId, objectId, stonesBranch } = ref;
   const mainRef: StoneObjectRef = { baseDir, objectId };
@@ -183,7 +219,18 @@ export async function resolveStoneIdentityRef(
     return mainRef;
   }
 
-  if (!sessionUsesWorktree(sessionId)) return mainRef;
+  if (!sessionUsesWorktree(sessionId)) {
+    // sessionUsesWorktree 排除 super + 无 sessionId → 解析到裸 main canonical。
+    // mode="write" 在此处即业务/super/控制面写 main——只放行经 symbol 旁路的入口。
+    if (mode === "write" && __internal !== MERGE_FAST_FORWARD_INTERNAL) {
+      throw new SuperSessionRequiredError(
+        `direct main write forbidden (sessionId=${sessionId ?? "<none>"}, objectId=${objectId}); ` +
+          `use talk(target="super") + create_pr_for_versioned / sediment_unversioned / ` +
+          `create_pr_for_class_edits via super flow instead.`,
+      );
+    }
+    return mainRef;
+  }
 
   const wtPath = sessionWorktreePath(baseDir, sessionId!);
   // `flows/<sid>` 与运行时数据共存——必须判 `.git`（真 worktree 信号），不能只判

@@ -97,3 +97,20 @@ POST /api/runtime/pr-issues/<N>/resolve          # body { decision: "merge"|"rej
 ```
 
 回滚某对象 stone 历史：`POST /api/runtime/stones/<id>/rollback`，body `{ targetCommit: "<sha>" }`。
+
+---
+
+## issue D 重设计后 — 4 method 一步到位（取代二段式 new_feat_branch + create_pr_and_invite_reviewers）
+
+你在 super flow 的 reflect_request 投影窗里直接拥有 4 个分发器 object method（仅在 sessionId="super" 时 surface）：
+
+1. **`scan_changes()`**：扫你（caller）在业务 flow 内的暂存改动，返回三组清单：
+   - `versioned_dirty`：版本化字段差异（如 agent.self）—— 走 PR 通道。
+   - `unversioned_dirty`：非版本化字段差异 —— 走 pool 通道。
+   - `class_edits`：worktree 内 class 源码改动 —— 走 PR 通道。
+2. **`create_pr_for_versioned(fields?, title)`**：对指定 versioned 字段（缺省 = 全部 dirty）起 feat-branch PR；
+   实现内部：派生 feat 分支 worktree → 把字段值写入对应 stone 路径 → commit + diff + 算 reviewer + 落账 PR-Issue。
+3. **`sediment_unversioned(fields?)`**：对指定 unversioned 字段（缺省 = 全部 dirty）**直写 pool**（`pools/objects/<self>/data.json`，merge）。无 PR、立刻生效。
+4. **`create_pr_for_class_edits(paths?, title)`**：对指定 class 源码改动（缺省 = 全部）起 feat-branch PR。
+
+典型流程：进 super flow → `scan_changes` 看清单 → 按字段类型分别调三个分发 method。**禁止**绕过它们直写 stones/main：业务 session 内对 main canonical 的直写会被 `resolveStoneIdentityRef` 守卫 throw（`SuperSessionRequiredError`）；只有这 4 method 内部通过受控 symbol 旁路放行合规写入。

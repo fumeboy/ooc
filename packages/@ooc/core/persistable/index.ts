@@ -97,11 +97,15 @@ export {
 export {
   rollback,
   httpDirectMainWrite,
+  mergeFeatBranch,
+  archiveFeatBranch,
   SUPERVISOR_OBJECT_ID,
   type RollbackInput,
   type RollbackResult,
   type HttpDirectMainWriteInput,
   type HttpDirectMainWriteResult,
+  type MergeFeatBranchResult,
+  type ArchiveFeatBranchResult,
 } from "./stone-versioning.js";
 
 export {
@@ -118,6 +122,40 @@ export {
   type CommitFeatAndDiffResult,
   type PrPayloadDraft,
 } from "./stone-feat-branch.js";
+
+export {
+  MERGE_FAST_FORWARD_INTERNAL,
+  SuperSessionRequiredError,
+} from "./stone-worktree.js";
+
+export {
+  createPrIssue,
+  loadPrIssue,
+  updatePrIssue,
+  listPrIssueIds,
+  aggregatePrApproval,
+  prIssuesDir,
+  prIssueFile,
+  type PrRecord,
+  type PrReview,
+  type PrStatus,
+} from "./pr-issue.js";
+
+export {
+  createFeatBranchPr,
+  type CreateFeatBranchPrInput,
+  type CreateFeatBranchPrResult,
+} from "./feat-branch-pr.js";
+
+export {
+  scanFlowChanges,
+  scanWorktreeClassEdits,
+  type FieldDiff,
+  type ClassEditEntry,
+  type ScanFlowChangesResult,
+} from "./flow-scan.js";
+
+export { _promoteFlowUnversionedToPool } from "./sediment.js";
 
 export { parseMentions } from "@ooc/core/utils/mention.js";
 

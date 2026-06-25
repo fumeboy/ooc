@@ -133,7 +133,39 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
       },
     )
     // 最近 LLM 观测
-    .get("/observation", () => getLatestLlmObservation() ?? { empty: true });
+    .get("/observation", () => getLatestLlmObservation() ?? { empty: true })
+    // PR-Issue resolve（人类侧合入闸；issue D 落地裁决 9）
+    .post(
+      "/pr-issues/:id/resolve",
+      async ({ params, body }) => {
+        const { resolvePrIssueByHuman } = await import(
+          "@ooc/builtins/agent/children/pr/approval-flow.js"
+        );
+        const r = await resolvePrIssueByHuman(
+          baseDir,
+          params.id,
+          body.decision,
+          body.reviewerId,
+          body.comment,
+        );
+        if (!r.ok) return { ok: false, error: r.error };
+        return { ok: true };
+      },
+      {
+        body: t.Object({
+          decision: t.Union([t.Literal("merge"), t.Literal("reject")]),
+          reviewerId: t.String(),
+          comment: t.Optional(t.String()),
+        }),
+      },
+    )
+    // PR-Issue 读单条（debug / 控制面用）
+    .get("/pr-issues/:id", async ({ params }) => {
+      const { loadPrIssue } = await import("@ooc/core/persistable/pr-issue.js");
+      const record = await loadPrIssue(baseDir, params.id);
+      if (!record) return { error: "not found" };
+      return record;
+    });
 }
 
 /** @deprecated use buildRuntimeModule(config). 留作历史兼容。 */
