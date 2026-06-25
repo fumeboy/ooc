@@ -280,9 +280,9 @@ export async function commitFeatAndDiff(
         ok: false,
         code: "NO_CHANGES",
         message:
-          `feat 分支 ${branch} 工作树无 stone 改动——先 write_file / file_window.edit 编辑 stone 路径 ` +
-          `（stones/<self>/...，objects/...）再 create_pr_and_invite_reviewers。若你本次只往 pool 沉淀了知识/记忆 ` +
-          `（pools/...，write-through 已立即生效），则无需 create_pr_and_invite_reviewers、也开不出 PR。`,
+          `feat 分支 ${branch} 工作树无 stone 改动——业务 session 编辑 stone 路径（stones/<self>/...，objects/...）后, ` +
+          `经 talk(target="super") 进 super flow，在 reflect_request 投影窗调 create_pr_for_versioned / create_pr_for_class_edits 推 canonical。` +
+          `若本次只往 pool 沉淀了知识/记忆（unversioned 字段，由 sediment_unversioned 直写 pool，立即生效），则不会开 PR。`,
       } as const;
     }
 

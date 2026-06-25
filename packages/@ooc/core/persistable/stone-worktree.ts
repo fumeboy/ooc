@@ -11,7 +11,8 @@
  * （program shell $OOC_SELF_DIR）看得到完整 identity、读写都收敛到「一个目录」。
  *
  * 本文件只负责「解析 identity 目录 + lazy 建/检测 worktree」——不碰 commit/merge
- * （那是 super flow create_pr_and_invite_reviewers 的事，复用 stone-versioning）。
+ * （那是 super flow `create_pr_for_versioned` / `create_pr_for_class_edits` 的事，
+ * 复用 stone-versioning）。
  */
 
 import { readdir, rmdir, stat } from "node:fs/promises";
@@ -149,17 +150,17 @@ function featBranchWorktreePath(baseDir: string, branch: string): string {
 /**
  * 确保 feat 分支 worktree 已就绪（含 `.git` worktree link）。
  *
- * 沉淀流程下 feat worktree 由 super-flow `new_feat_branch`（createFeatBranchWorktree）eager
- * 建好后才把绑定挂上 thread，故正常路径下本检查恒为 true。绑定存在但 worktree 不在
+ * 沉淀流程下 feat worktree 由 super-flow PR 系 method（`create_pr_for_versioned` /
+ * `create_pr_for_class_edits`）内部 eager 建好。绑定存在但 worktree 不在
  * （磁盘被清 / 异常）→ fail-loud warn，caller 兜底 main。**本函数不建分支**（建分支是
- * 沉淀方法的职责，需从 main 派生 + 串行化）。
+ * 上述 PR 系 method 的职责，需从 main 派生 + 串行化）。
  */
 async function ensureFeatBranchWorktreeReady(baseDir: string, branch: string): Promise<boolean> {
   const wtPath = featBranchWorktreePath(baseDir, branch);
   if (await pathExists(join(wtPath, ".git"))) return true;
   console.warn(
     `[stone-worktree] feat-branch 绑定 '${branch}' 的 worktree 不存在（${wtPath}）；` +
-      `先经 super flow new_feat_branch 开分支。兜底走 main。`,
+      `经 talk(target="super") 后在 super flow 内调 create_pr_for_versioned / create_pr_for_class_edits 开 PR。兜底走 main。`,
   );
   return false;
 }
