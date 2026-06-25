@@ -23,10 +23,8 @@ const execMethod: ObjectMethod<Data> = {
   name: "exec",
   description: "Run another bash script in this terminal process; result appended to history.",
   schema: {
-    args: {
       code: { type: "string", required: true, description: "待执行 bash 脚本" },
     },
-  },
   exec: async (ctx: ExecutableContext, self: SelfProxy<Data>, args: { code?: string }) => {
     const code = args?.code;
     if (typeof code !== "string" || code.trim() === "") {

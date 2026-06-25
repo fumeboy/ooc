@@ -17,11 +17,9 @@ export const todoMethod: ObjectMethod<Data> = {
   name: "todo",
   description: "Create a visible todo item in context.",
   schema: {
-    args: {
       content: { type: "string", required: true, description: "待办内容" },
       activates_on: { type: "array", required: false, description: "命中这些 intent 时强提醒" },
     },
-  },
   exec: async (ctx: ExecutableContext, _self: SelfProxy<Data>, args: Record<string, unknown>): Promise<ObjectMethodResult> => {
     const ref = await ctx.runtime.instantiate({class:"_builtin/agent/todo", args});
     return {

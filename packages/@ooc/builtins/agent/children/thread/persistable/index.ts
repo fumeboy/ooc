@@ -15,7 +15,7 @@ import { join } from "node:path";
 import type {
   PersistableContext,
   PersistableModule,
-} from "@ooc/core/persistable/contract.js";
+} from "@ooc/core/types/persistable.js";
 import { toJson } from "@ooc/core/persistable/common.js";
 import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
 

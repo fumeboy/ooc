@@ -27,12 +27,10 @@ const execMethod: ObjectMethod<Data> = {
   name: "exec",
   description: "Run another ts/js snippet in this interpreter process; result appended to history.",
   schema: {
-    args: {
       language: { type: "string", required: true, enum: LANG_ENUM, description: "ts / js" },
       lang: { type: "string", enum: LANG_ENUM, description: "Alias for language" },
       code: { type: "string", required: true, description: "Code string to execute" },
     },
-  },
   exec: async (ctx: ExecutableContext, self: SelfProxy<Data>, args: Record<string, unknown>) => {
     const lang = normLang(args);
     const code = args.code as string | undefined;

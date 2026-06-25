@@ -24,12 +24,10 @@ export const Class: OocClass<Data> = {
   construct: {
     description: "Run a ts/js snippet; result appears as a new interpreter_process window.",
     schema: {
-      args: {
         language: { type: "string", required: true, enum: LANG_ENUM, description: "ts / js" },
         lang: { type: "string", enum: LANG_ENUM, description: "Alias for language" },
         code: { type: "string", required: true, description: "Code string to execute" },
       },
-    },
     exec: async (ctx: ConstructorContext, args: Record<string, unknown>): Promise<Data> => {
       const lang = normLang(args);
       const code = args.code as string | undefined;

@@ -17,7 +17,8 @@ import type {
   ObjectLifecycleHook,
   ReadableModule,
   PersistableModule,
-  VisibleServerModule
+  VisibleServerModule,
+  ThinkableModule
 } from "../types";
 
 /**
@@ -49,16 +50,18 @@ export interface World {
  * 会遮蔽该键（`({}).constructor === Object` 恒真 → 单例无法被识别；TS 也会拿 `Function` 去比对类型而报错）。
  * example.md 示例里写的 `constructor:` 是该陷阱下的笔误，落地契约统一用 `construct`。
  */
-export interface OocClass<Data = any> {
+export interface OocClass<Data = any, Win = any> {
   id: string;
   construct?: ObjectConstructor<Data>;
   active?: ObjectLifecycleHook; // refcount 0→1 派发（object-lifecycle dispatchActiveIfFirst，seam=WindowManager.instantiate）
   unactive?: ObjectLifecycleHook;
   init?: (world: World) => string | Promise<string>;
   executable?: ExecutableModule<Data>;
-  readable?: ReadableModule<Data>;
+  readable?: ReadableModule<Data, Win>;
   persistable?: PersistableModule<Data>;
   visible?: VisibleServerModule<Data>;
+  /** thinkable 维度模块 —— 仅跑 thinkloop 的 class（thread）实际注册；其它 class 缺省。 */
+  thinkable?: ThinkableModule<Data>;
 
   // 仅 OOC Class 单例可以继承另外一个 class
   inheritClass?: string | null;

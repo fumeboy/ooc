@@ -21,10 +21,8 @@ const runMethod: ObjectMethod<Data> = {
   name: "run",
   description: "Run a bash script; result appears as a terminal_process window.",
   schema: {
-    args: {
       code: { type: "string", required: true, description: "待执行 bash 脚本" },
     },
-  },
   exec: async (ctx: ExecutableContext, _self: Data, args: { code?: string }) => {
     if (!ctx.runtime) {
       throw new Error("[terminal.run] runtime 句柄缺失，无法实例化 terminal_process。");

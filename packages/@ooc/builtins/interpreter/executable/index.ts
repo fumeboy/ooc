@@ -27,21 +27,22 @@ const runMethod: ObjectMethod<Data, RunArgs> = {
   name: "run",
   description: "Run a ts/js snippet; result appears as an interpreter_process window.",
   schema: {
-    args: {
       language: { type: "string", required: true, enum: LANG_ENUM, description: "ts / js" },
       lang: { type: "string", required: false, enum: LANG_ENUM, description: "language 的别名" },
       code: { type: "string", required: true, description: "待执行 ts/js 脚本" },
     },
-  },
   exec: async (ctx: ExecutableContext, _self: Data, args: RunArgs) => {
     if (!ctx.runtime) {
       return "[run] runtime 句柄缺失，无法实例化 interpreter_process。";
     }
-    const id = await ctx.runtime.instantiate("_builtin/interpreter/interpreter_process", {
-      language: args.language ?? args.lang,
-      code: args.code,
+    const ref = await ctx.runtime.instantiate({
+      class: "_builtin/interpreter/interpreter_process",
+      args: {
+        language: args.language ?? args.lang,
+        code: args.code,
+      },
     });
-    return `interpreter_process 已启动（${id}）。`;
+    return `interpreter_process 已启动（${ref.id}）。`;
   },
 };
 

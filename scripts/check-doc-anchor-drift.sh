@@ -29,6 +29,9 @@ SCAN_PATHS=(
 
 # 锚点形态：packages/@ooc/<路径>.ts:行号 或 .tsx:行号；范围 :N-M 取起始 N。
 # 路径用合法字符白名单，自然在反引号/括号/中文标点/空格处终止。
+#
+# **`~~strikethrough~~` 显式跳过**：极简化重构期把退役模块的死锚标记为 `~~path:N~~`，本脚本
+# 跳过这些已知 stale 标记——意图明确：这是"待重建"标识、不是"行号偏移"漂移。
 ANCHOR_RE='packages/@ooc/[A-Za-z0-9_./@-]+\.tsx?:[0-9]+'
 
 DEAD_FILE=0
@@ -56,7 +59,20 @@ while IFS= read -r hit; do
     echo "  越界行号 $docloc  →  $anchor （文件仅 $((total - 1)) 行）"
     OUT_OF_RANGE=$((OUT_OF_RANGE + 1)); VIOLATIONS=$((VIOLATIONS + 1))
   fi
-done < <(grep -rnoE "$ANCHOR_RE" "${SCAN_PATHS[@]}" --include="*.md" 2>/dev/null)
+done < <(
+  # `~~packages/@ooc/...~~` 强制跳过（极简化重构期把退役模块的死锚标记为 `~~path:N~~`，
+  # 意图明确：是"待重建"标识、不是"行号偏移"漂移）。
+  grep -rnE "$ANCHOR_RE" "${SCAN_PATHS[@]}" --include="*.md" 2>/dev/null \
+    | grep -v '~~packages/@ooc/' \
+    | grep -oE "[^:]+:[0-9]+:.*" \
+    | while IFS= read -r full; do
+        # extract just docfile:docline:anchor (re-do oE-equivalent: keep first anchor per line)
+        anchor=$(echo "$full" | grep -oE "$ANCHOR_RE" | head -1)
+        [[ -z "$anchor" ]] && continue
+        docloc="${full%%:packages/@ooc/*}"
+        echo "${docloc}:${anchor}"
+      done
+)
 
 if [[ $VIOLATIONS -gt 0 ]]; then
   echo

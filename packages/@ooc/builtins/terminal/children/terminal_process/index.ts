@@ -7,27 +7,25 @@
  */
 
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
-import type { ConstructorContext } from "@ooc/core/executable/contract.js";
+import type { ConstructorContext } from "@ooc/core/types/executable.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import { runBashExec } from "./executable/runtime.js";
 import type { Data } from "./types.js";
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/terminal/terminal_process",
   construct: {
     description: "Run a bash script; result appears as a new terminal_process window.",
     schema: {
-      args: {
         code: { type: "string", required: true, description: "待执行 bash 脚本" },
       },
-    },
     exec: async (ctx: ConstructorContext, args: { code?: string }): Promise<Data> => {
-      const persistence = ctx.persistence;
       const code = args?.code;
       if (typeof code !== "string" || code.trim() === "") {
         throw new Error("[terminal_process] 缺少 code 参数。");
       }
-      const record = await runBashExec(persistence, code);
+      const record = await runBashExec(ctx.dir, code);
       return { history: [record] };
     },
   },

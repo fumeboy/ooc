@@ -198,10 +198,6 @@
         "@ooc/builtins/user": "workspace:*",
       },
     },
-    "packages/@ooc/core/_shared": {
-      "name": "@ooc/core/_shared",
-      "version": "0.1.0",
-    },
     "packages/@ooc/storybook": {
       "name": "@ooc/storybook",
       "version": "0.1.0",
@@ -468,8 +464,6 @@
     "@ooc/cli": ["@ooc/cli@workspace:packages/@ooc/cli"],
 
     "@ooc/core": ["@ooc/core@workspace:packages/@ooc/core"],
-
-    "@ooc/core/_shared": ["@ooc/core/_shared@workspace:packages/@ooc/core/_shared"],
 
     "@ooc/storybook": ["@ooc/storybook@workspace:packages/@ooc/storybook"],
 

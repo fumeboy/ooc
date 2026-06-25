@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { objectDir, toJson, type FlowObjectRef } from "./common";
-import type { ObjectRegistry } from "../runtime/object-registry.js";
-import { builtinRegistry } from "../runtime/object-registry.js";
+import type { ClassRegistry } from "../runtime/object-registry.js";
+import { builtinClassRegistry } from "../runtime/object-registry.js";
 
 /** session 元数据，写入 `.session.json`。 */
 export interface FlowSessionMetadata {
@@ -113,10 +113,10 @@ export async function createFlowSession(baseDir: string, sessionId: string, titl
 export async function createFlowObject(
   ref: FlowObjectRef,
   opts?: { class?: string },
-  registry: ObjectRegistry = builtinRegistry,
+  registry: ClassRegistry = builtinClassRegistry,
 ): Promise<FlowObjectRef> {
   // class 存在性校验：未注册时 fail-loud（避免 .flow.json:class 引到悬空 class）。
-  if (opts?.class !== undefined && !registry.has(opts.class)) {
+  if (opts?.class !== undefined && !registry.hasClass(opts.class)) {
     throw new ClassNotFoundError(opts.class);
   }
 

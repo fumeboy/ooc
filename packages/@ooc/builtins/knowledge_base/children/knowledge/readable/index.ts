@@ -40,13 +40,11 @@ const setViewportMethod: WindowMethod<Data, KnowledgeWin> = {
   name: "set_viewport",
   description: "Adjust the viewport (line/column range) rendered for this knowledge window.",
   schema: {
-    args: {
       line_start: { type: "number", description: "起始行（含；从0开始）" },
       line_end: { type: "number", description: "结束行（不含）" },
       column_start: { type: "number", description: "起始字符列（含；从0开始）" },
       column_end: { type: "number", description: "结束字符列（不含）" },
     },
-  },
   exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: KnowledgeWin, args: Record<string, unknown>) => {
     const merged = mergeViewport(before?.viewport ?? DEFAULT_VIEWPORT, args);
     if (!merged.ok) throw new Error(`[knowledge.set_viewport] ${merged.error}`);
@@ -59,7 +57,7 @@ const readable: ReadableModule<Data, KnowledgeWin> = {
     const children: XmlNode[] = [xmlElement("path", {}, [xmlText(self.data.path)])];
     // TOOD
 
-    return { content: children };
+    return { class: "knowledge", content: children };
   },
   window: [
     {

@@ -34,12 +34,10 @@ const setTranscript: WindowMethod<Data, ThreadWin> = {
   name: "set_transcript_window",
   description: "Adjust which portion of the transcript is rendered (tail N or fixed range).",
   schema: {
-    args: {
       tail: { type: "number", required: false, description: "末 N 条（正整数，与 range_* 互斥）" },
       range_start: { type: "number", required: false, description: "区间起点" },
       range_end: { type: "number", required: false, description: "区间终点" },
     },
-  },
   exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: ThreadWin, args: Record<string, unknown>) => {
     if (!hasAnyTranscriptViewportField(args)) {
       return before ?? {};
@@ -56,7 +54,7 @@ const setTranscript: WindowMethod<Data, ThreadWin> = {
 export const compress: WindowMethod<unknown, ThreadWin> = {
   name: "compress",
   description: "压缩本 thread 历史信息",
-  schema: { args: {} },
+  schema: {},
   exec: (_ctx, _self, before_win) => {
     // TODO 执行一次信息总结
     return { ...before_win };
@@ -68,7 +66,6 @@ export const resize: WindowMethod<unknown, ThreadWin> = {
   name: "resize",
   description: "调本 thread 历史信息的自动压缩档位 level：0=不主动压缩，1=适度，2=激进（越高越早自动折叠早期历史）",
   schema: {
-    args: {
       level: {
         type: "number",
         required: true,
@@ -76,7 +73,6 @@ export const resize: WindowMethod<unknown, ThreadWin> = {
         description: "自动压缩档位：0 不主动 / 1 适度 / 2 激进",
       },
     },
-  },
   exec: (_ctx, _self, before_win, args) => {
     // TODO 按照新的自动档位进行一次压缩
     return { ...before_win, autoCompressLevel: args.level ?? 0 };
@@ -85,20 +81,18 @@ export const resize: WindowMethod<unknown, ThreadWin> = {
 
 
 const readable: ReadableModule<Data, ThreadWin> = {
-  readable: (ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ThreadWin>) => {
-    const children: XmlNode[] = []
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ThreadWin>) => {
+    const children: XmlNode[] = [];
+    const projectionClass = win.class === "this_thread" ? "this_thread" : "talk";
 
-    // TODO 根据自动压缩档位判断一次是否需要执行信息总结
-
-    if (win.class == "this_thread") {
+    if (projectionClass === "this_thread") {
       // TODO 展示 thread events & messages
-
-    } else { // talk window 只展示 messages
+    } else {
       const { visible: messages } = applyTranscriptViewport(self.data.messages, win.data?.transcriptViewport);
-      children.push(...messages.map(m => xmlText(m.from=="caller"? `[self:] ${m.content}`:`[callee:] ${m.content}`)));
+      children.push(...messages.map((m) => xmlText(m.from === "caller" ? `[self:] ${m.content}` : `[callee:] ${m.content}`)));
     }
 
-    return { content: children };
+    return { class: projectionClass, content: children };
   },
   window: [
     {

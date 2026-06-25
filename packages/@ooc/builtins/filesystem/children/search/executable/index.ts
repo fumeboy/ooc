@@ -31,14 +31,12 @@ const openMatchMethod: ObjectMethod<Data> = {
   description:
     "Open a file object for the match at the given index in this search window.",
   schema: {
-    args: {
       index: {
         type: "number",
         required: true,
         description: "match index from search matches[].index",
       },
     },
-  },
   exec: async (
     ctx: ExecutableContext,
     self: SelfProxy<Data>,

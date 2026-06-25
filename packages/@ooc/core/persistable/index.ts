@@ -1,5 +1,11 @@
-export type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "./common";
+/**
+ * persistable —— 三层存储 (stones / flows / pools) 物理 IO 入口 barrel。
+ *
+ * 仅 re-export 仍存在的模块；旧 PR-Issue / pool / object-data / super-actor / stone-readable
+ * 等已退役模块的 re-export 已清。
+ */
 export {
+  // common: refs + path helpers + 常量
   objectDir,
   stoneDir,
   resolveStoneDir,
@@ -10,26 +16,9 @@ export {
   STONE_CHILDREN_SUBDIR,
   BUILTIN_OBJECT_IDS,
   isBuiltinObjectId,
-} from "./common";
-
-export type { PoolObjectRef, PoolObjectMetadata } from "./pool-object";
-export {
-  POOL_OBJECTS_SUBDIR,
-  poolDir,
-  poolMetadataFile,
-  poolKnowledgeDir,
-  poolKnowledgeMemoryDir,
-  poolKnowledgeRelationsDir,
-  poolKnowledgeRelationFile,
-  poolFilesDir,
-  poolDataDir,
-  poolDataFile,
-  readPoolRelation,
-  createPoolObject,
-  derivePoolFromThread,
-} from "./pool-object";
-
-export { readCsv, writeCsv, appendRow } from "./csv-pool";
+  STONES_MAIN_BRANCH,
+} from "./common.js";
+export type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "./common.js";
 
 export {
   createFlowSession,
@@ -40,79 +29,43 @@ export {
   sessionMetadataFile,
   ClassNotFoundError,
   type FlowSessionMetadata,
-  type FlowObjectMetadata
-} from "./flow-object";
+  type FlowObjectMetadata,
+} from "./flow-object.js";
 
 export {
-  createStoneObject,
   executableDir,
   visibleDir,
   stoneKnowledgeDir,
   stoneChildrenDir,
   ancestorObjectIds,
   discoverStoneHierarchicalPeers,
-} from "./stone-object";
+} from "./stone-object.js";
 
 export {
-  writeRuntimeObjectData,
-  readRuntimeObjectData,
-} from "./flow-runtime-object";
-
-export {
-  // stone-worktree: session identity 的 worktree 统一访问层（取代 plain overlay）
   resolveStoneIdentityDir,
   resolveStoneIdentityRef,
   sessionStoneBranch,
   sessionWorktreePath,
   sessionUsesWorktree,
   ensureSessionWorktree,
-} from "./stone-worktree";
+} from "./stone-worktree.js";
 
-export {
-  // createObjectInSession: 在业务 session worktree 建新对象骨架（不 commit，create_pr_and_invite_reviewers 合入）
-  createObjectInSession,
-  type CreateObjectInSessionInput,
-  type CreateObjectInSessionResult,
-} from "./stone-create-object";
-export { readStoneClass } from "./stone-class";
-export { resolveBuiltinDir, resolveBuiltinReadDir } from "./builtin-dir";
-export {
-  readReadable,
-  readableFile,
-  writeReadable,
-} from "./stone-readable";
+export { readStoneClass } from "./stone-class.js";
+export { resolveBuiltinDir, resolveBuiltinReadDir } from "./builtin-dir.js";
 export {
   readExecutableSource,
   executableIndexFile,
   writeExecutableSource,
-} from "./stone-server";
-
-// PR-Issue 账本已下沉 pr builtin（PR 下沉 P3）：
-// @ooc/builtins/agent/children/pr/persistable/pr-issue.ts —— 消费方直接 import 该路径，
-// 不再经 persistable barrel（core 维度包不可 re-export builtin 物）。
+} from "./stone-server.js";
 
 export { enqueueSessionWrite, __resetSerialQueueForTests } from "../runtime/serial-queue.js";
 
-// STONES_MAIN_BRANCH canonical 源已迁入 ./common（打破 pr-issue → bootstrap 反向依赖）。
-export { STONES_MAIN_BRANCH } from "./common";
-
-// super-flow actor 冒泡（reflectable 新对象自沉淀 bootstrap）：super-alias 的 callee
-// 解析——canonical caller 透明、新对象冒泡到最近 canonical 祖先、顶层兜底 supervisor。
-export {
-  resolveSuperActor,
-  isCanonicalObject,
-  SUPER_ACTOR_FALLBACK,
-} from "./super-actor.js";
-
-// git / versioning 编排（stone-git / stone-bootstrap / stone-versioning / stone-feat-branch）。
-// persistable/index re-export 这些符号，作为 `@ooc/core/persistable` barrel 的统一对外面。
 export {
   ensureStoneRepo,
   type EnsureStoneRepoResult,
 } from "./stone-bootstrap.js";
 
 export {
-  // git CLI 薄包装（仅供 versioning 等高层编排使用）
   isValidBranchName,
   gitInit,
   gitCurrentBranch,
@@ -142,9 +95,6 @@ export {
 } from "./stone-git.js";
 
 export {
-  // 高层 versioning 编排（治理 rollback + 控制面直写 main + PR-Issue interim 合入）。
-  // session→main 合入语义（tryMergeSelf/classifyWorktreeBranch/requestPrIssueReview）已退役
-  // （地基不变量）；沉淀走 stone-feat-branch（createFeatBranchWorktree + commitAndOpenPr）。
   rollback,
   httpDirectMainWrite,
   SUPERVISOR_OBJECT_ID,
@@ -155,9 +105,6 @@ export {
 } from "./stone-versioning.js";
 
 export {
-  // stone-feat-branch: reflectable 沉淀的 feat-branch PR 路径（取代退役的 session→main 合入）。
-  // 改写：createFeatBranchWorktree（开分支不写文件）+ commitAndOpenPr（finalizer）
-  // 由 super(foo) thread 的 feat 分支绑定串起来；编辑走普通 write_file / file_window.edit。
   computeReviewerSet,
   createFeatBranchWorktree,
   commitFeatAndDiff,
@@ -172,15 +119,16 @@ export {
   type PrPayloadDraft,
 } from "./stone-feat-branch.js";
 
-export { parseMentions } from "@ooc/core/_shared/utils/mention.js";
+export { parseMentions } from "@ooc/core/utils/mention.js";
 
 export {
   flowClientPageFile,
   flowClientPagesDir,
   readFlowClientPage,
   writeFlowClientPage,
-} from "./stone-client";
-export type { WorldConfig } from "./world-config";
+} from "./stone-client.js";
+
+export type { WorldConfig } from "./world-config.js";
 export {
   DEFAULT_SITE_NAME,
   DEFAULT_LARK_TENANT_HOST,
@@ -188,4 +136,4 @@ export {
   readWorldConfig,
   readWorldConfigSync,
   clearWorldConfigCache,
-} from "./world-config";
+} from "./world-config.js";

@@ -1,6 +1,10 @@
 import yaml from "js-yaml";
-import { parseActivatesOn } from "./activator.expr";
-import type { KnowledgeFrontmatter } from "@ooc/core/_shared/types/knowledge.js";
+import type { KnowledgeFrontmatter } from "@ooc/core/types/knowledge.js";
+
+/** activates_on 字段的轻量解析占位 —— activator 子系统已退役，待重写时落实。 */
+function parseActivatesOn(_v: unknown, _file?: string): void {
+  /* no-op until activator is reborn */
+}
 
 /**
  * 把 .md 文本拆成 frontmatter 与 body。

@@ -24,7 +24,7 @@ import {
   type StoneObjectRef,
 } from "./common";
 import { gitWorktreeAdd } from "./stone-git";
-import { SUPER_SESSION_ID } from "../_shared/types/constants";
+import { SUPER_SESSION_ID } from "../types/constants";
 
 /** business session 的 stone 分支名：`session-<sid>`。 */
 export function sessionStoneBranch(sessionId: string): string {

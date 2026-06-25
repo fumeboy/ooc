@@ -67,12 +67,10 @@ export const setHistoryWindowMethod: WindowMethod<Data, ProcessWin> = {
   description:
     "Adjust which portion of the process's exec history is rendered (tail N or fixed range).",
   schema: {
-    args: {
       history_tail: { type: "number", description: "Show last N execs (positive int; mutually exclusive with start/end)" },
       history_start: { type: "number", description: "Start of range (non-neg int; pairs with history_end)" },
       history_end: { type: "number", description: "End of range (non-neg int; pairs with history_start)" },
     },
-  },
   exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: ProcessWin, args: Record<string, unknown>) => {
     // history_* → core transcript viewport 字段名
     const mapped: Record<string, unknown> = {};

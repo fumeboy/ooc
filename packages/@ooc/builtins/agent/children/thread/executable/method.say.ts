@@ -25,10 +25,8 @@ import { generateMessageId } from "@ooc/builtins/agent/thread/executable/utils.j
 import type { Data, ThreadMessage } from "../types.js";
 
 const SAY_SCHEMA: MethodCallSchema = {
-  args: {
     msg: { type: "string", required: true, description: "要发给对端的消息正文" },
-  },
-};
+  };
 
 /**
  * TODO(thread-say-schedule)：say/reply 写盘后经 runtime 触发对端调度

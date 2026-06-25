@@ -9,7 +9,7 @@
  *   runtime.stoneRegistry.rescan();
  *   runtime.observable.enableDebug();
  *
- * object 类型注册不在此聚合：think/exec/render 经全局 builtinRegistry，world stone
+ * object 类型注册不在此聚合：think/exec/render 经全局 builtinClassRegistry，world stone
  * 的对象类型由渲染期 thinkable/context/object-windows.ts 的 lazy ensure 注册。
  *
  * 过渡期：module-level 默认实例（defaultObservableStore /

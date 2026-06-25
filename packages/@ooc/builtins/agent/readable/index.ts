@@ -21,6 +21,7 @@ import type {
   ReadableModule,
 } from "@ooc/core/types";
 import type { ReadonlySelfProxy } from "@ooc/core/types";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { Data } from "../types.js";
 
 /** self 门面窗的投影态（init 注入 `{ transient, isSelfWindow }`）。 */
@@ -29,7 +30,11 @@ export interface AgentWin {
 }
 
 const readable: ReadableModule<Data, AgentWin> = {
-  readable: (ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: AgentWin) => {
+  readable: (
+    ctx: ReadableContext,
+    self: ReadonlySelfProxy<Data>,
+    _win: OocObjectRef<AgentWin>,
+  ) => {
     const body = self.data?.self ?? "";
     return {
       class: ctx.object.class,
@@ -38,9 +43,6 @@ const readable: ReadableModule<Data, AgentWin> = {
   },
   window: [
     {
-      // self 门面窗投影 class = 实例 objectId（动态）。这里以 agent 基类 id 占位声明形状；
-      // 实际归组按渲染期投影 class（ctx.object.class）走，object_methods 仅自文档（agency
-      // 真实 surface 由 isSelf 路径兜全）。
       class: "_builtin/agent",
       object_methods: ["talk", "plan"],
       window_methods: [],

@@ -62,7 +62,10 @@ export interface ExecutableContext {
  * *_process）从此取运行时环境。
  */
 export interface ConstructorContext {
-  sessionId: string
+  sessionId: string;
+  worldDir: string;
+  /** 该新实例的默认持久化目录（runtime 已据 sessionId+objectId 派生）；可写副作用前置文件落此。 */
+  dir: string;
   runtime?: RuntimeHandle;
   args: Record<string, unknown>;
 }

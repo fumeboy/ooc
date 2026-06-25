@@ -11,7 +11,7 @@
 import type {
   PersistableContext,
   PersistableModule,
-} from "@ooc/core/persistable/contract.js";
+} from "@ooc/core/types/persistable.js";
 import { readSelf, writeSelf } from "./self-md.js";
 import { resolveStoneIdentityRef } from "@ooc/core/persistable/index.js";
 import type { Data } from "../types.js";

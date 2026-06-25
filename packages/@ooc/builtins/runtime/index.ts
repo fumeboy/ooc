@@ -12,6 +12,7 @@ import readable from "./readable/index.js";
 import type { Data } from "./types.js";
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/runtime",
   executable,
   readable,
 };

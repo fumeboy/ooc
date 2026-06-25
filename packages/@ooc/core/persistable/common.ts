@@ -3,7 +3,7 @@ import { readdir } from "node:fs/promises";
 
 /**
  * flow/stone 引用类型 + 纯路径函数的 canonical 源已迁入
- * `@ooc/core/_shared/types/thread.ts`（零依赖层，打破 thinkable ↔ persistable 类型耦合）。
+ * `@ooc/core/types/paths.ts`（零依赖层，打破 thinkable ↔ persistable 类型耦合）。
  * 此处 re-export 保持旧 import 路径 (`persistable/common`) 可用。
  *
  * **留在本文件**的是带 IO / 路径路由的实现：objectDir / threadDir / stoneDir /
@@ -14,7 +14,7 @@ export type {
   FlowObjectRef,
   ThreadPersistenceRef,
   StoneObjectRef,
-} from "../_shared/types/thread.js";
+} from "../types/paths.js";
 export {
   STONE_CHILDREN_SUBDIR,
   BUILTIN_OBJECT_IDS,
@@ -22,10 +22,10 @@ export {
   isBuiltinObjectId,
   toJson,
   deriveStoneFromThread,
-} from "../_shared/types/thread.js";
+} from "../types/paths.js";
 
-import type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "../_shared/types/thread.js";
-import { BUILTIN_OBJECT_IDS, nestedObjectPath } from "../_shared/types/thread.js";
+import type { FlowObjectRef, ThreadPersistenceRef, StoneObjectRef } from "../types/paths.js";
+import { BUILTIN_OBJECT_IDS, nestedObjectPath } from "../types/paths.js";
 
 /**
  * Intermediate `objects/` dir in the versioning-worktree layout

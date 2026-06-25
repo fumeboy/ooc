@@ -12,13 +12,12 @@ import persistable from "./persistable/index.js";
 import type { Data } from "./types.js";
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/example",
   construct: {
     description: "Create an example object showing a message (authoring reference).",
     schema: {
-      args: {
         message: { type: "string", description: "要展示的文本（可多行）" },
       },
-    },
     exec: (_ctx, args: { message?: string }): Data => ({
       message: typeof args.message === "string" ? args.message : "(empty)",
       bumpCount: 0,

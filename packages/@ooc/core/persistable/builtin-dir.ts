@@ -1,5 +1,5 @@
 import { dirname } from "node:path";
-import { BUILTIN_OBJECT_IDS } from "../_shared/types/thread.js";
+import { BUILTIN_OBJECT_IDS } from "../types/paths.js";
 
 /**
  * 解析 builtin 五件套所在的**框架包**目录（运行进程的 `@ooc/builtins/<id>`）。

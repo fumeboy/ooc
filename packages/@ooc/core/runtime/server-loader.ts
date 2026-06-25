@@ -7,7 +7,7 @@
  * `executable/index.ts` 的 `export const window`（barrel）。
  *
  * loader 只负责「从磁盘 import Class + 读 ooc.class」并按 mtime 缓存；把它注册进某个
- * {@link ObjectRegistry} 由 {@link loadAndRegisterStoneClass} 收口（继承链 ensure 等渲染期策略
+ * {@link ObjectInsRegistry} 由 {@link loadAndRegisterStoneClass} 收口（继承链 ensure 等渲染期策略
  * 留给调用方）。
  */
 import { stat } from "node:fs/promises";
@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { resolveStoneDir, readStoneClass } from "../persistable/index.js";
 import type { StoneObjectRef } from "../persistable/index.js";
 import type { OocClass } from "./ooc-class.js";
-import type { ObjectRegistry } from "./object-registry.js";
+import type { ClassRegistry } from "./object-registry.js";
 
 /** loader 加载出的 stone class —— Class 模块 + 继承父类（来自 package.json `ooc.class`）。 */
 export interface LoadedStoneClass {
@@ -76,25 +76,28 @@ export class ServerLoader {
   }
 
   /**
-   * 加载 stone 的 Class 并注册进给定 registry（键名=原始 objectId，registry 内部归一）。
+   * 加载 stone 的 Class 并注册进给定 registry（键名 = `cls.id`，由 ClassRegistry.register 内部派生）。
    * 成功返回 true；该 stone 无 index.ts（纯 self.md 对象）返回 false。load 抛错向上抛（fail-loud）。
    */
   async loadAndRegisterStoneClass(
     stoneRef: StoneObjectRef,
     objectId: string,
-    registry: ObjectRegistry,
+    registry: ClassRegistry,
   ): Promise<boolean> {
     const loaded = await this.loadStoneClass(stoneRef);
     if (loaded) {
-      registry.register(objectId, loaded.cls, { parentClass: loaded.parentClass });
+      // 若 stone class 未显式声明 inheritClass，则用 package.json 的 ooc.class 兜底。
+      const cls = loaded.parentClass && !loaded.cls.inheritClass
+        ? { ...loaded.cls, id: objectId, inheritClass: loaded.parentClass }
+        : { ...loaded.cls, id: objectId };
+      registry.register(cls);
       return true;
     }
-    // 无 index.ts（纯 self.md / readable.md 对象，如 supervisor）：仍读 package.json 的 ooc.class
-    // 注册其 parentClass（空 Class）——让它经**单跳继承**拿到该 class 的 object method + seed knowledge
-    // （否则 supervisor 等 agent 实例 getClass().parentClass 为空，既丢 agency 又丢 class 知识）。
+    // 无 index.ts（纯 self.md / readable.md 对象）：仍读 package.json 的 ooc.class
+    // 注册其 inheritClass（空 Class）——让它经**单跳继承**拿到父 class 的 object method + seed knowledge。
     const parentClass = await readStoneClass(stoneRef);
     if (parentClass != null) {
-      registry.register(objectId, {}, { parentClass });
+      registry.register({ id: objectId, inheritClass: parentClass });
       return true;
     }
     return false;

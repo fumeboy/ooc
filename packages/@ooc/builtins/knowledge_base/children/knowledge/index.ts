@@ -19,16 +19,12 @@ export const Class: OocClass<Data> = {
   construct: {
     description: "Explicitly pin a knowledge doc by path so it stays visible in context.",
     schema: {
-      args: {
         path: { type: "string", required: true, description: "knowledge 索引中的路径（不带 .md）" },
       },
-    },
-    exec: async (ctx: ConstructorContext, args: { path?: string }): Promise<Data> => {
+    exec: async (_ctx: ConstructorContext, args: { path?: string }): Promise<Data> => {
       const path = typeof args.path === "string" ? args.path : "";
       if (!path) throw new Error("[open_knowledge] 缺少 path。");
-
-      // TODO
-      return {}
+      return { path, source: "explicit" };
     },
   },
   executable,

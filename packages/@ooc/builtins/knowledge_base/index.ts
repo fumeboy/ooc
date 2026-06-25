@@ -11,6 +11,7 @@ import readable from "./readable/index.js";
 import type { Data } from "./types.js";
 
 export const Class: OocClass<Data> = {
+  id: "_builtin/knowledge_base",
   executable,
   readable,
 };

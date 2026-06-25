@@ -17,10 +17,8 @@ const openKnowledgeMethod: ObjectMethod<Data> = {
   name: "open_knowledge",
   description: "Pin a knowledge doc by path so it stays visible in context.",
   schema: {
-    args: {
       path: { type: "string", required: true, description: "knowledge 索引中的路径（不带 .md）" },
     },
-  },
   exec: async (ctx: ExecutableContext, _self: Data, args: { path?: string }) => {
     if (!ctx.runtime) {
       throw new Error("[open_knowledge] runtime handle 缺失，无法实例化 knowledge 子对象。");

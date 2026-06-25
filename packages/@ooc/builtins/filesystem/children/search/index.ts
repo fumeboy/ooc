@@ -122,7 +122,6 @@ export const Class: OocClass<Data> = {
     description:
       "Search files by name (glob) or content (grep); results appear as a search window.",
     schema: {
-      args: {
         pattern: {
           type: "string",
           required: true,
@@ -142,7 +141,6 @@ export const Class: OocClass<Data> = {
           description: "grep: case insensitive match",
         },
       },
-    },
     exec: async (ctx: ConstructorContext, args: SearchArgs): Promise<Data> => {
       const pattern = typeof args.pattern === "string" ? args.pattern : "";
       if (!pattern) {

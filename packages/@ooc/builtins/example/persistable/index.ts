@@ -18,7 +18,7 @@ import { dirname, join } from "node:path";
 import type {
   PersistableContext,
   PersistableModule,
-} from "@ooc/core/persistable/contract.js";
+} from "@ooc/core/types/persistable.js";
 import type { Data } from "../types.js";
 
 const FILE = "example.md";

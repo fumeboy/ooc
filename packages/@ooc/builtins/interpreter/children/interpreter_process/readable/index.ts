@@ -16,6 +16,7 @@ import {
 } from "./history.js";
 import type { Data } from "../types.js";
 
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 /**
  * window method：调本解释器窗展示档位 compressLevel（compress v2 resize 协议，本 class 自实现）。
  * 0=全文 / 1=缩略 / 2=仅句柄——读出侧 xml.ts:projectByCompressLevel 据此投影输出详略。
@@ -24,10 +25,8 @@ const resizeMethod: WindowMethod<Data, ProcessWin> = {
   name: "resize",
   description: "调本解释器窗展示档位 level：0=全输出，1=缩略，2=仅句柄。",
   schema: {
-    args: {
       level: { type: "number", required: true, enum: [0, 1, 2], description: "展示档位：0 全文 / 1 缩略 / 2 仅句柄" },
     },
-  },
   exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: ProcessWin, args: Record<string, unknown>): ProcessWin => {
     const raw = (args as { level?: number }).level;
     const level = Math.max(0, Math.min(2, typeof raw === "number" ? raw : 0)) as 0 | 1 | 2;
@@ -36,9 +35,9 @@ const resizeMethod: WindowMethod<Data, ProcessWin> = {
 };
 
 const readable: ReadableModule<Data, ProcessWin> = {
-  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: ProcessWin) => ({
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ProcessWin>) => ({
     class: "interpreter_process",
-    content: renderProcessHistory(self.data.history, win),
+    content: renderProcessHistory(self.data.history, win.data ?? {}),
   }),
   window: [
     {

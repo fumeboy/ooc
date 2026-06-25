@@ -22,6 +22,7 @@ import { xmlElement, xmlText, truncateBytes } from "@ooc/core/types/xml.js";
 import type { ReadonlySelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 const MAX_EXAMPLE_BYTES = 8192;
 
 /** example 的**投影态**（与 Data 分离）：行/列 viewport。 */
@@ -34,13 +35,11 @@ const setViewportMethod: WindowMethod<Data, ExampleWin> = {
   name: "set_viewport",
   description: "Adjust the rendered viewport (line/column range) for this example window.",
   schema: {
-    args: {
       line_start: { type: "number", description: "起始行（含；从0开始）" },
       line_end: { type: "number", description: "结束行（不含）" },
       column_start: { type: "number", description: "起始字符列（含；从0开始）" },
       column_end: { type: "number", description: "结束字符列（不含）" },
     },
-  },
   exec: (_ctx: ReadableContext, _self: ReadonlySelfProxy<Data>, before: ExampleWin, args: Record<string, unknown>) => {
     const merged = mergeViewport(before?.viewport ?? DEFAULT_VIEWPORT, args);
     if (!merged.ok) throw new Error(`[example.set_viewport] ${merged.error}`);
@@ -49,8 +48,8 @@ const setViewportMethod: WindowMethod<Data, ExampleWin> = {
 };
 
 const readable: ReadableModule<Data, ExampleWin> = {
-  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: ExampleWin) => {
-    const viewport = win?.viewport ?? DEFAULT_VIEWPORT;
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ExampleWin>) => {
+    const viewport = win.data?.viewport ?? DEFAULT_VIEWPORT;
     const body = applyViewport(self.data.message ?? "", viewport);
     return {
       class: "example",

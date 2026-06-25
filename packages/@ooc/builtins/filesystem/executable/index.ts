@@ -32,13 +32,11 @@ const grepMethod: ObjectMethod<Data> = {
   name: "grep",
   description: "Search file contents by regex; results appear as a search object.",
   schema: {
-    args: {
       pattern: { type: "string", required: true, description: "正则表达式" },
       path: { type: "string", required: false, description: "搜索根目录或单个文件" },
       glob: { type: "string", required: false, description: "文件名过滤 glob" },
       case_insensitive: { type: "boolean", required: false, description: "是否忽略大小写" },
     },
-  },
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     const pattern = typeof args.pattern === "string" ? args.pattern : "";
     if (!pattern) throw new Error("[filesystem.grep] 缺少必填参数 pattern");
@@ -58,11 +56,9 @@ const globMethod: ObjectMethod<Data> = {
   name: "glob",
   description: "Find files by glob pattern; results appear as a search object.",
   schema: {
-    args: {
       pattern: { type: "string", required: true, description: "glob 通配符" },
       cwd: { type: "string", required: false, description: "搜索根目录" },
     },
-  },
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     const pattern = typeof args.pattern === "string" ? args.pattern : "";
     if (!pattern) throw new Error("[filesystem.glob] 缺少必填参数 pattern");
@@ -84,12 +80,10 @@ const openFileMethod: ObjectMethod<Data> = {
   name: "open_file",
   description: "Open a file as a file object visible in context.",
   schema: {
-    args: {
       path: { type: "string", required: true, description: "文件路径（绝对，或相对 session baseDir）" },
       lines: { type: "array", required: false, description: "[start, end] 行范围" },
       columns: { type: "array", required: false, description: "[start, end] 列范围" },
     },
-  },
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     const path = typeof args.path === "string" ? args.path : "";
     if (!path) throw new Error("[filesystem.open_file] 缺少必填参数 path");
@@ -109,11 +103,9 @@ const writeFileMethod: ObjectMethod<Data> = {
   name: "write_file",
   description: "Write a file (full overwrite); spawns a file object pointing at the path.",
   schema: {
-    args: {
       path: { type: "string", required: true, description: "目标文件路径" },
       content: { type: "string", required: true, description: "要写入的完整文件内容" },
     },
-  },
   exec: async (ctx: ExecutableContext, _self: Data, args: Record<string, unknown>) => {
     const path = typeof args.path === "string" ? args.path : "";
     const hasContent = typeof args.content === "string";
