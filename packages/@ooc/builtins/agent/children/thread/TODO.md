@@ -5,7 +5,7 @@
 > 并把 `isCreatorWindow` 去状态化（id 派生 + close 投影可见性）。非测试源码 tsc 0；round-trip 验通；guard 全绿；
 > doc 已回流对象树（push ooc-0）。剩 `conversationId`/`isForkWindow` 同属 id 镜像/寻址提示，本轮未动（见下）；
 > 574 composition 测试基线非本重构责任，未碰。
-> 设计权威：`.ooc-world-meta/.../children/class/knowledge/object-model.md` 核心 4 / 7；
+> 设计权威：`.ooc-world-meta/.../children/object/self.md` 核心 4 / 7；
 > persistable 边界 `.ooc-world-meta/.../children/persistable/knowledge/core-framework-vs-builtin-logic.md`（落地后须回流修正）。
 
 ## 决策

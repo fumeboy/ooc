@@ -2,7 +2,8 @@
  * skill_index —— 派生注入对象。
  *
  * agent 默认 thread context 含一个 skill_index 窗，readable 渲染时扫 context 中所有窗的 class，
- * 经 ClassRegistry 沿继承链 resolveObjectMethods 列出每个对象可调的 object method。
+ * 经 ClassRegistry `resolveObjectMethods` 本类直查列出每个对象可调的 object method（不沿继承链；
+ * 子如需复用父 methods 由子 class 源码 spread 在装配期表达，registry 只见扁平结果）。
  *
  * 当前最简：data 持 skills 数组（由外部 thinkable / 创建期填入）；readable 直接渲它。
  */

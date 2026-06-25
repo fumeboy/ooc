@@ -9,9 +9,10 @@
  * 与 self 门面窗注入时的 inst.class 一致——保证 window class 声明层按该 class 归组。
  *
  * agency（talk/plan）不在此 window decl 内逐条声明：self 门面窗经渲染器 isSelf 门控
- * surface 对象**全部自有 object method**（沿 class 链合并，见 xml.ts computeVisibleMethodSet
- * isSelf 分支）。此处 window decl 仅声明投影 class 形状；object_methods 列出 agency 仅为
- * 自文档，实际 surface 由 isSelf 路径兜全。end/todo 已迁 thread 作用域，不属 agent。
+ * surface 对象**全部自有 object method**（经 `resolveObjectMethods` 本类直查得到的扁平 method 集；
+ * 子若要复用父 method 由子 class 源码经 spread 在装配期完成，registry 只见扁平结果）。此处 window
+ * decl 仅声明投影 class 形状；object_methods 列出 agency 仅为自文档，实际 surface 由 isSelf 路径兜全。
+ * end/todo 已迁 thread 作用域，不属 agent。
  *
  * self.md 的读盘（hydrate `data.self`）由 agent persistable.load 负责，渲染器在投影前
  * 经 registry 派发——renderer 不再直接 readSelf（对象模型核心 9：self.md 只属 agent 实例）。
