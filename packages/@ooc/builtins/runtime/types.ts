@@ -8,3 +8,10 @@
  * runtime 是**单例工具对象**，无业务态——窗的元信息字段（id/class/status）由 runtime 管理，不在此。
  */
 export interface Data {}
+
+/**
+ * 版本化字段列表（issue C 同伴常量方案 B）。
+ *
+ * 本 class 全部字段非版本化（运行时载体 / tool-object / sediment 已落 pool）。
+ */
+export const VERSIONED_FIELDS: readonly (keyof Data)[] = [] as const;

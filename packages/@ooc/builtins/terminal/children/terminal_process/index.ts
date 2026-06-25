@@ -11,7 +11,7 @@ import type { ConstructorContext } from "@ooc/core/types/executable.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import { runBashExec } from "./executable/runtime.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 
 export const Class: OocClass<Data> = {
   id: "_builtin/terminal/terminal_process",
@@ -31,6 +31,7 @@ export const Class: OocClass<Data> = {
   },
   executable,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

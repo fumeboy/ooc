@@ -14,7 +14,7 @@ import type {
 } from "@ooc/core/types/index.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 
 const construct: ObjectConstructor<Data> = {
   description: "Create a todo item.",
@@ -75,6 +75,7 @@ export const Class: OocClass<Data> = {
   construct,
   executable,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

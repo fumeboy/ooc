@@ -18,7 +18,7 @@ import type {
   ExecutableContext,
 } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 
 const construct: ObjectConstructor<Data> = {
   description: "Open a method_exec_form to progressively fill args for a target method.",
@@ -105,6 +105,7 @@ export const Class: OocClass<Data> = {
   construct,
   executable,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

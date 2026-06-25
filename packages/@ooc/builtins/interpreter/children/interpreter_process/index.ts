@@ -11,7 +11,7 @@ import { makeSelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import { runInterpreterExec, type InterpreterLang } from "./executable/runtime.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 
 const LANG_ENUM = ["ts", "typescript", "js", "javascript"];
 
@@ -46,6 +46,7 @@ export const Class: OocClass<Data> = {
   },
   executable,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

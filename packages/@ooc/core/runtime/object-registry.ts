@@ -159,6 +159,11 @@ export class ClassRegistry {
     return this.classes.get(classId)?.persistable;
   }
 
+  /** 本类直查 versioned_fields（缺省 = 空数组 = 全部字段非版本化）。 */
+  resolveVersionedFields(classId: string): readonly string[] {
+    return this.classes.get(classId)?.versioned_fields ?? [];
+  }
+
   /** 本类直查 visible/server（HTTP 控制面 callMethod 入口）。 */
   resolveVisibleServer(classId: string): VisibleServerModule | undefined {
     return this.classes.get(classId)?.visible;

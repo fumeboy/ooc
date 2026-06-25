@@ -21,7 +21,7 @@ import type {
 } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
 import { observeLog, observeWarn } from "@ooc/core/observable/index.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 import { getLarkClient, isLarkConfigured } from "./lark-client.js";
 
 const construct: ObjectConstructor<Data> = {
@@ -133,6 +133,7 @@ export const Class: OocClass<Data> = {
   construct,
   executable,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

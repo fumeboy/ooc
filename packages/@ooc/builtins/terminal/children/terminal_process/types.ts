@@ -21,3 +21,10 @@ export interface ProcessExecRecord {
 export interface Data {
   history: ProcessExecRecord[];
 }
+
+/**
+ * 版本化字段列表（issue C 同伴常量方案 B）。
+ *
+ * 本 class 全部字段非版本化（运行时载体 / tool-object / sediment 已落 pool）。
+ */
+export const VERSIONED_FIELDS: readonly (keyof Data)[] = [] as const;

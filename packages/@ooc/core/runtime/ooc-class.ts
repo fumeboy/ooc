@@ -66,6 +66,19 @@ export interface OocClass<Data = any, Win = any> {
   visible?: VisibleServerModule<Data>;
   /** thinkable 维度模块 —— 仅跑 thinkloop 的 class（thread）实际注册;其它 class 缺省。 */
   thinkable?: ThinkableModule<Data>;
+  /**
+   * 版本化字段列表（issue C）—— 同伴常量方案 B：每个 builtin 在 `types.ts` 旁导出
+   * `VERSIONED_FIELDS`，`index.ts` 装配时引用注入。
+   *
+   * 列出的字段是 class definition 的一部分（与 executable/readable 同级）：runtime save
+   * 按 VERSIONED_FIELDS 字段级路由——版本化字段经 reflectable 分发器走 PR 合入 stone
+   * canonical；其余字段（unversioned）由 method 写在 flow 暂存内，session 结束（或显式
+   * `talk(super)`）由分发器合入 pool / 持久化语义层。method 路径**不**直接写 stone/pool。
+   *
+   * 缺省 `[]`（全部字段非版本化）。VERSIONED_FIELDS 本身不可在 flow 内 mutate——改它即
+   * "改 class 源码"，走 PR。
+   */
+  versioned_fields?: readonly string[];
 }
 
 

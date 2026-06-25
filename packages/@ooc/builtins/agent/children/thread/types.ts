@@ -315,3 +315,10 @@ export interface ThreadWin {
   summarizedRanges?: SummarizedRange[];
   autoCompressLevel?: 0 | 1 | 2;
 }
+
+/**
+ * 版本化字段列表（issue C 同伴常量方案 B）。
+ *
+ * thread 全部字段是运行时事实（messages/events/status 等），非版本化。
+ */
+export const VERSIONED_FIELDS: readonly (keyof Data)[] = [] as const;

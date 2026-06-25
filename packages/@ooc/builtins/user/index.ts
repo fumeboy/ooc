@@ -15,7 +15,7 @@ import type {
   ReadonlySelfProxy,
 } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 
 const construct: ObjectConstructor<Data> = {
   description: "Create a user object (passive, driven by human via control plane).",
@@ -49,6 +49,7 @@ export const Class: OocClass<Data> = {
   id: "_builtin/user",
   construct,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

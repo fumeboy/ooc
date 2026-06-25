@@ -3,9 +3,15 @@
  *
  * 设计权威：`.ooc-world-meta/.../children/persistable/self.md`。
  *
- * 核心机制：
- * - 落盘：经 `resolvePersistable(class).save(ctx, data)` 泛型派发；缺省走 `data.json`。
- * - hydrate：扫 `flows/<sid>/objects/`、每个目录读 `.flow.json` 拿 class、调 `resolvePersistable(class).load(ctx)`。
+ * 核心机制（issue C 三层重定位）：
+ * - **落盘**：`saveObjectData` 默认 scope="flow"——method 路径恒落 flow 暂存（`flows/<sid>/objects/<id>/data.json`）。
+ *   reflectable 分发器后续以 scope="stone"/"pool" 重调（issue D 主体）。class 自声明 save 时
+ *   runtime 传入 `ctx.scope`，旧实现可忽略此字段（兼容 = "flow" 默认）。
+ * - **hydrate**：顺序 stone canonical + pool sediment + flow override（flow 覆盖一切）；
+ *   merge 后入 session 对象表。完成后写 `.hydrate-snapshot.json`（字段 hash），供 issue D 增量检测用。
+ * - **write-through**：method 内 mutate self.data 立即落 flow 暂存 + 同步保留 session 对象表
+ *   引用（session 对象表持的就是同一份 data 引用——mutate 即可见，无需额外写回；本文件
+ *   只负责持久化）。
  *
  * persistence 不挂到 thread 数据上——所有 dir 派生靠 `(baseDir, sessionId, objectId)` 三元组
  * 经 `objectDir(ref)` 计算。
@@ -18,40 +24,79 @@ import {
   getSessionRegistry,
 } from "../runtime/object-registry.js";
 import type { OocObjectInstance } from "../runtime/ooc-class.js";
-import type { PersistableContext } from "../types/persistable.js";
+import type { PersistableContext, PersistableScope } from "../types/persistable.js";
 import { objectDir, toJson } from "./common.js";
+import { recordHydrate } from "./hydrate-snapshot.js";
 
 /**
- * 落盘一个 object 实例的业务 data。
+ * 把 data 按 VERSIONED_FIELDS 拆成 versioned / unversioned 两部分。
  *
- * 优先 `class.persistable.save`；缺省直接 JSON.stringify(data) 落到 `data.json`。
- * inline 模式（class 不声明 save 但有 inline 子段）跳过——它由父对象（thread）整体落盘。
+ * 列在 versionedFields 内的 key → versioned；其余 → unversioned。
+ * 缺失键不出现在结果里（versioned 只含 data 已有的版本化字段）。
+ */
+export function splitByVersioned<D extends Record<string, unknown>>(
+  data: D,
+  versionedFields: readonly string[],
+): { versioned: Partial<D>; unversioned: Partial<D> } {
+  const versioned: Partial<D> = {};
+  const unversioned: Partial<D> = {};
+  const vset = new Set(versionedFields);
+  for (const k of Object.keys(data) as Array<keyof D>) {
+    if (vset.has(k as string)) {
+      (versioned as Record<string, unknown>)[k as string] = data[k];
+    } else {
+      (unversioned as Record<string, unknown>)[k as string] = data[k];
+    }
+  }
+  return { versioned, unversioned };
+}
+
+/**
+ * 落盘一个 object 实例的业务 data —— 默认 scope="flow"（method 路径）。
+ *
+ * 流程：
+ *   1. 整份 data 写 `flows/<sid>/objects/<id>/data.json`（flow working copy；含 versioned + unversioned 全字段）。
+ *   2. 若 class 自声明 `persistable.save`，以 `ctx.scope="flow"` 调用一次；自定义 save
+ *      可按 scope 分支决定写什么（如 agent.save 在 scope=flow 时额外把 self 字段写 worktree 内 self.md）。
+ *   3. 写 `.flow.json` 标记 class（hydrate 时按它派发）。
+ *
+ * 内存可见性：method exec 拿到的 self 是 session 对象表中 instance.data 的引用，mutate 立刻
+ * 在 session 对象表生效（A 区核心 4 单实例 map）；本函数只负责把内存值持久化到磁盘。
+ *
+ * **本 issue 不调用 scope="stone"/"pool" 路径**——reflectable 分发器（issue D）后续以这两个
+ * scope 重调本函数（或自定义 save）实现 PR / pool 合入。
  */
 export async function saveObjectData(
   baseDir: string,
   sessionId: string,
   inst: OocObjectInstance,
   registry: ClassRegistry,
+  scope: PersistableScope = "flow",
 ): Promise<void> {
   const dir = objectDir({ baseDir, sessionId, objectId: inst.id });
+  await mkdir(dir, { recursive: true });
+
+  // 1. flow working copy：单 data.json 持整份 data（含 versioned + unversioned）。
+  //    本 issue 仅落 scope=flow；其他 scope 留给 issue D 分发器。
+  if (scope === "flow") {
+    await writeFile(join(dir, "data.json"), toJson(inst.data), "utf8");
+    await writeFlowMeta(dir, inst.class);
+  }
+
+  // 2. 自定义 save —— runtime 注入 scope；自定义实现可按 scope 决定写什么。
   const persistable = registry.resolvePersistable(inst.class);
-  // class 自定义 save 路径
   if (persistable?.save) {
     const ctx: PersistableContext = {
       baseDir,
       sessionId,
       objectId: inst.id,
       dir,
+      scope,
     };
     await persistable.save(ctx, inst.data);
-    // 额外写 .flow.json 标记 class（hydrate 时按它派发）
-    await writeFlowMeta(dir, inst.class);
-    return;
+    // class 自声明 save 时仍写 .flow.json，hydrate 派发要用。
+    if (scope === "flow") await writeFlowMeta(dir, inst.class);
   }
-  // 系统默认：data.json
-  await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, "data.json"), toJson(inst.data), "utf8");
-  await writeFlowMeta(dir, inst.class);
 }
 
 async function writeFlowMeta(dir: string, classId: string): Promise<void> {
@@ -83,7 +128,7 @@ async function loadObjectData(
   if (!classId) return undefined;
   const persistable = registry.resolvePersistable(classId);
   if (persistable?.load) {
-    const ctx: PersistableContext = { baseDir, sessionId, objectId, dir };
+    const ctx: PersistableContext = { baseDir, sessionId, objectId, dir, scope: "flow" };
     const data = await persistable.load(ctx);
     if (data === undefined) return undefined;
     return { id: objectId, class: classId, data };
@@ -101,7 +146,7 @@ async function loadObjectData(
 /**
  * 把整个 session 的对象表落盘。
  *
- * 遍历 `getSessionRegistry(sessionId)` 的所有实例，逐一调 `saveObjectData`。
+ * 遍历 `getSessionRegistry(sessionId)` 的所有实例，逐一调 `saveObjectData`（默认 scope="flow"）。
  */
 export async function persistSession(baseDir: string, sessionId: string): Promise<void> {
   const reg = getSessionRegistry(sessionId);
@@ -113,12 +158,13 @@ export async function persistSession(baseDir: string, sessionId: string): Promis
 }
 
 /**
- * Hydrate 一个 session 的对象表 —— 扫 `flows/<sid>/objects/` 重建 ObjectInsRegistry。
+ * Hydrate 一个 session 的对象表 —— 顺序 stone canonical + pool sediment + flow override。
  *
- * 每个 `objects/<id>/` 目录读 `.flow.json` 拿 class、调 persistable.load 回数据。
- *
- * 同时调 `hydrateStones(baseDir, reg)` 把 stones/main/objects/ 下的长期身份对象一并加载
- * （session 启动时 stone 对象先入表，flow 对象再覆盖）。
+ * 1. 扫 `stones/main/objects/` 把每个 stone object 入表（canonical 版本化字段）。
+ * 2. （pool sediment 当前仅有 knowledge sediment；普通 object data 不走 pool——故无单独
+ *    pool merge 步骤；knowledge sediment 经各 class 自己的 readable / activator 加载。）
+ * 3. 扫 `flows/<sid>/objects/` 读 `.flow.json` + `data.json`，flow 值覆盖 stone canonical。
+ * 4. 完成后写 `.hydrate-snapshot.json`（字段 hash），供 issue D 增量检测。
  */
 export async function hydrateSession(baseDir: string, sessionId: string): Promise<ObjectInsRegistry> {
   const reg = getSessionRegistry(sessionId);
@@ -128,15 +174,35 @@ export async function hydrateSession(baseDir: string, sessionId: string): Promis
   try {
     entries = await readdir(root, { withFileTypes: true });
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return reg; // 新 session：空表
+    if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+      // 新 session：仅 stone 数据；仍记一份 snapshot（基线 = 当前 stone 视图）。
+      await snapshotSession(baseDir, sessionId, reg);
+      return reg;
+    }
     throw e;
   }
   for (const e of entries) {
     if (!e.isDirectory()) continue;
     const inst = await loadObjectData(baseDir, sessionId, e.name, reg);
-    if (inst) reg.setObject(inst);
+    if (inst) reg.setObject(inst); // flow override 覆盖前面 hydrateStones 入的 canonical
   }
+  await snapshotSession(baseDir, sessionId, reg);
   return reg;
+}
+
+/** 给 session 对象表的每个对象记录 hydrate-snapshot（字段级 hash 基线）。 */
+async function snapshotSession(
+  baseDir: string,
+  sessionId: string,
+  reg: ObjectInsRegistry,
+): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  reg.iterObjects((inst) => {
+    const data = inst.data as Record<string, unknown> | undefined;
+    if (!data || typeof data !== "object") return;
+    tasks.push(recordHydrate(baseDir, sessionId, inst.id, data));
+  });
+  await Promise.all(tasks);
 }
 
 // ───────────────────────────────────── stones (长期身份层) ─────────────────────────────────────

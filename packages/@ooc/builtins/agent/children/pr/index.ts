@@ -16,7 +16,7 @@ import type {
   ExecutableContext,
 } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
-import type { Data, Comment } from "./types.js";
+import { type Data, type Comment, VERSIONED_FIELDS } from "./types.js";
 
 const construct: ObjectConstructor<Data> = {
   description: "Open a PR review window (created by runtime when a feat-branch PR is filed).",
@@ -120,6 +120,7 @@ export const Class: OocClass<Data> = {
   construct,
   executable,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data, Comment } from "./types.js";
