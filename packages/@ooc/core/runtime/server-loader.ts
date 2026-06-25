@@ -1,14 +1,16 @@
 /**
  * ServerLoader —— 动态加载 stone（world 对象）的 `export const Class`（OocClass）+ 继承元信息。
  *
- * Wave 4 对象模型：world 对象与 builtin 包同形——stone 目录有一个 `index.ts` 一处
+ * Wave 4 对象模型：world 对象与 builtin 包同形——class-defining stone 目录有一个 `index.ts` 一处
  * `export const Class: OocClass<Data>`（装配 construct / executable / readable / persistable），
- * 及 `package.json` 的 `ooc.{objectId, class}`（继承父类）。loader 不再读旧
- * `executable/index.ts` 的 `export const window`（barrel）。
+ * 及 `package.json` 的 `ooc.{objectId, class}`。loader 只负责 import、缓存、与缓存失效。
  *
- * loader 只负责「从磁盘 import Class + 读 ooc.class」并按 mtime 缓存；把它注册进某个
- * {@link ObjectInsRegistry} 由 {@link loadAndRegisterStoneClass} 收口（继承链 ensure 等渲染期策略
- * 留给调用方）。
+ * **OOC 协议层不内建任何继承机制**（object 模型核心 2 / 4）。**无 `index.ts` 的纯实例 object 不向
+ * ClassRegistry 注册新 class**——hydrate 时 `OocObjectInstance.class = ooc.class`（=父 class id），
+ * resolveXxx 直接命中父 class 的字段；class 间的能力复用全部由 class 源码用 import + spread 自行表达。
+ *
+ * 把加载结果注册进某个 {@link ClassRegistry} 由 {@link loadAndRegisterStoneClass} 收口；纯实例
+ * stone（无 index.ts）走 hydrate 路径（runtime-object-io.ts），不经本 loader 的 register 端点。
  */
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -17,9 +19,10 @@ import type { StoneObjectRef } from "../persistable/index.js";
 import type { OocClass } from "./ooc-class.js";
 import type { ClassRegistry } from "./object-registry.js";
 
-/** loader 加载出的 stone class —— Class 模块 + 继承父类（来自 package.json `ooc.class`）。 */
+/** loader 加载出的 stone class —— Class 模块 + `ooc.class` 元信息（仅元信息，runtime 不沿其 fallback）。 */
 export interface LoadedStoneClass {
   cls: OocClass;
+  /** `package.json` 的 `ooc.class` 字段原值（runtime 不在 ClassRegistry 解析此字段，仅 caller 自定义用途）。 */
   parentClass: string | null | undefined;
 }
 
@@ -49,7 +52,7 @@ export class ServerLoader {
 
   private async loadEntry(stoneRef: StoneObjectRef): Promise<LoaderCacheEntry | undefined> {
     const classInfo = await this.resolveClassFile(stoneRef);
-    // 无 index.ts：合法的纯 self.md / readable.md 对象（无后端程序路由）。
+    // 无 index.ts：合法的纯实例 object（无后端程序路由）——不进 ClassRegistry，hydrate 时 inst.class = ooc.class 直指父。
     if (!classInfo) return undefined;
 
     const { path: classFile, mtime } = classInfo;
@@ -70,14 +73,17 @@ export class ServerLoader {
     return entry;
   }
 
-  /** 动态加载 stone 的 `export const Class` + 继承父类（按 mtime 缓存）；无后端路由返回 undefined。 */
+  /** 动态加载 stone 的 `export const Class` + ooc.class 元信息（按 mtime 缓存）；无 index.ts 返回 undefined。 */
   async loadStoneClass(stoneRef: StoneObjectRef): Promise<LoadedStoneClass | undefined> {
     return (await this.loadEntry(stoneRef))?.loaded;
   }
 
   /**
-   * 加载 stone 的 Class 并注册进给定 registry（键名 = `cls.id`，由 ClassRegistry.register 内部派生）。
-   * 成功返回 true；该 stone 无 index.ts（纯 self.md 对象）返回 false。load 抛错向上抛（fail-loud）。
+   * 加载 class-defining stone 的 Class 并注册进给定 registry（键名 = `objectId`）。
+   *
+   * - 有 `index.ts` → `import { Class } → registry.register({ ...Class, id: objectId })`，返回 true。
+   * - 无 `index.ts`（纯实例 object）→ **不**向 registry 注册新 class，返回 false；该 stone 后续靠
+   *   hydrate 时把 `inst.class = ooc.class` 直接挂到父 class 的字段上（见 runtime-object-io.ts）。
    */
   async loadAndRegisterStoneClass(
     stoneRef: StoneObjectRef,
@@ -85,25 +91,12 @@ export class ServerLoader {
     registry: ClassRegistry,
   ): Promise<boolean> {
     const loaded = await this.loadStoneClass(stoneRef);
-    if (loaded) {
-      // 若 stone class 未显式声明 inheritClass，则用 package.json 的 ooc.class 兜底。
-      const cls = loaded.parentClass && !loaded.cls.inheritClass
-        ? { ...loaded.cls, id: objectId, inheritClass: loaded.parentClass }
-        : { ...loaded.cls, id: objectId };
-      registry.register(cls);
-      return true;
-    }
-    // 无 index.ts（纯 self.md / readable.md 对象）：仍读 package.json 的 ooc.class
-    // 注册其 inheritClass（空 Class）——让它经**单跳继承**拿到父 class 的 object method + seed knowledge。
-    const parentClass = await readStoneClass(stoneRef);
-    if (parentClass != null) {
-      registry.register({ id: objectId, inheritClass: parentClass });
-      return true;
-    }
-    return false;
+    if (!loaded) return false;
+    registry.register({ ...loaded.cls, id: objectId });
+    return true;
   }
 
-  /** 使单个 stone 的缓存条目失效（热更新用）。 */
+  /** 使单个 stone 的缓存条目失效（热更新 + PR merge finalizer 用）。 */
   async invalidateStone(stoneRef: StoneObjectRef): Promise<void> {
     const resolvedDir = await resolveStoneDir(stoneRef);
     // Remove all cache entries whose key falls under this stone's resolved directory.
@@ -126,11 +119,16 @@ export function createServerLoader(): ServerLoader {
   return new ServerLoader();
 }
 
-/** 动态加载 stone 的 `export const Class` + 继承父类，按 mtime 缓存（委托默认实例）。 */
+/** 动态加载 stone 的 `export const Class` + ooc.class 元信息（委托默认实例）。 */
 export async function loadStoneClass(
   stoneRef: StoneObjectRef,
 ): Promise<LoadedStoneClass | undefined> {
   return defaultServerLoader.loadStoneClass(stoneRef);
+}
+
+/** 使单个 stone 的默认 loader 缓存失效（PR merge finalizer 用）。 */
+export async function invalidateStone(stoneRef: StoneObjectRef): Promise<void> {
+  return defaultServerLoader.invalidateStone(stoneRef);
 }
 
 /** 测试钩子：清空默认实例的 loader 缓存。 */
