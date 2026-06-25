@@ -33,7 +33,7 @@ export interface World {
  * 一个 ooc class 的后端程序路由（`index.ts` 的 `export const Class`）。
  *
  * - construct   : 仅**非单例** class 注册（`exec(ctx, args)` 产出新实例初始 Data）；单例 class 省略
- * - active      : 对象 session refcount 0→1 激活钩子（可选；由 object-lifecycle 在 refcount 0↔1 派发，seam=WindowManager.instantiate）
+ * - active      : 对象 session refcount 0→1 激活钩子（可选；由 object-lifecycle 在 refcount 0↔1 派发，seam=ThreadRuntime.instantiate）
  * - unactive    : 对象 session refcount 1→0 停用钩子（可选；复用旧 destruct 槽；可返回 {delete:true} 自决删除）
  * - init        : **World 启动时执行**一次的 class 级初始化 `(world) => err`（返回错误信息，空=成功）；
  *                 用于起后台通道/长连接等（如 feishu_app 起 lark event relay）。机制（World 启动时
@@ -53,7 +53,7 @@ export interface World {
 export interface OocClass<Data = any, Win = any> {
   id: string;
   construct?: ObjectConstructor<Data>;
-  active?: ObjectLifecycleHook; // refcount 0→1 派发（object-lifecycle dispatchActiveIfFirst，seam=WindowManager.instantiate）
+  active?: ObjectLifecycleHook; // refcount 0→1 派发（object-lifecycle dispatchActiveIfFirst，seam=ThreadRuntime.instantiate）
   unactive?: ObjectLifecycleHook;
   init?: (world: World) => string | Promise<string>;
   executable?: ExecutableModule<Data>;

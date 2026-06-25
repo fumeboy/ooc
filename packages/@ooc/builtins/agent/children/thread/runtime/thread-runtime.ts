@@ -1,5 +1,5 @@
 /**
- * thread WindowManager —— thread builtin 私有运行时 facade。
+ * thread ThreadRuntime —— thread builtin 私有运行时 facade。
  *
  * 设计权威：`.ooc-world-meta/.../children/object/self.md` 核心 5/10 + E.thread。
  *
@@ -12,7 +12,7 @@
  *
  * **为什么归 thread builtin**：`contextWindows` 是 thread 形状特有；refcount = "扫本 session 全部
  * thread 看 contextWindows 引用此 object 的个数"，只有 thread 形状的对象 contributes refcount。
- * 故 WindowManager 是 thread 的私有运行时，不是 core 通用机制。core 只出 ClassRegistry /
+ * 故 ThreadRuntime 是 thread 的私有运行时，不是 core 通用机制。core 只出 ClassRegistry /
  * ObjectInsRegistry 泛型 seam。
  */
 import type { OocObjectInstance, OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
@@ -36,7 +36,7 @@ import {
 import type { ThreadContext } from "../types.js";
 
 /** 一条 thread 的运行时 facade —— 实现 RuntimeHandle，注入到 method ctx。 */
-export class WindowManager implements RuntimeHandle {
+export class ThreadRuntime implements RuntimeHandle {
   private readonly thread: ThreadContext;
   private readonly registry: ObjectInsRegistry;
   /** dataEdit 通知（thinkloop 注入持久化挂钩）。 */
@@ -55,12 +55,12 @@ export class WindowManager implements RuntimeHandle {
     this.worldDir = opts.worldDir ?? "";
   }
 
-  /** 从 thread 派生 WindowManager —— 取该 thread 所在 session 的 ObjectInsRegistry。 */
+  /** 从 thread 派生 ThreadRuntime —— 取该 thread 所在 session 的 ObjectInsRegistry。 */
   static fromThread(
     thread: ThreadContext,
     opts: { onDataEdit?: () => Promise<void> | void; worldDir?: string } = {},
-  ): WindowManager {
-    return new WindowManager(thread, getSessionRegistry(thread.sessionId), opts);
+  ): ThreadRuntime {
+    return new ThreadRuntime(thread, getSessionRegistry(thread.sessionId), opts);
   }
 
   /** 找窗（按 ref.id 在 contextWindows 数组里）。 */

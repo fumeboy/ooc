@@ -6,12 +6,12 @@
  * 设计：
  * - 输入：thread (data) + LlmClient + ObjectInsRegistry
  * - 副作用：mutates `thread.events`（appendEvents）; mutates `thread.contextWindows`（exec/close）;
- *   mutates session 对象表 via WindowManager
+ *   mutates session 对象表 via ThreadRuntime
  * - 出错：LLM timeout / network error → 写 `lastError` + 标 `status="failed"` + 不抛
  */
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
 import type { ObjectInsRegistry } from "@ooc/core/runtime/object-registry.js";
-import { WindowManager } from "../runtime/window-manager.js";
+import { ThreadRuntime } from "../runtime/thread-runtime.js";
 import type { ThreadContext, ProcessEvent } from "../types.js";
 import { buildLlmInput } from "./context.js";
 import { PRIMITIVE_TOOLS } from "./tools/schema.js";
@@ -74,7 +74,7 @@ export async function think(
   }
 
   // dispatch tool calls
-  const mgr = WindowManager.fromThread(thread, {
+  const runtime = ThreadRuntime.fromThread(thread, {
     worldDir: opts.worldDir,
     onDataEdit: opts.onDataEdit,
   });
@@ -88,7 +88,7 @@ export async function think(
       arguments: call.arguments,
       createdAt: Date.now(),
     });
-    const out = await dispatchToolCall(call, mgr, thread);
+    const out = await dispatchToolCall(call, runtime, thread);
     thread.events.push({
       category: "llm_interaction",
       kind: "function_call_output",
@@ -109,7 +109,7 @@ export async function think(
 
   // 进入 wait 或继续 running
   if (didWait && thread.status === "waiting") {
-    // already set by mgr.wait
+    // already set by runtime.wait
   } else {
     thread.status = "running";
   }

@@ -1,5 +1,5 @@
 /**
- * WindowManager smoke test —— 验证 exec / close / instantiate 三原语行为。
+ * ThreadRuntime smoke test —— 验证 exec / close / instantiate 三原语行为。
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import {
@@ -7,10 +7,10 @@ import {
   releaseSessionRegistry,
 } from "@ooc/core/runtime/object-registry";
 import "@ooc/core/runtime/object-register.builtins";
-import { WindowManager } from "@ooc/builtins/agent/children/thread";
+import { ThreadRuntime } from "@ooc/builtins/agent/children/thread";
 import type { ThreadContext } from "@ooc/builtins/agent/children/thread/types";
 
-const SESSION = "test-window-manager";
+const SESSION = "test-thread-runtime";
 
 async function makeThread(): Promise<ThreadContext> {
   const reg = getSessionRegistry(SESSION);
@@ -23,7 +23,7 @@ async function makeThread(): Promise<ThreadContext> {
   return data;
 }
 
-describe("WindowManager", () => {
+describe("ThreadRuntime", () => {
   beforeEach(() => {
     releaseSessionRegistry(SESSION);
   });
@@ -42,15 +42,15 @@ describe("WindowManager", () => {
 
   it("close on structural window throws", async () => {
     const t = await makeThread();
-    const mgr = WindowManager.fromThread(t);
-    expect(() => mgr.close("_builtin/filesystem")).toThrow(/not closable/);
+    const runtime = ThreadRuntime.fromThread(t);
+    expect(() => runtime.close("_builtin/filesystem")).toThrow(/not closable/);
   });
 
   it("instantiate creates child + appends to contextWindows", async () => {
     const t = await makeThread();
-    const mgr = WindowManager.fromThread(t);
+    const runtime = ThreadRuntime.fromThread(t);
     const before = t.contextWindows.length;
-    const ref = await mgr.instantiate({
+    const ref = await runtime.instantiate({
       class: "_builtin/agent/todo",
       args: { content: "x" },
     });
@@ -61,12 +61,12 @@ describe("WindowManager", () => {
 
   it("exec object method changes data", async () => {
     const t = await makeThread();
-    const mgr = WindowManager.fromThread(t);
-    const ref = await mgr.instantiate({
+    const runtime = ThreadRuntime.fromThread(t);
+    const ref = await runtime.instantiate({
       class: "_builtin/agent/todo",
       args: { content: "task1" },
     });
-    const result = await mgr.exec(ref.id, "done", {});
+    const result = await runtime.exec(ref.id, "done", {});
     expect(result.message).toContain("done");
     const inst = getSessionRegistry(SESSION).getObject(ref.id);
     expect((inst?.data as { status: string }).status).toBe("done");
@@ -74,13 +74,13 @@ describe("WindowManager", () => {
 
   it("close non-structural window removes it", async () => {
     const t = await makeThread();
-    const mgr = WindowManager.fromThread(t);
-    const ref = await mgr.instantiate({
+    const runtime = ThreadRuntime.fromThread(t);
+    const ref = await runtime.instantiate({
       class: "_builtin/agent/todo",
       args: { content: "x" },
     });
     expect(t.contextWindows.find((w) => w.id === ref.id)).toBeDefined();
-    await mgr.close(ref.id);
+    await runtime.close(ref.id);
     expect(t.contextWindows.find((w) => w.id === ref.id)).toBeUndefined();
   });
 });

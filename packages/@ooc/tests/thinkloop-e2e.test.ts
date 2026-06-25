@@ -79,9 +79,9 @@ describe("thinkloop e2e", () => {
     const thread = await makeThread();
     const reg = getSessionRegistry(SID);
     // first instantiate a todo into context
-    const { WindowManager } = await import("@ooc/builtins/agent/children/thread");
-    const mgr = WindowManager.fromThread(thread);
-    const todoRef = await mgr.instantiate({
+    const { ThreadRuntime } = await import("@ooc/builtins/agent/children/thread");
+    const runtime = ThreadRuntime.fromThread(thread);
+    const todoRef = await runtime.instantiate({
       class: "_builtin/agent/todo",
       args: { content: "test task" },
     });

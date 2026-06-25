@@ -21,4 +21,4 @@ const thinkable: ThinkableModule<ThreadContext> = {
 export default thinkable;
 export { runScheduler } from "./scheduler.js";
 export { think } from "./thinkloop.js";
-export { WindowManager } from "../runtime/window-manager.js";
+export { ThreadRuntime } from "../runtime/thread-runtime.js";

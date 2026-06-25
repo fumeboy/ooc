@@ -1,11 +1,11 @@
 /**
  * thread thinkable / tools —— 3 tool 原语 dispatcher。
  *
- * LLM 调 `exec` / `close` / `wait` 时，本模块把调用路由到 WindowManager。LLM 协议层的 tool
+ * LLM 调 `exec` / `close` / `wait` 时，本模块把调用路由到 ThreadRuntime。LLM 协议层的 tool
  * 元信息（schema）见 `./schema.ts`；本模块只做 dispatch。
  */
 import type { LlmToolCall } from "@ooc/core/thinkable/llm/types.js";
-import type { WindowManager } from "../../runtime/window-manager.js";
+import type { ThreadRuntime } from "../../runtime/thread-runtime.js";
 import type { ThreadContext } from "../../types.js";
 
 export interface ToolCallResult {
@@ -15,10 +15,10 @@ export interface ToolCallResult {
   shouldWait: boolean;
 }
 
-/** 派发一条 tool call 到 WindowManager；返回回喂给 LLM 的文本结果 + 是否进入 wait。 */
+/** 派发一条 tool call 到 ThreadRuntime；返回回喂给 LLM 的文本结果 + 是否进入 wait。 */
 export async function dispatchToolCall(
   call: LlmToolCall,
-  mgr: WindowManager,
+  runtime: ThreadRuntime,
   _thread: ThreadContext,
 ): Promise<ToolCallResult> {
   try {
@@ -27,17 +27,17 @@ export async function dispatchToolCall(
         const windowId = String(call.arguments?.window_id ?? "");
         const method = String(call.arguments?.method ?? "");
         const args = (call.arguments?.args as Record<string, unknown> | undefined) ?? {};
-        const result = await mgr.exec(windowId, method, args);
+        const result = await runtime.exec(windowId, method, args);
         return { outputText: result.message ?? "(ok)", shouldWait: false };
       }
       case "close": {
         const windowId = String(call.arguments?.window_id ?? "");
-        await mgr.close(windowId);
+        await runtime.close(windowId);
         return { outputText: `(closed: ${windowId})`, shouldWait: false };
       }
       case "wait": {
         const windowId = String(call.arguments?.window_id ?? "");
-        mgr.wait(windowId);
+        runtime.wait(windowId);
         return { outputText: `(waiting on: ${windowId})`, shouldWait: true };
       }
       default: {

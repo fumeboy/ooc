@@ -18,7 +18,6 @@ import persistable from "./persistable/index.js";
 import thinkable from "./thinkable/index.js";
 import type { Data } from "./types.js";
 import { generateMessageId, generateThreadId } from "./executable/utils.js";
-import { SelfProxy } from "@ooc/core/runtime/self-proxy.js";
 
 const construct: ObjectConstructor<Data> = {
   description:
@@ -78,4 +77,4 @@ export const Class: OocClass<Data> = {
 };
 
 export type { Data } from "./types.js";
-export { WindowManager } from "./runtime/window-manager.js";
+export { ThreadRuntime } from "./runtime/thread-runtime.js";

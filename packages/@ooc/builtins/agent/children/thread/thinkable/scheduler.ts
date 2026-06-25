@@ -21,7 +21,7 @@ import { think } from "./thinkloop.js";
 export interface SchedulerOptions {
   /** 最大 tick 数（防止失控循环）。 */
   maxTicks?: number;
-  /** world 根目录（透给 thinkloop / WindowManager）。 */
+  /** world 根目录（透给 thinkloop / ThreadRuntime）。 */
   worldDir?: string;
   /** 落盘挂钩。 */
   onDataEdit?: () => Promise<void> | void;

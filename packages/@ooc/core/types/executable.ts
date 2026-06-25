@@ -6,7 +6,7 @@ import type { OocObjectRef } from "../runtime/ooc-class.js";
  * runtime 句柄 —— 让 method / constructor 行使「需要 runtime 协助」的副作用。
  *
  * 最小面：实例化子对象（委托类 tool-object 如 filesystem.grep → 实例化 search）、关窗。
- * 具体实现由 core 反推阶段提供（runtime/WindowManager）；零依赖契约层只声明面。
+ * 具体实现由 core 反推阶段提供（runtime/ThreadRuntime）；零依赖契约层只声明面。
  */
 export interface RuntimeHandle {
   /** 调某 class 的 constructor 造新对象、挂进当前 thread；返回新对象 id。 */
@@ -119,7 +119,7 @@ export interface ObjectMethodResult {
 /**
  * 把 method exec 的返回形态规范化为 `ObjectMethodResult`（method 的统一结果形状）。
  *
- * exec 三态返回（`ObjectMethodResult | string | void`）由 runtime（WindowManager）/ HTTP `call_method`
+ * exec 三态返回（`ObjectMethodResult | string | void`）由 runtime（ThreadRuntime）/ HTTP `call_method`
  * 经此收口为**单一 result 形状**——method outcome 即 method result，不再有独立的 outcome 包装类型：
  * - void / undefined → `{}`
  * - 裸 string（sugar）→ `{ message }`

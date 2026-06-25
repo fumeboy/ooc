@@ -5,7 +5,7 @@
  *
  * end({result}) 自动经 creator 会话窗 say 回报（fork 走内存树、peer 走磁盘派送，由 say 自分流）。
  * 该 auto-reply 深度依赖 core（creator window 识别 + say method 派送 + notifyThreadActivated）——
- * 见 deferred_hooks：本轮保留逻辑体，core API（say 新签名 / WindowManager）待反推阶段补齐。
+ * 见 deferred_hooks：本轮保留逻辑体，core API（say 新签名 / ThreadRuntime）待反推阶段补齐。
  */
 
 import type {
