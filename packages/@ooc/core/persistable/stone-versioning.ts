@@ -280,8 +280,12 @@ export type ArchiveFeatBranchResult =
   | { ok: false; code: "GIT"; gitCode: GitErrorCode; stderr: string };
 
 /**
- * ff-merge feat branch → main：checkout main → ff-merge → 同步 packages → 取 head → 回收 worktree。
+ * ff-merge feat branch → main：checkout main → ff-merge → 同步 packages → 取 head → 失效 loader 缓存 → 回收 worktree。
  * 不读写 pr-issue；分支/路径由调用方传入。commitSha 取合后 main head。
+ *
+ * **invalidate 钩**：ff-merge 后对每个变更 objectId 调 `defaultServerLoader.invalidateStone({ baseDir, objectId })`，
+ * 清掉 ServerLoader 按 mtime 缓存的 stale class entry。否则 PR merge 后下次 hydrate 仍命中旧
+ * cache 中的 OocClass（裁决 D7 / persistable × reflectable 路径 A）。
  */
 export async function mergeFeatBranch(
   baseDir: string,
@@ -304,6 +308,17 @@ export async function mergeFeatBranch(
 
   const head = gitHead(repo);
   if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr };
+
+  // 失效 ServerLoader 按 mtime 缓存的 stale class entry（reflectable 路径 A：PR merge 后清缓存）。
+  // 用 dynamic import 避开 persistable → runtime 的循环依赖（server-loader 已 import persistable）。
+  try {
+    const { defaultServerLoader } = await import("../runtime/server-loader.js");
+    for (const oid of objectIds) {
+      await defaultServerLoader.invalidateStone({ baseDir, objectId: oid });
+    }
+  } catch {
+    // best-effort：loader 不可达不影响 merge 成功；hot-reload 推模式仍会兜底。
+  }
 
   await cleanupWorktreeAfterMerge(repo, worktreePath(baseDir, branch), baseDir, branch, reason);
   return { ok: true, commitSha: head.value };
