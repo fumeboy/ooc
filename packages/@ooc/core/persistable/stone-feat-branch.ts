@@ -17,7 +17,7 @@
  * `computeReviewerSet` 纯函数（决策 A：逐路径拥有者）算出的 reviewer 集**强制执行**：
  * 落 `record.reviewers`，合入闸 `aggregatePrApproval`（_builtin/agent/pr 的 pr-issue.ts）要求全员 approve 才
  * `ready-to-merge`（reject 一票否决），再由 `.world.json prAutoMerge` 决定自动/人工合入
- * （编排见 `@ooc/builtins/agent/pr/approval-flow.ts`）。
+ * （编排见 `@ooc/builtins/agent/children/pr/approval-flow.ts`）。
  *
  * 与 session 合入闸（已退役）的本质区别：分支是**沉淀单元**而非运行时派生物；source 是
  * super(foo) 在 feat worktree 下的直接编辑，不读任何 session worktree。

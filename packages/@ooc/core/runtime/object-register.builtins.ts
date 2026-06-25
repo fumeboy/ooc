@@ -12,23 +12,23 @@ import { builtinClassRegistry } from "./object-registry.js";
 
 // agent 家族
 import { Class as AgentClass } from "@ooc/builtins/agent";
-import { Class as ThreadClass } from "@ooc/builtins/agent/thread";
-import { Class as TodoClass } from "@ooc/builtins/agent/todo";
-import { Class as PlanClass } from "@ooc/builtins/agent/plan";
-import { Class as SkillIndexClass } from "@ooc/builtins/agent/skill_index";
-import { Class as MethodExecFormClass } from "@ooc/builtins/agent/method_exec_form";
-import { Class as PrClass } from "@ooc/builtins/agent/pr";
+import { Class as ThreadClass } from "@ooc/builtins/agent/children/thread";
+import { Class as TodoClass } from "@ooc/builtins/agent/children/todo";
+import { Class as PlanClass } from "@ooc/builtins/agent/children/plan";
+import { Class as SkillIndexClass } from "@ooc/builtins/agent/children/skill_index";
+import { Class as MethodExecFormClass } from "@ooc/builtins/agent/children/method_exec_form";
+import { Class as PrClass } from "@ooc/builtins/agent/children/pr";
 
 // tool-object 家族
 import { Class as FilesystemClass } from "@ooc/builtins/filesystem";
-import { Class as FileClass } from "@ooc/builtins/filesystem/file";
-import { Class as SearchClass } from "@ooc/builtins/filesystem/search";
+import { Class as FileClass } from "@ooc/builtins/filesystem/children/file";
+import { Class as SearchClass } from "@ooc/builtins/filesystem/children/search";
 import { Class as TerminalClass } from "@ooc/builtins/terminal";
-import { Class as TerminalProcessClass } from "@ooc/builtins/terminal/terminal_process";
+import { Class as TerminalProcessClass } from "@ooc/builtins/terminal/children/terminal_process";
 import { Class as InterpreterClass } from "@ooc/builtins/interpreter";
-import { Class as InterpreterProcessClass } from "@ooc/builtins/interpreter/interpreter_process";
+import { Class as InterpreterProcessClass } from "@ooc/builtins/interpreter/children/interpreter_process";
 import { Class as KnowledgeBaseClass } from "@ooc/builtins/knowledge_base";
-import { Class as KnowledgeClass } from "@ooc/builtins/knowledge_base/knowledge";
+import { Class as KnowledgeClass } from "@ooc/builtins/knowledge_base/children/knowledge";
 import { Class as RuntimeClass } from "@ooc/builtins/runtime";
 import { Class as UserClass } from "@ooc/builtins/user";
 import { Class as FeishuAppClass } from "@ooc/builtins/feishu_app";

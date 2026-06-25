@@ -1,5 +1,5 @@
 {
-  "name": "@ooc/builtins/agent/todo",
+  "name": "@ooc/builtins/agent/children/todo",
   "version": "0.0.1",
   "private": true,
   "type": "module",

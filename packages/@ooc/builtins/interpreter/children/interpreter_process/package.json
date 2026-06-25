@@ -1,5 +1,5 @@
 {
-  "name": "@ooc/builtins/interpreter/interpreter_process",
+  "name": "@ooc/builtins/interpreter/children/interpreter_process",
   "version": "0.1.0",
   "private": true,
   "type": "module",

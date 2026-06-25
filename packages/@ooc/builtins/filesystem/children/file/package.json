@@ -1,5 +1,5 @@
 {
-  "name": "@ooc/builtins/filesystem/file",
+  "name": "@ooc/builtins/filesystem/children/file",
   "version": "0.1.0",
   "private": true,
   "type": "module",

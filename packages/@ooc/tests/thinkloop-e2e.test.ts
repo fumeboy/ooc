@@ -13,8 +13,8 @@ import {
   releaseSessionRegistry,
 } from "@ooc/core/runtime/object-registry";
 import "@ooc/core/runtime/object-register.builtins";
-import { think, runScheduler } from "@ooc/builtins/agent/thread/thinkable";
-import type { ThreadContext } from "@ooc/builtins/agent/thread/types";
+import { think, runScheduler } from "@ooc/builtins/agent/children/thread/thinkable";
+import type { ThreadContext } from "@ooc/builtins/agent/children/thread/types";
 import type {
   LlmClient,
   LlmGenerateParams,
@@ -79,7 +79,7 @@ describe("thinkloop e2e", () => {
     const thread = await makeThread();
     const reg = getSessionRegistry(SID);
     // first instantiate a todo into context
-    const { WindowManager } = await import("@ooc/builtins/agent/thread");
+    const { WindowManager } = await import("@ooc/builtins/agent/children/thread");
     const mgr = WindowManager.fromThread(thread);
     const todoRef = await mgr.instantiate({
       class: "_builtin/agent/todo",

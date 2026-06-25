@@ -11,7 +11,7 @@ import {
   releaseSessionRegistry,
 } from "@ooc/core/runtime/object-registry";
 import { persistSession, hydrateSession } from "@ooc/core/persistable/runtime-object-io";
-import type { ThreadContext } from "@ooc/builtins/agent/thread/types";
+import type { ThreadContext } from "@ooc/builtins/agent/children/thread/types";
 
 const SID = "persist-test-session";
 let baseDir: string;

@@ -1,5 +1,5 @@
 {
-  "name": "@ooc/builtins/agent/skill_index",
+  "name": "@ooc/builtins/agent/children/skill_index",
   "version": "0.0.1",
   "private": true,
   "type": "module",

@@ -1,5 +1,5 @@
 {
-  "name": "@ooc/builtins/terminal/terminal_process",
+  "name": "@ooc/builtins/terminal/children/terminal_process",
   "version": "0.1.0",
   "private": true,
   "type": "module",

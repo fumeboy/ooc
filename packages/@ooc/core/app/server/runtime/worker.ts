@@ -5,7 +5,7 @@
  * 避免 busy-loop：waiting 或无 running thread 时回到等待，由 enqueue 唤醒。
  */
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
-import { runScheduler } from "@ooc/builtins/agent/thread/thinkable/index.js";
+import { runScheduler } from "@ooc/builtins/agent/children/thread/thinkable/index.js";
 import { persistSession } from "@ooc/core/persistable/runtime-object-io.js";
 import { observeLog } from "@ooc/core/observable/index.js";
 

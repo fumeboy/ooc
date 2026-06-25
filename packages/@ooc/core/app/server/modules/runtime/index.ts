@@ -16,7 +16,7 @@ import {
 } from "@ooc/core/runtime/object-registry.js";
 import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
-import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
+import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/children/thread/types.js";
 import { getLatestLlmObservation } from "@ooc/core/observable/index.js";
 import { hydrateSession, saveObjectData } from "@ooc/core/persistable/runtime-object-io.js";
 import { enqueueScheduler } from "../../runtime/worker.js";

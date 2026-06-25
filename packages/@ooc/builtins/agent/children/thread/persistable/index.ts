@@ -17,7 +17,7 @@ import type {
   PersistableModule,
 } from "@ooc/core/types/persistable.js";
 import { toJson } from "@ooc/core/persistable/common.js";
-import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
+import type { ThreadContext } from "@ooc/builtins/agent/children/thread/types.js";
 
 /** 单个 thread 的 `thread.json` 绝对路径。 */
 function threadFile(dir: string): string {

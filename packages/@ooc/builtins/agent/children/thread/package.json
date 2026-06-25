@@ -1,5 +1,5 @@
 {
-  "name": "@ooc/builtins/agent/thread",
+  "name": "@ooc/builtins/agent/children/thread",
   "version": "0.1.0",
   "private": true,
   "type": "module",

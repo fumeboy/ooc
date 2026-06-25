@@ -30,27 +30,27 @@
       "version": "0.1.0",
     },
     "packages/@ooc/builtins/agent/children/method_exec_form": {
-      "name": "@ooc/builtins/agent/method_exec_form",
+      "name": "@ooc/builtins/agent/children/method_exec_form",
       "version": "0.0.1",
     },
     "packages/@ooc/builtins/agent/children/plan": {
-      "name": "@ooc/builtins/agent/plan",
+      "name": "@ooc/builtins/agent/children/plan",
       "version": "0.0.1",
     },
     "packages/@ooc/builtins/agent/children/pr": {
-      "name": "@ooc/builtins/agent/pr",
+      "name": "@ooc/builtins/agent/children/pr",
       "version": "0.0.1",
     },
     "packages/@ooc/builtins/agent/children/skill_index": {
-      "name": "@ooc/builtins/agent/skill_index",
+      "name": "@ooc/builtins/agent/children/skill_index",
       "version": "0.0.1",
     },
     "packages/@ooc/builtins/agent/children/thread": {
-      "name": "@ooc/builtins/agent/thread",
+      "name": "@ooc/builtins/agent/children/thread",
       "version": "0.1.0",
     },
     "packages/@ooc/builtins/agent/children/todo": {
-      "name": "@ooc/builtins/agent/todo",
+      "name": "@ooc/builtins/agent/children/todo",
       "version": "0.0.1",
     },
     "packages/@ooc/builtins/feishu_app": {
@@ -62,7 +62,7 @@
       "version": "0.1.0",
     },
     "packages/@ooc/builtins/filesystem/children/file": {
-      "name": "@ooc/builtins/filesystem/file",
+      "name": "@ooc/builtins/filesystem/children/file",
       "version": "0.1.0",
       "dependencies": {
         "@codemirror/merge": "^6.0.0",
@@ -72,7 +72,7 @@
       },
     },
     "packages/@ooc/builtins/filesystem/children/search": {
-      "name": "@ooc/builtins/filesystem/search",
+      "name": "@ooc/builtins/filesystem/children/search",
       "version": "0.1.0",
       "dependencies": {
         "react": "^19.0.0",
@@ -83,7 +83,7 @@
       "version": "0.1.0",
     },
     "packages/@ooc/builtins/interpreter/children/interpreter_process": {
-      "name": "@ooc/builtins/interpreter/interpreter_process",
+      "name": "@ooc/builtins/interpreter/children/interpreter_process",
       "version": "0.1.0",
       "dependencies": {
         "react": "^19.0.0",
@@ -94,7 +94,7 @@
       "version": "0.1.0",
     },
     "packages/@ooc/builtins/knowledge_base/children/knowledge": {
-      "name": "@ooc/builtins/knowledge_base/knowledge",
+      "name": "@ooc/builtins/knowledge_base/children/knowledge",
       "version": "0.1.0",
       "dependencies": {
         "react": "^19.0.0",
@@ -109,7 +109,7 @@
       "version": "0.1.0",
     },
     "packages/@ooc/builtins/terminal/children/terminal_process": {
-      "name": "@ooc/builtins/terminal/terminal_process",
+      "name": "@ooc/builtins/terminal/children/terminal_process",
       "version": "0.1.0",
       "dependencies": {
         "react": "^19.0.0",
@@ -124,23 +124,23 @@
       "version": "0.1.0",
       "dependencies": {
         "@ooc/builtins/agent": "workspace:*",
-        "@ooc/builtins/agent/method_exec_form": "workspace:*",
-        "@ooc/builtins/agent/plan": "workspace:*",
-        "@ooc/builtins/agent/pr": "workspace:*",
-        "@ooc/builtins/agent/skill_index": "workspace:*",
-        "@ooc/builtins/agent/thread": "workspace:*",
-        "@ooc/builtins/agent/todo": "workspace:*",
+        "@ooc/builtins/agent/children/method_exec_form": "workspace:*",
+        "@ooc/builtins/agent/children/plan": "workspace:*",
+        "@ooc/builtins/agent/children/pr": "workspace:*",
+        "@ooc/builtins/agent/children/skill_index": "workspace:*",
+        "@ooc/builtins/agent/children/thread": "workspace:*",
+        "@ooc/builtins/agent/children/todo": "workspace:*",
         "@ooc/builtins/feishu_app": "workspace:*",
         "@ooc/builtins/filesystem": "workspace:*",
-        "@ooc/builtins/filesystem/file": "workspace:*",
-        "@ooc/builtins/filesystem/search": "workspace:*",
+        "@ooc/builtins/filesystem/children/file": "workspace:*",
+        "@ooc/builtins/filesystem/children/search": "workspace:*",
         "@ooc/builtins/interpreter": "workspace:*",
-        "@ooc/builtins/interpreter/interpreter_process": "workspace:*",
+        "@ooc/builtins/interpreter/children/interpreter_process": "workspace:*",
         "@ooc/builtins/knowledge_base": "workspace:*",
-        "@ooc/builtins/knowledge_base/knowledge": "workspace:*",
+        "@ooc/builtins/knowledge_base/children/knowledge": "workspace:*",
         "@ooc/builtins/runtime": "workspace:*",
         "@ooc/builtins/terminal": "workspace:*",
-        "@ooc/builtins/terminal/terminal_process": "workspace:*",
+        "@ooc/builtins/terminal/children/terminal_process": "workspace:*",
         "@ooc/builtins/user": "workspace:*",
       },
     },
@@ -279,39 +279,39 @@
 
     "@ooc/builtins/agent": ["@ooc/builtins/agent@workspace:packages/@ooc/builtins/agent"],
 
-    "@ooc/builtins/agent/method_exec_form": ["@ooc/builtins/agent/method_exec_form@workspace:packages/@ooc/builtins/agent/children/method_exec_form"],
+    "@ooc/builtins/agent/children/method_exec_form": ["@ooc/builtins/agent/children/method_exec_form@workspace:packages/@ooc/builtins/agent/children/method_exec_form"],
 
-    "@ooc/builtins/agent/plan": ["@ooc/builtins/agent/plan@workspace:packages/@ooc/builtins/agent/children/plan"],
+    "@ooc/builtins/agent/children/plan": ["@ooc/builtins/agent/children/plan@workspace:packages/@ooc/builtins/agent/children/plan"],
 
-    "@ooc/builtins/agent/pr": ["@ooc/builtins/agent/pr@workspace:packages/@ooc/builtins/agent/children/pr"],
+    "@ooc/builtins/agent/children/pr": ["@ooc/builtins/agent/children/pr@workspace:packages/@ooc/builtins/agent/children/pr"],
 
-    "@ooc/builtins/agent/skill_index": ["@ooc/builtins/agent/skill_index@workspace:packages/@ooc/builtins/agent/children/skill_index"],
+    "@ooc/builtins/agent/children/skill_index": ["@ooc/builtins/agent/children/skill_index@workspace:packages/@ooc/builtins/agent/children/skill_index"],
 
-    "@ooc/builtins/agent/thread": ["@ooc/builtins/agent/thread@workspace:packages/@ooc/builtins/agent/children/thread"],
+    "@ooc/builtins/agent/children/thread": ["@ooc/builtins/agent/children/thread@workspace:packages/@ooc/builtins/agent/children/thread"],
 
-    "@ooc/builtins/agent/todo": ["@ooc/builtins/agent/todo@workspace:packages/@ooc/builtins/agent/children/todo"],
+    "@ooc/builtins/agent/children/todo": ["@ooc/builtins/agent/children/todo@workspace:packages/@ooc/builtins/agent/children/todo"],
 
     "@ooc/builtins/feishu_app": ["@ooc/builtins/feishu_app@workspace:packages/@ooc/builtins/feishu_app"],
 
     "@ooc/builtins/filesystem": ["@ooc/builtins/filesystem@workspace:packages/@ooc/builtins/filesystem"],
 
-    "@ooc/builtins/filesystem/file": ["@ooc/builtins/filesystem/file@workspace:packages/@ooc/builtins/filesystem/children/file"],
+    "@ooc/builtins/filesystem/children/file": ["@ooc/builtins/filesystem/children/file@workspace:packages/@ooc/builtins/filesystem/children/file"],
 
-    "@ooc/builtins/filesystem/search": ["@ooc/builtins/filesystem/search@workspace:packages/@ooc/builtins/filesystem/children/search"],
+    "@ooc/builtins/filesystem/children/search": ["@ooc/builtins/filesystem/children/search@workspace:packages/@ooc/builtins/filesystem/children/search"],
 
     "@ooc/builtins/interpreter": ["@ooc/builtins/interpreter@workspace:packages/@ooc/builtins/interpreter"],
 
-    "@ooc/builtins/interpreter/interpreter_process": ["@ooc/builtins/interpreter/interpreter_process@workspace:packages/@ooc/builtins/interpreter/children/interpreter_process"],
+    "@ooc/builtins/interpreter/children/interpreter_process": ["@ooc/builtins/interpreter/children/interpreter_process@workspace:packages/@ooc/builtins/interpreter/children/interpreter_process"],
 
     "@ooc/builtins/knowledge_base": ["@ooc/builtins/knowledge_base@workspace:packages/@ooc/builtins/knowledge_base"],
 
-    "@ooc/builtins/knowledge_base/knowledge": ["@ooc/builtins/knowledge_base/knowledge@workspace:packages/@ooc/builtins/knowledge_base/children/knowledge"],
+    "@ooc/builtins/knowledge_base/children/knowledge": ["@ooc/builtins/knowledge_base/children/knowledge@workspace:packages/@ooc/builtins/knowledge_base/children/knowledge"],
 
     "@ooc/builtins/runtime": ["@ooc/builtins/runtime@workspace:packages/@ooc/builtins/runtime"],
 
     "@ooc/builtins/terminal": ["@ooc/builtins/terminal@workspace:packages/@ooc/builtins/terminal"],
 
-    "@ooc/builtins/terminal/terminal_process": ["@ooc/builtins/terminal/terminal_process@workspace:packages/@ooc/builtins/terminal/children/terminal_process"],
+    "@ooc/builtins/terminal/children/terminal_process": ["@ooc/builtins/terminal/children/terminal_process@workspace:packages/@ooc/builtins/terminal/children/terminal_process"],
 
     "@ooc/builtins/user": ["@ooc/builtins/user@workspace:packages/@ooc/builtins/user"],
 

@@ -16,7 +16,7 @@ import {
 } from "@ooc/core/runtime/object-registry.js";
 import { THREAD_CLASS_ID, PR_CLASS_ID } from "@ooc/core/types/constants.js";
 import type { OocObjectInstance, OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
-import type { ThreadContext } from "@ooc/builtins/agent/thread/types.js";
+import type { ThreadContext } from "@ooc/builtins/agent/children/thread/types.js";
 import { saveObjectData } from "./runtime-object-io.js";
 
 export interface PrDeliveryInput {

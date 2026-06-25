@@ -11,7 +11,7 @@ import {
   releaseSessionRegistry,
 } from "@ooc/core/runtime/object-registry";
 import { deliverPrToReviewers } from "@ooc/core/persistable/pr-deliver";
-import type { ThreadContext } from "@ooc/builtins/agent/thread/types";
+import type { ThreadContext } from "@ooc/builtins/agent/children/thread/types";
 
 const SID = "pr-deliver-test";
 let baseDir: string;

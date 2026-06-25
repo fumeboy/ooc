@@ -1,5 +1,5 @@
 {
-  "name": "@ooc/builtins/agent/plan",
+  "name": "@ooc/builtins/agent/children/plan",
   "version": "0.0.1",
   "private": true,
   "type": "module",

@@ -1,5 +1,5 @@
 {
-  "name": "@ooc/builtins/agent/method_exec_form",
+  "name": "@ooc/builtins/agent/children/method_exec_form",
   "version": "0.0.1",
   "private": true,
   "type": "module",

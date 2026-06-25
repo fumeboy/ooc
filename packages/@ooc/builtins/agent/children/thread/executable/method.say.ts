@@ -21,7 +21,7 @@ import type {
 } from "@ooc/core/types";
 import type { MethodCallSchema } from "@ooc/core/types";
 import { TODO } from "@ooc/core/utils/todo.js";
-import { generateMessageId } from "@ooc/builtins/agent/thread/executable/utils.js";
+import { generateMessageId } from "@ooc/builtins/agent/children/thread/executable/utils.js";
 import type { Data, ThreadMessage } from "../types.js";
 
 const SAY_SCHEMA: MethodCallSchema = {

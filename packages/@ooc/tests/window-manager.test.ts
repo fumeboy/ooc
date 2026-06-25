@@ -7,8 +7,8 @@ import {
   releaseSessionRegistry,
 } from "@ooc/core/runtime/object-registry";
 import "@ooc/core/runtime/object-register.builtins";
-import { WindowManager } from "@ooc/builtins/agent/thread";
-import type { ThreadContext } from "@ooc/builtins/agent/thread/types";
+import { WindowManager } from "@ooc/builtins/agent/children/thread";
+import type { ThreadContext } from "@ooc/builtins/agent/children/thread/types";
 
 const SESSION = "test-window-manager";
 
