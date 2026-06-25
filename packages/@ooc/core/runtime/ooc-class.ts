@@ -46,6 +46,10 @@ export interface World {
  *                 **仅跑 thinkloop 的 thread 类实际注册**——任意 class 可声明，但只有 thread 被调度行使。
  * - visible : 面向前端的服务端 API（HTTP 控制面编辑 object data；无 thinkloop thread）
  *
+ * **OOC 协议层不内建任何继承 / dispatch chain 机制**（object 模型核心 2）：ClassRegistry 注册扁平的
+ * class 定义，无 chain 元信息、无沿链 fallback。class 想复用另一个 class 的能力，由其 `index.ts` 用
+ * TS 标准 `import` + 对象 `spread`（或 method 级 import 函数 + 显式调）在源码侧完成。
+ *
  * 注：constructor 槽位命名为 **`construct`** 而非 `constructor` —— JS `Object.prototype.constructor`
  * 会遮蔽该键（`({}).constructor === Object` 恒真 → 单例无法被识别；TS 也会拿 `Function` 去比对类型而报错）。
  * example.md 示例里写的 `constructor:` 是该陷阱下的笔误，落地契约统一用 `construct`。
@@ -60,18 +64,16 @@ export interface OocClass<Data = any, Win = any> {
   readable?: ReadableModule<Data, Win>;
   persistable?: PersistableModule<Data>;
   visible?: VisibleServerModule<Data>;
-  /** thinkable 维度模块 —— 仅跑 thinkloop 的 class（thread）实际注册；其它 class 缺省。 */
+  /** thinkable 维度模块 —— 仅跑 thinkloop 的 class（thread）实际注册;其它 class 缺省。 */
   thinkable?: ThinkableModule<Data>;
-
-  // 仅 OOC Class 单例可以继承另外一个 class
-  inheritClass?: string | null;
 }
 
 
 /**
  * `package.json` 的 `ooc` 元信息（object-model 细节补充）。
  * - kind  : 这份 stone 是 class（定义）还是 object（实例）
- * - class : object 经 ooc.class 继承的那**一个** class（父类 id，单跳继承）；省略=无父类（自身即终点，无隐式基类回退；_builtin/root 类已退役）
+ * - class : object 经 ooc.class 单跳 binding 一个 class 作为身份模板。OOC 协议层不感知"父子关系"
+ *           —— class 间的复用一律由 class 源码用 import + spread 自行表达，runtime 不解析继承链。
  */
 export interface OocPackageMeta {
   objectId: string;

@@ -5,9 +5,13 @@
  *
  * 两层结构：
  * - **`ClassRegistry`** —— class（定义）注册表：进程级 builtin singleton + per-stone 派生。
- *   提供「沿单跳继承链解析维度模块」的泛型 seam (`resolveExecutable` / `resolveReadable` /
+ *   提供「本类直查维度模块」的泛型 seam (`resolveExecutable` / `resolveReadable` /
  *   `resolvePersistable` / `resolveVisibleServer` / `resolveThinkable` / `resolveConstructor` /
  *   `resolveActive` / `resolveUnactive`)。core 经此泛型解析 class 程序，不具名 import 具体 class。
+ *
+ *   **OOC 协议层不内建任何继承 / dispatch chain 机制**（object 模型核心 2）：注册扁平的 class，
+ *   resolveXxx 只查本类的对应槽。class 想复用另一个 class 的能力，由其 `index.ts` 用 TS 标准
+ *   `import` + 对象 `spread`（或 method 级 import + 显式调）在源码侧完成。
  *
  * - **`ObjectInsRegistry extends ClassRegistry`** —— 一个 session 内的 object **实例**注册表：
  *   `(objectId → OocObjectInstance)`。context window (`OocObjectRef`) 经 `ref.id` 解析到这里
@@ -32,14 +36,43 @@ import type {
 // ─────────────────────────── ClassRegistry ───────────────────────────
 
 /**
- * 同 class 内 object method 与 window method 不可重名（dispatch 入口统一 exec-by-name，
- * 重名会有优先级歧义）。注册期 fail-loud。
+ * 注册期 fail-loud 校验。两类查重均不可放过：
+ *
+ * 1. **object methods 列表内同名重复** —— 子 class 经 spread + concat 父 methods 时容易漏 filter，
+ *    放任会让 dispatch 按数组顺序拿到首个或末个不定，调试地狱。
+ * 2. **window methods 列表内同名重复**（同 window class 内）—— 同理。
+ * 3. **object method 与 window method 跨类型重名** —— exec-by-name 统一入口下有优先级歧义。
  */
 function assertNoMethodNameCollision(cls: OocClass): void {
-  const objectNames = new Set((cls.executable?.methods ?? []).map((m) => m.name));
+  // 1. object methods 内部自查重
+  const objectMethods = cls.executable?.methods ?? [];
+  const objectSeen = new Set<string>();
+  for (const m of objectMethods) {
+    if (objectSeen.has(m.name)) {
+      throw new Error(
+        `Duplicate object method name "${m.name}" on "${cls.id}" (likely a missing filter in spread+concat)`,
+      );
+    }
+    objectSeen.add(m.name);
+  }
+
+  // 2. 各 window class 内 window methods 自查重
+  for (const decl of cls.readable?.window ?? []) {
+    const windowSeen = new Set<string>();
+    for (const wm of decl.window_methods) {
+      if (windowSeen.has(wm.name)) {
+        throw new Error(
+          `Duplicate window method name "${wm.name}" on window class "${decl.class}" of "${cls.id}"`,
+        );
+      }
+      windowSeen.add(wm.name);
+    }
+  }
+
+  // 3. object vs window 跨类型重名
   for (const decl of cls.readable?.window ?? []) {
     for (const wm of decl.window_methods) {
-      if (objectNames.has(wm.name)) {
+      if (objectSeen.has(wm.name)) {
         throw new Error(
           `Method name "${wm.name}" registered as both object method and window method on "${cls.id}"`,
         );
@@ -49,10 +82,11 @@ function assertNoMethodNameCollision(cls: OocClass): void {
 }
 
 /**
- * Class 注册表 —— 按 class id 注册 OocClass 定义、沿单跳继承链泛型解析维度模块。
+ * Class 注册表 —— 按 class id 注册 OocClass 定义、本类直查各维度模块。
  *
- * 解析约定：每个 `resolveXxx(classId)` 先查本类的对应槽，缺则沿 `inheritClass` 链向上找。
- * 子类同名 method 覆盖父类（见 `resolveObjectMethods`）。继承不可多跳——见对象模型核心 2。
+ * 解析约定：每个 `resolveXxx(classId)` 只查本类的对应槽，**不沿任何继承链 fallback**。
+ * 子 class 要复用父能力，由子的 `index.ts` 在源码侧 `import` 父 class 后 `spread`
+ * （或方法级 `import` 父函数 + 显式调）完成——OOC 协议层不感知"父子关系"。
  */
 export class ClassRegistry {
   protected readonly classes = new Map<string, OocClass>();
@@ -70,99 +104,69 @@ export class ClassRegistry {
     return this.classes.has(classId);
   }
 
-  /** 沿继承链解析 construct。 */
+  /** 本类直查 construct。 */
   resolveConstructor(classId: string): ObjectConstructor | undefined {
-    const cls = this.classes.get(classId);
-    return cls?.construct ?? (cls?.inheritClass ? this.resolveConstructor(cls.inheritClass) : undefined);
+    return this.classes.get(classId)?.construct;
   }
 
-  /** 沿继承链解析 active 钩子。 */
+  /** 本类直查 active 钩子。 */
   resolveActive(classId: string): ObjectLifecycleHook | undefined {
-    const cls = this.classes.get(classId);
-    return cls?.active ?? (cls?.inheritClass ? this.resolveActive(cls.inheritClass) : undefined);
+    return this.classes.get(classId)?.active;
   }
 
-  /** 沿继承链解析 unactive 钩子。 */
+  /** 本类直查 unactive 钩子。 */
   resolveUnactive(classId: string): ObjectLifecycleHook | undefined {
-    const cls = this.classes.get(classId);
-    return cls?.unactive ?? (cls?.inheritClass ? this.resolveUnactive(cls.inheritClass) : undefined);
+    return this.classes.get(classId)?.unactive;
   }
 
-  /** 解析单个 object method（按名，沿继承链首个命中）。 */
+  /** 本类直查单个 object method（按 name）。子若想复用父 method，自己在 index.ts spread/import 后挂上。 */
   resolveObjectMethod(classId: string, name: string): ObjectMethod | undefined {
-    const cls = this.classes.get(classId);
-    const found = cls?.executable?.methods.find((m) => m.name === name);
-    if (found) return found;
-    if (!cls?.inheritClass) return undefined;
-    return this.resolveObjectMethod(cls.inheritClass, name);
+    return this.classes.get(classId)?.executable?.methods.find((m) => m.name === name);
   }
 
-  /**
-   * 合并沿继承链的全部 object method（子类同名覆盖父类）。
-   * dispatch 渲染「这个对象可调哪些 object method」时用。
-   */
+  /** 本类直查全部 object methods。dispatch 渲染「这个对象可调哪些 method」时用。 */
   resolveObjectMethods(classId: string): ObjectMethod[] {
-    const byName = new Map<string, ObjectMethod>();
-    const cls = this.classes.get(classId);
-    if (!cls) return [];
-    const inherited = cls.inheritClass ? this.resolveObjectMethods(cls.inheritClass) : [];
-    for (const m of inherited) byName.set(m.name, m);
-    for (const m of cls.executable?.methods ?? []) byName.set(m.name, m);
-    return Array.from(byName.values());
+    return this.classes.get(classId)?.executable?.methods ?? [];
   }
 
-  /** 解析 window method（按 windowClass + methodName，沿继承链）。 */
+  /** 本类直查 window method（按 windowClass + methodName）。 */
   resolveWindowMethod(
     classId: string,
     windowClass: string,
     methodName: string,
   ): WindowMethod | undefined {
-    const cls = this.classes.get(classId);
-    for (const decl of cls?.readable?.window ?? []) {
-      if (decl.class !== windowClass) continue;
-      const found = decl.window_methods.find((wm) => wm.name === methodName);
-      if (found) return found;
-    }
-    if (!cls?.inheritClass) return undefined;
-    return this.resolveWindowMethod(cls.inheritClass, windowClass, methodName);
+    const decl = this.classes.get(classId)?.readable?.window.find((w) => w.class === windowClass);
+    return decl?.window_methods.find((wm) => wm.name === methodName);
   }
 
-  /** 解析 window class 声明（render 用：要知道某窗 surface 哪些 object method）。 */
+  /** 本类直查 window class 声明。 */
   resolveWindowClass(classId: string, windowClass: string): WindowClassDecl | undefined {
-    const cls = this.classes.get(classId);
-    return (
-      cls?.readable?.window.find((w) => w.class === windowClass) ??
-      (cls?.inheritClass ? this.resolveWindowClass(cls.inheritClass, windowClass) : undefined)
-    );
+    return this.classes.get(classId)?.readable?.window.find((w) => w.class === windowClass);
   }
 
-  /** 解析 readable 模块整份（renderer 调；含 render fn + window decl 列表）。 */
+  /** 本类直查 readable 模块整份。 */
   resolveReadable(classId: string): ReadableModule | undefined {
-    const cls = this.classes.get(classId);
-    return cls?.readable ?? (cls?.inheritClass ? this.resolveReadable(cls.inheritClass) : undefined);
+    return this.classes.get(classId)?.readable;
   }
 
-  /** 解析 readable render（仅 render fn）。 */
+  /** 本类直查 readable render。 */
   resolveReadableRender(classId: string): ReadableRender | undefined {
     return this.resolveReadable(classId)?.readable;
   }
 
-  /** 解析 persistable 模块（沿继承链；无则走系统默认）。 */
+  /** 本类直查 persistable（无则走系统默认）。 */
   resolvePersistable(classId: string): PersistableModule | undefined {
-    const cls = this.classes.get(classId);
-    return cls?.persistable ?? (cls?.inheritClass ? this.resolvePersistable(cls.inheritClass) : undefined);
+    return this.classes.get(classId)?.persistable;
   }
 
-  /** 解析 visible/server 模块（HTTP 控制面 callMethod 入口）。 */
+  /** 本类直查 visible/server（HTTP 控制面 callMethod 入口）。 */
   resolveVisibleServer(classId: string): VisibleServerModule | undefined {
-    const cls = this.classes.get(classId);
-    return cls?.visible ?? (cls?.inheritClass ? this.resolveVisibleServer(cls.inheritClass) : undefined);
+    return this.classes.get(classId)?.visible;
   }
 
-  /** 解析 thinkable 模块（仅 thread 类实际声明；scheduler 经此调 think / onSchedulerTick）。 */
+  /** 本类直查 thinkable（仅 thread 类实际声明）。 */
   resolveThinkable(classId: string): ThinkableModule | undefined {
-    const cls = this.classes.get(classId);
-    return cls?.thinkable ?? (cls?.inheritClass ? this.resolveThinkable(cls.inheritClass) : undefined);
+    return this.classes.get(classId)?.thinkable;
   }
 
   iterRegisteredClasses(): Array<[string, OocClass]> {
