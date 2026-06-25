@@ -19,13 +19,39 @@ import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 import { getLatestLlmObservation } from "@ooc/core/observable/index.js";
 import { hydrateSession, saveObjectData } from "@ooc/core/persistable/runtime-object-io.js";
+import { enqueueScheduler } from "../../runtime/worker.js";
+import { createLlmClient } from "@ooc/core/thinkable/llm/client.js";
+import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
 
 export interface RuntimeModuleConfig {
   baseDir: string;
+  /** 注入一个 LlmClient (测试用 mock，生产用 createLlmClient())。 */
+  llm?: LlmClient;
+  /** auto-enqueue 开关 —— 创建 thread / 推消息后是否自动调度。缺省 true。 */
+  autoEnqueue?: boolean;
 }
 
 export function buildRuntimeModule(config: RuntimeModuleConfig) {
   const { baseDir } = config;
+  const autoEnqueue = config.autoEnqueue ?? true;
+  // 懒初始化 LLM client —— 没 env 时不会抛（仅 enqueueScheduler 调时才需要）。
+  let _llm: LlmClient | undefined;
+  function getLlm(): LlmClient {
+    if (config.llm) return config.llm;
+    if (!_llm) _llm = createLlmClient();
+    return _llm;
+  }
+
+  async function maybeEnqueue(sessionId: string): Promise<void> {
+    if (!autoEnqueue) return;
+    try {
+      await enqueueScheduler(sessionId, getLlm(), baseDir);
+    } catch (err) {
+      // LLM env 未配置时 createLlmClient 抛错；记录但不阻塞 HTTP 响应
+      console.warn(`[runtime] enqueue skipped: ${(err as Error).message}`);
+    }
+  }
+
   return new Elysia({ prefix: "/api/runtime" })
     // 列 session 内全部 thread（按需 hydrate）
     .get("/threads/:sessionId", async ({ params }) => {
@@ -48,7 +74,7 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
       });
       return { sessionId: params.sessionId, threads };
     })
-    // 创建 thread + 落盘
+    // 创建 thread + 落盘 + auto-enqueue
     .post(
       "/threads",
       async ({ body }) => {
@@ -64,6 +90,8 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
         const instance: OocObjectInstance = { id: data.id, class: THREAD_CLASS_ID, data };
         reg.setObject(instance);
         await saveObjectData(baseDir, sessionId, instance, reg);
+        // auto-enqueue（后台异步跑）
+        void maybeEnqueue(sessionId);
         return { threadId: data.id, sessionId };
       },
       {
@@ -74,7 +102,7 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
         }),
       },
     )
-    // 向 thread 推消息 + 落盘
+    // 向 thread 推消息 + 落盘 + auto-enqueue
     .post(
       "/threads/:threadId/messages",
       async ({ params, body }) => {
@@ -93,6 +121,7 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
         thread.messages.push(msg);
         if (thread.status === "waiting") thread.status = "running";
         await saveObjectData(baseDir, sessionId, inst, reg);
+        void maybeEnqueue(sessionId);
         return { ok: true, messageId: msg.id };
       },
       {
@@ -108,4 +137,4 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
 }
 
 /** @deprecated use buildRuntimeModule(config). 留作历史兼容。 */
-export const runtimeModule = buildRuntimeModule({ baseDir: "" });
+export const runtimeModule = buildRuntimeModule({ baseDir: "", autoEnqueue: false });

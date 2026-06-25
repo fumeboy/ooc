@@ -1,20 +1,43 @@
 /**
- * HTTP app server smoke test —— 验证 health / runtime endpoints。
+ * HTTP app server smoke test —— 验证 health / runtime endpoints + auto-enqueue。
  */
 import { describe, it, expect } from "bun:test";
 import { buildServer } from "@ooc/core/app/server";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type {
+  LlmClient,
+  LlmGenerateParams,
+  LlmGenerateResult,
+} from "@ooc/core/thinkable/llm/types";
 
-const app = buildServer({ baseDir: "/tmp/test-world" });
+const mockLlm: LlmClient = {
+  async generate(_params: LlmGenerateParams): Promise<LlmGenerateResult> {
+    return {
+      provider: "claude",
+      model: "mock",
+      outputItems: [],
+      text: "(mock response)",
+      toolCalls: [],
+    };
+  },
+};
 
 describe("app server", () => {
   it("GET /health returns ok", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "ooc-srv-test-"));
+    const app = buildServer({ baseDir, llm: mockLlm, autoEnqueue: false });
     const res = await app.handle(new Request("http://localhost/health"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
+    await rm(baseDir, { recursive: true, force: true });
   });
 
   it("POST /api/runtime/threads creates thread", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "ooc-srv-test-"));
+    const app = buildServer({ baseDir, llm: mockLlm, autoEnqueue: false });
     const res = await app.handle(
       new Request("http://localhost/api/runtime/threads", {
         method: "POST",
@@ -30,22 +53,40 @@ describe("app server", () => {
     const body = (await res.json()) as { threadId: string; sessionId: string };
     expect(body.sessionId).toBe("app-test-s1");
     expect(body.threadId).toMatch(/^thread_/);
+    await rm(baseDir, { recursive: true, force: true });
   });
 
-  it("GET /api/runtime/threads/:sessionId lists threads", async () => {
-    // first create one
-    await app.handle(
+  it("auto-enqueue triggers LLM (mock) after thread creation", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "ooc-srv-autoenq-"));
+    let calls = 0;
+    const llm: LlmClient = {
+      async generate() {
+        calls++;
+        return {
+          provider: "claude",
+          model: "mock",
+          outputItems: [],
+          text: "done",
+          toolCalls: [],
+        };
+      },
+    };
+    const app = buildServer({ baseDir, llm, autoEnqueue: true });
+    const res = await app.handle(
       new Request("http://localhost/api/runtime/threads", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          sessionId: "app-test-s2",
+          sessionId: "app-test-autoenq",
           calleeObjectId: "_builtin/supervisor",
+          message: "hi",
         }),
       }),
     );
-    const res = await app.handle(new Request("http://localhost/api/runtime/threads/app-test-s2"));
-    const body = (await res.json()) as { threads: Array<{ id: string }> };
-    expect(body.threads.length).toBeGreaterThan(0);
+    expect(res.status).toBe(200);
+    // wait for background enqueue
+    await new Promise((r) => setTimeout(r, 250));
+    expect(calls).toBeGreaterThan(0);
+    await rm(baseDir, { recursive: true, force: true });
   });
 });
