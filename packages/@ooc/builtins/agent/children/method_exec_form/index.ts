@@ -84,7 +84,7 @@ const executable: ExecutableModule<Data> = {
 
 const readable: ReadableModule<Data, unknown> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => ({
-    class: "method_exec_form",
+    class: "default",
     content: [
       xmlElement("target", { object: self.data.targetObjectId, method: self.data.targetMethod }, []),
       xmlElement("args", {}, [xmlText(JSON.stringify(self.data.accumulatedArgs, null, 2))]),
@@ -93,7 +93,7 @@ const readable: ReadableModule<Data, unknown> = {
   }),
   window: [
     {
-      class: "method_exec_form",
+      class: "default",
       object_methods: ["refine", "submit"],
       window_methods: [],
     },

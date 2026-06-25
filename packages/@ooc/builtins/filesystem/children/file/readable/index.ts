@@ -81,11 +81,11 @@ const readable: ReadableModule<Data, FileWin> = {
     } catch (error) {
       children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
     }
-    return { class: "file", content: children };
+    return { class: "default", content: children };
   },
   window: [
     {
-      class: "file",
+      class: "default",
       object_methods: ["reload", "edit"],
       window_methods: [setViewportMethod],
     },

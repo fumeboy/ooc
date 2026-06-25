@@ -18,7 +18,7 @@ export interface TerminalWin {}
 
 const readable: ReadableModule<Data, TerminalWin> = {
   readable: (_ctx: ReadableContext, _self: Data, _win: TerminalWin) => ({
-    class: "terminal",
+    class: "default",
     content: [
       xmlElement("about", {}, [
         xmlText(
@@ -29,7 +29,7 @@ const readable: ReadableModule<Data, TerminalWin> = {
   }),
   window: [
     {
-      class: "terminal",
+      class: "default",
       object_methods: ["run"],
       window_methods: [],
     },

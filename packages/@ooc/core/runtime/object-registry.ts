@@ -35,6 +35,9 @@ import type {
 
 // ─────────────────────────── ClassRegistry ───────────────────────────
 
+/** 默认投影 class 的保留名 —— 单视角 class 的强约束（见 readable 维度 self.md）。 */
+export const DEFAULT_WINDOW_CLASS = "default";
+
 /**
  * 注册期 fail-loud 校验。两类查重均不可放过：
  *
@@ -82,6 +85,46 @@ function assertNoMethodNameCollision(cls: OocClass): void {
 }
 
 /**
+ * 注册期 readable.window decl 一致性校验（issue 2026-06-26 default window class convention）：
+ *
+ * 1. **window[] 内 `class` 字段不重复** —— 否则 resolveWindowClass / resolveWindowMethod 会静默取
+ *    数组首个，造成 dispatch 歧义；fail-loud 让漂移立刻暴露。
+ * 2. **单视角 class（window[] 长度 = 1）**：唯一 decl 的 `class` 必须为 `"default"`。
+ *    单视角默认投影统一命名，未指明 class 时调用方可不查直接取 default。
+ * 3. **多视角 class（window[] 长度 > 1）**：豁免 default 强约束——多视角通常每条都具名语义
+ *    （`talk` / `reflect_request` 等），不强求兜底；调用方未指明 class 又无 default decl 时
+ *    `resolveDefaultWindowClass` 会回退 readable.md 名片或落 placeholder。
+ *
+ * （无 readable 模块的 class 跳过本校验。）
+ */
+function assertReadableWindowCohesion(cls: OocClass): void {
+  const decls = cls.readable?.window ?? [];
+  if (decls.length === 0) return;
+
+  // 1. class 唯一
+  const seen = new Set<string>();
+  for (const decl of decls) {
+    if (seen.has(decl.class)) {
+      throw new Error(
+        `Duplicate window class "${decl.class}" on "${cls.id}" readable.window[] (resolveWindowClass would silently pick the first)`,
+      );
+    }
+    seen.add(decl.class);
+  }
+
+  // 2. 单视角 → 必须 default
+  if (decls.length === 1) {
+    const only = decls[0]!;
+    if (only.class !== DEFAULT_WINDOW_CLASS) {
+      throw new Error(
+        `Single-view readable class "${cls.id}" must declare its sole window with class:"${DEFAULT_WINDOW_CLASS}" (got "${only.class}")`,
+      );
+    }
+  }
+  // 3. 多视角 → 不强制（豁免）
+}
+
+/**
  * Class 注册表 —— 按 class id 注册 OocClass 定义、本类直查各维度模块。
  *
  * 解析约定：每个 `resolveXxx(classId)` 只查本类的对应槽，**不沿任何继承链 fallback**。
@@ -93,6 +136,7 @@ export class ClassRegistry {
 
   register(cls: OocClass): void {
     assertNoMethodNameCollision(cls);
+    assertReadableWindowCohesion(cls);
     this.classes.set(cls.id, cls);
   }
 
@@ -142,6 +186,18 @@ export class ClassRegistry {
   /** 本类直查 window class 声明。 */
   resolveWindowClass(classId: string, windowClass: string): WindowClassDecl | undefined {
     return this.classes.get(classId)?.readable?.window.find((w) => w.class === windowClass);
+  }
+
+  /**
+   * 本类直查「默认投影 window class 声明」—— 单视角 class 兜底入口（issue 2026-06-26）。
+   *
+   * 1. 优先返回 `class === "default"` 的 decl（单视角强约束保证存在）。
+   * 2. 多视角 class 若无 default decl 时返 undefined；调用方应回退到该 class 的 `readable.md` 名片
+   *    （兑现 readable 核心 7：静态名片是投影的最低优先级回退）—— 名片回退由 readable 渲染层负责，
+   *    本 seam 只做注册表层 fail-fast。
+   */
+  resolveDefaultWindowClass(classId: string): WindowClassDecl | undefined {
+    return this.resolveWindowClass(classId, DEFAULT_WINDOW_CLASS);
   }
 
   /** 本类直查 readable 模块整份。 */

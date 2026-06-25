@@ -17,7 +17,7 @@ export interface RuntimeWin {}
 
 const readable: ReadableModule<Data, RuntimeWin> = {
   readable: (_ctx: ReadableContext, _self: Data, _win: RuntimeWin) => ({
-    class: "runtime",
+    class: "default",
     content: [
       xmlElement("about", {}, [
         xmlText(
@@ -28,7 +28,7 @@ const readable: ReadableModule<Data, RuntimeWin> = {
   }),
   window: [
     {
-      class: "runtime",
+      class: "default",
       object_methods: ["create_object"],
       window_methods: [],
     },

@@ -66,14 +66,14 @@ const executable: ExecutableModule<Data> = {
 
 const readable: ReadableModule<Data, unknown> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => ({
-    class: "plan",
+    class: "default",
     content: self.data.steps.map((s) =>
       xmlElement("step", { id: s.id, status: s.status }, [xmlText(s.content)]),
     ),
   }),
   window: [
     {
-      class: "plan",
+      class: "default",
       object_methods: ["add_step", "mark_step"],
       window_methods: [],
     },
