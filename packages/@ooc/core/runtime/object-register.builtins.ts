@@ -6,7 +6,6 @@
  *
  * 依赖本注册副作用的调用方（worker / 测试 / loader）：
  *   `import "@ooc/core/runtime/object-register.builtins.js"`
- * （旧路径 `register-builtins.js` 已退役）。
  */
 
 import { builtinClassRegistry } from "./object-registry.js";
@@ -14,6 +13,11 @@ import { builtinClassRegistry } from "./object-registry.js";
 // agent 家族
 import { Class as AgentClass } from "@ooc/builtins/agent";
 import { Class as ThreadClass } from "@ooc/builtins/agent/thread";
+import { Class as TodoClass } from "@ooc/builtins/agent/todo";
+import { Class as PlanClass } from "@ooc/builtins/agent/plan";
+import { Class as SkillIndexClass } from "@ooc/builtins/agent/skill_index";
+import { Class as MethodExecFormClass } from "@ooc/builtins/agent/method_exec_form";
+import { Class as PrClass } from "@ooc/builtins/agent/pr";
 
 // tool-object 家族
 import { Class as FilesystemClass } from "@ooc/builtins/filesystem";
@@ -31,6 +35,12 @@ import { Class as RuntimeClass } from "@ooc/builtins/runtime";
 builtinClassRegistry.register(AgentClass);
 // thread —— 唯一会话载体注册 class（talk / reflect_request 是它 readable 投影出的 window class）。
 builtinClassRegistry.register(ThreadClass);
+// agent children
+builtinClassRegistry.register(TodoClass);
+builtinClassRegistry.register(PlanClass);
+builtinClassRegistry.register(SkillIndexClass);
+builtinClassRegistry.register(MethodExecFormClass);
+builtinClassRegistry.register(PrClass);
 
 // tool objects 和 children 窗类。
 builtinClassRegistry.register(FilesystemClass);

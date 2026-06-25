@@ -1,0 +1,11 @@
+{
+  "name": "@ooc/builtins-agent-skill-index",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "ooc": {
+    "objectId": "_builtin/agent/skill_index",
+    "kind": "class"
+  }
+}

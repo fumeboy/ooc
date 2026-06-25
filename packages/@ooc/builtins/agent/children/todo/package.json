@@ -1,0 +1,11 @@
+{
+  "name": "@ooc/builtins-agent-todo",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./index.ts",
+  "ooc": {
+    "objectId": "_builtin/agent/todo",
+    "kind": "class"
+  }
+}

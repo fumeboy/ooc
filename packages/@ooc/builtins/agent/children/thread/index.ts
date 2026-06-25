@@ -15,6 +15,7 @@ import type { ThreadContext, ThreadMessage } from "./types.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import persistable from "./persistable/index.js";
+import thinkable from "./thinkable/index.js";
 import type { Data } from "./types.js";
 import { generateMessageId, generateThreadId } from "./executable/utils.js";
 import { SelfProxy } from "@ooc/core/runtime/self-proxy.js";
@@ -43,6 +44,7 @@ const construct: ObjectConstructor<Data> = {
         { id: "_builtin/interpreter", class: "_builtin/interpreter", createdAt: Date.now(), closable: false },
         { id: "_builtin/knowledge_base", class: "_builtin/knowledge_base", createdAt: Date.now(), closable: false },
         { id: "_builtin/runtime", class: "_builtin/runtime", createdAt: Date.now(), closable: false },
+        { id: "_builtin/agent/skill_index", class: "_builtin/agent/skill_index", createdAt: Date.now(), closable: false },
       ],
     };
   },
@@ -71,7 +73,9 @@ export const Class: OocClass<Data> = {
   executable,
   readable,
   persistable,
+  thinkable,
   unactive,
 };
 
 export type { Data } from "./types.js";
+export { WindowManager } from "./runtime/window-manager.js";

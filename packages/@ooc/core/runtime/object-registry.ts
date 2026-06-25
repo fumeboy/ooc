@@ -250,3 +250,18 @@ export function getSessionRegistry(sessionId: string): ObjectInsRegistry {
 export function releaseSessionRegistry(sessionId: string): void {
   sessionRegistries.delete(sessionId);
 }
+
+/**
+ * 遍历一个 session 里全部对象实例 —— scheduler / refcount 计算 / debug / cleanup 用。
+ *
+ * 等价于 `getSessionRegistry(sessionId).iterObjects(cb)`，但不强制建空表（sessionId 没 hydrate
+ * 过则直接 no-op）。
+ */
+export function iterateSessionObjectTable(
+  sessionId: string,
+  cb: (instance: OocObjectInstance) => void,
+): void {
+  const reg = sessionRegistries.get(sessionId);
+  if (!reg) return;
+  reg.iterObjects(cb);
+}
