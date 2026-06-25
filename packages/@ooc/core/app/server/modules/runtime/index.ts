@@ -18,84 +18,94 @@ import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import type { OocObjectInstance } from "@ooc/core/runtime/ooc-class.js";
 import type { ThreadContext, ThreadMessage } from "@ooc/builtins/agent/thread/types.js";
 import { getLatestLlmObservation } from "@ooc/core/observable/index.js";
+import { hydrateSession, saveObjectData } from "@ooc/core/persistable/runtime-object-io.js";
 
-export const runtimeModule = new Elysia({ prefix: "/api/runtime" })
-  // 列 session 内全部 thread
-  .get("/threads/:sessionId", ({ params }) => {
-    const threads: Array<{
-      id: string;
-      status: string;
-      messageCount: number;
-      eventCount: number;
-    }> = [];
-    iterateSessionObjectTable(params.sessionId, (inst) => {
-      if (inst.class !== THREAD_CLASS_ID) return;
-      const t = inst.data as ThreadContext;
-      threads.push({
-        id: t.id,
-        status: t.status,
-        messageCount: t.messages.length,
-        eventCount: t.events.length,
+export interface RuntimeModuleConfig {
+  baseDir: string;
+}
+
+export function buildRuntimeModule(config: RuntimeModuleConfig) {
+  const { baseDir } = config;
+  return new Elysia({ prefix: "/api/runtime" })
+    // 列 session 内全部 thread（按需 hydrate）
+    .get("/threads/:sessionId", async ({ params }) => {
+      await hydrateSession(baseDir, params.sessionId);
+      const threads: Array<{
+        id: string;
+        status: string;
+        messageCount: number;
+        eventCount: number;
+      }> = [];
+      iterateSessionObjectTable(params.sessionId, (inst) => {
+        if (inst.class !== THREAD_CLASS_ID) return;
+        const t = inst.data as ThreadContext;
+        threads.push({
+          id: t.id,
+          status: t.status,
+          messageCount: t.messages.length,
+          eventCount: t.events.length,
+        });
       });
-    });
-    return { sessionId: params.sessionId, threads };
-  })
-  // 创建 thread
-  .post(
-    "/threads",
-    async ({ body }) => {
-      const { sessionId, calleeObjectId, message } = body;
-      const reg = getSessionRegistry(sessionId);
-      const ctor = reg.resolveConstructor(THREAD_CLASS_ID);
-      if (!ctor) {
-        return { error: "thread class has no constructor" };
-      }
-      const data = (await ctor.exec(
-        { sessionId, worldDir: "", dir: "", args: { calleeObjectId, message } },
-        { calleeObjectId, message },
-      )) as ThreadContext;
-      const instance: OocObjectInstance = {
-        id: data.id,
-        class: THREAD_CLASS_ID,
-        data,
-      };
-      reg.setObject(instance);
-      return { threadId: data.id, sessionId };
-    },
-    {
-      body: t.Object({
-        sessionId: t.String(),
-        calleeObjectId: t.String(),
-        message: t.Optional(t.String()),
-      }),
-    },
-  )
-  // 向 thread 推消息
-  .post(
-    "/threads/:threadId/messages",
-    ({ params, body }) => {
-      const sessionId = body.sessionId;
-      const reg = getSessionRegistry(sessionId);
-      const inst = reg.getObject(params.threadId);
-      if (!inst) return { error: "thread not found" };
-      const t = inst.data as ThreadContext;
-      const msg: ThreadMessage = {
-        id: `msg_${Date.now().toString(36)}`,
-        content: body.content,
-        createdAt: Date.now(),
-        from: body.from ?? "caller",
-      };
-      t.messages.push(msg);
-      if (t.status === "waiting") t.status = "running";
-      return { ok: true, messageId: msg.id };
-    },
-    {
-      body: t.Object({
-        sessionId: t.String(),
-        content: t.String(),
-        from: t.Optional(t.Union([t.Literal("caller"), t.Literal("callee")])),
-      }),
-    },
-  )
-  // 最近 LLM 观测
-  .get("/observation", () => getLatestLlmObservation() ?? { empty: true });
+      return { sessionId: params.sessionId, threads };
+    })
+    // 创建 thread + 落盘
+    .post(
+      "/threads",
+      async ({ body }) => {
+        const { sessionId, calleeObjectId, message } = body;
+        await hydrateSession(baseDir, sessionId);
+        const reg = getSessionRegistry(sessionId);
+        const ctor = reg.resolveConstructor(THREAD_CLASS_ID);
+        if (!ctor) return { error: "thread class has no constructor" };
+        const data = (await ctor.exec(
+          { sessionId, worldDir: baseDir, dir: "", args: { calleeObjectId, message } },
+          { calleeObjectId, message },
+        )) as ThreadContext;
+        const instance: OocObjectInstance = { id: data.id, class: THREAD_CLASS_ID, data };
+        reg.setObject(instance);
+        await saveObjectData(baseDir, sessionId, instance, reg);
+        return { threadId: data.id, sessionId };
+      },
+      {
+        body: t.Object({
+          sessionId: t.String(),
+          calleeObjectId: t.String(),
+          message: t.Optional(t.String()),
+        }),
+      },
+    )
+    // 向 thread 推消息 + 落盘
+    .post(
+      "/threads/:threadId/messages",
+      async ({ params, body }) => {
+        const sessionId = body.sessionId;
+        await hydrateSession(baseDir, sessionId);
+        const reg = getSessionRegistry(sessionId);
+        const inst = reg.getObject(params.threadId);
+        if (!inst) return { error: "thread not found" };
+        const thread = inst.data as ThreadContext;
+        const msg: ThreadMessage = {
+          id: `msg_${Date.now().toString(36)}`,
+          content: body.content,
+          createdAt: Date.now(),
+          from: body.from ?? "caller",
+        };
+        thread.messages.push(msg);
+        if (thread.status === "waiting") thread.status = "running";
+        await saveObjectData(baseDir, sessionId, inst, reg);
+        return { ok: true, messageId: msg.id };
+      },
+      {
+        body: t.Object({
+          sessionId: t.String(),
+          content: t.String(),
+          from: t.Optional(t.Union([t.Literal("caller"), t.Literal("callee")])),
+        }),
+      },
+    )
+    // 最近 LLM 观测
+    .get("/observation", () => getLatestLlmObservation() ?? { empty: true });
+}
+
+/** @deprecated use buildRuntimeModule(config). 留作历史兼容。 */
+export const runtimeModule = buildRuntimeModule({ baseDir: "" });

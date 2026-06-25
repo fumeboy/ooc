@@ -21,6 +21,10 @@ import { think } from "./thinkloop.js";
 export interface SchedulerOptions {
   /** 最大 tick 数（防止失控循环）。 */
   maxTicks?: number;
+  /** world 根目录（透给 thinkloop / WindowManager）。 */
+  worldDir?: string;
+  /** 落盘挂钩。 */
+  onDataEdit?: () => Promise<void> | void;
 }
 
 /** 在一个 session 内跑调度循环，直到所有 thread 终态/waiting 或 maxTicks 耗尽。 */
@@ -64,6 +68,6 @@ export async function runScheduler(
     })[0]!;
 
     next.lastExecutedAt = Date.now();
-    await think(next, llm, registry);
+    await think(next, llm, registry, { worldDir: opts.worldDir, onDataEdit: opts.onDataEdit });
   }
 }

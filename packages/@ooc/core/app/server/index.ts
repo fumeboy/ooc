@@ -8,13 +8,13 @@ import { Elysia } from "elysia";
 import "@ooc/core/runtime/object-register.builtins.js";
 import { parseServerConfig } from "./bootstrap/config.js";
 import { healthModule } from "./modules/health/index.js";
-import { runtimeModule } from "./modules/runtime/index.js";
+import { buildRuntimeModule } from "./modules/runtime/index.js";
 
 export function buildServer(config: { baseDir: string }) {
   return new Elysia()
     .decorate("baseDir", config.baseDir)
     .use(healthModule)
-    .use(runtimeModule);
+    .use(buildRuntimeModule({ baseDir: config.baseDir }));
 }
 
 if (import.meta.main) {

@@ -23,10 +23,15 @@ import {
   type Viewport,
 } from "./viewport.js";
 import { xmlElement, xmlText, truncateBytes, type XmlNode } from "@ooc/core/types/xml.js";
-import { asTuple } from "@ooc/builtins/_shared/executable/utils.js";
 import type { ReadonlySelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
 import { OocObjectRef } from "@src/runtime/ooc-class.js";
+
+/** Tuple-of-2 type guard（旧 _shared/utils 已退役，内联此处）。 */
+function asTuple<T>(arr: readonly T[] | undefined): [T, T] | undefined {
+  if (!arr || arr.length !== 2) return undefined;
+  return [arr[0]!, arr[1]!];
+}
 
 const MAX_FILE_WINDOW_BYTES = 32768;
 

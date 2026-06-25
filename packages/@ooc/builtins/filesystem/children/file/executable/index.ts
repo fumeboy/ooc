@@ -8,7 +8,10 @@ import type {
 } from "@ooc/core/types";
 import type { SelfProxy } from "@ooc/core/types";
 import type { Data } from "../types.js";
-import { isString } from "@ooc/builtins/_shared/executable/utils.js";
+
+function isString(v: unknown): v is string {
+  return typeof v === "string";
+}
 
 interface EditPair {
   old: string;

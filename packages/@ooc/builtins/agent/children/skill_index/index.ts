@@ -26,16 +26,19 @@ const construct: ObjectConstructor<Data> = {
 };
 
 const readable: ReadableModule<Data, unknown> = {
-  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => ({
-    class: "skill_index",
-    content: self.data.skills.map((s) =>
-      xmlElement(
-        "skill",
-        { object: s.objectId, class: s.class, method: s.method },
-        [xmlText(s.description)],
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => {
+    const skills = self.data?.skills ?? [];
+    return {
+      class: "skill_index",
+      content: skills.map((s) =>
+        xmlElement(
+          "skill",
+          { object: s.objectId, class: s.class, method: s.method },
+          [xmlText(s.description)],
+        ),
       ),
-    ),
-  }),
+    };
+  },
   window: [
     {
       class: "skill_index",

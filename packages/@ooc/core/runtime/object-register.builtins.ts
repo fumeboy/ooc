@@ -30,6 +30,8 @@ import { Class as InterpreterProcessClass } from "@ooc/builtins/interpreter/inte
 import { Class as KnowledgeBaseClass } from "@ooc/builtins/knowledge_base";
 import { Class as KnowledgeClass } from "@ooc/builtins/knowledge_base/knowledge";
 import { Class as RuntimeClass } from "@ooc/builtins/runtime";
+import { Class as UserClass } from "@ooc/builtins/user";
+import { Class as FeishuAppClass } from "@ooc/builtins/feishu_app";
 
 // agent class —— object 经 ooc.class 继承即成 agent 实例。
 builtinClassRegistry.register(AgentClass);
@@ -53,3 +55,5 @@ builtinClassRegistry.register(InterpreterProcessClass);
 builtinClassRegistry.register(KnowledgeBaseClass);
 builtinClassRegistry.register(KnowledgeClass);
 builtinClassRegistry.register(RuntimeClass);
+builtinClassRegistry.register(UserClass);
+builtinClassRegistry.register(FeishuAppClass);

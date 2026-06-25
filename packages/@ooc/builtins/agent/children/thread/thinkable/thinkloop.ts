@@ -17,13 +17,20 @@ import { buildLlmInput } from "./context.js";
 import { PRIMITIVE_TOOLS } from "./tools/schema.js";
 import { dispatchToolCall } from "./tools/dispatch.js";
 
+export interface ThinkOptions {
+  worldDir?: string;
+  /** 持久化挂钩（reportDataEdit 调时落盘）。 */
+  onDataEdit?: () => Promise<void> | void;
+}
+
 /** 单轮 think —— 一次完整的 LLM 互动 + tool dispatch。 */
 export async function think(
   thread: ThreadContext,
   llm: LlmClient,
   registry: ObjectInsRegistry,
+  opts: ThinkOptions = {},
 ): Promise<void> {
-  const input = await buildLlmInput(thread, registry);
+  const input = await buildLlmInput(thread, registry, { worldDir: opts.worldDir });
 
   // 记 call_started（recovery 用）
   const callStartedAt = Date.now();
@@ -67,7 +74,10 @@ export async function think(
   }
 
   // dispatch tool calls
-  const mgr = WindowManager.fromThread(thread);
+  const mgr = WindowManager.fromThread(thread, {
+    worldDir: opts.worldDir,
+    onDataEdit: opts.onDataEdit,
+  });
   let didWait = false;
   for (const call of result.toolCalls ?? []) {
     thread.events.push({
@@ -91,8 +101,8 @@ export async function think(
     if (out.shouldWait) didWait = true;
   }
 
-  // 没 tool call 也没 text ⇒ LLM 表态 nothing to do → 进 done（最简退出策略）
-  if ((result.toolCalls?.length ?? 0) === 0 && !result.text) {
+  // 没 tool call ⇒ LLM 表态本轮无副作用 → 进 done（最简退出策略：text-only 也算完成）
+  if ((result.toolCalls?.length ?? 0) === 0) {
     thread.status = "done";
     return;
   }

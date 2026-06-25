@@ -1,11 +1,11 @@
 {
-  "name": "@ooc/builtins/agent/plan",
+  "name": "@ooc/builtins/feishu_app",
   "version": "0.0.1",
   "private": true,
   "type": "module",
   "main": "./index.ts",
   "ooc": {
-    "objectId": "_builtin/agent/plan",
+    "objectId": "_builtin/feishu_app",
     "kind": "class"
   }
 }

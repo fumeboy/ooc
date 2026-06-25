@@ -41,23 +41,26 @@ export class WindowManager implements RuntimeHandle {
   private readonly registry: ObjectInsRegistry;
   /** dataEdit 通知（thinkloop 注入持久化挂钩）。 */
   private readonly onDataEdit?: () => Promise<void> | void;
+  /** worldDir —— 落盘根目录，方法 ctx 透传。 */
+  private readonly worldDir: string;
 
   constructor(
     thread: ThreadContext,
     registry: ObjectInsRegistry,
-    onDataEdit?: () => Promise<void> | void,
+    opts: { onDataEdit?: () => Promise<void> | void; worldDir?: string } = {},
   ) {
     this.thread = thread;
     this.registry = registry;
-    this.onDataEdit = onDataEdit;
+    this.onDataEdit = opts.onDataEdit;
+    this.worldDir = opts.worldDir ?? "";
   }
 
   /** 从 thread 派生 WindowManager —— 取该 thread 所在 session 的 ObjectInsRegistry。 */
   static fromThread(
     thread: ThreadContext,
-    onDataEdit?: () => Promise<void> | void,
+    opts: { onDataEdit?: () => Promise<void> | void; worldDir?: string } = {},
   ): WindowManager {
-    return new WindowManager(thread, getSessionRegistry(thread.sessionId), onDataEdit);
+    return new WindowManager(thread, getSessionRegistry(thread.sessionId), opts);
   }
 
   /** 找窗（按 ref.id 在 contextWindows 数组里）。 */
@@ -79,13 +82,12 @@ export class WindowManager implements RuntimeHandle {
     windowId: string,
     methodName: string,
     args: Record<string, unknown> = {},
-    worldDir = "",
   ): Promise<ObjectMethodResult> {
     const ref = this.findWindow(windowId);
     if (!ref) throw new Error(`[exec] window not found: ${windowId}`);
     const objectMethod = this.registry.resolveObjectMethod(ref.class, methodName);
     if (objectMethod) {
-      return await this.execObjectMethod(ref, objectMethod, args, worldDir);
+      return await this.execObjectMethod(ref, objectMethod, args);
     }
     const windowMethod = this.registry.resolveWindowMethod(ref.class, ref.class, methodName);
     if (windowMethod) {
@@ -100,7 +102,6 @@ export class WindowManager implements RuntimeHandle {
     ref: OocObjectRef,
     method: ObjectMethod,
     args: Record<string, unknown>,
-    worldDir: string,
   ): Promise<ObjectMethodResult> {
     const instance = this.registry.getObject(ref.id);
     const data = instance?.data ?? {};
@@ -112,7 +113,7 @@ export class WindowManager implements RuntimeHandle {
       },
       args,
       dir: "",
-      worldDir,
+      worldDir: this.worldDir,
       sessionId: this.thread.sessionId,
     };
     const self = makeSelfProxy(data as object, ref.id, this);
@@ -177,7 +178,7 @@ export class WindowManager implements RuntimeHandle {
     const data = await ctor.exec(
       {
         sessionId: this.thread.sessionId,
-        worldDir: "",
+        worldDir: this.worldDir,
         dir: "",
         runtime: this,
         args: spec.args ?? {},
@@ -222,7 +223,7 @@ export class WindowManager implements RuntimeHandle {
       reportDataEdit: async () => {},
       args,
       dir: "",
-      worldDir: "",
+      worldDir: this.worldDir,
       sessionId: this.thread.sessionId,
     };
     return m.route(ctx, makeSelfProxy(data as object, ref.id, this), args);
@@ -255,7 +256,7 @@ export class WindowManager implements RuntimeHandle {
     await hook.exec(
       {
         sessionId: this.thread.sessionId,
-        worldDir: "",
+        worldDir: this.worldDir,
         dir: "",
         args: {},
         targetId: objectId,
@@ -275,7 +276,7 @@ export class WindowManager implements RuntimeHandle {
     const result = await hook.exec(
       {
         sessionId: this.thread.sessionId,
-        worldDir: "",
+        worldDir: this.worldDir,
         dir: "",
         args: {},
         targetId: objectId,

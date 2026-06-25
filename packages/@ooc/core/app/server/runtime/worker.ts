@@ -6,11 +6,13 @@
  */
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
 import { runScheduler } from "@ooc/builtins/agent/thread/thinkable/index.js";
+import { persistSession } from "@ooc/core/persistable/runtime-object-io.js";
 import { observeLog } from "@ooc/core/observable/index.js";
 
 interface WorkerState {
   sessionId: string;
   llm: LlmClient;
+  baseDir: string;
   busy: boolean;
   pending: boolean;
 }
@@ -18,10 +20,14 @@ interface WorkerState {
 const workers = new Map<string, WorkerState>();
 
 /** 给 session 入队一次调度信号；已 busy 则置 pending 等当前 tick 结束再跑一次。 */
-export async function enqueueScheduler(sessionId: string, llm: LlmClient): Promise<void> {
+export async function enqueueScheduler(
+  sessionId: string,
+  llm: LlmClient,
+  baseDir: string,
+): Promise<void> {
   let w = workers.get(sessionId);
   if (!w) {
-    w = { sessionId, llm, busy: false, pending: false };
+    w = { sessionId, llm, baseDir, busy: false, pending: false };
     workers.set(sessionId, w);
   }
   if (w.busy) {
@@ -34,7 +40,15 @@ export async function enqueueScheduler(sessionId: string, llm: LlmClient): Promi
 async function runOnce(w: WorkerState): Promise<void> {
   w.busy = true;
   try {
-    await runScheduler(w.sessionId, w.llm, { maxTicks: 15 });
+    await runScheduler(w.sessionId, w.llm, {
+      maxTicks: 15,
+      worldDir: w.baseDir,
+      onDataEdit: async () => {
+        await persistSession(w.baseDir, w.sessionId);
+      },
+    });
+    // 每轮 tick 结束后兜底落盘
+    await persistSession(w.baseDir, w.sessionId);
   } catch (err) {
     observeLog("worker.runScheduler.error", `[worker] ${(err as Error).message}`);
   } finally {
@@ -49,4 +63,9 @@ async function runOnce(w: WorkerState): Promise<void> {
 /** worker 数（debug 用）。 */
 export function workerCount(): number {
   return workers.size;
+}
+
+/** 清空所有 worker（测试 / shutdown 用）。 */
+export function clearWorkers(): void {
+  workers.clear();
 }

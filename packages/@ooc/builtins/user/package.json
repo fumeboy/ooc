@@ -5,11 +5,10 @@
   "type": "module",
   "exports": {
     "./*": "./*",
-    "./*.ts": "./*.ts",
-    "./*.tsx": "./*.tsx"
+    "./*.ts": "./*.ts"
   },
   "ooc": {
-    "objectId": "user",
-    "kind": "object"
+    "objectId": "_builtin/user",
+    "kind": "class"
   }
 }

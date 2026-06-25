@@ -5,40 +5,32 @@
   "workspaces": ["packages/**", "packages/**/children/**"],
   "scripts": {
     "test": "bun test",
-    "test:storybook": "bun test packages/@ooc/storybook/stories",
-    "test:e2e:backend": "RUN_BACKEND_E2E=1 bun test packages/@ooc/tests/e2e/backend",
-    "test:e2e:frontend": "RUN_FRONTEND_E2E=1 bun node_modules/.bin/playwright test --config packages/@ooc/tests/e2e/frontend/playwright.config.ts",
     "check:tsc": "bash scripts/check-tsc.sh",
     "check:silent-swallow": "bash scripts/check-no-silent-swallow.sh",
     "check:deprecated-symbols": "bash scripts/check-no-deprecated-symbols.sh",
     "check:doc-drift": "bash scripts/check-doc-deprecated-drift.sh",
     "check:anchor-drift": "bash scripts/check-doc-anchor-drift.sh",
-    "verify": "bun run check:tsc && bun test packages/@ooc/core/ && bun run check:silent-swallow && bun run check:deprecated-symbols && bun run check:doc-drift && bun run check:anchor-drift",
-    "dev": "bun run packages/@ooc/core/app/server/index.ts"
+    "verify": "bun run check:tsc && bun test packages/@ooc/tests/ && bun run check:silent-swallow && bun run check:deprecated-symbols && bun run check:doc-drift && bun run check:anchor-drift",
+    "dev:server": "bun run packages/@ooc/core/app/server/index.ts",
+    "dev:web": "bun --bun vite packages/@ooc/web"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0",
     "@types/bun": "latest",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.6.2",
     "@types/react": "^19.2.15",
-    "typescript": "^5.9.0"
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.9.0",
+    "vite": "^7.1.13"
   },
   "dependencies": {
-    "@larksuiteoapi/node-sdk": "^1.65.0",
-    "@ooc/builtins/_shared": "workspace:*",
-    "@ooc/builtins/filesystem/file": "workspace:*",
-    "@ooc/builtins/knowledge_base/knowledge": "workspace:*",
-    "@ooc/builtins/agent/plan": "workspace:*",
-    "@ooc/builtins/filesystem/search": "workspace:*",
-    "@ooc/builtins/agent/skill_index": "workspace:*",
-    "@ooc/builtins/agent/todo": "workspace:*",
-    "@ooc/builtins/agent/method_exec_form": "workspace:*",
     "@ooc/core": "workspace:*",
-    "@ooc/storybook": "workspace:*",
     "@ooc/web": "workspace:*",
     "elysia": "^1.4.28",
     "js-yaml": "^4.1.1",
-    "openai": "^6.37.0"
+    "openai": "^6.37.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   }
 }
