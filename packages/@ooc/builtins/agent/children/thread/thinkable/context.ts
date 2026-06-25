@@ -74,22 +74,40 @@ function systemInstructions(thread: ThreadContext): string {
 }
 
 /** 计算激活环境 —— 描述当前思考栈的状态。 */
-function activationEnv(thread: ThreadContext): ActivationContext {
+function activationEnv(thread: ThreadContext, registry: ObjectInsRegistry): ActivationContext {
   const windowClasses = new Set<string>();
   const methodForms = new Set<string>();
+  const activeIntents = new Set<string>();
   for (const w of thread.contextWindows) {
     windowClasses.add(w.class);
-    // method_exec_form 窗 → 记下 target class + method
+    // method_exec_form 窗 → 经 form 对象 data 取目标 guide 信息 + currentIntents
     if (w.class === "_builtin/agent/method_exec_form") {
-      const d = w.data as { targetObjectId?: string; targetMethod?: string } | undefined;
-      if (d?.targetObjectId && d?.targetMethod) {
-        methodForms.add(`${d.targetObjectId}::${d.targetMethod}`);
+      const formInst = registry.getObject(w.id);
+      const d = formInst?.data as
+        | {
+            targetObjectId?: string;
+            guideName?: string;
+            currentIntents?: string[];
+          }
+        | undefined;
+      if (d?.targetObjectId && d?.guideName) {
+        // 经 session 表把 targetObjectId 反查目标 class，与 trigger `method::<class>::<guide>` 对齐
+        const targetInst = registry.getObject(d.targetObjectId);
+        if (targetInst) {
+          methodForms.add(`${targetInst.class}::${d.guideName}`);
+        }
+      }
+      // phase-1 简化的 source-key 模型：所有 form 的 currentIntents 合并为 activeIntents
+      // （phase-2 改读 source-intents store + 按 sourceKey 撤销）
+      if (Array.isArray(d?.currentIntents)) {
+        for (const i of d.currentIntents) activeIntents.add(i);
       }
     }
   }
   return {
     windowClasses,
     methodForms,
+    activeIntents,
     inSuper: isSuperSessionId(thread.sessionId),
   };
 }
@@ -135,7 +153,7 @@ export async function buildLlmInput(
   if (opts.worldDir) {
     try {
       const index = await loadKnowledgeIndex(opts.worldDir, thread.calleeObjectId);
-      const env = activationEnv(thread);
+      const env = activationEnv(thread, registry);
       const activations = computeActivations(index, env);
       if (activations.length > 0) {
         knowledgeXml = serializeXml(renderKnowledge(activations));

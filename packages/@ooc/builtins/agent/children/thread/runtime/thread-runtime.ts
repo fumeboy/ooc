@@ -24,6 +24,7 @@ import {
 import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import {
   type ExecutableContext,
+  type ObjectGuideMethod,
   type ObjectMethod,
   type ObjectMethodResult,
   type ObjectMethodIntents,
@@ -74,9 +75,15 @@ export class ThreadRuntime implements RuntimeHandle {
   }
 
   /**
-   * **exec 原语**：在一个 window 上调一条 method（按名分派 object method 或 window method）。
+   * **exec 原语**：在一个 window 上调一条 method（按名分派 object method / guide method / window method）。
    *
-   * 优先 object method（改 data / 副作用），其次 window method（改投影 win）。
+   * 优先级：
+   *   1. resolveObjectMethod 命中 → 单步 method 直执行（schema 校验由 method 自身/可选 wrapper 处理）。
+   *   2. resolveObjectGuideMethod 命中 → 多步引导：先跑 guide.route 拿 ObjectMethodIntents：
+   *      - `quickSubmit=true` → 直接 guide.exec。
+   *      - 否则 → 自动 `instantiate(_builtin/agent/method_exec_form)` 把 form ref 返给 tool call。
+   *   3. resolveWindowMethod 命中 → 改投影 win。
+   *   4. 都不命中 → fail-loud。
    */
   async exec(
     windowId: string,
@@ -88,6 +95,10 @@ export class ThreadRuntime implements RuntimeHandle {
     const objectMethod = this.registry.resolveObjectMethod(ref.class, methodName);
     if (objectMethod) {
       return await this.execObjectMethod(ref, objectMethod, args);
+    }
+    const guideMethod = this.registry.resolveObjectGuideMethod(ref.class, methodName);
+    if (guideMethod) {
+      return await this.execGuideMethod(ref, methodName, guideMethod, args);
     }
     const windowMethod = this.registry.resolveWindowMethod(ref.class, ref.class, methodName);
     if (windowMethod) {
@@ -119,6 +130,56 @@ export class ThreadRuntime implements RuntimeHandle {
     const self = makeSelfProxy(data as object, ref.id, this);
     const raw = await method.exec(ctx, self, args);
     return normalizeMethodResult(raw);
+  }
+
+  /**
+   * 跑一条 **guide method** —— 多步引导：
+   *   - 先跑 guide.route 拿 ObjectMethodIntents。
+   *   - `quickSubmit=true` → 直接 guide.exec（与单步 method 等价）。
+   *   - 否则 → 自动 `instantiate(_builtin/agent/method_exec_form, { targetObjectId, guideName,
+   *     accumulatedArgs, currentTip, currentIntents })`，把 form ref 作为 refs 返给 tool call。
+   */
+  private async execGuideMethod(
+    ref: OocObjectRef,
+    guideName: string,
+    guide: ObjectGuideMethod,
+    args: Record<string, unknown>,
+  ): Promise<ObjectMethodResult> {
+    const instance = this.registry.getObject(ref.id);
+    const data = instance?.data ?? {};
+    const ctx: ExecutableContext = {
+      object: { id: ref.id, class: ref.class },
+      runtime: this,
+      reportDataEdit: async () => {
+        if (this.onDataEdit) await this.onDataEdit();
+      },
+      args,
+      dir: "",
+      worldDir: this.worldDir,
+      sessionId: this.thread.sessionId,
+    };
+    const self = makeSelfProxy(data as object, ref.id, this);
+    const intents = await guide.route(ctx, self, args);
+    if (intents?.quickSubmit) {
+      const raw = await guide.exec(ctx, self, args);
+      return normalizeMethodResult(raw);
+    }
+    // 否则自动开 form，把 form ref 返给 tool call
+    const formRef = await this.instantiate({
+      class: "_builtin/agent/method_exec_form",
+      args: {
+        targetObjectId: ref.id,
+        guideName,
+        accumulatedArgs: args,
+        currentTip: intents?.tip,
+        currentIntents: intents?.intents,
+      },
+    });
+    const tipPart = intents?.tip ? `（提示：${intents.tip}）` : "";
+    return {
+      message: `已开启表单 ${formRef.id}；继续用 refine 补参或 submit 提交${tipPart}`,
+      refs: [formRef],
+    };
   }
 
   /** 跑一条 window method —— 只动投影 win、返回新 win，写回 ref.data。 */
@@ -206,16 +267,20 @@ export class ThreadRuntime implements RuntimeHandle {
     return result.message;
   }
 
-  /** runRoute —— 不执行 exec、只算 intents。method_exec form refine 用。 */
+  /**
+   * runRoute —— 不执行 exec、只算 intents。method_exec form 的 refine 用：
+   * 解析目标 class 的 **guide method**（不是 object method——method 不再持 route），用累积参数刷新
+   * tip / intents 写回 form data。找不到目标 / 目标不是 guide → 返回 undefined。
+   */
   async runRoute(
     targetObjectId: string,
-    methodName: string,
+    guideName: string,
     args: Record<string, unknown>,
   ): Promise<ObjectMethodIntents | undefined> {
     const ref = this.findWindow(targetObjectId);
     if (!ref) return undefined;
-    const m = this.registry.resolveObjectMethod(ref.class, methodName);
-    if (!m?.route) return undefined;
+    const g = this.registry.resolveObjectGuideMethod(ref.class, guideName);
+    if (!g) return undefined;
     const data = this.objectDataOf(ref) ?? {};
     const ctx: ExecutableContext = {
       object: { id: ref.id, class: ref.class },
@@ -226,7 +291,37 @@ export class ThreadRuntime implements RuntimeHandle {
       worldDir: this.worldDir,
       sessionId: this.thread.sessionId,
     };
-    return m.route(ctx, makeSelfProxy(data as object, ref.id, this), args);
+    return await g.route(ctx, makeSelfProxy(data as object, ref.id, this), args);
+  }
+
+  /**
+   * execGuide —— **直接**调目标 guide 的 `exec`（**跳过 route、不开 form**）。method_exec form 的
+   * `submit` 用它落实累积参数；区别于 `callMethod`（走 exec dispatch 入口，guide 会被再次开 form 触发递归）。
+   */
+  async execGuide(
+    targetObjectId: string,
+    guideName: string,
+    args: Record<string, unknown>,
+  ): Promise<ObjectMethodResult | undefined> {
+    const ref = this.findWindow(targetObjectId);
+    if (!ref) return undefined;
+    const g = this.registry.resolveObjectGuideMethod(ref.class, guideName);
+    if (!g) return undefined;
+    const data = this.objectDataOf(ref) ?? {};
+    const ctx: ExecutableContext = {
+      object: { id: ref.id, class: ref.class },
+      runtime: this,
+      reportDataEdit: async () => {
+        if (this.onDataEdit) await this.onDataEdit();
+      },
+      args,
+      dir: "",
+      worldDir: this.worldDir,
+      sessionId: this.thread.sessionId,
+    };
+    const self = makeSelfProxy(data as object, ref.id, this);
+    const raw = await g.exec(ctx, self, args);
+    return normalizeMethodResult(raw);
   }
 
   // ─────────────────────── refcount / 生命周期 ───────────────────────

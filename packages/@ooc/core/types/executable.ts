@@ -24,16 +24,27 @@ export interface RuntimeHandle {
   ): Promise<string | undefined>;
 
   /**
-   * 对目标 object 的某 method 跑一次 `route`（填表式渐进执行的意图/提示重算）——解析目标 class 的
-   * method，若声明了 route 则用目标对象 data + 给定 args 求值返回 `ObjectMethodIntents`；无 route /
-   * 找不到目标则返回 undefined。method_exec form 的 refine 用它在累积参数后刷新 tip / intents。
-   * 与 callMethod 区别：runRoute 只算意图不执行 exec、不产副作用。
+   * 对目标 object 的某 **guide method** 跑一次 `route`（填表式渐进执行的意图/提示重算）——解析目标 class 的
+   * guide（**不是** object method，method 不再持 route）。用目标对象 data + 给定 args 求值返回
+   * `ObjectMethodIntents`；找不到目标或目标不是 guide 则返回 undefined。method_exec form 的 refine 用它
+   * 在累积参数后刷新 tip / intents。与 callMethod 区别：runRoute 只算意图不执行 exec、不产副作用。
    */
   runRoute?(
     targetObjectId: string,
-    methodName: string,
+    guideName: string,
     args: Record<string, unknown>,
   ): Promise<ObjectMethodIntents | undefined>;
+
+  /**
+   * 直接执行目标 object 的某 **guide method** 的 `exec`（**跳过 route / 不开 form**）——method_exec form
+   * 的 `submit` 用它把累积参数提交给真正的 guide.exec；区别于 `callMethod`（走 dispatch，guide 会被
+   * 再次开 form 触发递归）。找不到目标 / 目标不是 guide → 返回 undefined。
+   */
+  execGuide?(
+    targetObjectId: string,
+    guideName: string,
+    args: Record<string, unknown>,
+  ): Promise<ObjectMethodResult | undefined>;
 }
 
 /**
@@ -71,12 +82,16 @@ export interface ConstructorContext {
 }
 
 /**
- * object method 定义。
+ * object method 定义 —— **单步直执行**模板。
  *
- * - name        : 方法名（dispatch 入口；同 class 内 object/window method 不可重名）
+ * 与 `ObjectGuideMethod`（多步引导）正交：method 参数已知、`schema` 描述形状、`exec` 直接行动；
+ * 不持有 `route` / `intents`（那两字段曾在 method 上、未被任何 builtin 使用，已迁至 ObjectGuideMethod）。
+ *
+ * - name        : 方法名（dispatch 入口；同 class 内 method/guide/window method 三侧不可重名）
  * - description : LLM 面向的方法描述（必填）
  * - schema      : 可选参数 schema（结构化渲染 + fail-soft 校验）
  * - public      : 是否对 peer object 可见可调
+ * - permission  : 权限谓词：调用前按 args 算 `allow` / `ask` / `deny`（缺省 allow）
  * - exec        : (ctx, self, args) → 结果（`ObjectMethodResult`{message?/data?/err?}，或裸 string = sugar for {message}，或 void/undefined）；**可改 self、可副作用**
  */
 export interface ObjectMethod<Data = any, Args = any> {
@@ -84,10 +99,39 @@ export interface ObjectMethod<Data = any, Args = any> {
   description: string;
   schema?: MethodCallSchema;
   public?: boolean;
-  /** 权限谓词：调用前按 args 算 `allow` / `ask` / `deny`（缺省 allow）；判定归 observable 的 permission 模型。 */
   permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
-  intents?: {name: string, description: string}[]
-  route?: (ctx: ExecutableContext, self: SelfProxy<Data>, args: Args) => ObjectMethodIntents;
+  exec: (
+    ctx: ExecutableContext,
+    self: SelfProxy<Data>,
+    args: Args,
+  ) => ObjectMethodResult | string | void | Promise<ObjectMethodResult | string | void>;
+}
+
+/**
+ * object **guide** method 定义 —— **多步引导**模板。
+ *
+ * 用于「参数未必齐全、调用即开 form、逐轮 route 澄清 intents 直至 submit」一类需求。dispatch 命中时
+ * 跑 `route(ctx, self, args)`：
+ * - `quickSubmit=true` → runtime 直接调 `guide.exec`（与单步 method 等价）。
+ * - 否则 → runtime 自动 `instantiate(_builtin/agent/method_exec_form, {targetObjectId, guideName,
+ *   accumulatedArgs:args, currentTip, currentIntents})`，把 form ref 返给 tool call，agent 后续经
+ *   form.refine 累积参数、form.submit 真执行。
+ *
+ * `intents` 必有（描述该 guide 可能产生的意图全集，作为 LLM 静态先验 + activator 校验）；`schema?` 可
+ * 选（描述总参数空间，route 输出 ObjectMethodIntents 描述当下需补的子集）；`route` 必有，否则用 ObjectMethod。
+ */
+export interface ObjectGuideMethod<Data = any, Args = any> {
+  name: string;
+  description: string;
+  schema?: MethodCallSchema;
+  intents: { name: string; description: string }[];
+  public?: boolean;
+  permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
+  route: (
+    ctx: ExecutableContext,
+    self: SelfProxy<Data>,
+    args: Args,
+  ) => ObjectMethodIntents | Promise<ObjectMethodIntents>;
   exec: (
     ctx: ExecutableContext,
     self: SelfProxy<Data>,
@@ -99,8 +143,9 @@ export interface ObjectMethod<Data = any, Args = any> {
 // 类似于现实中我们填写的电子表单
 // 要提交行动前，发起一个表单
 // 填几个参数，然后给出新的填表项并给出提示，然后继续填，然后继续提示，直到表单填写完毕再提交
-// OOC 系统的 Object Method 也支持这个模式，如果 Object Method 定义了 route，那么方法执行时，会先执行 route 取得意图
-// 同时在 上下文中，会创建一个 ObjectMethodForm window, 用于显示表单，这个 window 具有 refine 方法用于继续填充调整参数，具有 submit 方法用于提交表单
+// OOC 系统的 ObjectGuideMethod 服务于这个模式：dispatch 命中 guide 时先执行 route 取得意图
+// 同时在上下文中创建一个 method_exec_form window 用于显示表单——该 window 持 refine 方法继续填充调整参数、
+// 持 submit 方法用于提交表单
 // route 计算出的 tip 会作为 tool call 结果返回，计算出的 intents 会用于激活关联的知识
 export interface ObjectMethodIntents {
   tip?: string,
@@ -182,4 +227,9 @@ export interface ObjectLifecycleHook<Data = any> {
 /** executable 维度模块 —— `executable/index.ts` 的 default export。 */
 export interface ExecutableModule<Data = any> {
   methods: ObjectMethod<Data>[];
+  /**
+   * 可选 **guide methods**（多步引导）。`methods`（单步）与 `guides`（多步）按 name 在 dispatch 入口
+   * 不可重名（注册期 `assertExecutableMethodGuideCohesion` 校验）。
+   */
+  guides?: ObjectGuideMethod<Data>[];
 }

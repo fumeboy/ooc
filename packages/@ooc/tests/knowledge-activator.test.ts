@@ -40,6 +40,7 @@ describe("activator.expr", () => {
     const env: ActivationContext = {
       windowClasses: new Set(["foo"]),
       methodForms: new Set(),
+      activeIntents: new Set(),
       inSuper: false,
     };
     expect(evaluateTrigger({ kind: "window", class: "foo" }, env)).toBe(true);
@@ -47,10 +48,30 @@ describe("activator.expr", () => {
   });
 
   it("evaluateTrigger super matches inSuper", () => {
-    const a: ActivationContext = { windowClasses: new Set(), methodForms: new Set(), inSuper: true };
+    const a: ActivationContext = {
+      windowClasses: new Set(),
+      methodForms: new Set(),
+      activeIntents: new Set(),
+      inSuper: true,
+    };
     expect(evaluateTrigger({ kind: "super" }, a)).toBe(true);
     const b = { ...a, inSuper: false };
     expect(evaluateTrigger({ kind: "super" }, b)).toBe(false);
+  });
+
+  it("parseTrigger intent::<name>", () => {
+    expect(parseTrigger("intent::create_file")).toEqual({ kind: "intent", name: "create_file" });
+  });
+
+  it("evaluateTrigger intent matches activeIntents", () => {
+    const env: ActivationContext = {
+      windowClasses: new Set(),
+      methodForms: new Set(),
+      activeIntents: new Set(["create_file"]),
+      inSuper: false,
+    };
+    expect(evaluateTrigger({ kind: "intent", name: "create_file" }, env)).toBe(true);
+    expect(evaluateTrigger({ kind: "intent", name: "delete" }, env)).toBe(false);
   });
 
   it("maxLevel: show_content > show_description", () => {
@@ -98,6 +119,7 @@ describe("computeActivations", () => {
     const env: ActivationContext = {
       windowClasses: new Set(["foo"]),
       methodForms: new Set(),
+      activeIntents: new Set(),
       inSuper: true,
     };
     const results = computeActivations(index, env);

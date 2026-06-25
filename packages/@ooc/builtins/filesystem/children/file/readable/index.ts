@@ -86,7 +86,9 @@ const readable: ReadableModule<Data, FileWin> = {
   window: [
     {
       class: "file",
-      object_methods: ["reload", "edit"],
+      // 仅列实际注册的 method（issue 2026-06-26-object-guide-method-split 引入 cohesion 校验，
+      // 悬空引用 fail-loud）；reload 历史声明未实现，已清。
+      object_methods: ["edit"],
       window_methods: [setViewportMethod],
     },
   ],

@@ -54,12 +54,15 @@ export interface WindowMethod<Data = unknown, Win = unknown, Args = any> {
  * 一个 window class 声明 —— readable 可注册多个（同一 object 按视角投影成不同 class）。
  *
  * - class          : 该投影 class 名
- * - object_methods : 该 window 上**展示**哪些 object method（按名引用 executable 的方法）
+ * - object_methods : 该 window 上**展示**哪些 object method（按名引用 ExecutableModule.methods）
+ * - guide_methods  : 该 window 上**展示**哪些 guide method（按名引用 ExecutableModule.guides）。
+ *                    method/guide 命名空间共用 dispatch 入口；同名互斥，注册期校验。
  * - window_methods : 该 window 提供的 window method
  */
 export interface WindowClassDecl<Data = unknown, Win = unknown> {
   class: string;
   object_methods: string[];
+  guide_methods?: string[];
   window_methods: WindowMethod<Data, Win>[];
 }
 

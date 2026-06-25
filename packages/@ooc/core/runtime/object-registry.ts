@@ -22,6 +22,7 @@
 import type { OocClass, OocObjectInstance } from "./ooc-class.js";
 import type {
   ObjectConstructor,
+  ObjectGuideMethod,
   ObjectLifecycleHook,
   ObjectMethod,
   WindowMethod,
@@ -31,6 +32,7 @@ import type {
   PersistableModule,
   VisibleServerModule,
   ThinkableModule,
+  ExecutableModule,
 } from "../types";
 
 // ─────────────────────────── ClassRegistry ───────────────────────────
@@ -82,6 +84,72 @@ function assertNoMethodNameCollision(cls: OocClass): void {
 }
 
 /**
+ * 注册期 fail-loud 校验（issue 2026-06-26-object-guide-method-split） —— 扩展 method/guide/window
+ * 三侧 cohesion：
+ *
+ * 1. **methods / guides 各自内部按 name 自查重**——guides 与 methods 一样按 name dispatch，重名歧义。
+ * 2. **methods 与 guides 跨域不可重名**——共享 exec-by-name 入口，命中谁不确定。
+ * 3. **guides 与 window methods 跨域不可重名**——见 assertNoMethodNameCollision 同因。
+ * 4. **每个 window decl 的 object_methods / guide_methods 引用必须能在 ExecutableModule 内解析**——
+ *    悬空引用 fail-loud；reflect_request 等下游按白名单 surface 依赖此约束。
+ */
+function assertExecutableMethodGuideCohesion(cls: OocClass): void {
+  const executable: ExecutableModule | undefined = cls.executable;
+  const methods = executable?.methods ?? [];
+  const guides = executable?.guides ?? [];
+
+  // 1. guides 内部按 name 自查重
+  const guideSeen = new Set<string>();
+  for (const g of guides) {
+    if (guideSeen.has(g.name)) {
+      throw new Error(
+        `Duplicate guide method name "${g.name}" on "${cls.id}"`,
+      );
+    }
+    guideSeen.add(g.name);
+  }
+
+  // 2. method vs guide 跨域不可重名
+  const methodNames = new Set(methods.map((m) => m.name));
+  for (const g of guides) {
+    if (methodNames.has(g.name)) {
+      throw new Error(
+        `Name "${g.name}" registered as both object method and guide method on "${cls.id}"`,
+      );
+    }
+  }
+
+  // 3. guide vs window method 跨域不可重名
+  for (const decl of cls.readable?.window ?? []) {
+    for (const wm of decl.window_methods) {
+      if (guideSeen.has(wm.name)) {
+        throw new Error(
+          `Name "${wm.name}" registered as both guide method and window method on "${cls.id}"`,
+        );
+      }
+    }
+  }
+
+  // 4. window decl 的 object_methods / guide_methods 引用必须可解析（悬空 fail-loud）
+  for (const decl of cls.readable?.window ?? []) {
+    for (const mname of decl.object_methods ?? []) {
+      if (!methodNames.has(mname)) {
+        throw new Error(
+          `Window class "${decl.class}" of "${cls.id}" references unknown object method "${mname}"`,
+        );
+      }
+    }
+    for (const gname of decl.guide_methods ?? []) {
+      if (!guideSeen.has(gname)) {
+        throw new Error(
+          `Window class "${decl.class}" of "${cls.id}" references unknown guide method "${gname}"`,
+        );
+      }
+    }
+  }
+}
+
+/**
  * Class 注册表 —— 按 class id 注册 OocClass 定义、本类直查各维度模块。
  *
  * 解析约定：每个 `resolveXxx(classId)` 只查本类的对应槽，**不沿任何继承链 fallback**。
@@ -93,6 +161,7 @@ export class ClassRegistry {
 
   register(cls: OocClass): void {
     assertNoMethodNameCollision(cls);
+    assertExecutableMethodGuideCohesion(cls);
     this.classes.set(cls.id, cls);
   }
 
@@ -127,6 +196,19 @@ export class ClassRegistry {
   /** 本类直查全部 object methods。dispatch 渲染「这个对象可调哪些 method」时用。 */
   resolveObjectMethods(classId: string): ObjectMethod[] {
     return this.classes.get(classId)?.executable?.methods ?? [];
+  }
+
+  /**
+   * 本类直查单个 **guide method**（按 name）。dispatch 入口在 resolveObjectMethod 未命中时回退到此查
+   * （见 ThreadRuntime.exec）。
+   */
+  resolveObjectGuideMethod(classId: string, name: string): ObjectGuideMethod | undefined {
+    return this.classes.get(classId)?.executable?.guides?.find((g) => g.name === name);
+  }
+
+  /** 本类直查全部 guide methods。 */
+  resolveObjectGuideMethods(classId: string): ObjectGuideMethod[] {
+    return this.classes.get(classId)?.executable?.guides ?? [];
   }
 
   /** 本类直查 window method（按 windowClass + methodName）。 */
