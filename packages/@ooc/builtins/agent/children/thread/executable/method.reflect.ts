@@ -97,9 +97,9 @@ async function selfHealCallerSessionId(
  * 输出三组清单 string，由 method 结果 message 渲入 super thread 的 transcript，供 caller
  * agent 决定走哪条分发通道。
  *
- * 实施简化：因找不到 callerSessionId（见 findCallerSessionId TODO），本版扫磁盘**所有业务
- * flow** 内的 objectDir(callerObjectId)/data.json 与 stone canonical 对比；找到第一个有 dirty
- * 字段的 session 即返回。class edits 扫所有业务 session 的 worktree diff。
+ * 实施：issue G 后 findCallerSessionId 直读 self.data.callerSessionId（super thread.construct 显式
+ * 写入）；命中即只扫该 session 一处；callerSessionId 缺失（旧 super thread 升级前）退化扫所有业务
+ * flow + 命中后自愈写回（selfHealCallerSessionId）。class edits 扫该 session 的 worktree diff。
  */
 const scanChangesMethod: ObjectMethod<ThreadContext> = {
   name: "scan_changes",
