@@ -92,8 +92,9 @@ function activationEnv(thread: ThreadContext, registry: ObjectInsRegistry): Acti
           methodForms.add(`${targetInst.class}::${d.guideName}`);
         }
       }
-      // phase-1 简化的 source-key 模型：所有 form 的 currentIntents 合并为 activeIntents
-      // （phase-2 改读 source-intents store + 按 sourceKey 撤销）
+      // 扫 form 的 currentIntents 合并为 activeIntents——契约层 phase-2 source-key store
+      // （core/thinkable/knowledge/source-intents.ts）已退役、本扫窗模型自然 session-scoped
+      // 且天然支持 refine→整组替换 currentIntents 数组（无需 store 撤销）。
       if (Array.isArray(d?.currentIntents)) {
         for (const i of d.currentIntents) activeIntents.add(i);
       }
