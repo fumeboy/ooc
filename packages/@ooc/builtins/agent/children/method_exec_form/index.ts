@@ -1,10 +1,16 @@
 /**
- * method_exec_form —— ooc class。「填表式渐进执行」的 form 对象。
+ * method_exec_form —— ooc class。「填表式渐进执行」的 form 对象，服务于 `ObjectGuideMethod` 触发。
  *
  * 流程：
- *   1. agent 调用某 object 的 method（声明了 route）→ runtime 创建 method_exec_form 实例
- *   2. agent 经 form.refine 累积参数 + 触发 route 重算 → tip / intents 进 context
- *   3. agent 经 form.submit 真正 exec 目标 method（用累积参数）
+ *   1. agent 经 exec(window, guideName, partialArgs) 调用某 object 的 **guide method** → runtime
+ *      跑 guide.route 拿 ObjectMethodIntents：
+ *      - `quickSubmit=true` → runtime 直接 guide.exec（不开 form）。
+ *      - 否则 → runtime 自动 instantiate `method_exec_form` 实例（本 class），把 form ref 返给 tool call。
+ *   2. agent 经 form.refine(args) 累积参数 + 触发 guide.route 重算 → currentTip / currentIntents 写回 form data。
+ *   3. agent 经 form.submit() 真正 exec 目标 guide（用累积参数）。
+ *
+ * 设计权威：`.ooc-world-meta/.../children/executable/self.md`（form 协议）+ issue
+ * 2026-06-26-object-guide-method-split.md。
  */
 import type { OocClass, OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type {
@@ -21,22 +27,39 @@ import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
 import type { Data } from "./types.js";
 
 const construct: ObjectConstructor<Data> = {
-  description: "Open a method_exec_form to progressively fill args for a target method.",
+  description: "Open a method_exec_form to progressively fill args for a target guide method.",
   schema: {
-    targetObjectId: { type: "string", required: true, description: "目标对象 id" },
-    targetMethod: { type: "string", required: true, description: "目标 method 名" },
+    targetObjectId: { type: "string", required: true, description: "目标对象 id（guide 所属对象）" },
+    guideName: { type: "string", required: true, description: "目标 guide method 名" },
+    accumulatedArgs: { type: "object", required: false, description: "初始累积参数（partialArgs）" },
+    currentTip: { type: "string", required: false, description: "初始 tip（route 输出）" },
+    currentIntents: { type: "object", required: false, description: "初始 intents（route 输出）" },
   },
-  exec: (_ctx: ConstructorContext, args: { targetObjectId?: string; targetMethod?: string }): Data => ({
+  exec: (
+    _ctx: ConstructorContext,
+    args: {
+      targetObjectId?: string;
+      guideName?: string;
+      // 历史 alias：旧调用方仍传 targetMethod 时兼容一段
+      targetMethod?: string;
+      accumulatedArgs?: Record<string, unknown>;
+      currentTip?: string;
+      currentIntents?: string[];
+    },
+  ): Data => ({
     targetObjectId: args.targetObjectId ?? "",
-    targetMethod: args.targetMethod ?? "",
-    accumulatedArgs: {},
+    guideName: args.guideName ?? args.targetMethod ?? "",
+    accumulatedArgs: args.accumulatedArgs ?? {},
+    currentTip: args.currentTip,
+    currentIntents: args.currentIntents,
     createdAt: Date.now(),
   }),
 };
 
 const refineMethod: ObjectMethod<Data> = {
   name: "refine",
-  description: "Merge args into the form and re-run target method's route to refresh tip/intents.",
+  description:
+    "Merge args into the form and re-run the target guide's route to refresh currentTip / currentIntents.",
   schema: {
     args: { type: "object", required: true, description: "本次新增/覆盖的参数" },
   },
@@ -47,34 +70,51 @@ const refineMethod: ObjectMethod<Data> = {
   ) => {
     const merged = { ...self.data.accumulatedArgs, ...(args.args ?? {}) };
     self.data.accumulatedArgs = merged;
-    // 经 runtime.runRoute 计算 tip/intents
+    self.data.lastError = undefined;
+    // 经 runtime.runRoute 计算 tip/intents（resolve 目标 guide method）
     const intents = await ctx.runtime.runRoute?.(
       self.data.targetObjectId,
-      self.data.targetMethod,
+      self.data.guideName,
       merged,
     );
     if (intents) {
-      self.data.tip = intents.tip;
-      self.data.intents = intents.intents;
+      self.data.currentTip = intents.tip;
+      self.data.currentIntents = intents.intents;
     }
-    return { message: `[form] refined; tip=${self.data.tip ?? "—"}` };
+    return {
+      message: `[form] refined; tip=${self.data.currentTip ?? "—"}`,
+    };
   },
 };
 
 const submitMethod: ObjectMethod<Data> = {
   name: "submit",
-  description: "Submit the form: call target method with accumulated args.",
+  description: "Submit the form: call target guide method's exec with accumulated args.",
   schema: {},
   exec: async (ctx: ExecutableContext, self) => {
-    if (!ctx.runtime.callMethod) {
-      return { err: "[form] runtime.callMethod unavailable" };
+    if (!ctx.runtime.execGuide) {
+      const err = "[form] runtime.execGuide unavailable";
+      self.data.lastError = err;
+      return { err };
     }
-    const out = await ctx.runtime.callMethod(
-      self.data.targetObjectId,
-      self.data.targetMethod,
-      self.data.accumulatedArgs,
-    );
-    return { message: out ?? "(submitted)" };
+    try {
+      const out = await ctx.runtime.execGuide(
+        self.data.targetObjectId,
+        self.data.guideName,
+        self.data.accumulatedArgs,
+      );
+      if (!out) {
+        const err = `[form] guide not found: ${self.data.targetObjectId}::${self.data.guideName}`;
+        self.data.lastError = err;
+        return { err };
+      }
+      self.data.lastError = out.err;
+      return out;
+    } catch (e) {
+      const msg = (e as Error).message;
+      self.data.lastError = msg;
+      return { err: msg };
+    }
   },
 };
 
@@ -83,17 +123,36 @@ const executable: ExecutableModule<Data> = {
 };
 
 const readable: ReadableModule<Data, unknown> = {
-  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => ({
-    class: "method_exec_form",
-    content: [
-      xmlElement("target", { object: self.data.targetObjectId, method: self.data.targetMethod }, []),
-      xmlElement("args", {}, [xmlText(JSON.stringify(self.data.accumulatedArgs, null, 2))]),
-      ...(self.data.tip ? [xmlElement("tip", {}, [xmlText(self.data.tip)])] : []),
-    ],
-  }),
+  readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => {
+    const d = self.data;
+    const contextChildren = [
+      xmlElement("target_object", { id: d.targetObjectId }, []),
+      xmlElement("guide", { name: d.guideName }, []),
+      xmlElement("accumulated_args", {}, [xmlText(JSON.stringify(d.accumulatedArgs, null, 2))]),
+    ];
+    if (d.currentTip) {
+      contextChildren.push(xmlElement("current_tip", {}, [xmlText(d.currentTip)]));
+    }
+    if (d.currentIntents && d.currentIntents.length > 0) {
+      contextChildren.push(
+        xmlElement(
+          "current_intents",
+          {},
+          d.currentIntents.map((i) => xmlElement("intent", {}, [xmlText(i)])),
+        ),
+      );
+    }
+    if (d.lastError) {
+      contextChildren.push(xmlElement("last_error", {}, [xmlText(d.lastError)]));
+    }
+    return {
+      class: "_builtin/agent/method_exec_form",
+      content: [xmlElement("context", {}, contextChildren)],
+    };
+  },
   window: [
     {
-      class: "method_exec_form",
+      class: "_builtin/agent/method_exec_form",
       object_methods: ["refine", "submit"],
       window_methods: [],
     },

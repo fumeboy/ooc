@@ -1,9 +1,14 @@
 /**
  * activator.expr —— knowledge `activates_on` trigger 解析 + 求值。
  *
- * 三类 trigger 语法：
+ * 四类 trigger 语法：
  * - `window::<class>` —— context 中存在某 class 的 window
- * - `method::<class>::<method>` —— 存在挂该 class 上的 method_exec form 窗（method 名）
+ * - `method::<class>::<guide>` —— 存在挂该 class 上的 method_exec form 窗（按 guide 名匹配）
+ *   注：trigger 关键字保留 `method::` 历史拼写，但语义已迁至 ObjectGuideMethod——`<guide>` 写
+ *   guide method name（不再有"method 自带 route"概念）。
+ * - `intent::<name>` —— 当前 thread 的 form 集合内某 form `currentIntents` 含此 intent
+ *   名（动态意图驱动）；phase-1 简化：所有 form 的 currentIntents 合并为 activeIntents 求值，
+ *   phase-2 再做 source-key 分组撤销机制
  * - `super` / `super::<true>` —— 当前 thread 跑在 super session
  *
  * 多 trigger 命中取 max 级别（show_content > show_description）。
@@ -13,6 +18,7 @@ import type { ActivationLevel, ActivatesOn } from "../../types/knowledge.js";
 export type Trigger =
   | { kind: "window"; class: string }
   | { kind: "method"; class: string; method: string }
+  | { kind: "intent"; name: string }
   | { kind: "super" };
 
 /** 解析单条 trigger 表达式；失败抛错（caller 决定是否 catch）。 */
@@ -27,6 +33,9 @@ export function parseTrigger(expr: string): Trigger {
     const idx = rest.indexOf("::");
     if (idx < 0) throw new Error(`[activator.expr] method trigger missing method name: ${s}`);
     return { kind: "method", class: rest.slice(0, idx).trim(), method: rest.slice(idx + 2).trim() };
+  }
+  if (s.startsWith("intent::")) {
+    return { kind: "intent", name: s.slice("intent::".length).trim() };
   }
   throw new Error(`[activator.expr] unknown trigger: ${s}`);
 }
@@ -50,8 +59,13 @@ export function parseActivatesOn(raw: unknown, file?: string): Map<Trigger, Acti
 export interface ActivationContext {
   /** context 中所有 window 的 class 集合。 */
   windowClasses: Set<string>;
-  /** method_exec form 中的 (class, method) 对集合。 */
-  methodForms: Set<string>; // "class::method" 格式
+  /** method_exec form 中的 (目标 class, guide name) 对集合，格式 `class::guide`。 */
+  methodForms: Set<string>;
+  /**
+   * 当前 thread 内所有 form 的 `currentIntents` 合并集合（phase-1 简化的 source-key 模型——所有
+   * form 共享一个活跃 intents 集；phase-2 再做按 source-key 分组撤销）。
+   */
+  activeIntents: Set<string>;
   /** 是否 super session。 */
   inSuper: boolean;
 }
@@ -65,6 +79,8 @@ export function evaluateTrigger(t: Trigger, env: ActivationContext): boolean {
       return env.windowClasses.has(t.class);
     case "method":
       return env.methodForms.has(`${t.class}::${t.method}`);
+    case "intent":
+      return env.activeIntents.has(t.name);
   }
 }
 

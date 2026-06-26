@@ -19,3 +19,10 @@ export {
   type ActivationContext,
 } from "./activator.expr.js";
 export { computeActivations } from "./activator.js";
+export {
+  setSourceIntents,
+  clearSourceIntents,
+  getAllActiveIntents,
+  getSourceIntents,
+  resetSourceIntentsStore,
+} from "./source-intents.js";
