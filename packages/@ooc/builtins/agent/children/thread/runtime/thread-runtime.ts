@@ -24,6 +24,7 @@ import {
   getSessionRegistry,
 } from "@ooc/core/runtime/object-registry.js";
 import { computeRefcount } from "@ooc/core/runtime/refcount.js";
+import { isSelfThreadWindow, threadWindowIdOf } from "@ooc/core/types/context-window.js";
 import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import {
   type ExecutableContext,
@@ -87,8 +88,18 @@ export class ThreadRuntime implements RuntimeHandle {
     return this.thread.contextWindows.find((w) => w.id === windowId);
   }
 
-  /** 取窗所引用对象的业务 data（经 session 表按 ref.id 解析）。 */
+  /**
+   * 把 ref 解析为业务 data —— self-view ref（id 形如 `w_creator_<threadId>`，issue I）短路到
+   * 当前 thread 自身 data；其它 ref 经 session 表按 ref.id 解析。
+   *
+   * 设计理由：self-view ref 是 thread 在自身 contextWindows 中"看自己"的入口；session 表里没
+   * 一个 id=`w_creator_<threadId>` 的 inst（thread inst 的 id = threadId 本身）。
+   * 短路避免空 data 退化破坏 readable / method 执行。
+   */
   private objectDataOf(ref: OocObjectRef): unknown {
+    if (isSelfThreadWindow(ref.id) && ref.id === threadWindowIdOf(this.thread.id)) {
+      return this.thread;
+    }
     return this.registry.getObject(ref.id)?.data;
   }
 
@@ -132,8 +143,7 @@ export class ThreadRuntime implements RuntimeHandle {
     method: ObjectMethod,
     args: Record<string, unknown>,
   ): Promise<ObjectMethodResult> {
-    const instance = this.registry.getObject(ref.id);
-    const data = instance?.data ?? {};
+    const data = this.objectDataOf(ref) ?? {};
     const ctx: ExecutableContext = {
       object: { id: ref.id, class: ref.class },
       runtime: this,
@@ -163,8 +173,7 @@ export class ThreadRuntime implements RuntimeHandle {
     guide: ObjectGuideMethod,
     args: Record<string, unknown>,
   ): Promise<ObjectMethodResult> {
-    const instance = this.registry.getObject(ref.id);
-    const data = instance?.data ?? {};
+    const data = this.objectDataOf(ref) ?? {};
     const ctx: ExecutableContext = {
       object: { id: ref.id, class: ref.class },
       runtime: this,

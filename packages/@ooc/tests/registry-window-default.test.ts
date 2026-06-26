@@ -89,20 +89,31 @@ describe("resolveDefaultWindowClass / resolveWindowClass (post-default conventio
     expect(decl?.class).toBe("default");
   });
 
-  it("thread (multi-view, issue E) has 'default' and 'super' window decls non-empty", () => {
+  it("thread (multi-view, issue I) has 'default', 'self' and 'super' window decls non-empty", () => {
     const defaultDecl = builtinClassRegistry.resolveWindowClass(THREAD_CLASS_ID, "default");
+    const selfDecl = builtinClassRegistry.resolveWindowClass(THREAD_CLASS_ID, "self");
     const superDecl = builtinClassRegistry.resolveWindowClass(THREAD_CLASS_ID, "super");
     expect(defaultDecl).toBeDefined();
+    expect(selfDecl).toBeDefined();
     expect(superDecl).toBeDefined();
+    // default: 对端视角——仅 say
     expect(defaultDecl?.object_methods).toContain("say");
-    expect(defaultDecl?.object_methods).toContain("reply");
-    expect(defaultDecl?.object_methods).toContain("end");
-    expect(defaultDecl?.object_methods).toContain("todo");
+    expect(defaultDecl?.object_methods).not.toContain("reply");
+    expect(defaultDecl?.object_methods).not.toContain("end");
+    // self: 自看视角——reply/end/todo
+    expect(selfDecl?.object_methods).toContain("reply");
+    expect(selfDecl?.object_methods).toContain("end");
+    expect(selfDecl?.object_methods).toContain("todo");
+    expect(selfDecl?.object_methods).not.toContain("say");
+    // super: self 全集 + 4 reflect method
+    expect(superDecl?.object_methods).toContain("reply");
+    expect(superDecl?.object_methods).toContain("end");
+    expect(superDecl?.object_methods).toContain("todo");
     expect(superDecl?.object_methods).toContain("scan_changes");
-    expect(superDecl?.object_methods).toContain("say");
+    expect(superDecl?.object_methods).toContain("create_pr_for_versioned");
   });
 
-  it("thread (multi-view, issue E) DOES have a default decl now (default+super 二投影)", () => {
+  it("thread (multi-view, issue I) DOES have a default decl now (default/self/super 三投影)", () => {
     const defaultDecl = builtinClassRegistry.resolveDefaultWindowClass(THREAD_CLASS_ID);
     expect(defaultDecl).toBeDefined();
     expect(defaultDecl?.class).toBe("default");

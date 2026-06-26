@@ -21,19 +21,51 @@ import type { XmlNode } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText, serializeXml } from "@ooc/core/types/xml.js";
 import { isSuperSessionId } from "@ooc/core/types/constants.js";
 import { renderReadable } from "@ooc/core/readable/index.js";
+import { isSelfThreadWindow, threadWindowIdOf } from "@ooc/core/types/context-window.js";
+import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
+import readableModule from "../readable/index.js";
+import type { ReadableContext } from "@ooc/core/types/index.js";
 import {
   type ActivationContext,
   computeActivations,
 } from "@ooc/core/thinkable/knowledge/index.js";
 import type { ActivationResult } from "@ooc/core/types/knowledge.js";
 import { loadKnowledgeIndex } from "@ooc/builtins/knowledge_base/loader.js";
-import type { ThreadContext, ThreadMessage } from "../types.js";
+import type { ThreadContext, ThreadMessage, ThreadWin } from "../types.js";
 
-/** 把一个 window 渲染成 XML 节点（经 renderReadable 3 档 fallback 取 payload，本函数自包 <window> 壳）。 */
+/**
+ * 把一个 window 渲染成 XML 节点。
+ *
+ * - **self-view ref**（issue I：id 形如 `w_creator_<threadId>`,session 表里没对应 inst）→ 短路
+ *   直接调本 thread 的 readable.readable(thread, ref),投影 class 由 readable 自身据视角算
+ *   （self / super）。不走 renderReadable 的 inst 解析。
+ * - **其它 ref**：经 core `renderReadable` 3 档 fallback。
+ *
+ * 本函数始终自包 `<window>` XML 壳。
+ */
 async function renderWindow(
   ref: OocObjectRef,
   registry: ObjectInsRegistry,
+  thread: ThreadContext,
 ): Promise<XmlNode> {
+  // self-view ref 短路:直接调本 thread readable,避免 renderReadable 找不到 inst data
+  if (isSelfThreadWindow(ref.id) && ref.id === threadWindowIdOf(thread.id)) {
+    const ctx: ReadableContext = { object: { id: ref.id, class: ref.class } };
+    const projection = await readableModule.readable(
+      ctx,
+      makeReadonlySelfProxy(thread),
+      ref as OocObjectRef<ThreadWin>,
+    );
+    if (projection.win !== undefined) ref.data = projection.win;
+    const content = Array.isArray(projection.content)
+      ? projection.content
+      : [xmlText(projection.content)];
+    return xmlElement(
+      "window",
+      { id: ref.id, class: projection.class, title: ref.title ?? "" },
+      content,
+    );
+  }
   const result = await renderReadable(ref, registry, registry);
   const content = Array.isArray(result.payload)
     ? result.payload
@@ -162,7 +194,7 @@ export async function buildLlmInput(
 
   const windowNodes: XmlNode[] = [];
   for (const ref of thread.contextWindows) {
-    windowNodes.push(await renderWindow(ref, registry));
+    windowNodes.push(await renderWindow(ref, registry, thread));
   }
   const contextWindowsXml = serializeXml(xmlElement("context_windows", {}, windowNodes));
   const messagesXml = serializeXml(renderMessages(thread.messages));
