@@ -1,7 +1,6 @@
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { TranscriptViewport } from "./readable/transcript-viewport";
 import type { SummarizedRange } from "@ooc/core/utils/summarized-ranges.js";
-import { SUPER_SESSION_ID } from "@ooc/core/types/constants.js";
 
 /**
  * ProcessEvent 共享的可选字段;所有 variants 都可承载它们。
@@ -315,18 +314,6 @@ export type ThreadContext = {
    */
   callerSessionId?: string;
 };
-
-/**
- * 判定一个 ThreadContext 是否是 super thread（sessionId === SUPER_SESSION_ID）。
- *
- * 用于 method 内的视角分流（普通 thread vs super thread）：
- * - 普通 thread (sessionId !== SUPER) → `callerSessionId` 必须 undefined；wake 目标 = self.sessionId。
- * - super thread (sessionId === SUPER) → `callerSessionId` 通常存在（caller 业务 sessionId）；
- *   wake 目标 = self.callerSessionId（反向唤醒业务 worker）或 SUPER_SESSION_ID（唤醒 super job lane）。
- */
-export function isSuperThread(t: ThreadContext): boolean {
-  return t.sessionId === SUPER_SESSION_ID;
-}
 
 export type Data = ThreadContext;
 
