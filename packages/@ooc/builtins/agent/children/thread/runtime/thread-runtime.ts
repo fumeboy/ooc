@@ -124,10 +124,12 @@ export class ThreadRuntime implements RuntimeHandle {
     if (!ref) throw new Error(`[exec] window not found: ${windowId}`);
     const objectMethod = this.registry.resolveObjectMethod(ref.class, methodName);
     if (objectMethod) {
+      this.assertInSurface(ref, methodName, "object");
       return await this.execObjectMethod(ref, objectMethod, args);
     }
     const guideMethod = this.registry.resolveObjectGuideMethod(ref.class, methodName);
     if (guideMethod) {
+      this.assertInSurface(ref, methodName, "guide");
       return await this.execGuideMethod(ref, methodName, guideMethod, args);
     }
     // issue K 修复：resolveWindowMethod 第二参语义是 windowView（按 readable.window decl 的 view 字段匹配），
@@ -143,6 +145,41 @@ export class ThreadRuntime implements RuntimeHandle {
       return {};
     }
     throw new Error(`[exec] method not found on class ${ref.class}: ${methodName}`);
+  }
+
+  /**
+   * issue M：兑现 issue E `method.public` 退役契约「未列入 readable.window decl 即不可调」——
+   * dispatch 在 object/guide method 命中后追加 view surface 白名单校验，未列入 fail-loud。
+   *
+   * 与 resolveWindowMethod 已按 view 闸（issue K）形成 method 三类（object/guide/window）
+   * dispatch 一致按 view 闸的统一语义。
+   *
+   * fallback：decl 缺失（hot-reload 中间态等异常窗口）→ 不闸 + dev-mode warn——issue B verified
+   * cohesion 校验已保证正常路径 decl 必存在；fallback 仅防异常态、加 warn 防 silent allow。
+   */
+  private assertInSurface(
+    ref: OocObjectRef,
+    methodName: string,
+    kind: "object" | "guide",
+  ): void {
+    const view = ref.window_view ?? DEFAULT_WINDOW_VIEW;
+    const decl = this.registry.resolveWindowView(ref.class, view);
+    if (!decl) {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          `[thread-runtime] assertInSurface: no view decl for class=${ref.class} view=${view} (hot-reload mid-state? skip surface gate)`,
+        );
+      }
+      return; // fallback 不闸
+    }
+    const surface = kind === "object"
+      ? decl.object_methods
+      : (decl.guide_methods ?? []);
+    if (!surface.includes(methodName)) {
+      throw new Error(
+        `[exec] method "${methodName}" not in surface of view "${view}" on class ${ref.class}`,
+      );
+    }
   }
 
   /** 跑一条 object method —— 改业务 data、可副作用。 */
