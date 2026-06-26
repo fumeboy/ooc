@@ -25,6 +25,11 @@ export interface SchedulerOptions {
   worldDir?: string;
   /** 落盘挂钩。 */
   onDataEdit?: () => Promise<void> | void;
+  /**
+   * 跨 session 唤醒钩子（worker 注入）——透给 ThreadRuntime 的 `scheduleSession` 用。
+   * 见 issue G + ThreadRuntime.scheduleSession JSDoc。
+   */
+  wakeSession?: (sessionId: string) => void;
 }
 
 /** 在一个 session 内跑调度循环，直到所有 thread 终态/waiting 或 maxTicks 耗尽。 */
@@ -68,6 +73,10 @@ export async function runScheduler(
     })[0]!;
 
     next.lastExecutedAt = Date.now();
-    await think(next, llm, registry, { worldDir: opts.worldDir, onDataEdit: opts.onDataEdit });
+    await think(next, llm, registry, {
+      worldDir: opts.worldDir,
+      onDataEdit: opts.onDataEdit,
+      wakeSession: opts.wakeSession,
+    });
   }
 }

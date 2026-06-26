@@ -74,6 +74,7 @@ async function appendMessageToSuperThread(
 async function createSuperThread(
   ctx: ExecutableContext,
   calleeObjectId: string,
+  callerSessionId: string,
   initialMessage: string | undefined,
 ): Promise<string> {
   const baseDir = ctx.worldDir;
@@ -100,10 +101,13 @@ async function createSuperThread(
 
   // 最小 ThreadContext shape（与 thread/persistable save 落盘形态一致）。
   // contextWindows 当前不预填——super flow scheduler 唤醒时按需 hydrate。
+  // callerSessionId（issue G）= caller object 所在业务 sessionId；super flow 内 reflect method 经
+  // self.data.callerSessionId 直读反查 caller 业务 flow。
   const thread = {
     id: threadId,
     calleeObjectId,
     sessionId: SUPER_SESSION_ID,
+    callerSessionId,
     status: "running",
     messages,
     events: [],
@@ -143,6 +147,7 @@ export const talkMethod: ObjectMethod<Data> = {
     if (normalizedTarget === SUPER_ALIAS_TARGET) {
       // 跨 session 自指（issue D 落地裁决 2）
       const callerObjectId = ctx.object.id;
+      const callerSessionId = ctx.sessionId;
       const existingRef = (self.data as Data).superThreadRef;
 
       if (existingRef && existingRef.sessionId === SUPER_SESSION_ID) {
@@ -161,6 +166,8 @@ export const talkMethod: ObjectMethod<Data> = {
             };
           }
         }
+        // issue G：写盘已 done（append 或仅复用 ref），唤醒 super job lane 让其消费。
+        ctx.runtime.scheduleSession?.(SUPER_SESSION_ID);
         const ref: OocObjectRef = {
           id: existingRef.threadId,
           class: THREAD_CLASS_ID,
@@ -172,10 +179,12 @@ export const talkMethod: ObjectMethod<Data> = {
         };
       }
 
-      // 无绑定 → 新建 super thread + 写回 ref
-      const threadId = await createSuperThread(ctx, callerObjectId, msg);
+      // 无绑定 → 新建 super thread + 写回 ref + 写 callerSessionId（issue G）
+      const threadId = await createSuperThread(ctx, callerObjectId, callerSessionId, msg);
       (self.data as Data).superThreadRef = { threadId, sessionId: SUPER_SESSION_ID };
       await ctx.reportDataEdit();
+      // issue G：唤醒 super job lane 让其调度新建的 super thread。
+      ctx.runtime.scheduleSession?.(SUPER_SESSION_ID);
       const ref: OocObjectRef = {
         id: threadId,
         class: THREAD_CLASS_ID,

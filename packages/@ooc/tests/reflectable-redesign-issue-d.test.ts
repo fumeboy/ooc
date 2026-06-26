@@ -157,6 +157,9 @@ describe("issue D reflectable redesign", () => {
       expect(thread.messages.length).toBe(2);
       expect(thread.messages[0].content).toBe("hello super");
       expect(thread.messages[1].content).toBe("follow up");
+
+      // issue G：super thread.json 写盘时含 callerSessionId 字段（= caller 业务 sessionId）。
+      expect(thread.callerSessionId).toBe("biz");
     });
 
     it("trim+lowercase normalization: 'SUPER' / ' super ' alias still routes", async () => {

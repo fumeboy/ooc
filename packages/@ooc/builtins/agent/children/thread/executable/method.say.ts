@@ -10,33 +10,27 @@
  *   - **reply**（creator-view 也是 `default` 投影，靠单 transcript 模型 + entry.author 区分视角）——
  *     creator 回话进 **child** → 写 child（窗所代表的那条 thread）的 **inbox**。
  *
- * **单一职责**：只把消息写进 thread Data 的 box（`self.data` 活引用）+ 经 runtime 触发对端调度。
- * runtime 调度本轮留 `TODO()` 占位（enqueueThread 待建，issue 后续点）；跨 thread 真实 delivery /
- * 对端读侧 peer-ref 投影 / callee 创建 / 跨 session 路由均属后续重构，不在此闭合。
+ * **单一职责**：写盘共享 transcript（self.data.messages push）→ 经 `ctx.runtime.scheduleSession`
+ * 唤醒对端 thread 所属 session 的 worker。
+ *
+ * **对端 sessionId 推断（issue G）**：
+ *   - 普通 thread（self.data.callerSessionId === undefined）→ 对端 sessionId === self.data.sessionId
+ *     （同 session 内 peer/fork，唤醒自身 session worker 继续推进）。
+ *   - super thread（self.data.callerSessionId !== undefined）→ 对端 sessionId === self.data.callerSessionId
+ *     （super→业务 session 反向唤醒：reply 回报 caller 业务 worker）。
  *
  * 注：**wait / close 是 tool 原语（非 method）**——见 thinkable/tools/schema.ts。
  */
 import type {
-  ExecutableContext,
   ObjectMethod,
 } from "@ooc/core/types";
 import type { MethodCallSchema } from "@ooc/core/types";
-import { TODO } from "@ooc/core/utils/todo.js";
 import { generateMessageId } from "@ooc/builtins/agent/children/thread/executable/utils.js";
 import type { Data, ThreadMessage } from "../types.js";
 
 const SAY_SCHEMA: MethodCallSchema = {
     msg: { type: "string", required: true, description: "要发给对端的消息正文" },
   };
-
-/**
- * TODO(thread-say-schedule)：say/reply 写盘后经 runtime 触发对端调度
- * （say→本 thread 的 creator / reply→窗所代表的 child 子线程）。
- * enqueueThread 机制待建（thread-core-boundary issue 后续点），本轮留 TODO 占位。
- */
-function triggerRuntimeSchedule(_ctx: ExecutableContext): never {
-  return TODO("runtime 触发 say/reply 对端调度（enqueueThread 待建）");
-}
 
 // caller(thread creator) say to callee thread
 export const sayMethod: ObjectMethod<Data> = {
@@ -45,16 +39,20 @@ export const sayMethod: ObjectMethod<Data> = {
     "Send a message to your creator: write into this thread's outbox and trigger scheduling.",
   schema: SAY_SCHEMA,
   permission: () => "allow",
-  exec: (ctx, self, args) => {
+  exec: async (ctx, self, args) => {
     const msg = {
       id: generateMessageId(),
       createdAt: Date.now(),
       content: args.msg,
       from: "caller",
     } as ThreadMessage;
-    self.data.messages.push(msg)
-    ctx.reportDataEdit();
-    triggerRuntimeSchedule(ctx);
+    self.data.messages.push(msg);
+    await ctx.reportDataEdit();
+    // 对端 sessionId：super thread → callerSessionId（业务 session 反向唤醒）；
+    // 普通 thread → 自身 sessionId（同 session peer/fork 继续推进）。
+    const targetSid = self.data.callerSessionId ?? self.data.sessionId;
+    ctx.runtime.scheduleSession?.(targetSid);
+    return { message: "[say] message delivered" };
   }
 };
 
@@ -65,15 +63,17 @@ export const replyMethod: ObjectMethod<Data> = {
     "Reply into the child thread: write into that thread's inbox and trigger scheduling.",
   schema: SAY_SCHEMA,
   permission: () => "allow",
-  exec: (ctx, self, args) => {
+  exec: async (ctx, self, args) => {
     const msg = {
       id: generateMessageId(),
       content: args.msg,
       createdAt: Date.now(),
       from: "callee",
     } as ThreadMessage;
-    self.data.messages.push(msg)
-    ctx.reportDataEdit();
-    triggerRuntimeSchedule(ctx);
+    self.data.messages.push(msg);
+    await ctx.reportDataEdit();
+    const targetSid = self.data.callerSessionId ?? self.data.sessionId;
+    ctx.runtime.scheduleSession?.(targetSid);
+    return { message: "[reply] message delivered" };
   }
 };

@@ -21,6 +21,12 @@ export interface ThinkOptions {
   worldDir?: string;
   /** 持久化挂钩（reportDataEdit 调时落盘）。 */
   onDataEdit?: () => Promise<void> | void;
+  /**
+   * 跨 session 唤醒钩子——构造 ThreadRuntime 时透传，供 say/reply/talk-super append 写盘后
+   * 经 `ctx.runtime.scheduleSession(targetSid)` 唤醒对端 worker。
+   * 见 issue G + ThreadRuntime.scheduleSession JSDoc。
+   */
+  wakeSession?: (sessionId: string) => void;
 }
 
 /** 单轮 think —— 一次完整的 LLM 互动 + tool dispatch。 */
@@ -77,6 +83,7 @@ export async function think(
   const runtime = ThreadRuntime.fromThread(thread, {
     worldDir: opts.worldDir,
     onDataEdit: opts.onDataEdit,
+    wakeSession: opts.wakeSession,
   });
   let didWait = false;
   for (const call of result.toolCalls ?? []) {

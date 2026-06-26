@@ -19,6 +19,7 @@
  */
 
 import type { ExecutableContext, ObjectMethod } from "@ooc/core/types/index.js";
+import type { SelfProxy } from "@ooc/core/types";
 import { isSuperSessionId } from "@ooc/core/types/constants.js";
 import {
   scanFlowChanges,
@@ -53,21 +54,41 @@ function getCallerObjectId(self: ThreadContext): string {
 }
 
 /**
- * 找 caller object 的所属业务 sessionId（caller 的原 session，不是 super）。
+ * 找 caller object 所属业务 sessionId 的 hint。
  *
- * 简化版：扫各业务 session 的 object registry 找 calleeObjectId 命中的 sessionId；
- * 找不到 → throw（说明 caller object 已 evict 或从未在业务 session 持有）。
- *
- * TODO(issue-C-callerSession-hint)：talk(target="super") 可以把 callerSessionId 编进
- * super thread 的 metadata 里，避免扫全表；本 issue 用扫表凑合。
+ * issue G：从 super thread 自身 data.callerSessionId 直读（由 talk(target="super") 创建时落盘）。
+ * 老 super thread.json 在升级前无此字段 → 返 undefined，三处扫表逻辑退化为扫所有业务 flow 并
+ * 在命中第一个 dirty session 后调 `selfHealCallerSessionId` 写回 self.data.callerSessionId。
  */
-function findCallerSessionId(callerObjectId: string): string | undefined {
-  // 简单实现：扫所有已注册 session（除 super），看哪个含此 objectId。
-  // 由于 sessionRegistries 是 module-level 私有，借 iterateSessionObjectTable 间接扫。
-  // 但 iterateSessionObjectTable 需要 sessionId 入参——没有全 session 列表 API。
-  // 退一步：从磁盘 `flows/*` 目录扫，找含 `objects/<callerObjectId>/...` 的 sessionId。
-  // 由于本 method 只在 super flow 内运行，调用频率低（reflect 一次扫一次），可接受。
-  return undefined; // 实际定位由 flow-scan 内部自找（扫各 session flow 的 data.json）
+function findCallerSessionId(self: SelfProxy<ThreadContext>): string | undefined {
+  return self.data.callerSessionId;
+}
+
+/** 列出业务 session（除 super）。reflect 三处共享。 */
+async function listBusinessSessions(worldDir: string): Promise<string[]> {
+  const { readdir } = await import("node:fs/promises");
+  try {
+    const entries = await readdir(join(worldDir, "flows"));
+    return entries.filter((s) => s !== "super");
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 自愈写回 callerSessionId（issue G）：fallback 扫表命中第一个 dirty session 后，把 sid 写回
+ * self.data.callerSessionId 并 reportDataEdit；下次 reflect 直读 hint，免扫表。
+ *
+ * 仅用于旧 super thread.json（在 issue G 升级前创建、无 callerSessionId 字段）的一次性升级；
+ * 新 super thread 由 talk(target="super") 创建时即落盘 callerSessionId，不走此路径。
+ */
+async function selfHealCallerSessionId(
+  ctx: ExecutableContext,
+  self: SelfProxy<ThreadContext>,
+  sid: string,
+): Promise<void> {
+  self.data.callerSessionId = sid;
+  await ctx.reportDataEdit();
 }
 
 /**
@@ -89,20 +110,15 @@ const scanChangesMethod: ObjectMethod<ThreadContext> = {
   exec: async (ctx, self) => {
     requireSuperSession(ctx, "scan_changes");
     const callerObjectId = getCallerObjectId(self.data);
+    const hint = findCallerSessionId(self);
 
-    // 扫所有业务 flow（除 super）：
-    const { readdir } = await import("node:fs/promises");
-    let sessions: string[] = [];
-    try {
-      const entries = await readdir(join(ctx.worldDir, "flows"));
-      sessions = entries.filter((s) => s !== "super");
-    } catch {
-      sessions = [];
-    }
+    // hint 存在 → 只扫该 session；缺失 → 退化扫所有业务 flow + 命中后自愈写回
+    const sessions = hint ? [hint] : await listBusinessSessions(ctx.worldDir);
 
     const allVersionedDirty: { sessionId: string; field: string; oldValue?: string; newValue: string }[] = [];
     const allUnversionedDirty: { sessionId: string; field: string; oldValue?: string; newValue: string }[] = [];
     const allClassEdits: { sessionId: string; path: string; status: string }[] = [];
+    let firstHitSid: string | undefined; // 用于自愈
 
     for (const sid of sessions) {
       // 读 .flow.json 拿 caller 的 class
@@ -130,6 +146,18 @@ const scanChangesMethod: ObjectMethod<ThreadContext> = {
       for (const e of edits) {
         allClassEdits.push({ sessionId: sid, path: e.path, status: e.status });
       }
+      // 命中（任一桶非空）→ 记录用于自愈（仅 hint 缺失分支生效）
+      if (
+        !firstHitSid &&
+        (result.versionedDirty.length > 0 || result.unversionedDirty.length > 0 || edits.length > 0)
+      ) {
+        firstHitSid = sid;
+      }
+    }
+
+    // 自愈：hint 缺失 + 扫到第一个有变化的 session → 写回 callerSessionId
+    if (!hint && firstHitSid) {
+      await selfHealCallerSessionId(ctx, self, firstHitSid);
     }
 
     const editsByStatus = { A: 0, M: 0, D: 0 } as Record<"A" | "M" | "D", number>;
@@ -192,16 +220,9 @@ const createPrForVersionedMethod: ObjectMethod<ThreadContext> = {
     if (!title.trim()) return { err: "[create_pr_for_versioned] title required" };
     const callerObjectId = getCallerObjectId(self.data);
     const requestedFields = Array.isArray(args.fields) ? (args.fields as string[]) : undefined;
+    const hint = findCallerSessionId(self);
 
-    // 先 scan，找 versioned dirty 字段
-    const { readdir } = await import("node:fs/promises");
-    let sessions: string[] = [];
-    try {
-      const entries = await readdir(join(ctx.worldDir, "flows"));
-      sessions = entries.filter((s) => s !== "super");
-    } catch {
-      sessions = [];
-    }
+    const sessions = hint ? [hint] : await listBusinessSessions(ctx.worldDir);
 
     // 找第一个含 dirty versioned 字段的 session（含 caller object）
     let dirty: FieldDiff[] = [];
@@ -227,6 +248,10 @@ const createPrForVersionedMethod: ObjectMethod<ThreadContext> = {
     }
     if (dirty.length === 0) {
       return { err: "[create_pr_for_versioned] no versioned dirty fields found" };
+    }
+    // 自愈：hint 缺失 + 命中 → 写回（hint 存在分支无需自愈）
+    if (!hint && foundSid) {
+      await selfHealCallerSessionId(ctx, self, foundSid);
     }
     const toSend = requestedFields
       ? dirty.filter((d) => requestedFields.includes(d.field))
@@ -326,17 +351,12 @@ const sedimentUnversionedMethod: ObjectMethod<ThreadContext> = {
     requireSuperSession(ctx, "sediment_unversioned");
     const callerObjectId = getCallerObjectId(self.data);
     const requestedFields = Array.isArray(args.fields) ? (args.fields as string[]) : undefined;
+    const hint = findCallerSessionId(self);
 
-    const { readdir } = await import("node:fs/promises");
-    let sessions: string[] = [];
-    try {
-      const entries = await readdir(join(ctx.worldDir, "flows"));
-      sessions = entries.filter((s) => s !== "super");
-    } catch {
-      sessions = [];
-    }
+    const sessions = hint ? [hint] : await listBusinessSessions(ctx.worldDir);
 
     const allDirty: FieldDiff[] = [];
+    let firstHitSid: string | undefined;
     for (const sid of sessions) {
       const flowDir = objectDir({ baseDir: ctx.worldDir, sessionId: sid, objectId: callerObjectId });
       let classId: string | undefined;
@@ -350,7 +370,14 @@ const sedimentUnversionedMethod: ObjectMethod<ThreadContext> = {
       const registry = getSessionRegistry(sid);
       const versionedFields = registry.resolveVersionedFields(classId);
       const r = await scanFlowChanges(ctx.worldDir, sid, callerObjectId, versionedFields);
+      if (!firstHitSid && r.unversionedDirty.length > 0) {
+        firstHitSid = sid;
+      }
       allDirty.push(...r.unversionedDirty);
+    }
+
+    if (!hint && firstHitSid) {
+      await selfHealCallerSessionId(ctx, self, firstHitSid);
     }
 
     const toSend = requestedFields
@@ -406,15 +433,9 @@ const createPrForClassEditsMethod: ObjectMethod<ThreadContext> = {
     if (!title.trim()) return { err: "[create_pr_for_class_edits] title required" };
     const callerObjectId = getCallerObjectId(self.data);
     const requestedPaths = Array.isArray(args.paths) ? (args.paths as string[]) : undefined;
+    const hint = findCallerSessionId(self);
 
-    const { readdir } = await import("node:fs/promises");
-    let sessions: string[] = [];
-    try {
-      const entries = await readdir(join(ctx.worldDir, "flows"));
-      sessions = entries.filter((s) => s !== "super");
-    } catch {
-      sessions = [];
-    }
+    const sessions = hint ? [hint] : await listBusinessSessions(ctx.worldDir);
 
     // 找第一个有 class edits 的 session（一般业务 session 只有 1 个）
     let edits: ClassEditEntry[] = [];
@@ -429,6 +450,9 @@ const createPrForClassEditsMethod: ObjectMethod<ThreadContext> = {
     }
     if (edits.length === 0) {
       return { err: "[create_pr_for_class_edits] no class edits found" };
+    }
+    if (!hint && foundSid) {
+      await selfHealCallerSessionId(ctx, self, foundSid);
     }
     const toSend = requestedPaths
       ? edits.filter((e) => requestedPaths.includes(e.path))
