@@ -1,14 +1,10 @@
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { TranscriptViewport } from "./readable/transcript-viewport";
-import type { SummarizedRange } from "@ooc/core/utils/summarized-ranges.js";
 
 /**
  * ProcessEvent 共享的可选字段;所有 variants 都可承载它们。
  *
  * - `id`: 事件稳定标识(可选)。旧 thread.json 无 id 字段属正常,渲染层按数组下标 fallback。
- *
- * 注:events 折叠不再改 thread.events（旧 `_foldedBy` 标记 / `events_summary` 事件已随 compress
- * Case A 退役）——折叠态活在自己视角 thread 窗的 `win.summarizedRanges`（投影态、可逆、不动 events）。
  */
 export type ProcessEventCommon = {
   /** 事件稳定标识(可选)。 */
@@ -56,7 +52,7 @@ export type ProcessEvent = ProcessEventCommon & (
       category: "llm_interaction";
       /** 工具调用记录，先进入事件流，再由 executable 分派执行。 */
       kind: "tool_use";
-      /** 当前文档定义的 tool 原语名称；compress 暂只保留类型位置。 */
+      /** 当前文档定义的 tool 原语名称。 */
       toolName: "exec" | "close" | "wait" | "open";
       /** 传给 tool handler 的原始参数对象。 */
       arguments: Record<string, unknown>;
@@ -133,22 +129,6 @@ export type ProcessEvent = ProcessEventCommon & (
       output: string;
       /** 是否成功。 */
       ok: boolean;
-    }
-  | {
-      /**
-       * 事件来源：context 折叠发生（compress v2）。
-       *
-       * 由 `harvestSummarizerForks` 在 summarizer fork 完成（done→记段 / failed→关自动压缩）时写一条，
-       * 与现有 ProcessEvent 同序进 thread.json / debug 落盘 / contextSnapshot,LLM 视野中也可见
-       * （silent-swallow ban：折叠对 LLM 透明）。
-       */
-      category: "context_change";
-      /** 折叠发生:每次 harvest 记段 / 记失败写一条。 */
-      kind: "context_compressed";
-      /** 折叠标记,形如 "auto-fold" / "auto-fold-failed"。 */
-      levelChange: string;
-      /** 触发原因:auto-summarized / summarizer-fork-failed 等。 */
-      reason: string;
     }
   | {
       /**
@@ -319,8 +299,6 @@ export type Data = ThreadContext;
 
 export interface ThreadWin {
   transcriptViewport?: TranscriptViewport;
-  summarizedRanges?: SummarizedRange[];
-  autoCompressLevel?: 0 | 1 | 2;
 }
 
 /**

@@ -42,7 +42,7 @@ export interface World {
  * - readable    : 投影成 context window + window method
  * - persistable : 自定义序列化（省略走系统默认）
  * - thinkable   : 一个 class 如何把自己组织进 thinkloop 的一轮 think（buildInputItems / appendEvents /
- *                 compress 钩子 / onSchedulerTick）；core thinkloop/scheduler 经 registry 解析后调用。
+ *                 onSchedulerTick）；core thinkloop/scheduler 经 registry 解析后调用。
  *                 **仅跑 thinkloop 的 thread 类实际注册**——任意 class 可声明，但只有 thread 被调度行使。
  * - visible : 面向前端的服务端 API（HTTP 控制面编辑 object data；无 thinkloop thread）
  *
