@@ -133,7 +133,6 @@ export const talkMethod: ObjectMethod<Data> = {
     msg: { type: "string", required: false, description: "首条消息（可选）" },
     title: { type: "string", required: false, description: "会话标题（peer 推荐）" },
   },
-  public: true,
   permission: () => "allow",
   exec: async (ctx: ExecutableContext, self, args: Record<string, unknown>) => {
     const rawTarget = typeof args.target === "string" ? args.target : "";

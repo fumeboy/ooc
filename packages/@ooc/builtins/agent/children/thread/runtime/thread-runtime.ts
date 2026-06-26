@@ -3,24 +3,27 @@
  *
  * 设计权威：`.ooc-world-meta/.../children/object/self.md` 核心 5/10 + E.thread。
  *
- * **职责**：把「在一条 thread 上执行 tool 原语（exec / close / wait）」串起来。封装：
+ * **职责**：把「在一条 thread 上执行 tool 原语（exec / close / wait / open）」串起来。封装：
  * - **解析**：从 thread.contextWindows 找窗 → 经 ClassRegistry 解析 class 的 method/lifecycle
  * - **执行**：构造 ctx → dispatch 到 method exec / window method exec
  * - **生命周期**：close 移除窗（refcount 减 1）→ refcount 归 0 触发 class.unactive
  * - **实例化**：method 调 `runtime.instantiate({class,args})` → 经 class.construct 造新对象、
  *   登记进 session 对象表 + 挂进 thread.contextWindows + 触发 class.active
  *
- * **为什么归 thread builtin**：`contextWindows` 是 thread 形状特有；refcount = "扫本 session 全部
- * thread 看 contextWindows 引用此 object 的个数"，只有 thread 形状的对象 contributes refcount。
- * 故 ThreadRuntime 是 thread 的私有运行时，不是 core 通用机制。core 只出 ClassRegistry /
- * ObjectInsRegistry 泛型 seam。
+ * **issue E**：refcount 计算 + GC 移到 core（refcount.ts / gc.ts），本 runtime 改 import
+ * `computeRefcount` 公共算法，不再持私域 `refcountInSession`。`dispatchUnactive` 实现要
+ * **幂等**：已 unactive 的 inst 再次调用静默跳过（防 close 即时 + GC pass2 重入）。
+ *
+ * **为什么 ThreadRuntime 仍归 thread builtin**：method dispatch / instantiate / close / open
+ * 这些与 "tool 原语在 thread 上行使" 强耦合的编排逻辑专于 thread；core 通用 seam 是
+ * computeRefcount / startSessionGc。
  */
 import type { OocObjectInstance, OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import {
   type ObjectInsRegistry,
   getSessionRegistry,
-  iterateSessionObjectTable as _iter,
 } from "@ooc/core/runtime/object-registry.js";
+import { computeRefcount } from "@ooc/core/runtime/refcount.js";
 import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import {
   type ExecutableContext,
@@ -32,7 +35,6 @@ import {
   type WindowMethod,
   type ReadableContext,
   normalizeMethodResult,
-  THREAD_CLASS_ID,
 } from "@ooc/core/types/index.js";
 import type { ThreadContext } from "../types.js";
 
@@ -44,6 +46,8 @@ export class ThreadRuntime implements RuntimeHandle {
   private readonly onDataEdit?: () => Promise<void> | void;
   /** worldDir —— 落盘根目录，方法 ctx 透传。 */
   private readonly worldDir: string;
+  /** 已 unactive 完毕的 inst 记录 —— dispatchUnactive 幂等护栏。 */
+  private readonly unactiveDispatched = new Set<string>();
 
   constructor(
     thread: ThreadContext,
@@ -206,7 +210,7 @@ export class ThreadRuntime implements RuntimeHandle {
     }
     const objectId = ref.id;
     this.thread.contextWindows = this.thread.contextWindows.filter((w) => w.id !== windowId);
-    if (this.refcountInSession(objectId) === 0) {
+    if (computeRefcount(this.thread.sessionId, objectId, this.registry) === 0) {
       await this.dispatchUnactive(objectId);
     }
   }
@@ -218,6 +222,63 @@ export class ThreadRuntime implements RuntimeHandle {
     const ref = this.findWindow(windowId);
     if (!ref) throw new Error(`[wait] window not found: ${windowId}`);
     this.thread.status = "waiting";
+  }
+
+  /**
+   * **open 原语**（issue E）：对目标 object 的某 method 开一张 `method_exec_form`，把
+   * `want`（自然语言意图）写进 form data —— 不执行 method 本身。
+   *
+   * 行为：
+   *   1. 解析目标 object 的 method/guide：
+   *      - 命中 ObjectGuideMethod → 跑一次 guide.route 拿 currentTip / currentIntents（与
+   *        `exec` 命中 guide 自动开 form 路径同构，区别仅在 quickSubmit 一律不生效——open 一律
+   *        开 form，承载 want）。
+   *      - 命中 ObjectMethod → tip/intents 留空（form 仍可用，引导 agent refine 后 submit）。
+   *      - 都未命中 → fail-loud。
+   *   2. instantiate `_builtin/agent/method_exec_form`，注入 `want`、`targetObjectId`、`guideName`
+   *      （单步 method 时填 method name）、`currentTip` / `currentIntents`。
+   *   3. 返回 form ref 给 tool call —— agent 下一轮在 form 上 refine / submit。
+   */
+  async open(
+    objectId: string,
+    methodName: string,
+    want: string,
+  ): Promise<ObjectMethodResult> {
+    const ref = this.findWindow(objectId);
+    if (!ref) throw new Error(`[open] window not found: ${objectId}`);
+
+    let currentTip: string | undefined;
+    let currentIntents: string[] | undefined;
+
+    const guide = this.registry.resolveObjectGuideMethod(ref.class, methodName);
+    if (guide) {
+      // 跑一次 route 取初始 tip / intents（不行使 exec）
+      const intents = await this.runRoute(objectId, methodName, {});
+      currentTip = intents?.tip;
+      currentIntents = intents?.intents;
+    } else {
+      const method = this.registry.resolveObjectMethod(ref.class, methodName);
+      if (!method) {
+        throw new Error(`[open] method not found on class ${ref.class}: ${methodName}`);
+      }
+    }
+
+    const formRef = await this.instantiate({
+      class: "_builtin/agent/method_exec_form",
+      args: {
+        targetObjectId: objectId,
+        guideName: methodName,
+        accumulatedArgs: {},
+        currentTip,
+        currentIntents,
+        want,
+      },
+    });
+    const tipPart = currentTip ? `（提示：${currentTip}）` : "";
+    return {
+      message: `已开启表单 ${formRef.id};want=${want}${tipPart}`,
+      refs: [formRef],
+    };
   }
 
   // ─────────────────────── RuntimeHandle 实现 ───────────────────────
@@ -247,7 +308,7 @@ export class ThreadRuntime implements RuntimeHandle {
       spec.args ?? {},
     );
     const instance: OocObjectInstance = { id, class: spec.class, data };
-    const firstReference = this.refcountInSession(id) === 0;
+    const firstReference = computeRefcount(this.thread.sessionId, id, this.registry) === 0;
     this.registry.setObject(instance);
     const ref: OocObjectRef = { id, class: spec.class, createdAt: Date.now() };
     this.thread.contextWindows.push(ref);
@@ -327,27 +388,17 @@ export class ThreadRuntime implements RuntimeHandle {
   // ─────────────────────── refcount / 生命周期 ───────────────────────
 
   /**
-   * 扫本 session 全部 thread，数 objectId 在 contextWindows 里的引用次数。
-   *
-   * 只有 thread 形状对象 contributes refcount——故这是 thread builtin 的私有算法。
+   * refcount 算法已迁入 `@ooc/core/runtime/refcount.ts:computeRefcount`（issue E）——本类直接
+   * import 使用；不再持私域 `refcountInSession`。
    */
-  private refcountInSession(objectId: string): number {
-    let count = 0;
-    _iter(this.thread.sessionId, (inst) => {
-      if (inst.class !== THREAD_CLASS_ID) return;
-      const t = inst.data as ThreadContext;
-      for (const w of t.contextWindows) {
-        if (w.id === objectId) count++;
-      }
-    });
-    return count;
-  }
 
   private async dispatchActive(objectId: string): Promise<void> {
     const inst = this.registry.getObject(objectId);
     if (!inst) return;
     const hook = this.registry.resolveActive(inst.class);
     if (!hook) return;
+    // 重新进入 active 视为重新激活——清掉幂等记录，让后续 unactive 仍可派发。
+    this.unactiveDispatched.delete(objectId);
     await hook.exec(
       {
         sessionId: this.thread.sessionId,
@@ -363,11 +414,24 @@ export class ThreadRuntime implements RuntimeHandle {
     );
   }
 
-  private async dispatchUnactive(objectId: string): Promise<void> {
+  /**
+   * **dispatchUnactive 幂等**（issue E）：close 即时触发 + GC pass2 兜底可能并发到达同一 inst，
+   * 已派发过的静默跳过，防重复 lifecycle 副作用。
+   */
+  async dispatchUnactive(objectId: string): Promise<void> {
+    if (this.unactiveDispatched.has(objectId)) return;
     const inst = this.registry.getObject(objectId);
-    if (!inst) return;
+    if (!inst) {
+      // inst 已被 GC pass1 移除 → 标记跳过，防外部再调
+      this.unactiveDispatched.add(objectId);
+      return;
+    }
     const hook = this.registry.resolveUnactive(inst.class);
-    if (!hook) return;
+    if (!hook) {
+      this.unactiveDispatched.add(objectId);
+      return;
+    }
+    this.unactiveDispatched.add(objectId);
     const result = await hook.exec(
       {
         sessionId: this.thread.sessionId,

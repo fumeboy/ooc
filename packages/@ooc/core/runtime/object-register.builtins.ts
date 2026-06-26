@@ -35,7 +35,7 @@ import { Class as FeishuAppClass } from "@ooc/builtins/feishu_app";
 
 // agent class —— object 经 ooc.class 继承即成 agent 实例。
 builtinClassRegistry.register(AgentClass);
-// thread —— 唯一会话载体注册 class（talk / reflect_request 是它 readable 投影出的 window class）。
+// thread —— 唯一会话载体注册 class（default / super 是它 readable 投影出的 window class，issue E）。
 builtinClassRegistry.register(ThreadClass);
 // agent children
 builtinClassRegistry.register(TodoClass);

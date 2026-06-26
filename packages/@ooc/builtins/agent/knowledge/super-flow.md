@@ -12,7 +12,7 @@ super flow 只是同一身份的另一条会话脉络。
 ## 本轮该做什么
 
 1. 读 inbox 里 caller 的反思请求，理解它在业务 flow 里改了什么、想沉淀什么。
-2. 在你的 self-view thread 上（投影 class = `reflect_request`）调下面的 **4 个分发 method** 一步到位
+2. 在你的 self-view thread 上（投影 class = `super`）调下面的 **4 个分发 method** 一步到位
    把暂存改动按字段类型分别推进 canonical / pool。
 3. 通过 creator talk_window 回复简短结论（say），用 `exec(method="end", args={ summary: "…" })` 收尾。
 
@@ -52,9 +52,9 @@ activates_on:
 **自检**：写完想一下"下次哪类 window 出现时我希望想起这条？"挑一个会真正出现在 context 里的
 `object::<type>` 填进 activates_on,否则白写。
 
-## 4 个分发器 method —— 一步到位推改动进 canonical / pool
+## 4 个反思 method —— 一步到位推改动进 canonical / pool
 
-你在 super flow 的 self-view thread 上（投影 class = `reflect_request`，仅在 sessionId="super" 时
+你在 super flow 的 self-view thread 上（投影 class = `super`，仅在 sessionId="super" 时
 surface）直接拥有 4 个 object method。**禁止**绕过它们直写 `stones/main`——业务 session 内对 main
 canonical 的直写会被 `resolveStoneIdentityRef` 守卫 throw `SuperSessionRequiredError`；只有这 4
 method 内部通过受控 symbol 旁路合规放行。

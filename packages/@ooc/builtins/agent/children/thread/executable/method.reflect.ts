@@ -1,7 +1,7 @@
 /**
- * thread —— reflect_request 投影专属 4 个 object methods（issue D 落地裁决 1）。
+ * thread —— super 投影专属 4 个 object methods（issue D 落地裁决 1；issue E：reflect_request → super）。
  *
- * 仅在 super flow self-view（thread.sessionId === "super"）的 reflect_request 投影内 surface。
+ * 仅在 super flow self-view（thread.sessionId === "super"）的 **super** 投影内 surface。
  * 所有 method **fail-loud if ctx.sessionId !== "super"**——业务 session 偷渡入口由
  * `resolveStoneIdentityRef` 守卫挡掉，本层是 method 级双闸门（issue D 落地裁决 7）。
  *
@@ -86,7 +86,6 @@ const scanChangesMethod: ObjectMethod<ThreadContext> = {
     "Scan caller's flow staging (versioned + unversioned fields) + worktree class-source edits. Returns three lists.",
   schema: {},
   permission: () => "allow",
-  public: true,
   exec: async (ctx, self) => {
     requireSuperSession(ctx, "scan_changes");
     const callerObjectId = getCallerObjectId(self.data);
@@ -179,7 +178,6 @@ const createPrForVersionedMethod: ObjectMethod<ThreadContext> = {
     },
   },
   permission: () => "allow",
-  public: true,
   exec: async (ctx, self, args) => {
     requireSuperSession(ctx, "create_pr_for_versioned");
     const title = typeof args.title === "string" ? args.title : "";
@@ -289,7 +287,6 @@ const sedimentUnversionedMethod: ObjectMethod<ThreadContext> = {
     },
   },
   permission: () => "allow",
-  public: true,
   exec: async (ctx, self, args) => {
     requireSuperSession(ctx, "sediment_unversioned");
     const callerObjectId = getCallerObjectId(self.data);
@@ -366,7 +363,6 @@ const createPrForClassEditsMethod: ObjectMethod<ThreadContext> = {
     title: { type: "string", required: true, description: "PR title / commit message" },
   },
   permission: () => "allow",
-  public: true,
   exec: async (ctx, self, args) => {
     requireSuperSession(ctx, "create_pr_for_class_edits");
     const title = typeof args.title === "string" ? args.title : "";

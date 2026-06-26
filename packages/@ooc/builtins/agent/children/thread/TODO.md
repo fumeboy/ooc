@@ -35,7 +35,7 @@ thread 是一个**普通 object**，持久化走 object-model 标准契约 `pers
 `PersistableModule.container = {write, read, writeSnapshot}`。这是在为**实现的偶然性**套命名，不是对齐模型：
 
 1. **没有「双重 data 形态」要发明新契约**。object-model 核心 4：object 持数据，readable 把它按 POV
-   **投影**成 window、动态算 class（thread / talk / reflect_request），投影态不持久化。所以 thread 用标准
+   **投影**成 window、动态算 class（thread / talk / super），投影态不持久化。所以 thread 用标准
    `save/load` 即可，`container` 这层 indirection 是多余的。
 2. **threadId 是 thread 的实例身份**。thread 按自己的实例 id 标准寻址（`{objectDir}/threads/{threadId}`），
    `save/load` 用 thread 作用域 ctx（`dir`=threadDir）即可，不需要 `container` 三件套。
@@ -47,7 +47,7 @@ thread 是一个**普通 object**，持久化走 object-model 标准契约 `pers
 creator 窗的身份**已编码在 id 里**：`creatorWindowIdOf(threadId) = "w_creator_" + threadId`。`isCreatorWindow`
 是 id 的冗余镜像，删字段，三处用途全部派生/吸收：
 
-- **`close` 不可关 creator 窗**：靠**投影可见性**——self-view 投影（`thread` / `reflect_request`）的
+- **`close` 不可关 creator 窗**：靠**投影可见性**——self-view 投影（`thread` / `super`）的
   `object_methods` 不 surface `"close"`；`talk`（other-view，含父侧 fork 子窗）保留。取代 `close` 里
   `if (self.isCreatorWindow)` 的运行时检查。
 - **投影 self/other 判别**（`computeProjectionClass`）：改 `id === creatorWindowIdOf(thread.id)`。
@@ -89,7 +89,7 @@ const persistable: PersistableModule = {
 1. **isCreatorWindow 去状态化**：
    - `context-window.ts` 加 `isCreatorWindowId(id)`；`thread/types.ts` Data 删 `isCreatorWindow`；
      `init.ts` 不再写该字段。
-   - `projection-class.ts` / `readable` self-view 判别改 id 派生；`readable/index.ts` 的 `thread`/`reflect_request`
+   - `projection-class.ts` / `readable` self-view 判别改 id 派生；`readable/index.ts` 的 `thread`/`super`
      投影去掉 `"close"`。
    - ~40 处 `data.isCreatorWindow` 消费点（`talk-delivery.ts` / `wait.ts` / `context/{protocol,index}.ts` /
      `flows/service.ts` / `conversation-render.ts` / `method.end.ts` / `session-methods.ts` …）改 id 派生。

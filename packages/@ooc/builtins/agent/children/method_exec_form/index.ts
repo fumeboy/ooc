@@ -34,6 +34,7 @@ const construct: ObjectConstructor<Data> = {
     accumulatedArgs: { type: "object", required: false, description: "初始累积参数（partialArgs）" },
     currentTip: { type: "string", required: false, description: "初始 tip（route 输出）" },
     currentIntents: { type: "object", required: false, description: "初始 intents（route 输出）" },
+    want: { type: "string", required: false, description: "open 原语注入的自然语言意图（issue E）" },
   },
   exec: (
     _ctx: ConstructorContext,
@@ -45,6 +46,7 @@ const construct: ObjectConstructor<Data> = {
       accumulatedArgs?: Record<string, unknown>;
       currentTip?: string;
       currentIntents?: string[];
+      want?: string;
     },
   ): Data => ({
     targetObjectId: args.targetObjectId ?? "",
@@ -52,6 +54,7 @@ const construct: ObjectConstructor<Data> = {
     accumulatedArgs: args.accumulatedArgs ?? {},
     currentTip: args.currentTip,
     currentIntents: args.currentIntents,
+    want: args.want,
     createdAt: Date.now(),
   }),
 };
@@ -130,6 +133,9 @@ const readable: ReadableModule<Data, unknown> = {
       xmlElement("guide", { name: d.guideName }, []),
       xmlElement("accumulated_args", {}, [xmlText(JSON.stringify(d.accumulatedArgs, null, 2))]),
     ];
+    if (d.want) {
+      contextChildren.push(xmlElement("want", {}, [xmlText(d.want)]));
+    }
     if (d.currentTip) {
       contextChildren.push(xmlElement("current_tip", {}, [xmlText(d.currentTip)]));
     }

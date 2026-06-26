@@ -33,7 +33,7 @@ import { join } from "node:path";
  * 给 PR author 在 super flow 的 author thread 内 append 一条 system message
  * （用 `from: "callee"` 表达 super flow 给 caller 的反馈）。
  *
- * authorThreadId 来自 PrRecord.authorThreadId（reflect_request 投影所在 thread id）。
+ * authorThreadId 来自 PrRecord.authorThreadId（super 投影所在 thread id）。
  * 物理：写 `flows/super/objects/<authorObjectId>/threads/<authorThreadId>/thread.json`。
  */
 async function notifyAuthor(record: PrRecord, content: string): Promise<void> {

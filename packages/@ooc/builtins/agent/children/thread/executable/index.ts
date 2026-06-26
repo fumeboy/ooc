@@ -3,10 +3,10 @@
  *   - say / reply                      —— 会话 method（method.say.ts）
  *   - end / todo                       —— thread 作用域操作（从 agent agency 迁入）
  *   - scan_changes / create_pr_for_versioned /
- *     sediment_unversioned / create_pr_for_class_edits  —— reflect_request 投影专属
+ *     sediment_unversioned / create_pr_for_class_edits  —— super 投影专属
  *     （仅 super flow self-view surface；method.reflect.ts；issue D 落地）
  *
- * 注：**wait 是 3 原语之一（非 method）**，经 `core/executable/tools/wait.ts` 独立 tool 入口。
+ * 注：**wait / close / open 是 4 tool 原语之一（非 method）**，经 thinkable/tools/ 独立 tool 入口。
  */
 import type { ExecutableModule } from "@ooc/core/types";
 import { sayMethod, replyMethod } from "./method.say.js";

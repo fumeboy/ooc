@@ -7,6 +7,9 @@
  * 设计：每个 OocObjectRef 在 thread.contextWindows 里 = 一个 window；经其 class 的 readable.render
  * 投影成 ReadableProjection（class + content），渲染成 XML 文本进 LLM input。
  *
+ * **issue E**：window 内容渲染走 `renderReadable`（core 单一入口，3 档 fallback），本文件只负责
+ * 自包 `<window>` XML 壳——payload 来自 `ReadableResult`。
+ *
  * knowledge activation：根据当前 contextWindows 的 class 集合计算 ActivationContext，
  * 经 knowledge_base loader 拿 owner 的 KnowledgeIndex，computeActivations 输出激活列表，
  * 按 presentation (full/summary) 嵌入 system message。
@@ -14,10 +17,10 @@
 import type { LlmInputItem } from "@ooc/core/thinkable/llm/types.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { ObjectInsRegistry } from "@ooc/core/runtime/object-registry.js";
-import type { ReadableContext, XmlNode } from "@ooc/core/types/index.js";
+import type { XmlNode } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText, serializeXml } from "@ooc/core/types/xml.js";
-import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import { isSuperSessionId } from "@ooc/core/types/constants.js";
+import { renderReadable } from "@ooc/core/readable/index.js";
 import {
   type ActivationContext,
   computeActivations,
@@ -26,28 +29,20 @@ import type { ActivationResult } from "@ooc/core/types/knowledge.js";
 import { loadKnowledgeIndex } from "@ooc/builtins/knowledge_base/loader.js";
 import type { ThreadContext, ThreadMessage } from "../types.js";
 
-/** 把一个 window 渲染成 XML 节点（经其 class 的 readable.render 投影）。 */
+/** 把一个 window 渲染成 XML 节点（经 renderReadable 3 档 fallback 取 payload，本函数自包 <window> 壳）。 */
 async function renderWindow(
   ref: OocObjectRef,
   registry: ObjectInsRegistry,
 ): Promise<XmlNode> {
-  const render = registry.resolveReadableRender(ref.class);
-  if (!render) {
-    return xmlElement("window", { id: ref.id, class: ref.class }, [
-      xmlText(`(no readable for class ${ref.class})`),
-    ]);
-  }
-  const inst = registry.getObject(ref.id);
-  const data = inst?.data ?? {};
-  const ctx: ReadableContext = { object: { id: ref.id, class: ref.class } };
-  const projection = await render(ctx, makeReadonlySelfProxy(data as object), ref);
-  const content = Array.isArray(projection.content)
-    ? projection.content
-    : [xmlText(projection.content)];
-  if (projection.win !== undefined) ref.data = projection.win;
+  const result = await renderReadable(ref, registry, registry);
+  const content = Array.isArray(result.payload)
+    ? result.payload
+    : [xmlText(result.payload)];
+  if (result.nextWin !== undefined) ref.data = result.nextWin;
+  const projectionClass = result.projectionClass ?? ref.class;
   return xmlElement(
     "window",
-    { id: ref.id, class: projection.class, title: ref.title ?? "" },
+    { id: ref.id, class: projectionClass, title: ref.title ?? "" },
     content,
   );
 }
