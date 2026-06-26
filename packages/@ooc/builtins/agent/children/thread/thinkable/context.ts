@@ -5,7 +5,7 @@
  * 输出：LlmInputItem[]（system instructions + activated knowledge + context windows + messages）
  *
  * 设计：每个 OocObjectRef 在 thread.contextWindows 里 = 一个 window；经其 class 的 readable.render
- * 投影成 ReadableProjection（class + content），渲染成 XML 文本进 LLM input。
+ * 投影成 ReadableProjection（view + content）,渲染成 XML 文本进 LLM input。
  *
  * **issue E**：window 内容渲染走 `renderReadable`（core 单一入口，3 档 fallback），本文件只负责
  * 自包 `<window>` XML 壳——payload 来自 `ReadableResult`。
@@ -22,6 +22,7 @@ import { xmlElement, xmlText, serializeXml } from "@ooc/core/types/xml.js";
 import { isSuperSessionId } from "@ooc/core/types/constants.js";
 import { renderReadable } from "@ooc/core/readable/index.js";
 import { isSelfThreadWindow, threadWindowIdOf } from "@ooc/core/types/context-window.js";
+import { DEFAULT_WINDOW_VIEW } from "@ooc/core/runtime/object-registry.js";
 import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import readableModule from "../readable/index.js";
 import type { ReadableContext } from "@ooc/core/types/index.js";
@@ -62,7 +63,7 @@ async function renderWindow(
       : [xmlText(projection.content)];
     return xmlElement(
       "window",
-      { id: ref.id, class: projection.class, title: ref.title ?? "" },
+      { id: ref.id, view: projection.view, title: ref.title ?? "" },
       content,
     );
   }
@@ -71,10 +72,12 @@ async function renderWindow(
     ? result.payload
     : [xmlText(result.payload)];
   if (result.nextWin !== undefined) ref.data = result.nextWin;
-  const projectionClass = result.projectionClass ?? ref.class;
+  // issue J:`<window view="...">` —— 投影视角而非对象 class id;优先用 render 返回的
+  // projectionView,缺省回退 ref.window_view,最终 DEFAULT_WINDOW_VIEW。
+  const projectionView = result.projectionView ?? ref.window_view ?? DEFAULT_WINDOW_VIEW;
   return xmlElement(
     "window",
-    { id: ref.id, class: projectionClass, title: ref.title ?? "" },
+    { id: ref.id, view: projectionView, title: ref.title ?? "" },
     content,
   );
 }
@@ -102,11 +105,11 @@ function systemInstructions(thread: ThreadContext): string {
 
 /** 计算激活环境 —— 描述当前思考栈的状态。 */
 function activationEnv(thread: ThreadContext, registry: ObjectInsRegistry): ActivationContext {
-  const windowClasses = new Set<string>();
+  const windowViews = new Set<string>();
   const methodForms = new Set<string>();
   const activeIntents = new Set<string>();
   for (const w of thread.contextWindows) {
-    windowClasses.add(w.class);
+    windowViews.add(w.class);
     // method_exec_form 窗 → 经 form 对象 data 取目标 guide 信息 + currentIntents
     if (w.class === "_builtin/agent/method_exec_form") {
       const formInst = registry.getObject(w.id);
@@ -133,7 +136,7 @@ function activationEnv(thread: ThreadContext, registry: ObjectInsRegistry): Acti
     }
   }
   return {
-    windowClasses,
+    windowViews,
     methodForms,
     activeIntents,
     inSuper: isSuperSessionId(thread.sessionId),

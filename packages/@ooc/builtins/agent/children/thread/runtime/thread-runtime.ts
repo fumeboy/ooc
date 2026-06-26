@@ -327,11 +327,15 @@ export class ThreadRuntime implements RuntimeHandle {
   /**
    * 实例化一个新对象 —— 经 class.construct 造初始 data → 登记 session 表 → 挂进 thread.contextWindows
    * → 触发 class.active。
+   *
+   * `windowView`（issue J,可选）：调用方需要指定该窗的投影视角时经 args 透传,写入 ref.window_view；
+   * 缺省 → ref 不写视角字段 → readable render 走 DEFAULT_WINDOW_VIEW 兜底。
    */
   async instantiate(spec: {
     class: string;
     childId?: string;
     args?: Record<string, unknown>;
+    windowView?: string;
   }): Promise<OocObjectRef> {
     const ctor = this.registry.resolveConstructor(spec.class);
     if (!ctor) throw new Error(`[instantiate] class ${spec.class} has no constructor`);
@@ -352,6 +356,7 @@ export class ThreadRuntime implements RuntimeHandle {
     const firstReference = computeRefcount(this.thread.sessionId, id, this.registry) === 0;
     this.registry.setObject(instance);
     const ref: OocObjectRef = { id, class: spec.class, createdAt: Date.now() };
+    if (spec.windowView) ref.window_view = spec.windowView;
     this.thread.contextWindows.push(ref);
     if (firstReference) await this.dispatchActive(id);
     return ref;

@@ -30,6 +30,7 @@ import type { ReadonlySelfProxy } from "@ooc/core/types";
 import { xmlText, type XmlNode } from "@ooc/core/types/xml.js";
 import { OocObjectRef, threadWindowIdOf } from "@ooc/core/types/context-window.js";
 import { SUPER_SESSION_ID } from "@ooc/core/types/constants.js";
+import { DEFAULT_WINDOW_VIEW } from "@ooc/core/runtime/object-registry.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
@@ -88,45 +89,53 @@ export const resize: WindowMethod<unknown, ThreadWin> = {
 };
 
 /**
- * 投影 class 算法（issue I 三档）：
- *   - self-view ref（win.id === threadWindowIdOf(threadData.id)）+ super session → "super"
- *   - self-view ref + 普通 session → "self"
- *   - 其它（peer-view ref）→ "default"
+ * 投影 view 算法（issue J:角色降级为 fallback 兜底）：
  *
- * 注：self-view ref 由 thread.construct 物理写入 contextWindows 首位（issue I 改动 3）；id 编码
- * 在 `threadWindowIdOf(threadId)`（= `w_creator_<threadId>`，沿用历史前缀）。
+ * **issue J 后 ref 创建点已显式写 `window_view`**（thread.construct = "self"、createSuperThread =
+ * "super"、peer ref 缺省 → DEFAULT_WINDOW_VIEW）。本函数仅作 issue I 旧 ref 兼容兜底:
+ *   - ref.window_view 显式存在 → 直接返回。
+ *   - 缺省 + self-view ref（win.id === threadWindowIdOf(threadData.id)）+ super session → "super"
+ *   - 缺省 + self-view ref + 普通 session → "self"
+ *   - 其它（缺省 + peer-view ref）→ DEFAULT_WINDOW_VIEW
+ *
+ * dev-mode 走 fallback 时打 warning,提示创建点遗漏显式 window_view（理论上不应触发）。
  */
 export function computeProjectionClass(
   threadData: Data,
   ref: OocObjectRef,
 ): string {
+  if (ref.window_view) return ref.window_view;
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn(`[thread] ref ${ref.id} 缺 window_view、走 fallback 推导（建议显式写）`);
+  }
+  // fallback 推导（issue I 旧 ref 兼容兜底,非新写路径）
   const isSelfView = ref.id === threadWindowIdOf(threadData.id);
   if (isSelfView && threadData.sessionId === SUPER_SESSION_ID) return "super";
   if (isSelfView) return "self";
-  return "default";
+  return DEFAULT_WINDOW_VIEW;
 }
 
 const readable: ReadableModule<Data, ThreadWin> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ThreadWin>) => {
-    const projectionClass = computeProjectionClass(self.data, win);
+    const projectionView = computeProjectionClass(self.data, win);
     const { visible: messages } = applyTranscriptViewport(self.data.messages, win.data?.transcriptViewport);
     const children: XmlNode[] = messages.map((m) =>
       xmlText(m.from === "caller" ? `[caller:] ${m.content}` : `[callee:] ${m.content}`),
     );
-    return { class: projectionClass, content: children };
+    return { view: projectionView, content: children };
   },
   window: [
     {
       // default —— 对端视角（caller / peer 看 thread 作为对话窗）
       // surface: 仅 say（caller 向 thread 说话）。
-      class: "default",
+      view: "default",
       object_methods: ["say"],
       window_methods: [setTranscript, compress, resize],
     },
     {
       // self —— thread 自看视角（self-view ref）
       // surface: reply / end / todo（thread 对自己的 method:回话给 creator / 结束 / 立 todo）。
-      class: "self",
+      view: "self",
       object_methods: ["reply", "end", "todo"],
       window_methods: [setTranscript, compress, resize],
     },
@@ -134,7 +143,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
       // super —— super flow self-view 投影（sessionId === SUPER_SESSION_ID 时命中）
       // surface = self 全集 + 4 个反思分发 method（OOC 协议层无 decl 继承,平铺 7 method;业务
       // session 偷渡由 method 内 requireSuperSession 双闸门兜底）。
-      class: "super",
+      view: "super",
       object_methods: [
         "reply",
         "end",

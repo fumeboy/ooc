@@ -114,7 +114,7 @@ const executable: ExecutableModule<Data> = {
 
 const readable: ReadableModule<Data, unknown> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => ({
-    class: "default",
+    view: "default",
     content: [
       xmlElement("pr", { id: self.data.prId, branch: self.data.branch, status: self.data.status }, [
         xmlElement("intent", {}, [xmlText(self.data.intent)]),
@@ -133,7 +133,7 @@ const readable: ReadableModule<Data, unknown> = {
   }),
   window: [
     {
-      class: "default",
+      view: "default",
       object_methods: ["comment", "approve", "reject"],
       window_methods: [],
     },

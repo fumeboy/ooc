@@ -26,7 +26,7 @@ import type {
   ObjectLifecycleHook,
   ObjectMethod,
   WindowMethod,
-  WindowClassDecl,
+  WindowViewDecl,
   ReadableModule,
   ReadableRender,
   PersistableModule,
@@ -37,8 +37,8 @@ import type {
 
 // ─────────────────────────── ClassRegistry ───────────────────────────
 
-/** 默认投影 class 的保留名 —— 单视角 class 的强约束（见 readable 维度 self.md）。 */
-export const DEFAULT_WINDOW_CLASS = "default";
+/** 默认投影 view 的保留名 —— 单视角 class 的强约束（见 readable 维度 self.md）。 */
+export const DEFAULT_WINDOW_VIEW = "default";
 
 /**
  * 注册期 fail-loud 校验。两类查重均不可放过：
@@ -61,13 +61,13 @@ function assertNoMethodNameCollision(cls: OocClass): void {
     objectSeen.add(m.name);
   }
 
-  // 2. 各 window class 内 window methods 自查重
+  // 2. 各 window view 内 window methods 自查重
   for (const decl of cls.readable?.window ?? []) {
     const windowSeen = new Set<string>();
     for (const wm of decl.window_methods) {
       if (windowSeen.has(wm.name)) {
         throw new Error(
-          `Duplicate window method name "${wm.name}" on window class "${decl.class}" of "${cls.id}"`,
+          `Duplicate window method name "${wm.name}" on window view "${decl.view}" of "${cls.id}"`,
         );
       }
       windowSeen.add(wm.name);
@@ -138,14 +138,14 @@ function assertExecutableMethodGuideCohesion(cls: OocClass): void {
     for (const mname of decl.object_methods ?? []) {
       if (!methodNames.has(mname)) {
         throw new Error(
-          `Window class "${decl.class}" of "${cls.id}" references unknown object method "${mname}"`,
+          `Window view "${decl.view}" of "${cls.id}" references unknown object method "${mname}"`,
         );
       }
     }
     for (const gname of decl.guide_methods ?? []) {
       if (!guideSeen.has(gname)) {
         throw new Error(
-          `Window class "${decl.class}" of "${cls.id}" references unknown guide method "${gname}"`,
+          `Window view "${decl.view}" of "${cls.id}" references unknown guide method "${gname}"`,
         );
       }
     }
@@ -153,15 +153,15 @@ function assertExecutableMethodGuideCohesion(cls: OocClass): void {
 }
 
 /**
- * 注册期 readable.window decl 一致性校验（issue 2026-06-26 default window class convention）：
+ * 注册期 readable.window decl 一致性校验（issue 2026-06-26 default window view convention）：
  *
- * 1. **window[] 内 `class` 字段不重复** —— 否则 resolveWindowClass / resolveWindowMethod 会静默取
- *    数组首个，造成 dispatch 歧义；fail-loud 让漂移立刻暴露。
- * 2. **单视角 class（window[] 长度 = 1）**：唯一 decl 的 `class` 必须为 `"default"`。
- *    单视角默认投影统一命名，未指明 class 时调用方可不查直接取 default。
+ * 1. **window[] 内 `view` 字段不重复** —— 否则 resolveWindowView / resolveWindowMethod 会静默取
+ *    数组首个,造成 dispatch 歧义；fail-loud 让漂移立刻暴露。
+ * 2. **单视角 class（window[] 长度 = 1）**：唯一 decl 的 `view` 必须为 `"default"`。
+ *    单视角默认投影统一命名,未指明 view 时调用方可不查直接取 default。
  * 3. **多视角 class（window[] 长度 > 1）**：豁免 default 强约束——多视角通常每条都具名语义
- *    （`default` / `super` 等），不强求兜底；调用方未指明 class 又无 default decl 时
- *    `resolveDefaultWindowClass` 会回退 readable.md 名片或落 placeholder。
+ *    （`default` / `super` 等）,不强求兜底；调用方未指明 view 又无 default decl 时
+ *    `resolveDefaultWindowView` 会回退 readable.md 名片或落 placeholder。
  *
  * （无 readable 模块的 class 跳过本校验。）
  */
@@ -169,23 +169,23 @@ function assertReadableWindowCohesion(cls: OocClass): void {
   const decls = cls.readable?.window ?? [];
   if (decls.length === 0) return;
 
-  // 1. class 唯一
+  // 1. view 唯一
   const seen = new Set<string>();
   for (const decl of decls) {
-    if (seen.has(decl.class)) {
+    if (seen.has(decl.view)) {
       throw new Error(
-        `Duplicate window class "${decl.class}" on "${cls.id}" readable.window[] (resolveWindowClass would silently pick the first)`,
+        `Duplicate window view "${decl.view}" on "${cls.id}" readable.window[] (resolveWindowView would silently pick the first)`,
       );
     }
-    seen.add(decl.class);
+    seen.add(decl.view);
   }
 
   // 2. 单视角 → 必须 default
   if (decls.length === 1) {
     const only = decls[0]!;
-    if (only.class !== DEFAULT_WINDOW_CLASS) {
+    if (only.view !== DEFAULT_WINDOW_VIEW) {
       throw new Error(
-        `Single-view readable class "${cls.id}" must declare its sole window with class:"${DEFAULT_WINDOW_CLASS}" (got "${only.class}")`,
+        `Single-view readable class "${cls.id}" must declare its sole window with view:"${DEFAULT_WINDOW_VIEW}" (got "${only.view}")`,
       );
     }
   }
@@ -255,31 +255,31 @@ export class ClassRegistry {
     return this.classes.get(classId)?.executable?.guides ?? [];
   }
 
-  /** 本类直查 window method（按 windowClass + methodName）。 */
+  /** 本类直查 window method（按 windowView + methodName）。 */
   resolveWindowMethod(
     classId: string,
-    windowClass: string,
+    windowView: string,
     methodName: string,
   ): WindowMethod | undefined {
-    const decl = this.classes.get(classId)?.readable?.window.find((w) => w.class === windowClass);
+    const decl = this.classes.get(classId)?.readable?.window.find((w) => w.view === windowView);
     return decl?.window_methods.find((wm) => wm.name === methodName);
   }
 
-  /** 本类直查 window class 声明。 */
-  resolveWindowClass(classId: string, windowClass: string): WindowClassDecl | undefined {
-    return this.classes.get(classId)?.readable?.window.find((w) => w.class === windowClass);
+  /** 本类直查 window view 声明。 */
+  resolveWindowView(classId: string, windowView: string): WindowViewDecl | undefined {
+    return this.classes.get(classId)?.readable?.window.find((w) => w.view === windowView);
   }
 
   /**
-   * 本类直查「默认投影 window class 声明」—— 单视角 class 兜底入口（issue 2026-06-26）。
+   * 本类直查「默认投影 window view 声明」—— 单视角 class 兜底入口（issue 2026-06-26）。
    *
-   * 1. 优先返回 `class === "default"` 的 decl（单视角强约束保证存在）。
+   * 1. 优先返回 `view === "default"` 的 decl（单视角强约束保证存在）。
    * 2. 多视角 class 若无 default decl 时返 undefined；调用方应回退到该 class 的 `readable.md` 名片
-   *    （兑现 readable 核心 7：静态名片是投影的最低优先级回退）—— 名片回退由 readable 渲染层负责，
+   *    （兑现 readable 核心 7：静态名片是投影的最低优先级回退）—— 名片回退由 readable 渲染层负责,
    *    本 seam 只做注册表层 fail-fast。
    */
-  resolveDefaultWindowClass(classId: string): WindowClassDecl | undefined {
-    return this.resolveWindowClass(classId, DEFAULT_WINDOW_CLASS);
+  resolveDefaultWindowView(classId: string): WindowViewDecl | undefined {
+    return this.resolveWindowView(classId, DEFAULT_WINDOW_VIEW);
   }
 
   /** 本类直查 readable 模块整份。 */

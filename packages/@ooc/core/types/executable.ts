@@ -9,8 +9,14 @@ import type { OocObjectRef } from "../runtime/ooc-class.js";
  * 具体实现由 core 反推阶段提供（runtime/ThreadRuntime）；零依赖契约层只声明面。
  */
 export interface RuntimeHandle {
-  /** 调某 class 的 constructor 造新对象、挂进当前 thread；返回新对象 id。 */
-  instantiate(_:{class: string, childId?: string, args?: Record<string, unknown>}): Promise<OocObjectRef>;
+  /**
+   * 调某 class 的 constructor 造新对象、挂进当前 thread；返回新对象 ref。
+   *
+   * `windowView` 可选——若指定,新建 ref 上写 `window_view` 字段以指定本次投影视角；缺省落
+   * `DEFAULT_WINDOW_VIEW`（readable render 兜底）。「object 化」封装下,调用方经此 args 透传需要的
+   * 视角,无须手写 ref.window_view 字段。
+   */
+  instantiate(_:{class: string, childId?: string, args?: Record<string, unknown>, windowView?: string}): Promise<OocObjectRef>;
   /**
    * 委托调当前 thread 内某 object 的 **object method**（解析目标 object 的 class →
    * resolveObjectMethod → 三参 exec）。用于一个 method 内编排别的对象的 method
@@ -123,8 +129,8 @@ export interface ConstructorContext {
  * - exec        : (ctx, self, args) → 结果（`ObjectMethodResult`{message?/data?/err?}，或裸 string = sugar for {message}，或 void/undefined）；**可改 self、可副作用**
  *
  * 方法可见性 = **完全**由 readable.window decl 决定（issue E）——method 协议层不再持
- * `public?` 字段。每个 window class 在 `WindowClassDecl.object_methods[]` 中按名显式 surface
- * 自己想暴露给 LLM 的 method，未列入即不可见、不可调。
+ * `public?` 字段。每个 window view 在 `WindowViewDecl.object_methods[]` 中按名显式 surface
+ * 自己想暴露给 LLM 的 method,未列入即不可见、不可调。
  */
 export interface ObjectMethod<Data = any, Args = any> {
   name: string;
@@ -151,7 +157,7 @@ export interface ObjectMethod<Data = any, Args = any> {
  * `intents` 必有（描述该 guide 可能产生的意图全集，作为 LLM 静态先验 + activator 校验）；`route` 必有，
  * 否则用 ObjectMethod。**guide 不持 `schema` 字段**（issue E）——总参数空间形态由 route 输出的
  * `ObjectMethodIntents` 在每次迭代中按当下需补的子集动态给出，静态 schema 与 form 的渐进语义重复。
- * **方法可见性同 ObjectMethod**：由 `WindowClassDecl.guide_methods[]` 决定，guide 协议层不持 `public?`。
+ * **方法可见性同 ObjectMethod**：由 `WindowViewDecl.guide_methods[]` 决定,guide 协议层不持 `public?`。
  */
 export interface ObjectGuideMethod<Data = any, Args = any> {
   name: string;

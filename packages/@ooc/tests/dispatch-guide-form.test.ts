@@ -60,10 +60,10 @@ const StubClass: OocClass<StubData> = {
   },
   executable: { methods: [], guides: [guide] },
   readable: {
-    readable: () => ({ class: "default", content: "" }),
+    readable: () => ({ view: "default", content: "" }),
     window: [
       {
-        class: "default",
+        view: "default",
         object_methods: [],
         guide_methods: ["do_thing"],
         window_methods: [],

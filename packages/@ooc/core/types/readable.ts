@@ -6,7 +6,7 @@ import type { OocObjectRef } from "../runtime/ooc-class.js";
 /**
  * readable / window method 的执行上下文（读侧；不携带改业务数据的能力）。
  *
- * - `object` : 接收者对象的身份元信息（id / class）。业务 data 经 self 入参，**不**在此。
+ * - `object` : 接收者对象的身份元信息（id / class）。业务 data 经 self 入参,**不**在此。
  */
 export interface ReadableContext {
   object: { id: string; class: string };
@@ -15,13 +15,14 @@ export interface ReadableContext {
 /**
  * readable 渲染输出 —— readable render 返回值。
  *
- * - `class`     : 本次投影出的 window class 名（按视角动态算；可与对象注册 class 不同）
+ * - `view`     : 本次投影出的 window view 名（按视角动态算；与 OocObjectRef.class 是两个概念,
+ *                view 描述「投影方案」/「视角」,如 `default` / `self` / `super` / `talk`）
  * - `content`   : 渲染产物（XML 节点数组或裸文本）
  * - `win`       : 渲染期可顺手返回的新窗投影态（覆写 `ref.data`）；不返回则保持
- * - `consumedMessageIds` : 本窗在 transcript 内已渲过的 thread message id，给 thinkable 兜底剔除
+ * - `consumedMessageIds` : 本窗在 transcript 内已渲过的 thread message id,给 thinkable 兜底剔除
  */
 export interface ReadableProjection<WinData = unknown> {
-  class: string;
+  view: string;
   content: XmlNode[] | string;
   win?: WinData;
   consumedMessageIds?: string[];
@@ -51,16 +52,17 @@ export interface WindowMethod<Data = unknown, Win = unknown, Args = any> {
 }
 
 /**
- * 一个 window class 声明 —— readable 可注册多个（同一 object 按视角投影成不同 class）。
+ * 一个 window view 声明 —— readable 可注册多个（同一 object 按视角投影成不同 view）。
  *
- * - class          : 该投影 class 名
+ * - view           : 该投影视角名（`default` / `self` / `super` / `talk` 等；与 OocObjectRef.class
+ *                    即对象 class id 是正交概念）
  * - object_methods : 该 window 上**展示**哪些 object method（按名引用 ExecutableModule.methods）
  * - guide_methods  : 该 window 上**展示**哪些 guide method（按名引用 ExecutableModule.guides）。
- *                    method/guide 命名空间共用 dispatch 入口；同名互斥，注册期校验。
+ *                    method/guide 命名空间共用 dispatch 入口；同名互斥,注册期校验。
  * - window_methods : 该 window 提供的 window method
  */
-export interface WindowClassDecl<Data = unknown, Win = unknown> {
-  class: string;
+export interface WindowViewDecl<Data = unknown, Win = unknown> {
+  view: string;
   object_methods: string[];
   guide_methods?: string[];
   window_methods: WindowMethod<Data, Win>[];
@@ -76,5 +78,5 @@ export type ReadableRender<Data = unknown, Win = unknown> = (
 /** readable 维度模块 —— `readable/index.ts` 的 default export。 */
 export interface ReadableModule<Data = unknown, Win = unknown> {
   readable: ReadableRender<Data, Win>;
-  window: WindowClassDecl<Data, Win>[];
+  window: WindowViewDecl<Data, Win>[];
 }

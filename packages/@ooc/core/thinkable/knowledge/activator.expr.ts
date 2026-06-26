@@ -2,12 +2,13 @@
  * activator.expr —— knowledge `activates_on` trigger 解析 + 求值。
  *
  * 四类 trigger 语法：
- * - `window::<class>` —— context 中存在某 class 的 window
+ * - `window::<view>` —— context 中存在某 window view 的窗（trigger 关键字 `window::` 与 view 名拼写
+ *   均不变；只是 ctx 字段名从历史的 windowClasses 改为 windowViews 与 issue J 术语一致）
  * - `method::<class>::<guide>` —— 存在挂该 class 上的 method_exec form 窗（按 guide 名匹配）
- *   注：trigger 关键字保留 `method::` 历史拼写，但语义已迁至 ObjectGuideMethod——`<guide>` 写
+ *   注：trigger 关键字保留 `method::` 历史拼写,但语义已迁至 ObjectGuideMethod——`<guide>` 写
  *   guide method name（不再有"method 自带 route"概念）。
  * - `intent::<name>` —— 当前 thread 的 form 集合内某 form `currentIntents` 含此 intent
- *   名（动态意图驱动）；phase-1 简化：所有 form 的 currentIntents 合并为 activeIntents 求值，
+ *   名（动态意图驱动）；phase-1 简化：所有 form 的 currentIntents 合并为 activeIntents 求值,
  *   phase-2 再做 source-key 分组撤销机制
  * - `super` / `super::<true>` —— 当前 thread 跑在 super session
  *
@@ -16,7 +17,7 @@
 import type { ActivationLevel, ActivatesOn } from "../../types/knowledge.js";
 
 export type Trigger =
-  | { kind: "window"; class: string }
+  | { kind: "window"; view: string }
   | { kind: "method"; class: string; method: string }
   | { kind: "intent"; name: string }
   | { kind: "super" };
@@ -26,7 +27,7 @@ export function parseTrigger(expr: string): Trigger {
   const s = expr.trim();
   if (s === "super") return { kind: "super" };
   if (s.startsWith("window::")) {
-    return { kind: "window", class: s.slice("window::".length).trim() };
+    return { kind: "window", view: s.slice("window::".length).trim() };
   }
   if (s.startsWith("method::")) {
     const rest = s.slice("method::".length);
@@ -57,9 +58,9 @@ export function parseActivatesOn(raw: unknown, file?: string): Map<Trigger, Acti
 
 /** 求值环境 —— 描述当前思考栈的状态。 */
 export interface ActivationContext {
-  /** context 中所有 window 的 class 集合。 */
-  windowClasses: Set<string>;
-  /** method_exec form 中的 (目标 class, guide name) 对集合，格式 `class::guide`。 */
+  /** context 中所有 window 的 view 集合（按 issue J:投影视角而非对象 class id）。 */
+  windowViews: Set<string>;
+  /** method_exec form 中的 (目标 class, guide name) 对集合,格式 `class::guide`。 */
   methodForms: Set<string>;
   /**
    * 当前 thread 内所有 form 的 `currentIntents` 合并集合（phase-1 简化的 source-key 模型——所有
@@ -76,7 +77,7 @@ export function evaluateTrigger(t: Trigger, env: ActivationContext): boolean {
     case "super":
       return env.inSuper;
     case "window":
-      return env.windowClasses.has(t.class);
+      return env.windowViews.has(t.view);
     case "method":
       return env.methodForms.has(`${t.class}::${t.method}`);
     case "intent":

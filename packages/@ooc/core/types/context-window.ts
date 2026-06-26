@@ -43,3 +43,14 @@ export function threadWindowIdOf(threadId: string): string {
 export function isSelfThreadWindow(id: string): boolean {
   return id.startsWith(THREAD_WINDOW_ID_PREFIX);
 }
+
+/**
+ * 提取 ref 的**对象身份**（剥离 window_view 等渲染 hint）供 equality / dedup 使用。
+ *
+ * issue J 后 ref 上 `window_view` 是「视角投影 hint」（非身份）—— 同一对象在 caller / callee
+ * 两端的 ref 可持不同 window_view 但指向同一 inst。比较「是不是同一对象」时务必用此 helper
+ * 剥离视角字段,而不是裸 ref 浅比较。
+ */
+export function refIdentity(ref: OocObjectRef): { id: string; class: string } {
+  return { id: ref.id, class: ref.class };
+}

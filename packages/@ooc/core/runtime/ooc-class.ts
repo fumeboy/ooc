@@ -101,9 +101,28 @@ export interface OocObjectInstance<Data = unknown> {
 }
 
 export type ContextWindow = OocObjectRef;
+/**
+ * OocObjectRef —— context window 的引用形态。
+ *
+ * 字段语义：
+ * - `id`          : 对象实例 id（OocObjectInstance.id）—— refcount / session 表查询主键。
+ * - `class`       : 对象 class id（如 `_builtin/agent/thread`）—— **对象身份**,不可在 method 内变。
+ * - `window_view` : 该窗的投影**视角**（如 `default` / `self` / `super`）。**不参与对象身份**——
+ *                   同 (id, class) 的两个 ref 可持不同 window_view（视角投影,如 caller/callee 同看
+ *                   一条 thread）。runtime-owned:agent 自写 method 应只读、不应自改提权视角。
+ *                   缺省 → readable render 走 DEFAULT_WINDOW_VIEW（"default"）兜底。
+ * - `title`       : 人读标题（前端 / LLM xml 渲染用）。
+ * - `createdAt`   : ref 建立时间戳。
+ * - `data`        : 该窗当前的**投影态 Win**（window method 返回的形态）—— 不是业务 data,业务 data
+ *                   活在 OocObjectInstance.data 上、按 ref.id 经 session 表解析。
+ * - `closable`    : 是否允许 close 原语关闭（结构窗 = false,如 thread self-view ref / 工具窗）。
+ *
+ * 身份比较使用 `refIdentity` helper（core/types/context-window.ts）剥离 window_view 等渲染 hint。
+ */
 export interface OocObjectRef<WinData = unknown> {
   id: string;
   class: string;
+  window_view?: string;
   title?: string;
   createdAt: number;
   data?: WinData;

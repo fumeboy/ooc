@@ -17,12 +17,12 @@ export interface FilesystemWin {}
 const readable: ReadableModule<Data, FilesystemWin> = {
   // content 极简：object method 的 description 已足够丰富，readable 不赘述。
   readable: (_ctx: ReadableContext, _self: Data, _win: FilesystemWin) => ({
-    class: "default",
+    view: "default",
     content: "文件系统",
   }),
   window: [
     {
-      class: "default",
+      view: "default",
       object_methods: ["grep", "glob", "open_file", "write_file"],
       window_methods: [],
     },

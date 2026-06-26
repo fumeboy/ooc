@@ -106,7 +106,7 @@ const executable: ExecutableModule<Data> = {
 
 const readable: ReadableModule<Data, unknown> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => ({
-    class: "default",
+    view: "default",
     content: [
       xmlElement(
         "feishu_app",
@@ -121,7 +121,7 @@ const readable: ReadableModule<Data, unknown> = {
   }),
   window: [
     {
-      class: "default",
+      view: "default",
       object_methods: ["send_message", "search_doc"],
       window_methods: [],
     },
