@@ -5,21 +5,31 @@
  * thread 形状私域。
  *   - `active`：thread.status ∈ {done, failed} 视为终态，返 false（GC pass1 据此移除）。
  *   - `refs`：返回 thread.contextWindows —— 这就是 thread 对其它 object 的出度引用。
+ *
+ * issue H：think 签名收敛为 `(data, deps)`；adapter 在入口 fail-loud 断言 deps 必备字段，
+ * 解包后调 thinkloop module-level think（thinkloop signature 不变）。
  */
 import type { ThinkableModule, ThinkableDeps } from "@ooc/core/types/index.js";
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
-import type { OocObjectInstance, OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
+import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { ObjectInsRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { ThreadContext } from "../types.js";
 import { think } from "./thinkloop.js";
 
 const thinkable: ThinkableModule<ThreadContext> = {
-  think: async (instance: OocObjectInstance<ThreadContext>, deps: ThinkableDeps) => {
-    await think(
-      instance.data,
-      deps.llm as LlmClient,
-      deps.registry as ObjectInsRegistry,
-    );
+  think: async (data: ThreadContext, deps: ThinkableDeps) => {
+    // fail-loud：think 入口必备 deps（reviewer 关键建议——fail-loud 在 adapter 入口最接近 caller）
+    if (!deps.worldDir || !deps.onDataEdit) {
+      throw new Error("thread.think requires worldDir + onDataEdit in ThinkableDeps");
+    }
+    const llm = deps.llm as LlmClient;
+    const registry = deps.registry as ObjectInsRegistry;
+    await think(data, llm, registry, {
+      worldDir: deps.worldDir,
+      onDataEdit: deps.onDataEdit,
+      // wakeSession 不 fail-loud（issue G 已 optional + ThreadRuntime 内 no-op + warn 兜底）
+      wakeSession: deps.wakeSession,
+    });
   },
   active: (data: ThreadContext) => {
     return data.status !== "done" && data.status !== "failed";

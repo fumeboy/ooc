@@ -129,7 +129,12 @@ describe("thinkloop e2e", () => {
   it("scheduler picks next thread + runs until exhaustion", async () => {
     const t1 = await makeThread();
     const llm = mockLlm([{ text: "done1" }]);
-    await runScheduler(SID, llm, { maxTicks: 5 });
+    // issue H：adapter fail-loud 要求 worldDir + onDataEdit；测试提供无副作用 stub。
+    await runScheduler(SID, llm, {
+      maxTicks: 5,
+      worldDir: "/tmp/_test_scheduler_seam",
+      onDataEdit: async () => {},
+    });
     expect(t1.status).toBe("done");
   });
 
