@@ -2,7 +2,7 @@
 title: 方法菜单
 description: 你（agent）能 exec 的方法索引 —— 自己的 agency + 成员工具对象的方法
 activates_on:
-  "object::root": "show_content"
+  "intent::class::root": "show_content"
 ---
 
 你能调的方法分两处。每条的一句描述、必填参数都在 `<window_views>` 的对应 `<view>` 里声明——

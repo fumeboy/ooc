@@ -2,7 +2,7 @@
 title: 子线程与跨 thread 共享 window
 description: 通过 talk(target=自己) fork 子线程交互，以及 readonly-ref/move 分享 ContextWindow
 activates_on:
-  "object::talk": "show_content"
+  "intent::class::talk": "show_content"
 ---
 
 `talk(target=自己的 objectId)` fork 一条同对象子线程，产出一个 **fork 子窗**（isForkWindow）。

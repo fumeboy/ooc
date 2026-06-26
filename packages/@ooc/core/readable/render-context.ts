@@ -52,6 +52,13 @@ export interface RenderReadableOpts {
    * 调用方按其能取到 stone 目录的方式实现（如 fs.readFile 拼 stoneDir）。
    */
   loadStoneReadableMd?: (classId: string, objectId: string) => Promise<string | undefined>;
+  /**
+   * **issue N**: 本轮 thinkloop 聚合的 intent 集合（core `scanIntents` 出参）。注入
+   * ReadableContext.intents 供 readable render 据"基于意图的资源激活"消费。
+   *
+   * 缺省 = 空 Set——非 thinkloop 调用方（test / ad-hoc 渲染）传空即可。
+   */
+  intents?: Set<string>;
 }
 
 const PLACEHOLDER_PREFIX = "(no readable for class ";
@@ -72,7 +79,10 @@ export async function renderReadable(
   if (render) {
     const inst = registry.getObject(ref.id);
     const data = inst?.data ?? {};
-    const ctx: ReadableContext = { object: { id: ref.id, class: ref.class } };
+    const ctx: ReadableContext = {
+      object: { id: ref.id, class: ref.class },
+      intents: opts.intents ?? new Set(),
+    };
     const projection = await render(ctx, makeReadonlySelfProxy(data as object), ref);
     return {
       payload: projection.content,

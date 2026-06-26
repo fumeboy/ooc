@@ -6,10 +6,20 @@ import type { OocObjectRef } from "../runtime/ooc-class.js";
 /**
  * readable / window method 的执行上下文（读侧；不携带改业务数据的能力）。
  *
- * - `object` : 接收者对象的身份元信息（id / class）。业务 data 经 self 入参,**不**在此。
+ * - `object`  : 接收者对象的身份元信息（id / class）。业务 data 经 self 入参,**不**在此。
+ * - `intents` : 本轮 thinkloop 从 thread.contextWindows 聚合的 intent 集合（issue N）。core 跑
+ *               `scanIntents` 经每条 ref 的 `class.readable.intents?.(self)` 收集 + Set 去重后注入
+ *               所有 readable render。消费方：knowledge_base 等"基于意图的资源激活"实现。
+ *               stateless 投影：每轮 thinkloop 重算、不缓存,form close 后自然消失。
+ *               命名空间约定:
+ *                 - `intent::class::<class>` —— 每条 contextWindows ref 经 root readable.intents 产
+ *                 - `intent::form_open::<targetClass>::<guideName>` —— method_exec_form 产
+ *                 - `intent::super_flow::active` —— super flow 内 thread 产
+ *                 - `intent::user::<name>` —— 用户 ooc class 自定义命名空间
  */
 export interface ReadableContext {
   object: { id: string; class: string };
+  intents: Set<string>;
 }
 
 /**
@@ -79,4 +89,19 @@ export type ReadableRender<Data = unknown, Win = unknown> = (
 export interface ReadableModule<Data = unknown, Win = unknown> {
   readable: ReadableRender<Data, Win>;
   window: WindowViewDecl<Data, Win>[];
+  /**
+   * 可选:本 class 暴露给上下文聚合的 intents（issue N）。
+   *
+   * 由 `core/thinkable/context/scanIntents.ts` 在每轮 thinkloop 调一次,把所有 contextWindows ref 的产出
+   * Set 去重后注入 ReadableContext.intents。**stateless 投影**——每轮重算、无缓存。
+   *
+   * 入参签名与 `readable.readable` 对齐:接 self (对象业务数据) + ref (OocObjectRef,可看 ref.id /
+   * ref.window_view / ref.data 判断本 ref 在 context 中的视角与状态)。
+   *
+   * 缺省 undefined = 本 class 不产 intent（与协议向后兼容）。多数 builtin 不实现此槽；典型实现:
+   * - `method_exec_form` —— 产 `form_open::<targetClass>::<guideName>` + user intents
+   * - `thread`           —— 据 ref.window_view + sessionId 产 `class::root` / `class::talk` /
+   *                          `super_flow::active`
+   */
+  intents?: (self: ReadonlySelfProxy<Data>, ref: OocObjectRef<Win>) => readonly string[];
 }

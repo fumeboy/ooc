@@ -12,13 +12,13 @@ import type {
   ActivationResult,
   KnowledgeDoc,
   KnowledgeIndex,
-} from "../../types/knowledge.js";
+} from "./types.js";
 import {
   type ActivationContext,
   evaluateTrigger,
   maxLevel,
   parseActivatesOn,
-} from "./activator.expr.js";
+} from "./expr.js";
 
 function resultFor(doc: KnowledgeDoc, level: ActivationLevel): ActivationResult {
   return {

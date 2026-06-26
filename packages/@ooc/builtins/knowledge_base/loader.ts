@@ -9,8 +9,8 @@
  */
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
-import type { KnowledgeDoc, KnowledgeIndex } from "@ooc/core/types/knowledge.js";
-import { parseKnowledgeFile } from "@ooc/core/thinkable/knowledge/parser.js";
+import type { KnowledgeDoc, KnowledgeIndex } from "./activator/types.js";
+import { parseKnowledgeFile } from "./activator/parser.js";
 
 async function scanDir(root: string, idPrefix = ""): Promise<KnowledgeDoc[]> {
   let entries;

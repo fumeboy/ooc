@@ -14,6 +14,13 @@
 export interface Data {
   /** 目标 object id（guide 所属对象）。 */
   targetObjectId: string;
+  /**
+   * 目标 object 的 class id（**issue N** 新增）。form 持此字段让 `readable.intents` 产
+   * `intent::form_open::<targetClass>::<guideName>` 不再需要二次反查 registry——core
+   * `scanIntents` 只依赖 readable 槽 + self,不识别 class id。caller（thread-runtime / open / refine
+   * route 自动开 form 时）由 `ref.class` 直填。
+   */
+  targetClass: string;
   /** 目标 **guide** 名（dispatch 时 LLM 调用的 guide method name；open 单步 method 时填 method name）。 */
   guideName: string;
   /** 累积参数（多轮 refine merge）。 */

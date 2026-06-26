@@ -241,6 +241,7 @@ export class ThreadRuntime implements RuntimeHandle {
       class: "_builtin/agent/method_exec_form",
       args: {
         targetObjectId: ref.id,
+        targetClass: ref.class,
         guideName,
         accumulatedArgs: args,
         currentTip: intents?.tip,
@@ -261,7 +262,8 @@ export class ThreadRuntime implements RuntimeHandle {
     args: Record<string, unknown>,
   ): Promise<void> {
     const data = this.objectDataOf(ref) ?? {};
-    const ctx: ReadableContext = { object: { id: ref.id, class: ref.class } };
+    // issue N: window method 走 mutate-only 路径,不参与"基于意图的激活" —— intents 传空 Set。
+    const ctx: ReadableContext = { object: { id: ref.id, class: ref.class }, intents: new Set() };
     const self = makeReadonlySelfProxy(data as object);
     const newWin = await method.exec(ctx, self, ref.data, args);
     ref.data = newWin;
@@ -335,6 +337,7 @@ export class ThreadRuntime implements RuntimeHandle {
       class: "_builtin/agent/method_exec_form",
       args: {
         targetObjectId: objectId,
+        targetClass: ref.class,
         guideName: methodName,
         accumulatedArgs: {},
         currentTip,
