@@ -83,7 +83,17 @@ const editMethod: ObjectMethod<Data> = {
       return "[file_window.edit] 缺少 args={ old, new } 或 args={ edits: [{old, new}, ...] }。";
     }
 
-    // TODO
+    const filePath = self.data.path;
+    const initial = await readFile(filePath, "utf8");
+    const result = applyEdits(initial, edits);
+    if (!result.ok) {
+      return { err: `[file.edit] ${result.error}` };
+    }
+    await writeFile(filePath, result.result, "utf8");
+    await ctx.reportDataEdit();
+    return {
+      message: `[file.edit] applied ${edits.length} edit(s) → ${result.result.length} chars`,
+    };
   },
 };
 
