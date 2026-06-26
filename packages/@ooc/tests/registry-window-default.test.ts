@@ -89,17 +89,22 @@ describe("resolveDefaultWindowClass / resolveWindowClass (post-default conventio
     expect(decl?.class).toBe("default");
   });
 
-  it("thread (multi-view) has both 'thread' and 'talk' window decls non-empty", () => {
-    const threadDecl = builtinClassRegistry.resolveWindowClass(THREAD_CLASS_ID, "thread");
-    const talkDecl = builtinClassRegistry.resolveWindowClass(THREAD_CLASS_ID, "talk");
-    expect(threadDecl).toBeDefined();
-    expect(talkDecl).toBeDefined();
-    expect(threadDecl?.object_methods).toContain("reply");
-    expect(talkDecl?.object_methods).toContain("say");
+  it("thread (multi-view, issue E) has 'default' and 'super' window decls non-empty", () => {
+    const defaultDecl = builtinClassRegistry.resolveWindowClass(THREAD_CLASS_ID, "default");
+    const superDecl = builtinClassRegistry.resolveWindowClass(THREAD_CLASS_ID, "super");
+    expect(defaultDecl).toBeDefined();
+    expect(superDecl).toBeDefined();
+    expect(defaultDecl?.object_methods).toContain("say");
+    expect(defaultDecl?.object_methods).toContain("reply");
+    expect(defaultDecl?.object_methods).toContain("end");
+    expect(defaultDecl?.object_methods).toContain("todo");
+    expect(superDecl?.object_methods).toContain("scan_changes");
+    expect(superDecl?.object_methods).toContain("say");
   });
 
-  it("thread (multi-view) has no default decl (multi-view 豁免)", () => {
+  it("thread (multi-view, issue E) DOES have a default decl now (default+super 二投影)", () => {
     const defaultDecl = builtinClassRegistry.resolveDefaultWindowClass(THREAD_CLASS_ID);
-    expect(defaultDecl).toBeUndefined();
+    expect(defaultDecl).toBeDefined();
+    expect(defaultDecl?.class).toBe("default");
   });
 });

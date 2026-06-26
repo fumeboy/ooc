@@ -1,7 +1,7 @@
 /**
- * thread thinkable / tools —— 3 tool 原语 dispatcher。
+ * thread thinkable / tools —— 4 tool 原语 dispatcher（issue E）。
  *
- * LLM 调 `exec` / `close` / `wait` 时，本模块把调用路由到 ThreadRuntime。LLM 协议层的 tool
+ * LLM 调 `exec` / `close` / `wait` / `open` 时，本模块把调用路由到 ThreadRuntime。LLM 协议层的 tool
  * 元信息（schema）见 `./schema.ts`；本模块只做 dispatch。
  */
 import type { LlmToolCall } from "@ooc/core/thinkable/llm/types.js";
@@ -15,7 +15,7 @@ export interface ToolCallResult {
   shouldWait: boolean;
 }
 
-/** 派发一条 tool call 到 ThreadRuntime；返回回喂给 LLM 的文本结果 + 是否进入 wait。 */
+/** 派发一条 tool call 到 ThreadRuntime;返回回喂给 LLM 的文本结果 + 是否进入 wait。 */
 export async function dispatchToolCall(
   call: LlmToolCall,
   runtime: ThreadRuntime,
@@ -39,6 +39,13 @@ export async function dispatchToolCall(
         const windowId = String(call.arguments?.window_id ?? "");
         runtime.wait(windowId);
         return { outputText: `(waiting on: ${windowId})`, shouldWait: true };
+      }
+      case "open": {
+        const objectId = String(call.arguments?.objectId ?? "");
+        const methodName = String(call.arguments?.methodName ?? "");
+        const want = String(call.arguments?.want ?? "");
+        const result = await runtime.open(objectId, methodName, want);
+        return { outputText: result.message ?? "(opened)", shouldWait: false };
       }
       default: {
         return { outputText: `(unknown tool: ${call.name})`, shouldWait: false };

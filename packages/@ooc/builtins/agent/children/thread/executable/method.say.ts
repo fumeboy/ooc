@@ -1,19 +1,20 @@
 /**
  * thread —— 会话 object method（say / reply）。
  *
- * thread 是唯一会话载体注册 class（context.md 核心 2/8/9）；同一 thread 按视角投影成两种会话窗，
- * 各自的写消息 method 按视角分名（creator-scoped inbox/outbox：inbox=creator→本 thread、
- * outbox=本 thread→creator）：
- *   - **say**（self-view 窗：`thread` / `reflect_request`）—— 本 thread 对其 **creator** 说话 → 写
+ * thread 是唯一会话载体注册 class（context.md 核心 2/8/9）；同一 thread 按视角投影成统一 default
+ * 窗 + super 窗（issue E：原 thread / talk / reflect_request 三投影 → default + super 二投影），
+ * 写消息 method 按视角分名（creator-scoped inbox/outbox：inbox=creator→本 thread、outbox=本
+ * thread→creator）：
+ *   - **say**（self-view 窗：`default` / `super`）—— 本 thread 对其 **creator** 说话 → 写
  *     本 thread 的 **outbox**。
- *   - **reply**（creator-view 窗：`talk`，即 creator 看 child 的会话窗）—— creator 回话进 **child** →
- *     写 child（窗所代表的那条 thread）的 **inbox**。
+ *   - **reply**（creator-view 也是 `default` 投影，靠单 transcript 模型 + entry.author 区分视角）——
+ *     creator 回话进 **child** → 写 child（窗所代表的那条 thread）的 **inbox**。
  *
  * **单一职责**：只把消息写进 thread Data 的 box（`self.data` 活引用）+ 经 runtime 触发对端调度。
  * runtime 调度本轮留 `TODO()` 占位（enqueueThread 待建，issue 后续点）；跨 thread 真实 delivery /
  * 对端读侧 peer-ref 投影 / callee 创建 / 跨 session 路由均属后续重构，不在此闭合。
  *
- * 注：**wait / close 是 tool 原语（非 method）**——见 `core/executable/tools/{wait,close}.ts`。
+ * 注：**wait / close 是 tool 原语（非 method）**——见 thinkable/tools/schema.ts。
  */
 import type {
   ExecutableContext,
@@ -44,7 +45,6 @@ export const sayMethod: ObjectMethod<Data> = {
     "Send a message to your creator: write into this thread's outbox and trigger scheduling.",
   schema: SAY_SCHEMA,
   permission: () => "allow",
-  public: true,
   exec: (ctx, self, args) => {
     const msg = {
       id: generateMessageId(),
@@ -65,7 +65,6 @@ export const replyMethod: ObjectMethod<Data> = {
     "Reply into the child thread: write into that thread's inbox and trigger scheduling.",
   schema: SAY_SCHEMA,
   permission: () => "allow",
-  public: true,
   exec: (ctx, self, args) => {
     const msg = {
       id: generateMessageId(),

@@ -94,7 +94,7 @@ function assertNoMethodNameCollision(cls: OocClass): void {
  * 2. **methods 与 guides 跨域不可重名**——共享 exec-by-name 入口，命中谁不确定。
  * 3. **guides 与 window methods 跨域不可重名**——见 assertNoMethodNameCollision 同因。
  * 4. **每个 window decl 的 object_methods / guide_methods 引用必须能在 ExecutableModule 内解析**——
- *    悬空引用 fail-loud；reflect_request 等下游按白名单 surface 依赖此约束。
+ *    悬空引用 fail-loud；super 等下游按白名单 surface 依赖此约束。
  */
 function assertExecutableMethodGuideCohesion(cls: OocClass): void {
   const executable: ExecutableModule | undefined = cls.executable;
@@ -160,7 +160,7 @@ function assertExecutableMethodGuideCohesion(cls: OocClass): void {
  * 2. **单视角 class（window[] 长度 = 1）**：唯一 decl 的 `class` 必须为 `"default"`。
  *    单视角默认投影统一命名，未指明 class 时调用方可不查直接取 default。
  * 3. **多视角 class（window[] 长度 > 1）**：豁免 default 强约束——多视角通常每条都具名语义
- *    （`talk` / `reflect_request` 等），不强求兜底；调用方未指明 class 又无 default decl 时
+ *    （`default` / `super` 等），不强求兜底；调用方未指明 class 又无 default decl 时
  *    `resolveDefaultWindowClass` 会回退 readable.md 名片或落 placeholder。
  *
  * （无 readable 模块的 class 跳过本校验。）

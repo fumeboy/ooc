@@ -16,7 +16,7 @@ export type PermissionDecision =
  */
 export type PendingToolCall = {
   /** 触发的 LLM tool 原语名。 */
-  toolName: "exec" | "close" | "wait";
+  toolName: "exec" | "close" | "wait" | "open";
   /**
    * 对 exec: 解析自 args.method 的 method 路径 (例如 "talk", "write_file")。
    * 对 close/wait: 等于 toolName。

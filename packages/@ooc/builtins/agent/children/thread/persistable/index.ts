@@ -5,7 +5,7 @@
  * `save` / `load`（与 `builtins/example/persistable/index.ts` 同一套）。
  *
  * - `mode:"inline"`：thread **作为别的 context 里的一个窗**时，整窗随所属 context inline 落盘、
- *   不写独立 data.json（会话窗 self/peer/fork/reflect_request 投影都是 thread 实例）。
+ *   不写独立 data.json（会话窗 self/peer/fork/super 投影都是 thread 实例）。
  * - `save` / `load`：thread **作为运行会话容器**时的持久化——把整份 ThreadContext 序列化成
  *   单个 `<dir>/thread.json`（`dir` 由 PersistableContext 给出，core 已解析到该 thread 的目录）。
  *   core 经 seam（`resolvePersistable(THREAD_CLASS_ID).save/load`）派发到此，不具名 import 本实现。

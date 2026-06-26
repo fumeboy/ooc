@@ -1,8 +1,8 @@
 /** LLM provider 只保留首批需要的两种协议，避免过早抽象。 */
 export type LlmProvider = "openai" | "claude";
 
-/** ThinkLoop 当前文档定义的 tool 原语名称；不提前开放任意字符串。 */
-export type LlmToolName = "exec" | "close" | "wait";
+/** ThinkLoop 当前文档定义的 tool 原语名称；不提前开放任意字符串。issue E：3→4 加 open。 */
+export type LlmToolName = "exec" | "close" | "wait" | "open";
 
 /** provider 无关的最小文本消息结构。 */
 export type LlmMessage = {

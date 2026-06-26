@@ -45,6 +45,24 @@ export interface RuntimeHandle {
     guideName: string,
     args: Record<string, unknown>,
   ): Promise<ObjectMethodResult | undefined>;
+
+  /**
+   * **open 原语**：在不行使 `exec`/`callMethod` 的前提下，对目标 object 的某 method 开一张
+   * `method_exec_form` 让 agent 把意图（`want`，自然语言）连同参数一道带入填表流程。
+   *
+   * 与 `exec` 的差异：
+   * - `exec` 命中 object method → 直接执行；命中 guide method → 走 route → 若非 quickSubmit 自动
+   *   开 form（form 不会承载 want）。
+   * - `open` 一律开 form（即使目标是单步 ObjectMethod），并把 `want` 写入 form data —— 用于让
+   *   agent 在动手前把"为什么调"显式表达进上下文。
+   *
+   * 返回 form ref + 提示文本。找不到目标对象 / 目标 method 时抛清晰错误。
+   */
+  open?(
+    objectId: string,
+    methodName: string,
+    want: string,
+  ): Promise<ObjectMethodResult>;
 }
 
 /**
@@ -90,15 +108,17 @@ export interface ConstructorContext {
  * - name        : 方法名（dispatch 入口；同 class 内 method/guide/window method 三侧不可重名）
  * - description : LLM 面向的方法描述（必填）
  * - schema      : 可选参数 schema（结构化渲染 + fail-soft 校验）
- * - public      : 是否对 peer object 可见可调
  * - permission  : 权限谓词：调用前按 args 算 `allow` / `ask` / `deny`（缺省 allow）
  * - exec        : (ctx, self, args) → 结果（`ObjectMethodResult`{message?/data?/err?}，或裸 string = sugar for {message}，或 void/undefined）；**可改 self、可副作用**
+ *
+ * 方法可见性 = **完全**由 readable.window decl 决定（issue E）——method 协议层不再持
+ * `public?` 字段。每个 window class 在 `WindowClassDecl.object_methods[]` 中按名显式 surface
+ * 自己想暴露给 LLM 的 method，未列入即不可见、不可调。
  */
 export interface ObjectMethod<Data = any, Args = any> {
   name: string;
   description: string;
   schema?: MethodCallSchema;
-  public?: boolean;
   permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
   exec: (
     ctx: ExecutableContext,
@@ -117,15 +137,15 @@ export interface ObjectMethod<Data = any, Args = any> {
  *   accumulatedArgs:args, currentTip, currentIntents})`，把 form ref 返给 tool call，agent 后续经
  *   form.refine 累积参数、form.submit 真执行。
  *
- * `intents` 必有（描述该 guide 可能产生的意图全集，作为 LLM 静态先验 + activator 校验）；`schema?` 可
- * 选（描述总参数空间，route 输出 ObjectMethodIntents 描述当下需补的子集）；`route` 必有，否则用 ObjectMethod。
+ * `intents` 必有（描述该 guide 可能产生的意图全集，作为 LLM 静态先验 + activator 校验）；`route` 必有，
+ * 否则用 ObjectMethod。**guide 不持 `schema` 字段**（issue E）——总参数空间形态由 route 输出的
+ * `ObjectMethodIntents` 在每次迭代中按当下需补的子集动态给出，静态 schema 与 form 的渐进语义重复。
+ * **方法可见性同 ObjectMethod**：由 `WindowClassDecl.guide_methods[]` 决定，guide 协议层不持 `public?`。
  */
 export interface ObjectGuideMethod<Data = any, Args = any> {
   name: string;
   description: string;
-  schema?: MethodCallSchema;
   intents: { name: string; description: string }[];
-  public?: boolean;
   permission?: (args: Record<string, unknown>) => "allow" | "ask" | "deny";
   route: (
     ctx: ExecutableContext,
