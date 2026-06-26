@@ -37,7 +37,16 @@ const readable: ReadableModule<Data, SearchWin> = {
     if (self.data.searchRoot) {
       children.push(xmlElement("search_root", {}, [xmlText(self.data.searchRoot)]));
     }
-    // TODO 展示搜索结果
+    const matchNodes: XmlNode[] = self.data.matches.map((m) => {
+      const attrs: Record<string, string> = {
+        index: String(m.index),
+        path: m.path,
+      };
+      if (typeof m.line === "number") {
+        attrs.line = String(m.line);
+      }
+      return xmlElement("match", attrs, m.snippet ? [xmlText(m.snippet)] : []);
+    });
     children.push(
       xmlElement(
         "matches",
@@ -45,6 +54,7 @@ const readable: ReadableModule<Data, SearchWin> = {
           count: String(self.data.matches.length),
           truncated: self.data.truncated ? "true" : "false",
         },
+        matchNodes,
       ),
     );
 
