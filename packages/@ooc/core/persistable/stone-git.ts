@@ -138,6 +138,49 @@ export function gitDiffNames(repoDir: string, baseRef: string, headRef: string):
   return { ok: true, value };
 }
 
+/** `git diff --name-status` 单条记录：A=added / M=modified / D=deleted。 */
+export interface DiffNameStatusEntry {
+  status: "A" | "M" | "D";
+  path: string;
+}
+
+/**
+ * 列出 baseRef...headRef 累积 diff 的 A/M/D 三态条目（git diff --name-status）。
+ *
+ * 仅认 A/M/D 三态——R(rename)/C(copy) 在三点 diff 下不常见；若实际出现暂归为 modified
+ * （保守落入 M 桶），上游不需要区分。返回顺序与 git 原始输出一致。
+ */
+export function gitDiffNameStatus(
+  repoDir: string,
+  baseRef: string,
+  headRef: string,
+): GitResult<DiffNameStatusEntry[]> {
+  if (typeof baseRef !== "string" || baseRef.length === 0) return failInput("empty baseRef");
+  if (typeof headRef !== "string" || headRef.length === 0) return failInput("empty headRef");
+  const r = runRaw(repoDir, ["diff", "--name-status", `${baseRef}...${headRef}`]);
+  if (r.exitCode !== 0) return failGeneric(r.stderr);
+  const value: DiffNameStatusEntry[] = [];
+  for (const rawLine of r.stdout.split("\n")) {
+    const line = rawLine.trimEnd();
+    if (!line) continue;
+    // git 输出形如 `A\tpath`、`M\tpath`、`D\tpath`；rename/copy 形如 `R100\told\tnew`
+    const tabIdx = line.indexOf("\t");
+    if (tabIdx <= 0) continue;
+    const code = line[0]!;
+    const rest = line.slice(tabIdx + 1);
+    let status: "A" | "M" | "D";
+    if (code === "A") status = "A";
+    else if (code === "D") status = "D";
+    else status = "M"; // M / R / C / T / U → 统一保守归 modified
+    // rename/copy 取目标路径（最后一个 tab 段）
+    const lastTab = rest.lastIndexOf("\t");
+    const path = lastTab === -1 ? rest : rest.slice(lastTab + 1);
+    if (!path) continue;
+    value.push({ status, path });
+  }
+  return { ok: true, value };
+}
+
 /**
  * git format-patch 等价的 patch 文本：返回 baseRef..headRef 范围内每条 commit 的 patch
  * 拼成的 unified diff 字符串。供 PR-Issue payload 使用。

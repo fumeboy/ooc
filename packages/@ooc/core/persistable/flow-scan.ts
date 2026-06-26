@@ -21,7 +21,7 @@ import {
   STONES_MAIN_BRANCH,
   STONE_OBJECTS_SUBDIR,
 } from "./common.js";
-import { gitDiffNames } from "./stone-git.js";
+import { gitDiffNameStatus } from "./stone-git.js";
 import { sessionStoneBranch } from "./stone-worktree.js";
 
 /** 单个字段差异。 */
@@ -36,8 +36,8 @@ export interface FieldDiff {
 /** 单个 class 源码编辑（vs stone main）。 */
 export interface ClassEditEntry {
   path: string;
-  /** git status 字符（A/M/D 等）。 */
-  status: "added" | "modified" | "deleted" | "other";
+  /** A=added / M=modified / D=deleted（rename/copy 保守归 M）。 */
+  status: "A" | "M" | "D";
 }
 
 export interface ScanFlowChangesResult {
@@ -117,10 +117,10 @@ export async function scanFlowChanges(
 }
 
 /**
- * 扫 worktree class 源码 vs stone main 的 git diff。
+ * 扫 worktree class 源码 vs stone main 的 git diff（A/M/D 三态）。
  *
- * **本 issue 简化版**：用 `git diff --name-status main session-<sid>` 列出 worktree 内
- * 相对 main 的所有变更路径。session-<sid> 分支由 ensureSessionWorktree 已建立。
+ * 用 `git diff --name-status main session-<sid>` 列出 worktree 内相对 main 的所有变更路径
+ * 与状态码。session-<sid> 分支由 ensureSessionWorktree 已建立。
  *
  * 返回的 path 是相对 stones 仓库根的相对路径（如 `objects/foo/executable/index.ts`）。
  */
@@ -131,15 +131,10 @@ export async function scanWorktreeClassEdits(
   const repo = join(baseDir, "stones", STONES_MAIN_BRANCH);
   const featBranch = sessionStoneBranch(sessionId);
 
-  // 用 --name-status 拿带状态的 diff（暂时复用 gitDiffNames 拿 paths;status 暂统一标 modified）。
-  // TODO 后续可以扩 stone-git 加 gitDiffNameStatus 拿 A/M/D 三态。
-  const names = gitDiffNames(repo, STONES_MAIN_BRANCH, featBranch);
-  if (!names.ok) {
+  const entries = gitDiffNameStatus(repo, STONES_MAIN_BRANCH, featBranch);
+  if (!entries.ok) {
     // 分支不存在 / 仓库无 worktree → 空清单（非 error）。
     return [];
   }
-  return names.value.map((path) => ({
-    path,
-    status: "modified" as const,
-  }));
+  return entries.value.map((e) => ({ path: e.path, status: e.status }));
 }

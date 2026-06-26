@@ -132,6 +132,12 @@ const scanChangesMethod: ObjectMethod<ThreadContext> = {
       }
     }
 
+    const editsByStatus = { A: 0, M: 0, D: 0 } as Record<"A" | "M" | "D", number>;
+    for (const e of allClassEdits) {
+      if (e.status === "A" || e.status === "M" || e.status === "D") {
+        editsByStatus[e.status] += 1;
+      }
+    }
     const summary = [
       `[scan_changes] caller=${callerObjectId}`,
       `versioned_dirty (${allVersionedDirty.length}):`,
@@ -142,7 +148,7 @@ const scanChangesMethod: ObjectMethod<ThreadContext> = {
       ...allUnversionedDirty.map(
         (d) => `  - [${d.sessionId}] ${d.field}: ${d.oldValue ?? "<unset>"} → ${d.newValue}`,
       ),
-      `class_edits (${allClassEdits.length}):`,
+      `class_edits (${allClassEdits.length}; added=${editsByStatus.A}, modified=${editsByStatus.M}, deleted=${editsByStatus.D}):`,
       ...allClassEdits.map((e) => `  - [${e.sessionId}] ${e.status} ${e.path}`),
     ].join("\n");
 
