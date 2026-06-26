@@ -33,13 +33,11 @@ export interface ThinkableModule<Data = unknown> {
   /**
    * 一轮 think 的入口（thinkloop tick 调一次）。
    *
-   * 形参：当前正在跑的 thread 实例（含其 data）+ class registry 句柄。
+   * 形参：当前正在跑的 instance 的 data（thinkable 是能力模块、不持 instance handle，
+   * 故只收 data 而非 OocObjectInstance）+ class registry 句柄等 cross-cutting deps。
    * 返回：异步完成本轮 think（构造 input → 调 LLM → 执行 tool → 写事件）。
    */
-  think?: (
-    instance: OocObjectInstance<Data>,
-    deps: ThinkableDeps,
-  ) => Promise<void>;
+  think?: (data: Data, deps: ThinkableDeps) => Promise<void>;
 
   /**
    * scheduler 每 tick 给本 class 实例的回调——harvest / child-notify / 唤醒检查等。
@@ -75,10 +73,21 @@ export interface ThinkableModule<Data = unknown> {
  *
  * 具体形状由 core 的 thinkable subsystem 注入（llm client / registry / persistable seam ...）。
  * 留 unknown 是为了 contract 层零运行时依赖；实现层各自 cast。
+ *
+ * **当前 thinkable 模块槽天生面向 thread 系**（OOC 哲学澄清 2：只有 thread 类跑 thinkloop）；
+ * 故 `worldDir / onDataEdit / wakeSession` 是 thread 启动 thinkloop 的 cross-cutting opts，
+ * 字段全 optional——既有非 thread caller（refs/active）不读这些字段、不破坏向后兼容。
+ * thread thinkable adapter 在 think 入口处 fail-loud 断言 worldDir + onDataEdit 必备。
  */
 export interface ThinkableDeps {
   /** LLM client（thinkable/llm/client.ts）。 */
   llm: unknown;
   /** class registry 句柄（resolveXxx 用）。 */
   registry: unknown;
+  /** 持久化 + flow 寻址用——thread think 与对端调度需。 */
+  worldDir?: string;
+  /** instance data 变更后通知 runtime 持久化（scope=flow 写入路径）。 */
+  onDataEdit?: () => Promise<void> | void;
+  /** 跨 thread/跨 session 唤醒钩（issue G）；缺省 no-op + warn 兜底。 */
+  wakeSession?: (sessionId: string) => void;
 }

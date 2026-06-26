@@ -16,7 +16,6 @@ import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
 import { iterateSessionObjectTable, getSessionRegistry } from "@ooc/core/runtime/object-registry.js";
 import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import type { ThreadContext } from "../types.js";
-import { think } from "./thinkloop.js";
 
 export interface SchedulerOptions {
   /** 最大 tick 数（防止失控循环）。 */
@@ -73,7 +72,15 @@ export async function runScheduler(
     })[0]!;
 
     next.lastExecutedAt = Date.now();
-    await think(next, llm, registry, {
+    // issue H：scheduler 经 resolveThinkable seam 派发 think；不再直 import thinkloop.think。
+    // 既有 `inst.class !== THREAD_CLASS_ID` 过滤已挡住非 thread；未命中即注册表损坏 → fail-loud。
+    const thinkableMod = registry.resolveThinkable(THREAD_CLASS_ID);
+    if (!thinkableMod?.think) {
+      throw new Error(`[scheduler] no thinkable.think for class=${THREAD_CLASS_ID}`);
+    }
+    await thinkableMod.think(next, {
+      llm,
+      registry,
       worldDir: opts.worldDir,
       onDataEdit: opts.onDataEdit,
       wakeSession: opts.wakeSession,
