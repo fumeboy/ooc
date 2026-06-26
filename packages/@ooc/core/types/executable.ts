@@ -63,6 +63,17 @@ export interface RuntimeHandle {
     methodName: string,
     want: string,
   ): Promise<ObjectMethodResult>;
+
+  /**
+   * 跨 session 调度信号——唤醒目标 sessionId 的 worker 处理已写盘的 inbox/事件。
+   *
+   * 仅唤醒、不传载荷：调用者必须**先**写盘对端数据（如 say 写 transcript / talk(super)
+   * appendMessageToSuperThread），再调 scheduleSession 通知对端 worker 重新调度。
+   * 写盘 + wake 不原子；crash 容忍由 scheduler 启动/周期 tick 扫 inbox 兜底。
+   *
+   * tier-A 控制面模式（无 worker）下 ThreadRuntime 内 wakeSession 未注入时静默 no-op + warn。
+   */
+  scheduleSession?(sessionId: string): void;
 }
 
 /**

@@ -46,24 +46,38 @@ export class ThreadRuntime implements RuntimeHandle {
   private readonly onDataEdit?: () => Promise<void> | void;
   /** worldDir —— 落盘根目录，方法 ctx 透传。 */
   private readonly worldDir: string;
+  /**
+   * 跨 session 唤醒钩子（worker.ts / thinkloop 注入）；缺席时 `scheduleSession` 静默 no-op + warn。
+   * 见 `RuntimeHandle.scheduleSession` JSDoc 与 issue G。
+   */
+  private readonly wakeSession?: (sessionId: string) => void;
   /** 已 unactive 完毕的 inst 记录 —— dispatchUnactive 幂等护栏。 */
   private readonly unactiveDispatched = new Set<string>();
 
   constructor(
     thread: ThreadContext,
     registry: ObjectInsRegistry,
-    opts: { onDataEdit?: () => Promise<void> | void; worldDir?: string } = {},
+    opts: {
+      onDataEdit?: () => Promise<void> | void;
+      worldDir?: string;
+      wakeSession?: (sessionId: string) => void;
+    } = {},
   ) {
     this.thread = thread;
     this.registry = registry;
     this.onDataEdit = opts.onDataEdit;
     this.worldDir = opts.worldDir ?? "";
+    this.wakeSession = opts.wakeSession;
   }
 
   /** 从 thread 派生 ThreadRuntime —— 取该 thread 所在 session 的 ObjectInsRegistry。 */
   static fromThread(
     thread: ThreadContext,
-    opts: { onDataEdit?: () => Promise<void> | void; worldDir?: string } = {},
+    opts: {
+      onDataEdit?: () => Promise<void> | void;
+      worldDir?: string;
+      wakeSession?: (sessionId: string) => void;
+    } = {},
   ): ThreadRuntime {
     return new ThreadRuntime(thread, getSessionRegistry(thread.sessionId), opts);
   }
@@ -282,6 +296,24 @@ export class ThreadRuntime implements RuntimeHandle {
   }
 
   // ─────────────────────── RuntimeHandle 实现 ───────────────────────
+
+  /**
+   * **scheduleSession 信号**（issue G）：唤醒目标 sessionId 的 worker 处理已写盘的 inbox/事件。
+   *
+   * 仅唤醒、不传载荷：调用者（say / reply / talk-super append）必须**先**写盘对端数据，再调本
+   * method 让 wakeSession 钩子转发到 worker.enqueueScheduler。tier-A 控制面 / 测试态 wakeSession
+   * 未注入时静默 no-op + warn，不抛错（防 storybook 红）。
+   */
+  scheduleSession(sessionId: string): void {
+    if (!this.wakeSession) {
+      console.warn(
+        "[ThreadRuntime] scheduleSession called without wakeSession hook (sid=%s)",
+        sessionId,
+      );
+      return;
+    }
+    this.wakeSession(sessionId);
+  }
 
   /**
    * 实例化一个新对象 —— 经 class.construct 造初始 data → 登记 session 表 → 挂进 thread.contextWindows

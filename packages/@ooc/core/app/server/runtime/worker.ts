@@ -46,6 +46,15 @@ async function runOnce(w: WorkerState): Promise<void> {
       onDataEdit: async () => {
         await persistSession(w.baseDir, w.sessionId);
       },
+      /**
+       * issue G：把 enqueueScheduler 闭包注入 ThreadRuntime.scheduleSession 钩子。
+       * say / reply / talk-super append 写盘后调用 → 跨 session 唤醒对端 worker。
+       * 此处 fire-and-forget（enqueueScheduler 是 async 但 wakeSession 签名同步）；
+       * 投递失败不阻塞当前 think 一轮，crash 容忍由 scheduler 启动 / 周期 tick 扫 inbox 兜底。
+       */
+      wakeSession: (sid: string) => {
+        void enqueueScheduler(sid, w.llm, w.baseDir);
+      },
     });
     // 每轮 tick 结束后兜底落盘
     await persistSession(w.baseDir, w.sessionId);
