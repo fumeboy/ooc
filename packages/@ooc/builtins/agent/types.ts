@@ -12,8 +12,9 @@
  * 多次 talk(super) 复用同一 super thread（caller 持 ref 即重用）；消息派送由 caller 直接
  * 写入 super flow 内该 thread 的 inbox.json——避免引入 cross-session bus 基础设施。
  *
- * TODO(issue-C-VERSIONED_FIELDS)：issue C verified 后须在 class.versioned_fields 显式声明
- * superThreadRef 不在 VERSIONED 集（PR 流程不应分发它，否则把运行时 ref 当身份提案）。
+ * **版本化字段**：仅 `self`（由 `VERSIONED_FIELDS` 常量声明、`index.ts` 装配时赋给
+ * `Class.versioned_fields`）。`superThreadRef` 是运行时跨 session 引用，非身份提案，不在
+ * VERSIONED 集（避免 PR 流程把运行时 ref 当身份分发）。
  */
 export interface Data {
   self: string;

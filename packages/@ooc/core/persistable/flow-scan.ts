@@ -7,10 +7,10 @@
  * 2. unversionedChanges — 非版本化字段差异（vs stone main canonical）。
  * 3. classEdits         — flow worktree 内 class 源码 vs stone main 的 git diff。
  *
- * 本 issue 简化版（**TODO: verified 后改读 class.versioned_fields，由 issue C 提供**）：
- * - 字段版本化判定**硬编码**：agent → ["self"]；其他类型 → 空数组（即视为 unversioned）。
- * - 不维护 hydrate-snapshot；直接 flow data.json vs stone canonical 比对。
- * - 不做 conflict 检测（vs stone HEAD）；issue C 落地后再补。
+ * 字段版本化判定：由 caller 经 `ClassRegistry.resolveVersionedFields(classId)` 解析后
+ * 把 `versionedFields: readonly string[]` 传入；本模块保持「无 runtime 依赖的算法函数」。
+ * 不维护 hydrate-snapshot；直接 flow data.json vs stone canonical 比对。
+ * 不做 conflict 检测（vs stone HEAD）；issue G 后再补。
  */
 
 import { readFile } from "node:fs/promises";
@@ -20,10 +20,9 @@ import {
   nestedObjectPath,
   STONES_MAIN_BRANCH,
   STONE_OBJECTS_SUBDIR,
-  STONES_BARE_REPO_DIR,
 } from "./common.js";
-import { gitDiffNames, gitDiffPatch } from "./stone-git.js";
-import { sessionWorktreePath, sessionStoneBranch } from "./stone-worktree.js";
+import { gitDiffNames } from "./stone-git.js";
+import { sessionStoneBranch } from "./stone-worktree.js";
 
 /** 单个字段差异。 */
 export interface FieldDiff {
@@ -44,31 +43,6 @@ export interface ClassEditEntry {
 export interface ScanFlowChangesResult {
   versionedDirty: FieldDiff[];
   unversionedDirty: FieldDiff[];
-}
-
-/**
- * **本 issue 占位**：根据 classId 返回该 class 哪些字段是 versioned。
- *
- * TODO(issue-C-VERSIONED_FIELDS)：issue C verified 后应改读 class.versioned_fields，
- * 由 OocClass 声明。本 issue D worktree 基于 main 不带 issue C，硬编码：
- *   - `_builtin/agent` 及其继承类（supervisor / user / 自定义 agent） → ["self"]
- *   - 其他 class → 空（即所有字段视为 unversioned）
- */
-function getVersionedFields(classId: string): string[] {
-  // agent 与其派生 class（包括 _builtin/agent/supervisor、_builtin/agent/user 等）
-  // 都把 `self` 字段视为 versioned。
-  if (classId === "_builtin/agent") return ["self"];
-  if (classId.startsWith("_builtin/agent/")) {
-    // 排除 thread / pr 等子 class（它们不是 agent，不持有 self）。
-    if (classId === "_builtin/agent/thread") return [];
-    if (classId === "_builtin/agent/pr") return [];
-    if (classId === "_builtin/agent/skill_index") return [];
-    if (classId === "_builtin/agent/method_exec_form") return [];
-    if (classId === "_builtin/agent/plan") return [];
-    if (classId === "_builtin/agent/todo") return [];
-    return ["self"];
-  }
-  return [];
 }
 
 /** 读 stone canonical data.json；不存在 / 解析失败返回 {}. */
@@ -105,21 +79,22 @@ async function readFlowData(
  * 扫描某个对象在某 session flow 内的字段级 dirty。
  *
  * 用法：scan_changes 内对每个对象（含调用 agent）依次扫描，聚合三类清单。
+ * `versionedFields` 由 caller 经 `ClassRegistry.resolveVersionedFields(classId)` 解析后传入。
  */
 export async function scanFlowChanges(
   baseDir: string,
   sessionId: string,
   objectId: string,
-  classId: string,
+  versionedFields: readonly string[],
 ): Promise<ScanFlowChangesResult> {
-  const versionedFields = new Set(getVersionedFields(classId));
+  const versionedSet = new Set(versionedFields);
   const flowData = await readFlowData(baseDir, sessionId, objectId);
   const stoneData = await readStoneCanonicalData(baseDir, objectId);
 
   const versionedDirty: FieldDiff[] = [];
   const unversionedDirty: FieldDiff[] = [];
 
-  // 以 flow 当前所有字段为基准；增量未含 stone 已删字段（issue C 后续考虑）。
+  // 以 flow 当前所有字段为基准；增量未含 stone 已删字段（issue G 后续考虑）。
   for (const field of Object.keys(flowData)) {
     const flowVal = flowData[field];
     const stoneVal = stoneData[field];
@@ -131,7 +106,7 @@ export async function scanFlowChanges(
       oldValue: stoneJson,
       newValue: flowJson,
     };
-    if (versionedFields.has(field)) {
+    if (versionedSet.has(field)) {
       versionedDirty.push(diff);
     } else {
       unversionedDirty.push(diff);
