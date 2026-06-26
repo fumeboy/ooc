@@ -48,11 +48,11 @@ const readable: ReadableModule<Data, SearchWin> = {
       ),
     );
 
-    return { class: "search", content: children };
+    return { class: "default", content: children };
   },
   window: [
     {
-      class: "search",
+      class: "default",
       object_methods: ["open_match"],
       window_methods: [],
     },

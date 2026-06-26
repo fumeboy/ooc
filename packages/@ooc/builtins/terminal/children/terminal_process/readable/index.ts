@@ -41,12 +41,12 @@ const resizeMethod: WindowMethod<Data, ProcessWin> = {
 
 const readable: ReadableModule<Data, ProcessWin> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ProcessWin>) => ({
-    class: "terminal_process",
+    class: "default",
     content: renderProcessHistory(self.data.history ?? [], win.data ?? {}),
   }),
   window: [
     {
-      class: "terminal_process",
+      class: "default",
       object_methods: ["exec", "close"],
       window_methods: [setHistoryWindowMethod, resizeMethod],
     },

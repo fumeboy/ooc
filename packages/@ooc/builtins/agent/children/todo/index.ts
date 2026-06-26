@@ -55,7 +55,7 @@ const executable: ExecutableModule<Data> = {
 
 const readable: ReadableModule<Data, unknown> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => ({
-    class: "todo",
+    class: "default",
     content: [
       xmlElement("content", {}, [xmlText(self.data.content)]),
       xmlElement("status", {}, [xmlText(self.data.status)]),
@@ -63,7 +63,7 @@ const readable: ReadableModule<Data, unknown> = {
   }),
   window: [
     {
-      class: "todo",
+      class: "default",
       object_methods: ["in_progress", "done"],
       window_methods: [],
     },

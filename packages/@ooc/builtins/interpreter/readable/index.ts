@@ -19,12 +19,12 @@ export interface InterpreterWin {}
 const readable: ReadableModule<Data, InterpreterWin> = {
   // content 极简：object method 的 description 已足够丰富，readable 不赘述。
   readable: (_ctx: ReadableContext, _self: Data, _win: InterpreterWin) => ({
-    class: "interpreter",
+    class: "default",
     content: "解释器",
   }),
   window: [
     {
-      class: "interpreter",
+      class: "default",
       object_methods: ["run"],
       window_methods: [],
     },

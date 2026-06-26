@@ -146,13 +146,13 @@ const readable: ReadableModule<Data, unknown> = {
       contextChildren.push(xmlElement("last_error", {}, [xmlText(d.lastError)]));
     }
     return {
-      class: "_builtin/agent/method_exec_form",
+      class: "default",
       content: [xmlElement("context", {}, contextChildren)],
     };
   },
   window: [
     {
-      class: "_builtin/agent/method_exec_form",
+      class: "default",
       object_methods: ["refine", "submit"],
       window_methods: [],
     },

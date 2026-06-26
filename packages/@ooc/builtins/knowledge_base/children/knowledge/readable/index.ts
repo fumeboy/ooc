@@ -57,11 +57,11 @@ const readable: ReadableModule<Data, KnowledgeWin> = {
     const children: XmlNode[] = [xmlElement("path", {}, [xmlText(self.data.path)])];
     // TOOD
 
-    return { class: "knowledge", content: children };
+    return { class: "default", content: children };
   },
   window: [
     {
-      class: "knowledge",
+      class: "default",
       object_methods: [],
       window_methods: [setViewportMethod],
     },

@@ -5,14 +5,14 @@
  * （context.md 核心 2/8/9）：
  *   - **thread**（self-view 非 super）：thread 与其 creator 的对话（普通 flow 的 creator 窗）。
  *   - **talk**（other-view）：与对端 peer/sub thread 的对话（含父侧 fork 子窗）。
- *   - **reflect_request**（self-view super）：super flow 的反思自视，额外 surface 沉淀 method。
+ *   - **reflect_request**（self-view super）：super flow 的反思自视，额外 surface 沉淀 method
+ *     —— 由 issue D 落地，本 readable 当前仅声明 thread + talk 两档。
  *
- * 投影 class 由 readable 内部调 `computeProjectionClass(...)` 从 id 派生的 self/other-view
- * （creator 窗 = `isSelfThreadWindow(id)`）+ thread session 动态算，作为 `ReadableProjection.class`
- * 返回——**不持久化**。三种投影对应 `window` 数组里的 3 个 window decl，渲染期 `resolveWindowClass(
- * _builtin/thread, 投影 class)` 据此决定该窗展示哪些 method。close 不再是 method（已塌回 close 原语）。
- * 会话 transcript 三种投影同款渲染（renderHead +
- * filterTalkMessages + renderTranscriptOrHandle），实现物保留在 core talk 域，本 readable import 复用。
+ * 投影 class 由 readable 内部从 win.class 派生（本 readable 是 thread 多视角场景的协议
+ * 装配点；其它 class 受默认 `"default"` 强约束）。三种投影对应 `window` 数组里的 decl，渲染期
+ * `resolveWindowClass(_builtin/thread, 投影 class)` 据此决定该窗展示哪些 method。close 不再是
+ * method（已塌回 close 原语）。会话 transcript 多视角同款渲染（renderHead + filterTalkMessages +
+ * renderTranscriptOrHandle），实现物保留在 core talk 域，本 readable import 复用。
  */
 import type {
   ReadableContext,
@@ -70,7 +70,7 @@ export const resize: WindowMethod<unknown, ThreadWin> = {
         type: "number",
         required: true,
         enum: [0, 1, 2],
-        description: "自动压缩档位：0 不主动 / 1 适度 / 2 激进",
+        description: "自动压缩档位:0 不主动 / 1 适度 / 2 激进",
       },
     },
   exec: (_ctx, _self, before_win, args) => {
@@ -83,9 +83,9 @@ export const resize: WindowMethod<unknown, ThreadWin> = {
 const readable: ReadableModule<Data, ThreadWin> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ThreadWin>) => {
     const children: XmlNode[] = [];
-    const projectionClass = win.class === "this_thread" ? "this_thread" : "talk";
+    const projectionClass = win.class === "talk" ? "talk" : "thread";
 
-    if (projectionClass === "this_thread") {
+    if (projectionClass === "thread") {
       // TODO 展示 thread events & messages
     } else {
       const { visible: messages } = applyTranscriptViewport(self.data.messages, win.data?.transcriptViewport);
@@ -96,7 +96,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
   },
   window: [
     {
-      class: "this_thread",
+      class: "thread",
       object_methods: ["reply", "end", "todo"],
       window_methods: [setTranscript, compress, resize],
     },

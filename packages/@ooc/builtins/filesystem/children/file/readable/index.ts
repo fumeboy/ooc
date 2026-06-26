@@ -81,11 +81,11 @@ const readable: ReadableModule<Data, FileWin> = {
     } catch (error) {
       children.push(xmlElement("error", {}, [xmlText((error as Error).message)]));
     }
-    return { class: "file", content: children };
+    return { class: "default", content: children };
   },
   window: [
     {
-      class: "file",
+      class: "default",
       // 仅列实际注册的 method（issue 2026-06-26-object-guide-method-split 引入 cohesion 校验，
       // 悬空引用 fail-loud）；reload 历史声明未实现，已清。
       object_methods: ["edit"],
