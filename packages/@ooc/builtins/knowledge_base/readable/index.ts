@@ -16,7 +16,7 @@ export interface KnowledgeBaseWin {}
 
 const readable: ReadableModule<Data, KnowledgeBaseWin> = {
   readable: (_ctx: ReadableContext, _self: Data, _win: KnowledgeBaseWin) => ({
-    class: "default",
+    view: "default",
     content: [
       xmlElement("about", {}, [
         xmlText(
@@ -27,7 +27,7 @@ const readable: ReadableModule<Data, KnowledgeBaseWin> = {
   }),
   window: [
     {
-      class: "default",
+      view: "default",
       object_methods: ["open_knowledge"],
       window_methods: [],
     },

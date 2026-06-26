@@ -39,13 +39,13 @@ const readable: ReadableModule<Data, AgentWin> = {
   ) => {
     const body = self.data?.self ?? "";
     return {
-      class: "default",
+      view: "default",
       content: body.trim().length > 0 ? body : [],
     };
   },
   window: [
     {
-      class: "default",
+      view: "default",
       // 仅列实际注册的 method（issue 2026-06-26-object-guide-method-split 引入 cohesion 校验，
       // 悬空引用 fail-loud）；self 门面窗的真实 surface 由 isSelf 渲染器走 resolveObjectMethods 兜全。
       object_methods: ["talk"],

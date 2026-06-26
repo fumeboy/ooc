@@ -30,7 +30,7 @@ const readable: ReadableModule<Data, unknown> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, _win: OocObjectRef<unknown>) => {
     const skills = self.data?.skills ?? [];
     return {
-      class: "default",
+      view: "default",
       content: skills.map((s) =>
         xmlElement(
           "skill",
@@ -42,7 +42,7 @@ const readable: ReadableModule<Data, unknown> = {
   },
   window: [
     {
-      class: "default",
+      view: "default",
       object_methods: [],
       window_methods: [],
     },

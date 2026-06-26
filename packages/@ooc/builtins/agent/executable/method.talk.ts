@@ -115,8 +115,8 @@ async function createSuperThread(
     events: [],
     contextWindows: [
       // self-view ref —— super thread 自看入口（issue I 改动 3）；readable render 据此识别为
-      // super 视角投影（threadData.sessionId === SUPER_SESSION_ID 时 → "super"）。
-      { id: threadWindowIdOf(threadId), class: THREAD_CLASS_ID, createdAt: Date.now(), closable: false },
+      // super 视角投影。**issue J**:`window_view: "super"` 硬编码,不依赖 computeProjectionClass 推断。
+      { id: threadWindowIdOf(threadId), class: THREAD_CLASS_ID, window_view: "super", createdAt: Date.now(), closable: false },
       // callee agent 的 self 门面窗（agent.readable 渲身份）——issue I 顺手修 `class:"self"`→ agent class id。
       { id: calleeObjectId, class: "_builtin/agent", createdAt: Date.now(), closable: false },
     ],

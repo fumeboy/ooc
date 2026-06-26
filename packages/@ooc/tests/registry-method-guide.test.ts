@@ -58,10 +58,10 @@ describe("ClassRegistry method/guide cohesion", () => {
         guides: [makeGuide("foo")],
       },
       readable: {
-        readable: () => ({ class: "default", content: "" }),
+        readable: () => ({ view: "default", content: "" }),
         window: [
           {
-            class: "default",
+            view: "default",
             object_methods: [],
             guide_methods: ["foo"],
             window_methods: [
@@ -96,10 +96,10 @@ describe("ClassRegistry method/guide cohesion", () => {
         methods: [makeMethod("present")],
       },
       readable: {
-        readable: () => ({ class: "default", content: "" }),
+        readable: () => ({ view: "default", content: "" }),
         window: [
           {
-            class: "default",
+            view: "default",
             object_methods: ["missing"],
             window_methods: [],
           },
@@ -118,10 +118,10 @@ describe("ClassRegistry method/guide cohesion", () => {
         guides: [makeGuide("present")],
       },
       readable: {
-        readable: () => ({ class: "default", content: "" }),
+        readable: () => ({ view: "default", content: "" }),
         window: [
           {
-            class: "default",
+            view: "default",
             object_methods: [],
             guide_methods: ["missing"],
             window_methods: [],
@@ -141,10 +141,10 @@ describe("ClassRegistry method/guide cohesion", () => {
         guides: [makeGuide("g1")],
       },
       readable: {
-        readable: () => ({ class: "default", content: "" }),
+        readable: () => ({ view: "default", content: "" }),
         window: [
           {
-            class: "default",
+            view: "default",
             object_methods: ["m1"],
             guide_methods: ["g1"],
             window_methods: [

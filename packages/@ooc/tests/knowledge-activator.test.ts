@@ -13,10 +13,10 @@ import {
 import type { KnowledgeIndex, KnowledgeDoc } from "@ooc/core/types/knowledge";
 
 describe("activator.expr", () => {
-  it("parseTrigger window::<class>", () => {
+  it("parseTrigger window::<view>", () => {
     expect(parseTrigger("window::_builtin/agent/todo")).toEqual({
       kind: "window",
-      class: "_builtin/agent/todo",
+      view: "_builtin/agent/todo",
     });
   });
 
@@ -36,20 +36,20 @@ describe("activator.expr", () => {
     expect(() => parseTrigger("unknown::xyz")).toThrow(/unknown trigger/);
   });
 
-  it("evaluateTrigger window matches windowClasses", () => {
+  it("evaluateTrigger window matches windowViews", () => {
     const env: ActivationContext = {
-      windowClasses: new Set(["foo"]),
+      windowViews: new Set(["foo"]),
       methodForms: new Set(),
       activeIntents: new Set(),
       inSuper: false,
     };
-    expect(evaluateTrigger({ kind: "window", class: "foo" }, env)).toBe(true);
-    expect(evaluateTrigger({ kind: "window", class: "bar" }, env)).toBe(false);
+    expect(evaluateTrigger({ kind: "window", view: "foo" }, env)).toBe(true);
+    expect(evaluateTrigger({ kind: "window", view: "bar" }, env)).toBe(false);
   });
 
   it("evaluateTrigger super matches inSuper", () => {
     const a: ActivationContext = {
-      windowClasses: new Set(),
+      windowViews: new Set(),
       methodForms: new Set(),
       activeIntents: new Set(),
       inSuper: true,
@@ -65,7 +65,7 @@ describe("activator.expr", () => {
 
   it("evaluateTrigger intent matches activeIntents", () => {
     const env: ActivationContext = {
-      windowClasses: new Set(),
+      windowViews: new Set(),
       methodForms: new Set(),
       activeIntents: new Set(["create_file"]),
       inSuper: false,
@@ -117,7 +117,7 @@ describe("computeActivations", () => {
     ];
     const index: KnowledgeIndex = { byPath: new Map(docs.map((d) => [d.path, d])) };
     const env: ActivationContext = {
-      windowClasses: new Set(["foo"]),
+      windowViews: new Set(["foo"]),
       methodForms: new Set(),
       activeIntents: new Set(),
       inSuper: true,

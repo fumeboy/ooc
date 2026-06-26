@@ -22,7 +22,7 @@ describe("renderReadable 3-tier fallback (issue E)", () => {
   beforeEach(() => releaseSessionRegistry(SESSION));
   afterEach(() => releaseSessionRegistry(SESSION));
 
-  it("tier 1: render-fn hit returns source=render-fn with projectionClass", async () => {
+  it("tier 1: render-fn hit returns source=render-fn with projectionView", async () => {
     const reg = getSessionRegistry(SESSION);
     // pick a builtin with render fn: method_exec_form
     const ref = {
@@ -42,7 +42,7 @@ describe("renderReadable 3-tier fallback (issue E)", () => {
     });
     const result = await renderReadable(ref, reg, reg);
     expect(result.source).toBe("render-fn");
-    expect(result.projectionClass).toBe("default");
+    expect(result.projectionView).toBe("default");
     expect(Array.isArray(result.payload)).toBe(true);
   });
 

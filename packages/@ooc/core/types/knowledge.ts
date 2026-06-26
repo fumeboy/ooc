@@ -13,8 +13,8 @@ export type ActivationLevel = "show_description" | "show_content";
  * 激活规则：key 是 trigger 表达式，value 是该 trigger 命中后的最低激活级别。
  *
  * 支持三类 trigger 语法（详见 `activator.expr.ts`）：
- * - `window::<type>` —— 任意 open 的 window 满足该 type 时命中
- * - `method::<window_type>::<method>` —— 存在挂在该 window 类型上的同名 method_exec form
+ * - `window::<view>` —— context 中存在该 view 的 window 时命中
+ * - `method::<class>::<guide>` —— 存在挂该 class 上的 method_exec form（按 guide 名匹配）
  * - `super` —— 当前 thread 跑在 super session 中
  *
  * 多 trigger 命中取 **max**（show_content > show_description）。

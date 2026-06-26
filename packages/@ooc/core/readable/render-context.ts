@@ -33,16 +33,16 @@ export type ReadableSource = "render-fn" | "static-card" | "placeholder";
  *    - render-fn 命中 → 来自 ReadableProjection.content（XmlNode[] 或 string）。
  *    - static-card 命中 → readable.md 文本（string）。
  *    - placeholder → 固定占位 string。
- * - `source`：fallback 档位标识，便于 storybook / observability 区分。
+ * - `source`：fallback 档位标识,便于 storybook / observability 区分。
  * - `warning`：placeholder / static-card 路径上可选附加的人读提示。
- * - `projectionClass`：render-fn 路径才有——`ReadableProjection.class`，调用方可拿来填 `<window class=...>`。
+ * - `projectionView`：render-fn 路径才有——`ReadableProjection.view`,调用方可拿来填 `<window view=...>`。
  * - `nextWin`：render-fn 路径可选返回的新 win 投影态；调用方负责写回 ref.data（沿用旧 context.ts 行为）。
  */
 export interface ReadableResult {
   payload: string | XmlNode[];
   source: ReadableSource;
   warning?: string;
-  projectionClass?: string;
+  projectionView?: string;
   nextWin?: unknown;
 }
 
@@ -77,7 +77,7 @@ export async function renderReadable(
     return {
       payload: projection.content,
       source: "render-fn",
-      projectionClass: projection.class,
+      projectionView: projection.view,
       nextWin: projection.win,
     };
   }

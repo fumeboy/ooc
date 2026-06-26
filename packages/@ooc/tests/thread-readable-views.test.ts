@@ -52,6 +52,8 @@ describe("thread readable three-views (issue I)", () => {
       expect(selfRef).toBeDefined();
       expect(selfRef!.class).toBe("_builtin/agent/thread");
       expect(selfRef!.closable).toBe(false);
+      // issue J:thread.construct 显式写 window_view: "self"
+      expect(selfRef!.window_view).toBe("self");
     });
 
     it("self-view ref id 形如 `w_creator_<threadId>`", async () => {

@@ -58,11 +58,11 @@ const readable: ReadableModule<Data, SearchWin> = {
       ),
     );
 
-    return { class: "default", content: children };
+    return { view: "default", content: children };
   },
   window: [
     {
-      class: "default",
+      view: "default",
       object_methods: ["open_match"],
       window_methods: [],
     },

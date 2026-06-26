@@ -152,13 +152,13 @@ const readable: ReadableModule<Data, unknown> = {
       contextChildren.push(xmlElement("last_error", {}, [xmlText(d.lastError)]));
     }
     return {
-      class: "default",
+      view: "default",
       content: [xmlElement("context", {}, contextChildren)],
     };
   },
   window: [
     {
-      class: "default",
+      view: "default",
       object_methods: ["refine", "submit"],
       window_methods: [],
     },

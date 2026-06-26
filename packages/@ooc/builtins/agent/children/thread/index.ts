@@ -41,9 +41,9 @@ const construct: ObjectConstructor<Data> = {
       contextWindows: [
         // self-view ref —— thread 自看入口（issue I 改动 3）；id 经 threadWindowIdOf 派生
         // （= `w_creator_<threadId>`,沿用历史前缀）。readable render 据此 ref 识别 self 视角
-        // 投影 class（普通 → "self"、super flow → "super"）。
+        // 投影 view。**issue J**:`window_view: "self"` 硬编码,不依赖 computeProjectionClass 推断。
         // refcount.computeRefcount 的 self-ref guard（issue I）跳过此自指边,GC 不受影响。
-        { id: threadWindowIdOf(threadId), class: "_builtin/agent/thread", createdAt: Date.now(), closable: false },
+        { id: threadWindowIdOf(threadId), class: "_builtin/agent/thread", window_view: "self", createdAt: Date.now(), closable: false },
         // callee agent 的 self 门面窗（agent.readable 渲身份）——issue I 顺手修:原 `class:"self"`
         // 字面值在 class registry 内无注册、走 placeholder fallback,现改为正确的 agent class id。
         { id: args.calleeObjectId as string, class: "_builtin/agent", createdAt: Date.now(), closable: false },

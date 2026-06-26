@@ -5,8 +5,8 @@ activates_on:
   "object::root": "show_content"
 ---
 
-你能调的方法分两处。每条的一句描述、必填参数都在 `<window_classes>` 的对应 `<class>` 里声明——
-本篇不复述 brief，只给**索引 + 何时用哪条**（class 声明层不承载的元信息）。
+你能调的方法分两处。每条的一句描述、必填参数都在 `<window_views>` 的对应 `<view>` 里声明——
+本篇不复述 brief，只给**索引 + 何时用哪条**（view 声明层不承载的元信息）。
 
 `exec(method="<name>", title="…", args={…})` 调用；缺省 window_id = 你自己（self 窗）。
 调成员工具对象的方法时，window_id 指向对应成员窗。args 由本次调用直传，给齐即立即执行。
@@ -28,4 +28,4 @@ activates_on:
 - `runtime` 成员：建**全新对象**骨架 → `create_object`（仅业务 session）。
 - 接入**飞书** → `feishu_app` 成员的 `open_chat` / `open_doc`。
 
-每个 method 进入 exec 后，对应知识会自动激活；本篇只是入口索引，具体参数看 `<window_classes>` 里该 method 的 schema。
+每个 method 进入 exec 后，对应知识会自动激活；本篇只是入口索引，具体参数看 `<window_views>` 里该 method 的 schema。
