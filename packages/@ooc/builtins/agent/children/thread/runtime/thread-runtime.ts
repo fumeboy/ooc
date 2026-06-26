@@ -22,6 +22,7 @@ import type { OocObjectInstance, OocObjectRef } from "@ooc/core/runtime/ooc-clas
 import {
   type ObjectInsRegistry,
   getSessionRegistry,
+  DEFAULT_WINDOW_VIEW,
 } from "@ooc/core/runtime/object-registry.js";
 import { computeRefcount } from "@ooc/core/runtime/refcount.js";
 import { isSelfThreadWindow, threadWindowIdOf } from "@ooc/core/types/context-window.js";
@@ -129,7 +130,14 @@ export class ThreadRuntime implements RuntimeHandle {
     if (guideMethod) {
       return await this.execGuideMethod(ref, methodName, guideMethod, args);
     }
-    const windowMethod = this.registry.resolveWindowMethod(ref.class, ref.class, methodName);
+    // issue K 修复：resolveWindowMethod 第二参语义是 windowView（按 readable.window decl 的 view 字段匹配），
+    // 此前误传 ref.class → 永远 miss → 所有 window method dispatch 报 method-not-found。
+    // 用 ref.window_view ?? DEFAULT_WINDOW_VIEW 与 render-context.ts / `<window>` XML view attribute 同步。
+    const windowMethod = this.registry.resolveWindowMethod(
+      ref.class,
+      ref.window_view ?? DEFAULT_WINDOW_VIEW,
+      methodName,
+    );
     if (windowMethod) {
       await this.execWindowMethod(ref, windowMethod, args);
       return {};
