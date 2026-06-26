@@ -125,4 +125,19 @@ describe("dispatch surface gate (issue M)", () => {
       expect(vp?.tail).toBe(5);
     });
   });
+
+  describe("case E: super-view ref + 业务 sessionId 调 reflect → defense-in-depth", () => {
+    it("caller 伪造 super-view ref 在业务 session 调 scan_changes —— surface 闸通过、requireSuperSession 后置 fail", async () => {
+      const t = await makeThread(SESSION); // 业务 sessionId
+      // 伪造 super-view ref（攻击者绕开 surface 闸的尝试——窗 surface 闸看 view、不看 ctx.sessionId）
+      attachPeerThreadRef(t, "peer-fake-super", SESSION, "super");
+      const runtime = ThreadRuntime.fromThread(t, { worldDir: "" });
+      // scan_changes 在 super decl object_methods 内 → surface 闸通过
+      // 但 method.exec 内 requireSuperSession 检查 ctx.sessionId === SUPER_SESSION_ID → fail
+      await expect(
+        runtime.exec("peer-fake-super", "scan_changes", {}),
+      ).rejects.toThrow(/forbidden in non-super session/);
+      // 验证错误不是 surface 闸（确保 defense-in-depth 后置闸真起作用、不是 surface 提前拦截）
+    });
+  });
 });
