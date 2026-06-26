@@ -236,6 +236,10 @@ const createPrForVersionedMethod: ObjectMethod<ThreadContext> = {
       authorObjectId: callerObjectId,
       authorThreadId: self.data.id,
       writeFiles: async ({ worktreePath }) => {
+        const segs = nestedObjectPath(callerObjectId);
+        const objectDirInWt = join(worktreePath, "objects", ...segs);
+        const dataVersionedPath = join(objectDirInWt, "data.versioned.json");
+        let dataVersioned: Record<string, unknown> | undefined;
         for (const d of toSend) {
           if (d.field === "self") {
             // newValue 是 JSON-string-encoded（scanFlowChanges JSON.stringify 过）。解 1 层。
@@ -245,13 +249,34 @@ const createPrForVersionedMethod: ObjectMethod<ThreadContext> = {
             } catch {
               selfText = d.newValue;
             }
-            const segs = nestedObjectPath(callerObjectId);
-            const dest = join(worktreePath, "objects", ...segs, "self.md");
+            const dest = join(objectDirInWt, "self.md");
             await mkdir(dirname(dest), { recursive: true });
             const { writeFile: writeF } = await import("node:fs/promises");
             await writeF(dest, selfText, "utf8");
+            continue;
           }
-          // TODO(issue-C): 其他 versioned 字段 → data.versioned.json 写入
+          // 非 self versioned 字段 → data.versioned.json (issue C 收尾)。
+          // 多字段 merge：lazy 读现存 → 累积 → 在循环外一次写回。
+          if (dataVersioned === undefined) {
+            try {
+              const raw = await readFile(dataVersionedPath, "utf8");
+              dataVersioned = JSON.parse(raw) as Record<string, unknown>;
+            } catch {
+              dataVersioned = {};
+            }
+          }
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(d.newValue);
+          } catch {
+            parsed = d.newValue;
+          }
+          dataVersioned[d.field] = parsed;
+        }
+        if (dataVersioned !== undefined) {
+          await mkdir(objectDirInWt, { recursive: true });
+          const { writeFile: writeF } = await import("node:fs/promises");
+          await writeF(dataVersionedPath, JSON.stringify(dataVersioned, null, 2), "utf8");
         }
       },
     });
