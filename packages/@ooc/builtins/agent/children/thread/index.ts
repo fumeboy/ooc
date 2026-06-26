@@ -11,6 +11,7 @@ import type {
   LifecycleContext,
   ObjectLifecycleHook,
 } from "@ooc/core/types";
+import { threadWindowIdOf } from "@ooc/core/types/context-window.js";
 import type { ThreadContext, ThreadMessage } from "./types.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
@@ -27,8 +28,9 @@ const construct: ObjectConstructor<Data> = {
     msg: { type: "string", required: false, description: "message content" },
   },
   exec: async (ctx: ConstructorContext, args: Record<string, unknown>): Promise<Data> => {
+    const threadId = generateThreadId();
     return {
-      id: generateThreadId(),
+      id: threadId,
       calleeObjectId: args.calleeObjectId as string,
       sessionId: ctx.sessionId,
       status: "running",
@@ -37,7 +39,14 @@ const construct: ObjectConstructor<Data> = {
       ],
       events: [],
       contextWindows: [
-        { id: args.calleeObjectId as string, class: "self", createdAt: Date.now(), closable: false },
+        // self-view ref —— thread 自看入口（issue I 改动 3）；id 经 threadWindowIdOf 派生
+        // （= `w_creator_<threadId>`,沿用历史前缀）。readable render 据此 ref 识别 self 视角
+        // 投影 class（普通 → "self"、super flow → "super"）。
+        // refcount.computeRefcount 的 self-ref guard（issue I）跳过此自指边,GC 不受影响。
+        { id: threadWindowIdOf(threadId), class: "_builtin/agent/thread", createdAt: Date.now(), closable: false },
+        // callee agent 的 self 门面窗（agent.readable 渲身份）——issue I 顺手修:原 `class:"self"`
+        // 字面值在 class registry 内无注册、走 placeholder fallback,现改为正确的 agent class id。
+        { id: args.calleeObjectId as string, class: "_builtin/agent", createdAt: Date.now(), closable: false },
         { id: "_builtin/filesystem", class: "_builtin/filesystem", createdAt: Date.now(), closable: false },
         { id: "_builtin/terminal", class: "_builtin/terminal", createdAt: Date.now(), closable: false },
         { id: "_builtin/interpreter", class: "_builtin/interpreter", createdAt: Date.now(), closable: false },

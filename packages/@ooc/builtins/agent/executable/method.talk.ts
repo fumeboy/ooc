@@ -31,6 +31,7 @@ import { join } from "node:path";
 import { objectDir, toJson } from "@ooc/core/persistable/common.js";
 import { createFlowSession } from "@ooc/core/persistable/flow-object.js";
 import { generateMessageId, generateThreadId } from "@ooc/builtins/agent/children/thread/executable/utils.js";
+import { threadWindowIdOf } from "@ooc/core/types/context-window.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { Data } from "../types.js";
 
@@ -100,7 +101,8 @@ async function createSuperThread(
     : [];
 
   // 最小 ThreadContext shape（与 thread/persistable save 落盘形态一致）。
-  // contextWindows 当前不预填——super flow scheduler 唤醒时按需 hydrate。
+  // contextWindows 预填 self-view ref + callee agent 门面窗（issue I 改动 3 + 顺手修 `class:"self"`
+  // 字面 bug）；其它工具窗 super flow scheduler 唤醒时按需 hydrate。
   // callerSessionId（issue G）= caller object 所在业务 sessionId；super flow 内 reflect method 经
   // self.data.callerSessionId 直读反查 caller 业务 flow。
   const thread = {
@@ -112,7 +114,11 @@ async function createSuperThread(
     messages,
     events: [],
     contextWindows: [
-      { id: calleeObjectId, class: "self", createdAt: Date.now(), closable: false },
+      // self-view ref —— super thread 自看入口（issue I 改动 3）；readable render 据此识别为
+      // super 视角投影（threadData.sessionId === SUPER_SESSION_ID 时 → "super"）。
+      { id: threadWindowIdOf(threadId), class: THREAD_CLASS_ID, createdAt: Date.now(), closable: false },
+      // callee agent 的 self 门面窗（agent.readable 渲身份）——issue I 顺手修 `class:"self"`→ agent class id。
+      { id: calleeObjectId, class: "_builtin/agent", createdAt: Date.now(), closable: false },
     ],
   };
   await writeFile(join(dir, "thread.json"), toJson(thread), "utf8");
