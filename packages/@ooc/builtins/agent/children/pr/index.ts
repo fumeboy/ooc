@@ -1,8 +1,14 @@
 /**
  * pr —— ooc class。reviewer 收到的 PR 评审窗。
  *
- * 流程：super(foo) 创建 feat-branch + 落 PR → runtime 实例化 pr object 投递给 reviewer →
- * reviewer agent 经 comment / approve / reject method 操作。
+ * 流程：super(foo) 创建 feat-branch + 落 PR-Issue → runtime 实例化 pr object 投递给 reviewer →
+ * reviewer agent 经 comment / approve / reject method 操作 → 触发 `onReviewerAction` finalizer。
+ *
+ * issue D 补全：
+ * - persistable inline：PR window data 随载体 thread 落盘；持久化底座 = PR-Issue
+ *   `stones/.stones_repo/.pr-issues/<id>.json`（core/persistable/pr-issue.ts）。
+ * - approve / reject / comment 内部触发 `onReviewerAction` finalizer → 聚合投票 →
+ *   按 worldConfig.prAutoMerge 决定 auto / manual 合入。
  */
 import type { OocClass, OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type {
@@ -14,8 +20,10 @@ import type {
   ExecutableModule,
   ObjectMethod,
   ExecutableContext,
+  PersistableModule,
 } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
+import { onReviewerAction } from "./approval-flow.js";
 import { type Data, type Comment, VERSIONED_FIELDS } from "./types.js";
 
 const construct: ObjectConstructor<Data> = {
@@ -43,13 +51,20 @@ const commentMethod: ObjectMethod<Data> = {
   schema: {
     body: { type: "string", required: true, description: "comment 正文" },
   },
-  exec: (ctx: ExecutableContext, self, args: { body?: string }) => {
+  exec: async (ctx: ExecutableContext, self, args: { body?: string }) => {
     const comment: Comment = {
       authorObjectId: ctx.object.id,
       body: args.body ?? "",
       at: Date.now(),
     };
     self.data.comments.push(comment);
+    // 触发 finalizer：comment 不算决议，但落账 reviews 流水（issue D 落地裁决 10）
+    try {
+      await onReviewerAction(ctx.worldDir, self.data.prId, ctx.object.id, "comment", args.body);
+    } catch (e) {
+      // PR-Issue 落账失败（可能 PR-Issue 已不存在）— 不阻断 method
+      console.warn(`[pr.comment] onReviewerAction failed: ${(e as Error).message}`);
+    }
     return { message: "[pr] comment added" };
   },
 };
@@ -58,8 +73,13 @@ const approveMethod: ObjectMethod<Data> = {
   name: "approve",
   description: "Approve this PR.",
   schema: {},
-  exec: (_ctx: ExecutableContext, self) => {
+  exec: async (ctx: ExecutableContext, self) => {
     self.data.status = "approved";
+    try {
+      await onReviewerAction(ctx.worldDir, self.data.prId, ctx.object.id, "approve");
+    } catch (e) {
+      console.warn(`[pr.approve] onReviewerAction failed: ${(e as Error).message}`);
+    }
     return { message: "[pr] approved" };
   },
 };
@@ -70,7 +90,7 @@ const rejectMethod: ObjectMethod<Data> = {
   schema: {
     reason: { type: "string", required: false, description: "拒绝原因" },
   },
-  exec: (ctx: ExecutableContext, self, args: { reason?: string }) => {
+  exec: async (ctx: ExecutableContext, self, args: { reason?: string }) => {
     self.data.status = "rejected";
     if (args.reason) {
       self.data.comments.push({
@@ -78,6 +98,11 @@ const rejectMethod: ObjectMethod<Data> = {
         body: `[reject] ${args.reason}`,
         at: Date.now(),
       });
+    }
+    try {
+      await onReviewerAction(ctx.worldDir, self.data.prId, ctx.object.id, "reject", args.reason);
+    } catch (e) {
+      console.warn(`[pr.reject] onReviewerAction failed: ${(e as Error).message}`);
     }
     return { message: "[pr] rejected" };
   },
@@ -115,12 +140,24 @@ const readable: ReadableModule<Data, unknown> = {
   ],
 };
 
+/**
+ * inline persistable：PR window data 随载体 thread 落盘——不写独立 data.json。
+ *
+ * 持久化底座（不可丢失）= PR-Issue `stones/.stones_repo/.pr-issues/<id>.json`，
+ * 由 `core/persistable/pr-issue.ts` 维护。PR window 是 PR-Issue 的 view，inline 模式
+ * 即可——丢了 reviewer 重 hydrate 时按 prId 重新拉。
+ */
+const persistable: PersistableModule<Data> = {
+  // inline 模式：留空 save/load；core 会跳过、由父对象（thread）整体落盘。
+};
+
 export const Class: OocClass<Data> = {
   id: "_builtin/agent/pr",
   construct,
   executable,
   readable,
   versioned_fields: VERSIONED_FIELDS,
+  persistable,
 };
 
 export type { Data, Comment } from "./types.js";

@@ -22,6 +22,7 @@ import type {
 import type { ReadonlySelfProxy } from "@ooc/core/types";
 import { xmlText, type XmlNode } from "@ooc/core/types/xml.js";
 import { OocObjectRef } from "@ooc/core/types/context-window.js";
+import { SUPER_SESSION_ID } from "@ooc/core/types/constants.js";
 import {
   DEFAULT_TRANSCRIPT_VIEWPORT,
   mergeTranscriptViewport,
@@ -83,10 +84,20 @@ export const resize: WindowMethod<unknown, ThreadWin> = {
 const readable: ReadableModule<Data, ThreadWin> = {
   readable: (_ctx: ReadableContext, self: ReadonlySelfProxy<Data>, win: OocObjectRef<ThreadWin>) => {
     const children: XmlNode[] = [];
-    const projectionClass = win.class === "talk" ? "talk" : "thread";
+    // computeProjectionClass 前置判定（issue D + B 命名）：super flow 内 self-view → reflect_request
+    // （投影携带 4 个分发器 method）。其他场景按 B 的 win.class 派生：talk → talk，否则 → thread。
+    const projectionClass =
+      self.data.sessionId === SUPER_SESSION_ID
+        ? "reflect_request"
+        : win.class === "talk"
+          ? "talk"
+          : "thread";
 
-    if (projectionClass === "thread") {
-      // TODO 展示 thread events & messages
+    if (projectionClass === "thread" || projectionClass === "reflect_request") {
+      // 展示 transcript（reflect_request 视图与 self-view 同款渲染 messages；
+      // scan_changes 结果由 method 调用结果显式注入，不在 readable 投影里渲）。
+      const { visible: messages } = applyTranscriptViewport(self.data.messages, win.data?.transcriptViewport);
+      children.push(...messages.map((m) => xmlText(m.from === "caller" ? `[self:] ${m.content}` : `[callee:] ${m.content}`)));
     } else {
       const { visible: messages } = applyTranscriptViewport(self.data.messages, win.data?.transcriptViewport);
       children.push(...messages.map((m) => xmlText(m.from === "caller" ? `[self:] ${m.content}` : `[callee:] ${m.content}`)));
@@ -103,6 +114,20 @@ const readable: ReadableModule<Data, ThreadWin> = {
     {
       class: "talk",
       object_methods: ["say"],
+      window_methods: [setTranscript, compress, resize],
+    },
+    {
+      // issue D：super flow self-view 投影。surface 4 个分发器 object_methods（一步到位语义）
+      // + say/reply（与 talk decl 同接口）。window_methods 与 talk decl 同。
+      class: "reflect_request",
+      object_methods: [
+        "scan_changes",
+        "create_pr_for_versioned",
+        "sediment_unversioned",
+        "create_pr_for_class_edits",
+        "say",
+        "reply",
+      ],
       window_methods: [setTranscript, compress, resize],
     },
   ],
