@@ -71,9 +71,9 @@ export interface OocClass<Data = any, Win = any> {
    * `VERSIONED_FIELDS`，`index.ts` 装配时引用注入。
    *
    * 列出的字段是 class definition 的一部分（与 executable/readable 同级）：runtime save
-   * 按 VERSIONED_FIELDS 字段级路由——版本化字段经 reflectable 分发器走 PR 合入 stone
+   * 按 VERSIONED_FIELDS 字段级路由——版本化字段经 super flow 内的 reflect method 走 PR 合入 stone
    * canonical；其余字段（unversioned）由 method 写在 flow 暂存内，session 结束（或显式
-   * `talk(super)`）由分发器合入 pool / 持久化语义层。method 路径**不**直接写 stone/pool。
+   * `talk(super)`）由 reflect method 链路合入 pool / 持久化语义层。method 路径**不**直接写 stone/pool。
    *
    * 缺省 `[]`（全部字段非版本化）。VERSIONED_FIELDS 本身不可在 flow 内 mutate——改它即
    * "改 class 源码"，走 PR。

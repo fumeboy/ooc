@@ -10,7 +10,7 @@
  *   同时整份 data 也由 runtime 的缺省 `data.json` 落盘（writeFile 走外层 saveObjectData），
  *   两路并存（外层负责 data.json 全字段；本 save 负责把 self 字段映射成 self.md 文件名）。
  *
- * - `scope="stone"`（仅 reflectable 分发器调用，issue D 主体）：写 `stones/main/objects/<id>/self.md`
+ * - `scope="stone"`（仅 super flow 内的 reflect method 调用，issue D 主体）：写 `stones/main/objects/<id>/self.md`
  *   作为 canonical 版本化值。**本 issue 不主动以此 scope 调用**——仅实现兼容入口。
  *
  * - `scope="pool"`：N/A（agent 没有 pool 字段）。
@@ -33,7 +33,7 @@ const persistable: PersistableModule<Data> = {
   save: async (ctx: PersistableContext, data: Data) => {
     if (ctx.scope === "pool") return; // agent 无 pool 字段；no-op
     if (ctx.scope === "stone") {
-      // reflectable 分发器调用（issue D）；直写 stones/main/objects/<id>/self.md，bypass session worktree。
+      // super flow 内的 reflect method 调用（issue D）；直写 stones/main/objects/<id>/self.md，bypass session worktree。
       const mainRef: StoneObjectRef = { baseDir: ctx.baseDir, objectId: ctx.objectId };
       await writeSelf(mainRef, data.self ?? "");
       return;

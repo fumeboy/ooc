@@ -1,7 +1,7 @@
 /**
  * hydrate snapshot —— 记录某 session hydrate 完成时每个对象每个字段的 content hash + stone HEAD sha。
  *
- * issue C 倒灌（issue D 依赖）：scan_changes 增量检测的基础。reflectable 分发器在 session
+ * issue C 倒灌（issue D 依赖）：scan_changes 增量检测的基础。reflectable 反思链路在 session
  * 结束（或显式 `talk(super)`）时对照 snapshot 找出哪些字段「自 hydrate 以来变过」，
  * 决定走 stone PR 还是 pool 合入。
  *

@@ -3,7 +3,7 @@
  *
  * `scope` 字段（issue C 引入）显式标记本次 save/load 写哪一层：
  *   - "flow"  ：本 session 暂存（默认；method 路径恒为 flow）。
- *   - "stone" ：版本化字段的 canonical 落点（仅 reflectable 分发器后续以此 scope 调用，issue D 主体）。
+ *   - "stone" ：版本化字段的 canonical 落点（仅 super flow 内的 reflect method 后续以此 scope 调用，issue D 主体）。
  *   - "pool"  ：sediment-only 路径（knowledge 等；普通 object data 不走 pool）。
  *
  * 三层物理布局裁决参见 `.ooc-world-meta/.../children/persistable/self.md` 核心 1-N。
@@ -24,7 +24,7 @@ export interface PersistableContext {
    *
    * - method 路径调用 save 时 runtime 注入 "flow"（保留向后兼容：旧 save 实现可忽略此字段，
    *   作为 "flow" 默认行为，与 method 写一律落 flow 暂存的契约一致）。
-   * - reflectable 分发器以 scope="stone"/"pool" 重调 save（issue D 主体）；本 issue 仅实现
+   * - reflectable 反思链路以 scope="stone"/"pool" 重调 save（issue D 主体）；本 issue 仅实现
    *   兼容入口，core runtime 不主动以 stone/pool scope 调用。
    */
   scope: PersistableScope;

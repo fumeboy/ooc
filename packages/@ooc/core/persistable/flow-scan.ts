@@ -1,5 +1,5 @@
 /**
- * flow-scan —— 扫描 flow 暂存内的字段级 / class 源码改动，为 reflectable 分发器 method
+ * flow-scan —— 扫描 flow 暂存内的字段级 / class 源码改动，为 reflect method 链路
  * `scan_changes` 提供清单（issue D 落地裁决 5）。
  *
  * 三组输出：

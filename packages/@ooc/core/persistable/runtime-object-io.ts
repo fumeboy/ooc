@@ -5,7 +5,7 @@
  *
  * 核心机制（issue C 三层重定位）：
  * - **落盘**：`saveObjectData` 默认 scope="flow"——method 路径恒落 flow 暂存（`flows/<sid>/objects/<id>/data.json`）。
- *   reflectable 分发器后续以 scope="stone"/"pool" 重调（issue D 主体）。class 自声明 save 时
+ *   reflectable 反思链路后续以 scope="stone"/"pool" 重调（issue D 主体）。class 自声明 save 时
  *   runtime 传入 `ctx.scope`，旧实现可忽略此字段（兼容 = "flow" 默认）。
  * - **hydrate**：顺序 stone canonical + pool sediment + flow override（flow 覆盖一切）；
  *   merge 后入 session 对象表。完成后写 `.hydrate-snapshot.json`（字段 hash），供 issue D 增量检测用。
@@ -63,7 +63,7 @@ export function splitByVersioned<D extends Record<string, unknown>>(
  * 内存可见性：method exec 拿到的 self 是 session 对象表中 instance.data 的引用，mutate 立刻
  * 在 session 对象表生效（A 区核心 4 单实例 map）；本函数只负责把内存值持久化到磁盘。
  *
- * **本 issue 不调用 scope="stone"/"pool" 路径**——reflectable 分发器（issue D）后续以这两个
+ * **本 issue 不调用 scope="stone"/"pool" 路径**——reflectable 反思链路（issue D）后续以这两个
  * scope 重调本函数（或自定义 save）实现 PR / pool 合入。
  */
 export async function saveObjectData(
@@ -77,7 +77,7 @@ export async function saveObjectData(
   await mkdir(dir, { recursive: true });
 
   // 1. flow working copy：单 data.json 持整份 data（含 versioned + unversioned）。
-  //    本 issue 仅落 scope=flow；其他 scope 留给 issue D 分发器。
+  //    本 issue 仅落 scope=flow；其他 scope 留给 issue D reflect method。
   if (scope === "flow") {
     await writeFile(join(dir, "data.json"), toJson(inst.data), "utf8");
     await writeFlowMeta(dir, inst.class);
