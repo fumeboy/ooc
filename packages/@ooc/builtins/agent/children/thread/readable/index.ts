@@ -60,34 +60,6 @@ const setTranscript: WindowMethod<Data, ThreadWin> = {
   },
 };
 
-export const compress: WindowMethod<unknown, ThreadWin> = {
-  name: "compress",
-  description: "压缩本 thread 历史信息",
-  schema: {},
-  exec: (_ctx, _self, before_win) => {
-    // TODO 执行一次信息总结
-    return { ...before_win };
-  },
-};
-
-/** thread 窗 resize：设自动压缩档位 autoCompressLevel（0 不主动 / 1 适度 / 2 激进）。 */
-export const resize: WindowMethod<unknown, ThreadWin> = {
-  name: "resize",
-  description: "调本 thread 历史信息的自动压缩档位 level:0=不主动压缩,1=适度,2=激进(越高越早自动折叠早期历史)",
-  schema: {
-      level: {
-        type: "number",
-        required: true,
-        enum: [0, 1, 2],
-        description: "自动压缩档位:0 不主动 / 1 适度 / 2 激进",
-      },
-    },
-  exec: (_ctx, _self, before_win, args) => {
-    // TODO 按照新的自动档位进行一次压缩
-    return { ...before_win, autoCompressLevel: args.level ?? 0 };
-  },
-};
-
 /**
  * 投影 view 算法（issue J:角色降级为 fallback 兜底）：
  *
@@ -130,14 +102,14 @@ const readable: ReadableModule<Data, ThreadWin> = {
       // surface: 仅 say（caller 向 thread 说话）。
       view: "default",
       object_methods: ["say"],
-      window_methods: [setTranscript, compress, resize],
+      window_methods: [setTranscript],
     },
     {
       // self —— thread 自看视角（self-view ref）
       // surface: reply / end / todo（thread 对自己的 method:回话给 creator / 结束 / 立 todo）。
       view: "self",
       object_methods: ["reply", "end", "todo"],
-      window_methods: [setTranscript, compress, resize],
+      window_methods: [setTranscript],
     },
     {
       // super —— super flow self-view 投影（sessionId === SUPER_SESSION_ID 时命中）
@@ -153,7 +125,7 @@ const readable: ReadableModule<Data, ThreadWin> = {
         "sediment_unversioned",
         "create_pr_for_class_edits",
       ],
-      window_methods: [setTranscript, compress, resize],
+      window_methods: [setTranscript],
     },
   ],
 };

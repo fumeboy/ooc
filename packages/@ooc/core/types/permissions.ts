@@ -11,7 +11,7 @@ export type PermissionDecision =
  * thinkloop 在分派 tool call 前组装的待审计载荷。
  *
  * - exec: method = args.method (实际 OOC method 名); windowId = args.window_id (目标 window);
- *   args = args.args (method 的业务参数)。compress/resize 是 class 自实现的 window method，经此路 exec 派发。
+ *   args = args.args (method 的业务参数)。
  * - close / wait: method = toolName 自身; windowId / args 视情况填
  */
 export type PendingToolCall = {

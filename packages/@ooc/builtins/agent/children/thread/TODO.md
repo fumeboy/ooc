@@ -135,7 +135,7 @@ const persistable: PersistableModule = {
   `core/thinkable/context/__tests__/attention-tiering.test.ts`、
   `core/readable/__tests__/transcript-viewport-integration.test.ts`、
   `builtins/agent/children/thread/__tests__/{talk-delivery,thread-say}.test.ts`、
-  `tests/e2e/backend/{context-compression-p0c-typed,plan-share-parent-child}.e2e.test.ts`、
+  `tests/e2e/backend/plan-share-parent-child.e2e.test.ts`、
   `tests/integration/{wait-state-transition,ooc6-object-unification}` 等。
 
 ### conversationId 去状态化
