@@ -3,7 +3,7 @@ import type { ObjectConstructor } from "@ooc/core/types";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import persistable from "./persistable/index.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 
 const construct: ObjectConstructor<Data> = {
   description: "Create an agent instance with an identity (self.md text).",
@@ -25,6 +25,7 @@ export const Class: OocClass<Data> = {
   executable,
   readable,
   persistable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

@@ -19,7 +19,7 @@ import {
 } from "./executable/grep-impl.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
-import type { Data, SearchMatch } from "./types.js";
+import { type Data, type SearchMatch, VERSIONED_FIELDS } from "./types.js";
 
 const SEARCH_MAX_MATCHES = 200;
 
@@ -154,6 +154,7 @@ export const Class: OocClass<Data> = {
   },
   executable,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

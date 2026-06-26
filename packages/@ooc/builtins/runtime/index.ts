@@ -9,12 +9,13 @@
 import type { OocClass } from "@ooc/core/runtime/ooc-class.js";
 import executable from "./executable/index.js";
 import readable from "./readable/index.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 
 export const Class: OocClass<Data> = {
   id: "_builtin/runtime",
   executable,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

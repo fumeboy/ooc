@@ -16,7 +16,7 @@ import type {
   ReadonlySelfProxy,
 } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 
 const construct: ObjectConstructor<Data> = {
   description: "Open an empty skill index (populated by thinkable at context render time).",
@@ -53,6 +53,7 @@ export const Class: OocClass<Data> = {
   id: "_builtin/agent/skill_index",
   construct,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data, SkillEntry } from "./types.js";

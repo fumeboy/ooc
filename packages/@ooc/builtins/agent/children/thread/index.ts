@@ -16,7 +16,7 @@ import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import persistable from "./persistable/index.js";
 import thinkable from "./thinkable/index.js";
-import type { Data } from "./types.js";
+import { type Data, VERSIONED_FIELDS } from "./types.js";
 import { generateMessageId, generateThreadId } from "./executable/utils.js";
 
 const construct: ObjectConstructor<Data> = {
@@ -74,6 +74,7 @@ export const Class: OocClass<Data> = {
   persistable,
   thinkable,
   unactive,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data } from "./types.js";

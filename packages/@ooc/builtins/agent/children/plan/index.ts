@@ -13,7 +13,7 @@ import type {
   ExecutableContext,
 } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText } from "@ooc/core/types/xml.js";
-import type { Data, PlanStep } from "./types.js";
+import { type Data, type PlanStep, VERSIONED_FIELDS } from "./types.js";
 
 function generateStepId(): string {
   return `step_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -85,6 +85,7 @@ export const Class: OocClass<Data> = {
   construct,
   executable,
   readable,
+  versioned_fields: VERSIONED_FIELDS,
 };
 
 export type { Data, PlanStep } from "./types.js";
