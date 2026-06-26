@@ -321,4 +321,94 @@ describe("issue D reflectable redesign", () => {
       expect(agg.approved).toBe(false);
     });
   });
+
+  /**
+   * Wiring assertion (issue F)：scan_changes method 经
+   * `getSessionRegistry(sid).resolveVersionedFields(classId)` 解析 versionedFields 后
+   * 调 `scanFlowChanges`——验证 wiring 真正接通（防 builtin copyFrom 时序问题致空、
+   * 防 import 路径 typo），单测无法捕这层。
+   *
+   * 构造：agent 实例 in biz session 改 `.self` 字段（mock saveObjectData 经 flow data.json）。
+   * 在 super session 内调 scan_changes method → 断言 `versioned_dirty` 桶非空且含 `self` 字段。
+   */
+  describe("reflect-wiring (issue F: scanChanges 经 registry.resolveVersionedFields 接通)", () => {
+    let baseDir: string;
+    beforeAll(async () => {
+      baseDir = await mkdtemp(join(tmpdir(), "ooc-reflect-wiring-"));
+      await ensureBareSkeleton(baseDir);
+    });
+    afterAll(async () => {
+      await rm(baseDir, { recursive: true, force: true });
+    });
+
+    it("scan_changes returns versioned_dirty containing self for agent classId", async () => {
+      // 触发 builtin class registry 装配（_builtin/agent.versioned_fields = ["self"]）
+      await import("@ooc/core/runtime/object-register.builtins");
+
+      const callerObjectId = "agent_wiring_x";
+      const bizSid = "biz-wiring";
+
+      // 1. 业务 session flow：写 .flow.json (class=_builtin/agent) + data.json (改过 self)
+      const flowObjDir = join(baseDir, "flows", bizSid, "objects", callerObjectId);
+      await mkdir(flowObjDir, { recursive: true });
+      await writeFile(
+        join(flowObjDir, ".flow.json"),
+        JSON.stringify({ class: "_builtin/agent" }),
+        "utf8",
+      );
+      await writeFile(
+        join(flowObjDir, "data.json"),
+        JSON.stringify({ self: "NEW SELF VERSIONED", notes: "scratch" }),
+        "utf8",
+      );
+
+      // 2. stones/main canonical：写 旧 self
+      const stoneDir = join(baseDir, "stones", "main", "objects", callerObjectId);
+      await mkdir(stoneDir, { recursive: true });
+      await writeFile(
+        join(stoneDir, "data.json"),
+        JSON.stringify({ self: "OLD SELF" }),
+        "utf8",
+      );
+
+      // 3. 在 super session 内调 scan_changes method
+      const { reflectMethods } = await import(
+        "@ooc/builtins/agent/children/thread/executable/method.reflect.js"
+      );
+      const scanChangesMethod = reflectMethods.find((m) => m.name === "scan_changes");
+      expect(scanChangesMethod).toBeDefined();
+
+      const ctx = {
+        object: { id: "super-thread-1", class: "_builtin/agent/thread" },
+        runtime: {},
+        reportDataEdit: async () => {},
+        args: {},
+        dir: "",
+        worldDir: baseDir,
+        sessionId: SUPER_SESSION_ID,
+      } as any;
+      // thread.data.calleeObjectId = caller agent（super flow 内 thread 协议）
+      const self = { data: { calleeObjectId: callerObjectId, id: "super-thread-1" } } as any;
+
+      const result = await scanChangesMethod!.exec(ctx, self, {});
+
+      // 断言：versioned_dirty 桶非空且含 self 字段
+      const versionedDirty = (result as any).data.versioned_dirty as Array<{
+        sessionId: string;
+        field: string;
+      }>;
+      expect(versionedDirty.length).toBeGreaterThan(0);
+      const selfEntry = versionedDirty.find((d) => d.field === "self");
+      expect(selfEntry).toBeDefined();
+      expect(selfEntry!.sessionId).toBe(bizSid);
+
+      // notes 是非版本化字段 → unversioned_dirty 应含 notes
+      const unversionedDirty = (result as any).data.unversioned_dirty as Array<{
+        sessionId: string;
+        field: string;
+      }>;
+      const notesEntry = unversionedDirty.find((d) => d.field === "notes");
+      expect(notesEntry).toBeDefined();
+    });
+  });
 });

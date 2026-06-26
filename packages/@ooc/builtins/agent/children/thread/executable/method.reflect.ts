@@ -12,7 +12,7 @@
  *   4. create_pr_for_class_edits(paths,title) — class 源码改动 → feat-branch PR
  *
  * 当前实施版（issue C 未合主干）简化点：
- *   - versioned 字段判定硬编码 agent.self（详见 flow-scan.getVersionedFields TODO）；
+ *   - versioned 字段判定经 `ClassRegistry.resolveVersionedFields(classId)` 解析（issue F 落地后）；
  *   - reviewer thread 投递留 followup（仅 createPrIssue 落账，不实例化 pr window 进 reviewer 的
  *     thread context）；
  *   - 缺省 fields = 全部 dirty 字段；缺省 paths = 全部 class edits。
@@ -28,7 +28,7 @@ import {
   type FieldDiff,
   type ClassEditEntry,
 } from "@ooc/core/persistable/index.js";
-import { iterateSessionObjectTable } from "@ooc/core/runtime/object-registry.js";
+import { iterateSessionObjectTable, getSessionRegistry } from "@ooc/core/runtime/object-registry.js";
 import { mkdir, copyFile, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { objectDir, nestedObjectPath } from "@ooc/core/persistable/common.js";
@@ -117,7 +117,9 @@ const scanChangesMethod: ObjectMethod<ThreadContext> = {
       }
       if (!classId) continue;
 
-      const result = await scanFlowChanges(ctx.worldDir, sid, callerObjectId, classId);
+      const registry = getSessionRegistry(sid);
+      const versionedFields = registry.resolveVersionedFields(classId);
+      const result = await scanFlowChanges(ctx.worldDir, sid, callerObjectId, versionedFields);
       for (const d of result.versionedDirty) {
         allVersionedDirty.push({ sessionId: sid, ...d });
       }
@@ -208,7 +210,9 @@ const createPrForVersionedMethod: ObjectMethod<ThreadContext> = {
         continue;
       }
       if (!classId) continue;
-      const r = await scanFlowChanges(ctx.worldDir, sid, callerObjectId, classId);
+      const registry = getSessionRegistry(sid);
+      const versionedFields = registry.resolveVersionedFields(classId);
+      const r = await scanFlowChanges(ctx.worldDir, sid, callerObjectId, versionedFields);
       if (r.versionedDirty.length > 0) {
         dirty = r.versionedDirty;
         foundSid = sid;
@@ -312,7 +316,9 @@ const sedimentUnversionedMethod: ObjectMethod<ThreadContext> = {
         continue;
       }
       if (!classId) continue;
-      const r = await scanFlowChanges(ctx.worldDir, sid, callerObjectId, classId);
+      const registry = getSessionRegistry(sid);
+      const versionedFields = registry.resolveVersionedFields(classId);
+      const r = await scanFlowChanges(ctx.worldDir, sid, callerObjectId, versionedFields);
       allDirty.push(...r.unversionedDirty);
     }
 
