@@ -128,6 +128,37 @@ const readable: ReadableModule<Data, ThreadWin> = {
       window_methods: [setTranscript],
     },
   ],
+  /**
+   * **issue N**: 供给 intents 给 core `scanIntents` 聚合。
+   *
+   * 据 ref 视角（self / super / default）产对应"视角别名 intent",让 knowledge md 命中:
+   *
+   *   - **self / super ref**（thread 自看 / super flow 投影）：
+   *       - `class::root` —— 每个 thread 都有 self-view 这条 root ref,作为"任何时候都在"的别名;
+   *         interaction-core.md / agency-methods.md / self-evolution.md / end-reflection.md 命中。
+   *   - **super ref**（sessionId === SUPER）:
+   *       - 额外 `super_flow::active` —— super-flow.md 命中。
+   *   - **default ref**（thread 作为对端 talk_window 出现在 context 中,如 peer talk / fork-self）:
+   *       - `class::talk` —— talk-and-super.md / talk-fork-and-share.md 命中。
+   *
+   * 视角识别：优先看 `ref.window_view`（issue J 起 ref 创建点已显式写）,缺省回退 `computeProjectionClass`
+   * 的 fallback 推导。
+   */
+  intents: (self, ref) => {
+    const out: string[] = [];
+    const view = ref.window_view ?? computeProjectionClass(self.data, ref);
+    if (view === "self" || view === "super") {
+      out.push("class::root");
+    }
+    if (view === "super" || self.data.sessionId === SUPER_SESSION_ID) {
+      out.push("super_flow::active");
+    }
+    if (view === "default") {
+      // peer-view thread = talk_window 形态
+      out.push("class::talk");
+    }
+    return out;
+  },
 };
 
 export default readable;

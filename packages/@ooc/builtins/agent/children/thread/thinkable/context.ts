@@ -2,7 +2,7 @@
  * thread thinkable / context 构造 —— 把 thread 状态转成 LLM input items。
  *
  * 输入：thread (data) + ObjectInsRegistry (查每个窗的 readable.render) + 可选 worldDir + ownerId
- * 输出：LlmInputItem[]（system instructions + activated knowledge + context windows + messages）
+ * 输出：LlmInputItem[]（system instructions + context windows + messages）
  *
  * 设计：每个 OocObjectRef 在 thread.contextWindows 里 = 一个 window；经其 class 的 readable.render
  * 投影成 ReadableProjection（view + content）,渲染成 XML 文本进 LLM input。
@@ -10,29 +10,33 @@
  * **issue E**：window 内容渲染走 `renderReadable`（core 单一入口，3 档 fallback），本文件只负责
  * 自包 `<window>` XML 壳——payload 来自 `ReadableResult`。
  *
- * knowledge activation：根据当前 contextWindows 的 class 集合计算 ActivationContext，
- * 经 knowledge_base loader 拿 owner 的 KnowledgeIndex，computeActivations 输出激活列表，
- * 按 presentation (full/summary) 嵌入 system message。
+ * **issue N** knowledge 激活机制下沉:
+ *   1. 旧 thread/context.ts 直渲 `<knowledge>` 顶层段已废止——activationEnv / loadKnowledgeIndex /
+ *      computeActivations / renderKnowledge 整套迁入 `builtins/knowledge_base/`。
+ *   2. 本文件改职责：
+ *      - 调 core `scanIntents` 聚合 contextWindows 的 intents,作为 ReadableContext.intents 注入每个
+ *        readable render。
+ *      - 遇到 `_builtin/knowledge_base` ref 时预加载 KnowledgeIndex 注入 ref.data,让 kb 的 readable
+ *        据 ctx.intents 自渲 `<knowledge>` 子节点。
+ *   3. XML 形状变化：原来顶层 `<knowledge>` 段，现在归到 `<window class="_builtin/knowledge_base">`
+ *      内的 `<knowledge>` 子节点。
  */
 import type { LlmInputItem } from "@ooc/core/thinkable/llm/types.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { ObjectInsRegistry } from "@ooc/core/runtime/object-registry.js";
 import type { XmlNode } from "@ooc/core/types/index.js";
 import { xmlElement, xmlText, serializeXml } from "@ooc/core/types/xml.js";
-import { isSuperSessionId } from "@ooc/core/types/constants.js";
 import { renderReadable } from "@ooc/core/readable/index.js";
+import { scanIntents } from "@ooc/core/thinkable/context/index.js";
 import { isSelfThreadWindow, threadWindowIdOf } from "@ooc/core/types/context-window.js";
 import { DEFAULT_WINDOW_VIEW } from "@ooc/core/runtime/object-registry.js";
 import { makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import readableModule from "../readable/index.js";
 import type { ReadableContext } from "@ooc/core/types/index.js";
-import {
-  type ActivationContext,
-  computeActivations,
-} from "@ooc/core/thinkable/knowledge/index.js";
-import type { ActivationResult } from "@ooc/core/types/knowledge.js";
 import { loadKnowledgeIndex } from "@ooc/builtins/knowledge_base/loader.js";
 import type { ThreadContext, ThreadMessage, ThreadWin } from "../types.js";
+
+const KNOWLEDGE_BASE_CLASS_ID = "_builtin/knowledge_base";
 
 /**
  * 把一个 window 渲染成 XML 节点。
@@ -43,15 +47,20 @@ import type { ThreadContext, ThreadMessage, ThreadWin } from "../types.js";
  * - **其它 ref**：经 core `renderReadable` 3 档 fallback。
  *
  * 本函数始终自包 `<window>` XML 壳。
+ *
+ * **issue N**：caller 传入 `intents`（core scanIntents 聚合的本轮 Set）；本函数把它注入
+ * ReadableContext.intents,所有 readable render 据此跑"基于意图的资源激活"（knowledge_base 是
+ * 实现之一）。renderReadable 内部构造 ctx 时也注入同一 intents（已统一）。
  */
 async function renderWindow(
   ref: OocObjectRef,
   registry: ObjectInsRegistry,
   thread: ThreadContext,
+  intents: Set<string>,
 ): Promise<XmlNode> {
   // self-view ref 短路:直接调本 thread readable,避免 renderReadable 找不到 inst data
   if (isSelfThreadWindow(ref.id) && ref.id === threadWindowIdOf(thread.id)) {
-    const ctx: ReadableContext = { object: { id: ref.id, class: ref.class } };
+    const ctx: ReadableContext = { object: { id: ref.id, class: ref.class }, intents };
     const projection = await readableModule.readable(
       ctx,
       makeReadonlySelfProxy(thread),
@@ -67,7 +76,7 @@ async function renderWindow(
       content,
     );
   }
-  const result = await renderReadable(ref, registry, registry);
+  const result = await renderReadable(ref, registry, registry, { intents });
   const content = Array.isArray(result.payload)
     ? result.payload
     : [xmlText(result.payload)];
@@ -103,75 +112,23 @@ function systemInstructions(thread: ThreadContext): string {
   ].join("\n");
 }
 
-/** 计算激活环境 —— 描述当前思考栈的状态。 */
-function activationEnv(thread: ThreadContext, registry: ObjectInsRegistry): ActivationContext {
-  const windowViews = new Set<string>();
-  const methodForms = new Set<string>();
-  const activeIntents = new Set<string>();
-  for (const w of thread.contextWindows) {
-    windowViews.add(w.class);
-    // method_exec_form 窗 → 经 form 对象 data 取目标 guide 信息 + currentIntents
-    if (w.class === "_builtin/agent/method_exec_form") {
-      const formInst = registry.getObject(w.id);
-      const d = formInst?.data as
-        | {
-            targetObjectId?: string;
-            guideName?: string;
-            currentIntents?: string[];
-          }
-        | undefined;
-      if (d?.targetObjectId && d?.guideName) {
-        // 经 session 表把 targetObjectId 反查目标 class，与 trigger `method::<class>::<guide>` 对齐
-        const targetInst = registry.getObject(d.targetObjectId);
-        if (targetInst) {
-          methodForms.add(`${targetInst.class}::${d.guideName}`);
-        }
-      }
-      // 扫 form 的 currentIntents 合并为 activeIntents——契约层 phase-2 source-key store
-      // （core/thinkable/knowledge/source-intents.ts）已退役、本扫窗模型自然 session-scoped
-      // 且天然支持 refine→整组替换 currentIntents 数组（无需 store 撤销）。
-      if (Array.isArray(d?.currentIntents)) {
-        for (const i of d.currentIntents) activeIntents.add(i);
-      }
-    }
-  }
-  return {
-    windowViews,
-    methodForms,
-    activeIntents,
-    inSuper: isSuperSessionId(thread.sessionId),
-  };
-}
-
-function renderKnowledge(activations: ActivationResult[]): XmlNode {
-  return xmlElement(
-    "knowledge",
-    { count: String(activations.length) },
-    activations.map((a) =>
-      xmlElement(
-        "doc",
-        { path: a.path, presentation: a.presentation },
-        a.presentation === "full"
-          ? [xmlText(a.doc.body)]
-          : a.doc.frontmatter.description
-            ? [xmlText(a.doc.frontmatter.description)]
-            : [],
-      ),
-    ),
-  );
-}
-
 export interface BuildLlmInputOptions {
   /** world 根目录；提供则启用 knowledge activator。 */
   worldDir?: string;
 }
 
 /**
+ * issue N: **协议层 intents 聚合** + **knowledge_base ref 预加载 index 注入** 都在本入口完成,
+ * 让 knowledge_base.readable 据 ctx.intents 自渲 `<knowledge>` 子节点。
+ *
+ * - core `scanIntents` 聚合 contextWindows 中所有 readable.intents 供给——典型 producer 是
+ *   `method_exec_form`（产 form_open intent）和 `thread` 自己（据 sessionId 产 super_flow intent）。
+ * - knowledge_base ref 在被渲染前,把 KnowledgeIndex 写入 ref.data.index,让 kb.readable 直读。
+ *
  * 构造本轮 LLM input。
  *
  * - system instructions（静态 prompt）
- * - <knowledge>（按 thread 状态激活的 knowledge docs）
- * - <context_windows>（thread 全部窗的 readable 渲染合一）
+ * - <context_windows>（thread 全部窗的 readable 渲染合一,knowledge_base ref 自渲 `<knowledge>` 子节点）
  * - <messages>（最近 thread.messages）
  */
 export async function buildLlmInput(
@@ -179,32 +136,32 @@ export async function buildLlmInput(
   registry: ObjectInsRegistry,
   opts: BuildLlmInputOptions = {},
 ): Promise<LlmInputItem[]> {
-  // knowledge activation（如果有 worldDir）
-  let knowledgeXml = "";
+  // 聚合本轮 intents（core scanIntents,统一 Set 去重）
+  const intents = scanIntents(thread.contextWindows, registry, registry);
+
+  // 预加载 knowledge index 注入 knowledge_base ref（若有）。kb 不在 ref 集 → 整段消失（裁决 13）。
   if (opts.worldDir) {
-    try {
-      const index = await loadKnowledgeIndex(opts.worldDir, thread.calleeObjectId);
-      const env = activationEnv(thread, registry);
-      const activations = computeActivations(index, env);
-      if (activations.length > 0) {
-        knowledgeXml = serializeXml(renderKnowledge(activations));
+    const kbRef = thread.contextWindows.find((r) => r.class === KNOWLEDGE_BASE_CLASS_ID);
+    if (kbRef) {
+      try {
+        const index = await loadKnowledgeIndex(opts.worldDir, thread.calleeObjectId);
+        // 把 index 注入 ref.data —— kb.readable 经 win.data?.index 读取
+        kbRef.data = { ...(kbRef.data as object | undefined ?? {}), index };
+      } catch (e) {
+        // 加载失败不阻塞 thinkloop;kb readable 走 fallback 不渲 <knowledge> 子节点
+        console.warn(`[context] knowledge index load failed: ${(e as Error).message}`);
       }
-    } catch (e) {
-      // 激活失败不阻塞 thinkloop
-      console.warn(`[context] knowledge activation failed: ${(e as Error).message}`);
     }
   }
 
   const windowNodes: XmlNode[] = [];
   for (const ref of thread.contextWindows) {
-    windowNodes.push(await renderWindow(ref, registry, thread));
+    windowNodes.push(await renderWindow(ref, registry, thread, intents));
   }
   const contextWindowsXml = serializeXml(xmlElement("context_windows", {}, windowNodes));
   const messagesXml = serializeXml(renderMessages(thread.messages));
 
-  const parts = [systemInstructions(thread)];
-  if (knowledgeXml) parts.push(knowledgeXml);
-  parts.push(contextWindowsXml, messagesXml);
+  const parts = [systemInstructions(thread), contextWindowsXml, messagesXml];
 
   return [
     {

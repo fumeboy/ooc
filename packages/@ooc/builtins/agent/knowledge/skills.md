@@ -2,7 +2,7 @@
 title: 使用 skills
 description: skill_index 列出可复用操作模式，open_file 读 SKILL.md 进入
 activates_on:
-  "object::skill_index": "show_content"
+  "intent::class::skill_index": "show_content"
 ---
 
 skill_index window 列出当前可用的 skills——每个 skill 是一个目录，含 SKILL.md + 任意辅助文件，

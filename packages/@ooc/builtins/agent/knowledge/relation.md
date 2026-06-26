@@ -2,7 +2,7 @@
 title: relation_window —— 记录你对某 peer 的认知
 description: 与某 peer 有 talk 时，怎么编辑你对它的关系认知（session / 长期两层）
 activates_on:
-  "object::relation": "show_content"
+  "intent::class::relation": "show_content"
 ---
 
 每当 thread 里有指向某 peer 的 talk_window 时，系统自动派生一条 relation_window

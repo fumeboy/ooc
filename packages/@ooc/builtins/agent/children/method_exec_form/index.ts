@@ -30,6 +30,7 @@ const construct: ObjectConstructor<Data> = {
   description: "Open a method_exec_form to progressively fill args for a target guide method.",
   schema: {
     targetObjectId: { type: "string", required: true, description: "目标对象 id（guide 所属对象）" },
+    targetClass: { type: "string", required: true, description: "目标对象 class id（issue N 新增,readable.intents 产 form_open intent 用）" },
     guideName: { type: "string", required: true, description: "目标 guide method 名" },
     accumulatedArgs: { type: "object", required: false, description: "初始累积参数（partialArgs）" },
     currentTip: { type: "string", required: false, description: "初始 tip（route 输出）" },
@@ -40,6 +41,7 @@ const construct: ObjectConstructor<Data> = {
     _ctx: ConstructorContext,
     args: {
       targetObjectId?: string;
+      targetClass?: string;
       guideName?: string;
       // 历史 alias：旧调用方仍传 targetMethod 时兼容一段
       targetMethod?: string;
@@ -50,6 +52,7 @@ const construct: ObjectConstructor<Data> = {
     },
   ): Data => ({
     targetObjectId: args.targetObjectId ?? "",
+    targetClass: args.targetClass ?? "",
     guideName: args.guideName ?? args.targetMethod ?? "",
     accumulatedArgs: args.accumulatedArgs ?? {},
     currentTip: args.currentTip,
@@ -163,6 +166,29 @@ const readable: ReadableModule<Data, unknown> = {
       window_methods: [],
     },
   ],
+  /**
+   * **issue N**: 供给 intents 给 core `scanIntents` 聚合,驱动 knowledge_base 等"基于意图的资源激活"。
+   *
+   * 产 2 类 intent（不含 `intent::` 前缀,由 expr 解析时去前缀；聚合后存进 ReadableContext.intents 集合时也不带前缀）:
+   *   - `class::<targetClass>::<guideName>` 形态的 `form_open::<targetClass>::<guideName>` ——
+   *     表征"某 form 持有指向某 class 某 guide 的 open 状态"；knowledge_base 可命中激活相关 knowledge
+   *     （如 self-evolution.md 命中 `intent::form_open::filesystem::write_file`）。
+   *   - `user::<name>` —— form 的 `currentIntents`（route 算出的语义意图）以 user 前缀挂入；用户
+   *     ooc class 自由发挥的命名空间。
+   *
+   * **stateless 投影**：每轮 thinkloop 重算、不缓存,form close 后自然消失（无需手工撤销）。
+   */
+  intents: (self) => {
+    const d = self.data;
+    const out: string[] = [];
+    if (d.targetClass && d.guideName) {
+      out.push(`form_open::${d.targetClass}::${d.guideName}`);
+    }
+    for (const i of d.currentIntents ?? []) {
+      out.push(`user::${i}`);
+    }
+    return out;
+  },
 };
 
 export const Class: OocClass<Data> = {

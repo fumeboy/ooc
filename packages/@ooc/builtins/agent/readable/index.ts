@@ -52,6 +52,13 @@ const readable: ReadableModule<Data, AgentWin> = {
       window_methods: [],
     },
   ],
+  /**
+   * **issue N**: agent self 门面窗产 `class::root` —— "你是谁、你在哪"层级的 knowledge
+   * （interaction-core.md / agency-methods.md / self-evolution.md / talk-and-super.md / end-reflection.md）
+   * 据此命中。每个 thread.contextWindows 总含 callee agent ref（self 门面）,所以 `class::root` 在
+   * 任何 thread 任何时候都命中。
+   */
+  intents: () => ["class::root"],
 };
 
 export default readable;

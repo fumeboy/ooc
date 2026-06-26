@@ -119,6 +119,9 @@ async function createSuperThread(
       { id: threadWindowIdOf(threadId), class: THREAD_CLASS_ID, window_view: "super", createdAt: Date.now(), closable: false },
       // callee agent 的 self 门面窗（agent.readable 渲身份）——issue I 顺手修 `class:"self"`→ agent class id。
       { id: calleeObjectId, class: "_builtin/agent", createdAt: Date.now(), closable: false },
+      // **issue N**: super flow 默认挂 knowledge_base ref——否则 super-flow.md 等 super 反思 knowledge
+      // 在 super flow 内不会被激活（迁移悄无声息回归,reviewer 立场 4 / 漏点 1 兜底）。
+      { id: "_builtin/knowledge_base", class: "_builtin/knowledge_base", createdAt: Date.now(), closable: false },
     ],
   };
   await writeFile(join(dir, "thread.json"), toJson(thread), "utf8");

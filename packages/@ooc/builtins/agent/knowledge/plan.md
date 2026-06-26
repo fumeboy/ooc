@@ -2,7 +2,7 @@
 title: plan_window —— thread 的行动计划
 description: 在 plan_window 上增删改 step、展开/收起 sub plan
 activates_on:
-  "object::plan": "show_content"
+  "intent::class::plan": "show_content"
 ---
 
 plan_window 是 thread 的行动计划窗口，由 agent 的 `plan` 方法创建 / 更新；支持 sub plan 嵌套，

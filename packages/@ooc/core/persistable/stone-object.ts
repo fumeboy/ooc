@@ -28,7 +28,8 @@ export function visibleDir(ref: StoneObjectRef): string {
  * - 这里是先天/设计层 seed：`packages/<self>/knowledge/<slug>.md`，由 Object 主动写入并经 git review
  * - pool 侧 sediment：`pools/objects/<self>/knowledge/memory|relations/...`，运行时积累，不进 git
  *
- * loader 双源扫描时统一加载、LLM 视角不分来源；同名冲突 sediment 胜出（详见 loader.ts loadKnowledgeIndex）。
+ * loader 双源扫描时统一加载、LLM 视角不分来源；同名冲突 sediment 胜出（详见
+ * `builtins/knowledge_base/loader.ts` 的 `loadKnowledgeIndex`）。
  */
 export function stoneKnowledgeDir(ref: StoneObjectRef): string {
   // `_builtin/<id>` class 的 seed knowledge 从框架包读（供 instance 经 parentClass 链继承）；
@@ -52,7 +53,7 @@ export function stoneChildrenDir(ref: StoneObjectRef): string {
  * - "a/b/c"               → ["a", "a/b"]
  *
  * 用于 knowledge loader 在加载子 Agent 时遍历祖先目录，按 frontmatter `inheritable`
- * 决定是否下传知识（详见 src/thinkable/knowledge/loader.ts）。
+ * 决定是否下传知识（详见 `builtins/knowledge_base/loader.ts`）。
  */
 export function ancestorObjectIds(objectId: string): string[] {
   const segments = objectId.split("/").filter(Boolean);

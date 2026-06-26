@@ -2,7 +2,7 @@
 title: search_window —— glob/grep 搜索结果
 description: 一次 glob/grep 搜索的持久结果窗，可在某条匹配上打开文件
 activates_on:
-  "object::search": "show_content"
+  "intent::class::search": "show_content"
 ---
 
 search_window 持有一次 glob/grep 搜索结果（由 `filesystem` 成员的 `glob` / `grep` 创建）。

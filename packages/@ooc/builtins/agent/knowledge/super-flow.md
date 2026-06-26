@@ -2,7 +2,7 @@
 title: 你正在 super flow（反思 / 沉淀 / 合入）
 description: super flow 是你的反思通道：沉淀记忆、合入身份演化、（supervisor）治理
 activates_on:
-  "super": "show_content"
+  "intent::super_flow::active": "show_content"
 ---
 
 当前 thread 跑在你的 super flow（sessionId="super"）里。这是反思通道——沉淀经验、合入身份
@@ -40,17 +40,19 @@ activates_on:
 <正文>
 ```
 
-`activates_on` 是 `Record<trigger, "show_description" | "show_content">`,至少一项。trigger 三类：
+`activates_on` 是 `Record<trigger, "show_description" | "show_content">`,至少一项。trigger 统一为
+单一 **intent** 协议（核心：core 每轮从 contextWindows 聚合 intents、knowledge_base 据此激活）：
 
-| trigger | 含义 |
-|---|---|
-| `object::<type>` | 该 type 的 window open 时命中（`object::root` 每个 thread 都有 = 任何时候;`object::talk` 有对话窗时;`object::plan` 有计划窗时…）|
-| `object_id::<id>` | 特定 objectId 的对象出现在 context 时命中（盯某个具体 peer / 成员）|
-| `super` | 仅在 super flow 命中 |
+| trigger 形态 | 含义 | 谁产 intent |
+|---|---|---|
+| `intent::class::<class>` | context 中有这个 class 的 window | 每条 contextWindows ref 的 readable.intents 产 |
+| `intent::form_open::<targetClass>::<guideName>` | 某 form open 着指向某 class 的某 guide | `method_exec_form.readable.intents` 据自身 data 产 |
+| `intent::super_flow::active` | 当前 thread 跑在 super session | thread.readable.intents 据 sessionId 产 |
+| `intent::user::<name>` | 用户自定义命名空间（ooc class 自由发挥） | 任意 ooc class 自己的 readable.intents 产 |
 
-`show_description` 命中露摘要,`show_content` 命中露全文;多 trigger 取 max。
-**自检**：写完想一下"下次哪类 window 出现时我希望想起这条？"挑一个会真正出现在 context 里的
-`object::<type>` 填进 activates_on,否则白写。
+`show_description` 命中露摘要,`show_content` 命中露全文;多 trigger 命中取 max。
+**自检**：写完想一下"下次哪类 window / form / flow 出现时我希望想起这条？"挑一个会真正出现在
+context 里的 intent 填进 activates_on,否则白写。
 
 ## 4 个反思 method —— 一步到位推改动进 canonical / pool
 

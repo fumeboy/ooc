@@ -2,7 +2,7 @@
 title: pr_window —— 你是这条 PR 的 reviewer
 description: 看到 pr_window 时如何评审 feat-branch PR（approve / reject / request_changes）
 activates_on:
-  "object::pr": "show_content"
+  "intent::class::pr": "show_content"
 ---
 
 你的 context 里出现了一个 **pr_window**：有人（author）发起了一次 feat-branch 沉淀，把改动提交成

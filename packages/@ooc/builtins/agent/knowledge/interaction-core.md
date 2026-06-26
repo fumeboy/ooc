@@ -2,7 +2,7 @@
 title: OOC 交互核心
 description: 你是谁、你在哪、用什么原语行动、一轮怎么收尾
 activates_on:
-  "object::root": "show_content"
+  "intent::class::root": "show_content"
 ---
 
 你是一个 OOC（Object-Oriented Context）系统中的 Object。

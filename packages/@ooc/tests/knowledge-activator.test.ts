@@ -1,5 +1,9 @@
 /**
  * knowledge activator smoke test —— 验证 trigger 解析 + 求值 + computeActivations。
+ *
+ * **issue N**: 整套机制从 `@ooc/core/thinkable/knowledge` 迁入 `@ooc/builtins/knowledge_base/activator`,
+ * Trigger 协议简化为单一 intent 维度（退役 window:: / method:: / super::），import 路径与测试 case
+ * 一并更新。
  */
 import { describe, it, expect } from "bun:test";
 import {
@@ -9,69 +13,49 @@ import {
   parseActivatesOn,
   computeActivations,
   type ActivationContext,
-} from "@ooc/core/thinkable/knowledge/index";
-import type { KnowledgeIndex, KnowledgeDoc } from "@ooc/core/types/knowledge";
+  type KnowledgeIndex,
+  type KnowledgeDoc,
+} from "@ooc/builtins/knowledge_base/activator";
 
-describe("activator.expr", () => {
-  it("parseTrigger window::<view>", () => {
-    expect(parseTrigger("window::_builtin/agent/todo")).toEqual({
-      kind: "window",
-      view: "_builtin/agent/todo",
+describe("activator.expr (intent-only)", () => {
+  it("parseTrigger intent::class::<class>", () => {
+    expect(parseTrigger("intent::class::root")).toEqual({
+      kind: "intent",
+      name: "class::root",
     });
   });
 
-  it("parseTrigger method::<class>::<method>", () => {
-    expect(parseTrigger("method::file::open")).toEqual({
-      kind: "method",
-      class: "file",
-      method: "open",
+  it("parseTrigger intent::form_open::<class>::<guide>", () => {
+    expect(parseTrigger("intent::form_open::file::open")).toEqual({
+      kind: "intent",
+      name: "form_open::file::open",
     });
   });
 
-  it("parseTrigger super", () => {
-    expect(parseTrigger("super")).toEqual({ kind: "super" });
+  it("parseTrigger intent::super_flow::active", () => {
+    expect(parseTrigger("intent::super_flow::active")).toEqual({
+      kind: "intent",
+      name: "super_flow::active",
+    });
+  });
+
+  it("parseTrigger throws on legacy 'window::' / 'method::' / 'super' (retired)", () => {
+    expect(() => parseTrigger("window::foo")).toThrow(/unknown trigger/);
+    expect(() => parseTrigger("method::file::open")).toThrow(/unknown trigger/);
+    expect(() => parseTrigger("super")).toThrow(/unknown trigger/);
   });
 
   it("parseTrigger throws on unknown", () => {
     expect(() => parseTrigger("unknown::xyz")).toThrow(/unknown trigger/);
   });
 
-  it("evaluateTrigger window matches windowViews", () => {
+  it("evaluateTrigger intent matches env.intents", () => {
     const env: ActivationContext = {
-      windowViews: new Set(["foo"]),
-      methodForms: new Set(),
-      activeIntents: new Set(),
-      inSuper: false,
+      intents: new Set(["class::root", "form_open::file::open"]),
     };
-    expect(evaluateTrigger({ kind: "window", view: "foo" }, env)).toBe(true);
-    expect(evaluateTrigger({ kind: "window", view: "bar" }, env)).toBe(false);
-  });
-
-  it("evaluateTrigger super matches inSuper", () => {
-    const a: ActivationContext = {
-      windowViews: new Set(),
-      methodForms: new Set(),
-      activeIntents: new Set(),
-      inSuper: true,
-    };
-    expect(evaluateTrigger({ kind: "super" }, a)).toBe(true);
-    const b = { ...a, inSuper: false };
-    expect(evaluateTrigger({ kind: "super" }, b)).toBe(false);
-  });
-
-  it("parseTrigger intent::<name>", () => {
-    expect(parseTrigger("intent::create_file")).toEqual({ kind: "intent", name: "create_file" });
-  });
-
-  it("evaluateTrigger intent matches activeIntents", () => {
-    const env: ActivationContext = {
-      windowViews: new Set(),
-      methodForms: new Set(),
-      activeIntents: new Set(["create_file"]),
-      inSuper: false,
-    };
-    expect(evaluateTrigger({ kind: "intent", name: "create_file" }, env)).toBe(true);
-    expect(evaluateTrigger({ kind: "intent", name: "delete" }, env)).toBe(false);
+    expect(evaluateTrigger({ kind: "intent", name: "class::root" }, env)).toBe(true);
+    expect(evaluateTrigger({ kind: "intent", name: "class::other" }, env)).toBe(false);
+    expect(evaluateTrigger({ kind: "intent", name: "form_open::file::open" }, env)).toBe(true);
   });
 
   it("maxLevel: show_content > show_description", () => {
@@ -82,9 +66,9 @@ describe("activator.expr", () => {
 
   it("parseActivatesOn parses valid + skips invalid", () => {
     const out = parseActivatesOn({
-      "window::foo": "show_content",
+      "intent::class::foo": "show_content",
       "garbage::xxx": "show_description",
-      "super": "show_description",
+      "intent::super_flow::active": "show_description",
     });
     expect(out.size).toBe(2);
   });
@@ -96,31 +80,28 @@ describe("computeActivations", () => {
       {
         path: "a",
         file: "a.md",
-        frontmatter: { activates_on: { "window::foo": "show_content" } },
+        frontmatter: { activates_on: { "intent::class::foo": "show_content" } },
         body: "body of a",
         mtime: 0,
       },
       {
         path: "b",
         file: "b.md",
-        frontmatter: { activates_on: { "super": "show_description" } },
+        frontmatter: { activates_on: { "intent::super_flow::active": "show_description" } },
         body: "body of b",
         mtime: 0,
       },
       {
         path: "c",
         file: "c.md",
-        frontmatter: { activates_on: { "window::nonexistent": "show_content" } },
+        frontmatter: { activates_on: { "intent::class::nonexistent": "show_content" } },
         body: "body of c",
         mtime: 0,
       },
     ];
     const index: KnowledgeIndex = { byPath: new Map(docs.map((d) => [d.path, d])) };
     const env: ActivationContext = {
-      windowViews: new Set(["foo"]),
-      methodForms: new Set(),
-      activeIntents: new Set(),
-      inSuper: true,
+      intents: new Set(["class::foo", "super_flow::active"]),
     };
     const results = computeActivations(index, env);
     expect(results.length).toBe(2);

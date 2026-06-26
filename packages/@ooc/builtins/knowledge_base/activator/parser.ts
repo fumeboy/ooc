@@ -1,10 +1,6 @@
 import yaml from "js-yaml";
-import type { KnowledgeFrontmatter } from "@ooc/core/types/knowledge.js";
-
-/** activates_on 字段的轻量解析占位 —— activator 子系统已退役，待重写时落实。 */
-function parseActivatesOn(_v: unknown, _file?: string): void {
-  /* no-op until activator is reborn */
-}
+import type { KnowledgeFrontmatter } from "./types.js";
+import { parseActivatesOn as parseActivatesOnExpr } from "./expr.js";
 
 /**
  * 把 .md 文本拆成 frontmatter 与 body。
@@ -64,7 +60,7 @@ function validateFrontmatter(fm: KnowledgeFrontmatter): KnowledgeFrontmatter {
   if (fm.activates_on !== undefined) {
     // 校验只是要 fail-loud；这里调用一次，让 parser 阶段就拒绝旧格式。
     // 上层会 catch 并附上文件路径；parser 不知道文件路径，只能在错误里说 schema。
-    parseActivatesOn(fm.activates_on, "<unknown file>");
+    parseActivatesOnExpr(fm.activates_on, "<unknown file>");
   }
   return fm;
 }

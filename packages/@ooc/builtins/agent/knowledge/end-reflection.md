@@ -2,8 +2,8 @@
 title: end 之前：考虑通过 super 沉淀经验
 description: 结束 thread 前想一下有没有值得带走的认知，有就走 super flow 沉淀
 activates_on:
-  "object::root": "show_description"
-  "method::_builtin/agent::end": "show_content"
+  "intent::class::root": "show_description"
+  "intent::form_open::_builtin/agent::end": "show_content"
 ---
 
 你正准备结束当前 thread。调 `end` 之前，想一秒：**本次工作产生了什么值得带走的东西？**

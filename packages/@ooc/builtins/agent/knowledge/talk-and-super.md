@@ -2,9 +2,9 @@
 title: 与其它对象对话 + super 反思分身
 description: 怎么用 talk_window 收发消息，以及如何找你的 super 分身反思
 activates_on:
-  "object::root": "show_description"
-  "object::talk": "show_content"
-  "method::_builtin/agent::talk": "show_content"
+  "intent::class::root": "show_description"
+  "intent::class::talk": "show_content"
+  "intent::form_open::_builtin/agent::talk": "show_content"
 ---
 
 ## 与其它对象对话（talk_window）
