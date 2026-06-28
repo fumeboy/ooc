@@ -8,6 +8,7 @@
  * （knowledge 激活机制整套下沉 builtins）。
  */
 export * from "./executable.js";
+export * from "./lifecycle.js";
 export * from "./readable.js";
 export * from "./persistable.js";
 export * from "./visible-server.js";

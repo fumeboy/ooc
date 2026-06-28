@@ -82,7 +82,10 @@ export const Class: OocClass<Data> = {
   readable,
   persistable,
   thinkable,
-  unactive,
+  // lifecycle 维度模块（issue 2026-06-28：从裸 unactive 字段迁入 lifecycle 模块槽）。
+  lifecycle: {
+    unactive,
+  },
   versioned_fields: VERSIONED_FIELDS,
 };
 
