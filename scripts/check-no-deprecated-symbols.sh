@@ -32,7 +32,10 @@ declare -a FORBIDDEN_PATTERNS=(
   "loadServerMethods\\b"
   "runFunctionProgram"
   "program\\.function\\b"
-  "OPEN_TOOL"
+  # OPEN_TOOL：issue E 重新引入 `open` 为 4 个 tool 原语之一（exec/close/wait/open），
+  # 是当前合法符号（packages/@ooc/builtins/agent/children/thread/thinkable/tools/schema.ts:53），
+  # 不再禁。REFINE_TOOL / SUBMIT_TOOL / handle{Open,Refine,Submit}Tool 早 D6 退役，源码内已无引用，
+  # 留作回潮护栏。
   "REFINE_TOOL"
   "SUBMIT_TOOL"
   "handleOpenTool"
