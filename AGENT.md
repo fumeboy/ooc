@@ -17,13 +17,13 @@ OOC 是一个 AI Agent 架构，以面向对象编程的哲学为基础组织上
 - **Object 化的 Agent**：一个 Agent 是一个 Object（持有数据字段 + 程序方法），Object 之间通过 `talk_window` / `do_window` / `PR-Issue` 协作。
 - **元编程**：Object 可以为自己写 `stones/<branch>/objects/<self>/executable/index.ts` 方法库、写 `visible/index.tsx` 界面、改 `self.md` / `readable.md` 身份，并在 super flow 中沉淀 memory——具备自我迭代潜力。
 
-OOC Agent 由 **7 个能力维度**组合，按 object→agent 分层：object base 4（readable / executable / visible / persistable）+ agent 智能增量 3（thinkable / collaborable / reflectable）。observable（系统对 agent 的旁路观测）/ extendable（外接集成）按 self-constitutive 判据为**非维度**；programmable（为自身编程）已并入 reflectable。（权威口径见 supervisor `self.md` / `knowledge/index.md`。）
+OOC Agent 由 **8 个能力维度**组合，按 object→agent 分层：object base 5（readable / executable / visible / persistable / **lifecycle**(active/unactive/on_reload,issue 2026-06-28)）+ agent 智能增量 3（thinkable / collaborable / reflectable）。observable（系统对 agent 的旁路观测）/ extendable（外接集成）按 self-constitutive 判据为**非维度**；programmable（为自身编程）已并入 reflectable。（权威口径见 supervisor `self.md` / `knowledge/index.md`。）
 
 ## 进入项目时必读
 
 **维度/模块设计的权威正在迁入 `.ooc-world-meta` 对象树**（OOC 自举 world = `github.com/fumeboy/ooc-0` 的独立 clone，已不再是 submodule，被父仓 gitignore）：
 `.ooc-world-meta/stones/main/objects/supervisor/`（大局观+核心哲学+harness 组织+测试策略，见其 knowledge/）
-及其 `children/<dim>/`（7 维度 thinkable/executable/collaborable/reflectable/readable/visible/persistable
+及其 `children/<dim>/`（8 维度 thinkable/executable/collaborable/reflectable/readable/visible/persistable/lifecycle
 + 非维度 observable + 横向 object〔对象模型〕/app）。每个对象 self.md 先陈述**核心设计**、含**名词解释** + knowledge。
 **任何"X 维度/模块是什么、怎么设计的"先看对应对象。** `meta/` 与 `docs/ooc-6/` 的旧设计文档正按维度
 吸收进对象树后逐步删除；与代码冲突时一律信代码。
