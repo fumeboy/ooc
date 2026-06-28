@@ -11,6 +11,7 @@
  */
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
 import type { ObjectInsRegistry } from "@ooc/core/runtime/object-registry.js";
+import type { ReloadTable } from "@ooc/core/runtime/reload-table.js";
 import { ThreadRuntime } from "../runtime/thread-runtime.js";
 import type { ThreadContext, ProcessEvent } from "../types.js";
 import { buildLlmInput } from "./context.js";
@@ -27,6 +28,11 @@ export interface ThinkOptions {
    * 见 issue G + ThreadRuntime.scheduleSession JSDoc。
    */
   wakeSession?: (sessionId: string) => void;
+  /**
+   * lifecycle on_reload 派发标记表（issue 2026-06-28）。WorldRuntime 注入；tier-A 控制面
+   * 测试态可缺省 → ThreadRuntime 静默跳过 on_reload。
+   */
+  reloadTable?: ReloadTable;
 }
 
 /** 单轮 think —— 一次完整的 LLM 互动 + tool dispatch。 */
@@ -84,6 +90,7 @@ export async function think(
     worldDir: opts.worldDir,
     onDataEdit: opts.onDataEdit,
     wakeSession: opts.wakeSession,
+    reloadTable: opts.reloadTable,
   });
   let didWait = false;
   for (const call of result.toolCalls ?? []) {
