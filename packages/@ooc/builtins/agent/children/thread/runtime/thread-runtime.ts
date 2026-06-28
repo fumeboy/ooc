@@ -25,6 +25,7 @@ import {
   DEFAULT_WINDOW_VIEW,
 } from "@ooc/core/runtime/object-registry.js";
 import { computeRefcount } from "@ooc/core/runtime/refcount.js";
+import type { ReloadTable } from "@ooc/core/runtime/reload-table.js";
 import { isSelfThreadWindow, threadWindowIdOf } from "@ooc/core/types/context-window.js";
 import { makeSelfProxy, makeReadonlySelfProxy } from "@ooc/core/runtime/self-proxy.js";
 import {
@@ -53,6 +54,13 @@ export class ThreadRuntime implements RuntimeHandle {
    * 见 `RuntimeHandle.scheduleSession` JSDoc 与 issue G。
    */
   private readonly wakeSession?: (sessionId: string) => void;
+  /**
+   * lifecycle on_reload 派发标记表（issue 2026-06-28-lifecycle-module-and-reload）。
+   * WorldRuntime 注入；tier-A 控制面 / 测试态可缺省 → 静默跳过 reload 派发。
+   */
+  private readonly reloadTable?: ReloadTable;
+  /** 本 thread 已处理 on_reload 的 class cursor 表（classId → 最近一次 invalidatedAt）。 */
+  private readonly onReloadCursor = new Map<string, number>();
   /** 已 unactive 完毕的 inst 记录 —— dispatchUnactive 幂等护栏。 */
   private readonly unactiveDispatched = new Set<string>();
 
@@ -63,6 +71,7 @@ export class ThreadRuntime implements RuntimeHandle {
       onDataEdit?: () => Promise<void> | void;
       worldDir?: string;
       wakeSession?: (sessionId: string) => void;
+      reloadTable?: ReloadTable;
     } = {},
   ) {
     this.thread = thread;
@@ -70,6 +79,7 @@ export class ThreadRuntime implements RuntimeHandle {
     this.onDataEdit = opts.onDataEdit;
     this.worldDir = opts.worldDir ?? "";
     this.wakeSession = opts.wakeSession;
+    this.reloadTable = opts.reloadTable;
   }
 
   /** 从 thread 派生 ThreadRuntime —— 取该 thread 所在 session 的 ObjectInsRegistry。 */
@@ -79,6 +89,7 @@ export class ThreadRuntime implements RuntimeHandle {
       onDataEdit?: () => Promise<void> | void;
       worldDir?: string;
       wakeSession?: (sessionId: string) => void;
+      reloadTable?: ReloadTable;
     } = {},
   ): ThreadRuntime {
     return new ThreadRuntime(thread, getSessionRegistry(thread.sessionId), opts);
@@ -489,6 +500,9 @@ export class ThreadRuntime implements RuntimeHandle {
   private async dispatchActive(objectId: string): Promise<void> {
     const inst = this.registry.getObject(objectId);
     if (!inst) return;
+    // **on_reload before active**（issue 2026-06-28 顺序契约）：先让 class 处理资源/内存态重建，
+    // 再发首次激活。on_reload 抛 → fail-loud,active 不会被调用。
+    await this.maybeDispatchOnReload(objectId);
     const hook = this.registry.resolveActive(inst.class);
     if (!hook) return;
     // 重新进入 active 视为重新激活——清掉幂等记录，让后续 unactive 仍可派发。
@@ -505,6 +519,45 @@ export class ThreadRuntime implements RuntimeHandle {
         },
       },
       inst.data,
+    );
+  }
+
+  /**
+   * **maybeDispatchOnReload**（issue 2026-06-28-lifecycle-module-and-reload）：
+   *
+   * 查 reloadTable 决定是否派发 `lifecycle.on_reload`。决策算法：
+   *  - 取 class 的 `invalidatedAt` 标记（reloadTable.peek），缺则不派发
+   *  - 对比本 thread 本地 cursor（onReloadCursor[classId]）；越界即派发并刷新 cursor
+   *
+   * 跨 thread / 跨 session 自然 —— reloadTable 是 WorldRuntime 进程级单例，所有 thread
+   * 都看得到；每条 thread 维护各自 cursor，独立判定。
+   *
+   * 无 reloadTable（tier-A 控制面 / 旧 ThreadRuntime.fromThread 不注入）→ 静默跳过。
+   */
+  private async maybeDispatchOnReload(objectId: string): Promise<void> {
+    if (!this.reloadTable) return;
+    const inst = this.registry.getObject(objectId);
+    if (!inst) return;
+    const mark = this.reloadTable.peek(inst.class);
+    if (!mark) return;
+    const cursor = this.onReloadCursor.get(inst.class) ?? 0;
+    if (mark.invalidatedAt <= cursor) return; // 本 thread 已处理过此次 invalidate
+    const hook = this.registry.resolveOnReload(inst.class);
+    this.onReloadCursor.set(inst.class, mark.invalidatedAt); // 即使无 hook 也推进 cursor 防重测
+    if (!hook) return;
+    await hook.exec(
+      {
+        sessionId: this.thread.sessionId,
+        worldDir: this.worldDir,
+        dir: "",
+        args: {},
+        targetId: objectId,
+        reportDataEdit: async () => {
+          if (this.onDataEdit) await this.onDataEdit();
+        },
+      },
+      inst.data,
+      { changedFiles: mark.changedFiles },
     );
   }
 
