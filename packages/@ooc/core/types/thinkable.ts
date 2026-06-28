@@ -90,4 +90,10 @@ export interface ThinkableDeps {
   onDataEdit?: () => Promise<void> | void;
   /** 跨 thread/跨 session 唤醒钩（issue G）；缺省 no-op + warn 兜底。 */
   wakeSession?: (sessionId: string) => void;
+  /**
+   * lifecycle on_reload 派发标记表（issue 2026-06-28-lifecycle-module-and-reload）。
+   * WorldRuntime 注入；tier-A 控制面 / 测试态可缺省 → ThreadRuntime 静默跳过 on_reload 派发。
+   * 类型用 unknown 保 contract 层零运行时依赖（thread 实现 cast 为 ReloadTable）。
+   */
+  reloadTable?: unknown;
 }

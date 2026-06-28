@@ -13,8 +13,8 @@
 
 import type {
   ExecutableModule,
+  LifecycleModule,
   ObjectConstructor,
-  ObjectLifecycleHook,
   ReadableModule,
   PersistableModule,
   VisibleServerModule,
@@ -25,8 +25,9 @@ import type {
  * 一个 ooc class 的后端程序路由（`index.ts` 的 `export const Class`）。
  *
  * - construct   : 仅**非单例** class 注册（`exec(ctx, args)` 产出新实例初始 Data）；单例 class 省略
- * - active      : 对象 session refcount 0→1 激活钩子（可选；由 object-lifecycle 在 refcount 0↔1 派发，seam=ThreadRuntime.instantiate）
- * - unactive    : 对象 session refcount 1→0 停用钩子（可选；复用旧 destruct 槽；可返回 {delete:true} 自决删除）
+ * - lifecycle   : **第 5 维 object base**（issue 2026-06-28-lifecycle-module-and-reload）——
+ *                 模块槽 `{ active?, unactive?, on_reload? }`：分别在 refcount 0→1 / 1→0 / hot-reload 派发。
+ *                 详见 `core/types/lifecycle.ts` + `.ooc-world-meta/.../objects/supervisor/children/lifecycle/`。
  * - executable  : object method（改数据 / 副作用；LLM 在 thinkloop 行使）
  * - readable    : 投影成 context window + window method
  * - persistable : 自定义序列化（省略走系统默认）
@@ -35,9 +36,8 @@ import type {
  *                 **仅跑 thinkloop 的 thread 类实际注册**——任意 class 可声明，但只有 thread 被调度行使。
  * - visible : 面向前端的服务端 API（HTTP 控制面编辑 object data；无 thinkloop thread）
  *
- * **class 级 long-lived service** 经**单例 + active 钩**自然表达（issue P 退役 init? 字段）——
- * 单例被根级 context 静态引用时永生、active 即 once-per-process。OOC 协议层无 class-level
- * init/teardown 钩；详 object self.md 核心 11 + 迁移映射段。
+ * **class 级 long-lived service** 经**单例 + lifecycle.active 钩**自然表达——单例被根级 context 静态引用时永生、
+ * active 即 once-per-process。OOC 协议层无 class-level init/teardown 钩；详 object self.md 核心 11。
  *
  * **OOC 协议层不内建任何继承 / dispatch chain 机制**（object 模型核心 2）：ClassRegistry 注册扁平的
  * class 定义，无 chain 元信息、无沿链 fallback。class 想复用另一个 class 的能力，由其 `index.ts` 用
@@ -50,8 +50,12 @@ import type {
 export interface OocClass<Data = any, Win = any> {
   id: string;
   construct?: ObjectConstructor<Data>;
-  active?: ObjectLifecycleHook; // refcount 0→1 派发（object-lifecycle dispatchActiveIfFirst，seam=ThreadRuntime.instantiate）
-  unactive?: ObjectLifecycleHook;
+  /**
+   * lifecycle 维度模块 —— object base 第 5 维（issue 2026-06-28-lifecycle-module-and-reload）。
+   * 三可选钩：active (refcount 0→1) / unactive (refcount 1→0) / on_reload (hot-reload)。
+   * 历史的裸 `active?: ObjectLifecycleHook` / `unactive?: ObjectLifecycleHook` 字段已归位到此模块。
+   */
+  lifecycle?: LifecycleModule<Data>;
   executable?: ExecutableModule<Data>;
   readable?: ReadableModule<Data, Win>;
   persistable?: PersistableModule<Data>;

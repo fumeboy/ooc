@@ -24,6 +24,7 @@ import type {
   ObjectConstructor,
   ObjectGuideMethod,
   ObjectLifecycleHook,
+  OnReloadHook,
   ObjectMethod,
   WindowMethod,
   WindowViewDecl,
@@ -222,14 +223,19 @@ export class ClassRegistry {
     return this.classes.get(classId)?.construct;
   }
 
-  /** 本类直查 active 钩子。 */
+  /** 本类直查 active 钩子（issue 2026-06-28：lifecycle 模块槽下，路径加一步 .lifecycle.*）。 */
   resolveActive(classId: string): ObjectLifecycleHook | undefined {
-    return this.classes.get(classId)?.active;
+    return this.classes.get(classId)?.lifecycle?.active;
   }
 
-  /** 本类直查 unactive 钩子。 */
+  /** 本类直查 unactive 钩子（issue 2026-06-28：lifecycle 模块槽下）。 */
   resolveUnactive(classId: string): ObjectLifecycleHook | undefined {
-    return this.classes.get(classId)?.unactive;
+    return this.classes.get(classId)?.lifecycle?.unactive;
+  }
+
+  /** 本类直查 on_reload 钩子（issue 2026-06-28：hot-reload 触发的资源/内存态重建钩）。 */
+  resolveOnReload(classId: string): OnReloadHook | undefined {
+    return this.classes.get(classId)?.lifecycle?.on_reload;
   }
 
   /** 本类直查单个 object method（按 name）。子若想复用父 method，自己在 index.ts spread/import 后挂上。 */

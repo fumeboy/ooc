@@ -14,6 +14,7 @@
  */
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
 import { iterateSessionObjectTable, getSessionRegistry } from "@ooc/core/runtime/object-registry.js";
+import type { ReloadTable } from "@ooc/core/runtime/reload-table.js";
 import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import type { ThreadContext } from "../types.js";
 
@@ -29,6 +30,11 @@ export interface SchedulerOptions {
    * 见 issue G + ThreadRuntime.scheduleSession JSDoc。
    */
   wakeSession?: (sessionId: string) => void;
+  /**
+   * lifecycle on_reload 派发标记表（issue 2026-06-28-lifecycle-module-and-reload）。
+   * worker 从 WorldRuntime 取并透传；缺省 ThreadRuntime 静默跳过 on_reload 派发。
+   */
+  reloadTable?: ReloadTable;
 }
 
 /** 在一个 session 内跑调度循环，直到所有 thread 终态/waiting 或 maxTicks 耗尽。 */
@@ -84,6 +90,7 @@ export async function runScheduler(
       worldDir: opts.worldDir,
       onDataEdit: opts.onDataEdit,
       wakeSession: opts.wakeSession,
+      reloadTable: opts.reloadTable,
     });
   }
 }

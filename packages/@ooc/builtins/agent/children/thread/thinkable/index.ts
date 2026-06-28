@@ -13,6 +13,7 @@ import type { ThinkableModule, ThinkableDeps } from "@ooc/core/types/index.js";
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
 import type { OocObjectRef } from "@ooc/core/runtime/ooc-class.js";
 import type { ObjectInsRegistry } from "@ooc/core/runtime/object-registry.js";
+import type { ReloadTable } from "@ooc/core/runtime/reload-table.js";
 import type { ThreadContext } from "../types.js";
 import { think } from "./thinkloop.js";
 
@@ -29,6 +30,8 @@ const thinkable: ThinkableModule<ThreadContext> = {
       onDataEdit: deps.onDataEdit,
       // wakeSession 不 fail-loud（issue G 已 optional + ThreadRuntime 内 no-op + warn 兜底）
       wakeSession: deps.wakeSession,
+      // issue 2026-06-28: reloadTable 可选透传, 缺省 ThreadRuntime 静默跳过 on_reload
+      reloadTable: deps.reloadTable as ReloadTable | undefined,
     });
   },
   active: (data: ThreadContext) => {
