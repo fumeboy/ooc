@@ -60,7 +60,7 @@ import {
   previewText,
   statusToTone,
   type Tone,
-} from "@ooc/builtins/_shared/visible/utils";
+} from "../../../shared/visible-utils";
 import { WindowVisible } from "./visible/resolveWindowVisible";
 
 const WINDOW_TYPE_ICON: Partial<Record<string, LucideIcon>> = {

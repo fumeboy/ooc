@@ -1,49 +1,60 @@
 /**
  * builtin-visible-registry — builtin class 的 window 视觉组件静态注册表。
  *
- * 线 A（统一 window 渲染解析层）：thread_context 视图渲染 window 时，builtin window 走本
- * 注册表（编译时打包进 bundle，稳定/快），user-defined object 走运行时动态加载
- * （见 resolveWindowVisible.tsx）。消除了 ContextSnapshotViewer 里的 per-type switch
- * 与 HANDLED_WINDOW_TYPES 硬编码集合。
+ * **2026-06-29 重构 (A1+A2 web build fix)**:
  *
- * 收拢的组件：
- * - 8 个实存 builtin `visible/index.tsx`（file/knowledge/todo/search/skill_index/plan/program/root）
- * - method_exec（本地 ./MethodExecWindowDetail）
- * - 从 viewer 内联抽出的 feishu_chat / feishu_doc / do / talk
+ * ooc-6 时代每个 builtin 自带 `visible/index.tsx`,本注册表直接 import。
+ * main 当前 builtin 命名空间已改 (issue O),旧路径全 MISSING。新设计走
+ * `visible/index.tsx` 的 `client-source-url` endpoint + 前端 dynamic import
+ * (ObjectClientRenderer);本表降级为**纯占位 fallback**,直至各 builtin
+ * 真正实装 visible/index.tsx + 接通 client-source-url endpoint。
  *
- * supervisor / user 不注册——它们返回 null、不接 window prop、不在 RENDERABLE_VISIBLE_TYPES，
- * 自然落 resolveWindowVisible 的 JSON 兜底（无害）。
+ * - method_exec / feishu_chat / feishu_doc / do / talk 是本目录自有组件, 保留。
+ * - 其余 8 个 builtin window type → 占位组件 (展示 window 数据 JSON, 等真 visible 来)。
+ *
+ * 线 A 设计 (S 系列文档锚): 经 ObjectClientRenderer + clientSourceUrl 路径动态
+ * 加载某 class 的 visible/index.tsx, 完全替代静态注册表;本表仅为对 web 接通时
+ * 仍命中的 type→component 兜底,避免空界面。
  */
-import type { ComponentType } from "react";
+import type { ComponentType, ReactElement } from "react";
 import type { ContextWindow } from "../../context-snapshot";
 
-import FileWindowDetail from "@ooc/builtins/file/visible/index";
-import KnowledgeWindowDetail from "@ooc/builtins/knowledge/visible/index";
-import TodoWindowDetail from "@ooc/builtins/todo/visible/index";
-import SearchWindowDetail from "@ooc/builtins/search/visible/index";
-import SkillIndexWindowDetail from "@ooc/builtins/skill_index/visible/index";
-import PlanWindowDetail from "@ooc/builtins/plan/visible/index";
-import ProgramWindowDetail from "@ooc/builtins/program/visible/index";
-import RootWindowDetail from "@ooc/builtins/root/visible/index";
 import MethodExecWindowDetail from "../MethodExecWindowDetail";
 import FeishuChatWindowDetail from "./FeishuChatWindowDetail";
 import FeishuDocWindowDetail from "./FeishuDocWindowDetail";
-import DoWindowDetail from "./DoWindowDetail";
 import TalkWindowDetail from "./TalkWindowDetail";
 
-/** builtin window type → 视觉组件。组件约定 `({ window }) => JSX`。 */
+/**
+ * 占位组件 — 当某 builtin 还没真实装 visible/index.tsx 时使用。
+ */
+function PlaceholderWindowDetail({ window: w }: { window: ContextWindow }): ReactElement {
+  return (
+    <div style={{ padding: 12, color: "var(--muted-foreground, #666)", fontSize: 12 }}>
+      <p style={{ marginBottom: 8, opacity: 0.7 }}>
+        [builtin visible 待实装] window type: <code>{(w as { type?: string }).type}</code>
+      </p>
+      <pre style={{ background: "var(--accent, #f5f5f5)", padding: 8, borderRadius: 4, overflow: "auto" }}>
+        {JSON.stringify(w, null, 2).slice(0, 800)}
+      </pre>
+    </div>
+  );
+}
+
+/** builtin window type → 视觉组件。 */
 export const BUILTIN_VISIBLE: Record<string, ComponentType<{ window: ContextWindow }>> = {
-  file: FileWindowDetail as ComponentType<{ window: ContextWindow }>,
-  knowledge: KnowledgeWindowDetail as ComponentType<{ window: ContextWindow }>,
-  todo: TodoWindowDetail as ComponentType<{ window: ContextWindow }>,
-  search: SearchWindowDetail as ComponentType<{ window: ContextWindow }>,
-  skill_index: SkillIndexWindowDetail as ComponentType<{ window: ContextWindow }>,
-  plan: PlanWindowDetail as ComponentType<{ window: ContextWindow }>,
-  program: ProgramWindowDetail as ComponentType<{ window: ContextWindow }>,
-  root: RootWindowDetail as ComponentType<{ window: ContextWindow }>,
+  // ⏳ 待 builtin 实装 visible/index.tsx + 接通 client-source-url 后切到 ObjectClientRenderer 路径
+  file: PlaceholderWindowDetail,
+  knowledge: PlaceholderWindowDetail,
+  todo: PlaceholderWindowDetail,
+  search: PlaceholderWindowDetail,
+  skill_index: PlaceholderWindowDetail,
+  plan: PlaceholderWindowDetail,
+  program: PlaceholderWindowDetail,
+  root: PlaceholderWindowDetail,
+  // ✅ 本目录自有组件 — 保留
   method_exec: MethodExecWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   feishu_chat: FeishuChatWindowDetail,
   feishu_doc: FeishuDocWindowDetail,
-  do: DoWindowDetail,
   talk: TalkWindowDetail,
+  // do_window 已退役 (issue B 合并入 talk), 2026-06-29 删
 };

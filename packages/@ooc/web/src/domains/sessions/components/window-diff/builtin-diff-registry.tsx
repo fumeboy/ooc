@@ -1,32 +1,37 @@
 /**
- * builtin-diff-registry — builtin class 的 window diff 组件静态注册表（线 C）。
+ * builtin-diff-registry — builtin class 的 window diff 组件静态注册表 (线 C)。
  *
- * 对称线 A 的 builtin-visible-registry.tsx。
- * - 有 builtin 目录的从 @ooc/builtins/<type>/visible/diff 导入。
- * - 无 builtin 目录的（talk / do / method_exec）从 web 本地导入。
+ * **2026-06-29 重构 (A1+A2 web build fix)**:
+ * ooc-6 时代各 builtin 自带 `visible/diff.tsx`,main 当前 builtin 命名空间已改,
+ * 旧路径全 MISSING。设计后续: 走 `client-source-url?file=diff` endpoint 动态加载;
+ * 本表降级为占位 fallback。
  */
-import type { ComponentType } from "react";
+import type { ComponentType, ReactElement } from "react";
 import type { WindowDiffProps } from "./window-diff-props";
 
-// 有 builtin 目录（无 .tsx 扩展名，线 A 约定）:
-import FileDiff from "@ooc/builtins/file/visible/diff";
-import KnowledgeDiff from "@ooc/builtins/knowledge/visible/diff";
-import SearchDiff from "@ooc/builtins/search/visible/diff";
-import ProgramDiff from "@ooc/builtins/program/visible/diff";
-import PlanDiff from "@ooc/builtins/plan/visible/diff";
-// 无 builtin 目录，web 本地:
+// 无 builtin 目录,web 本地:
 import TalkDiff from "./TalkDiff";
-import DoDiff from "./DoDiff";
 import MethodExecDiff from "./MethodExecDiff";
 
-/** builtin window type → diff 组件。组件约定 `({ previous, current }) => JSX`。 */
+/** 占位 diff 组件 — builtin diff.tsx 未实装时使用。 */
+function PlaceholderDiff(_: WindowDiffProps): ReactElement {
+  return (
+    <div style={{ padding: 12, color: "var(--muted-foreground, #666)", fontSize: 12, opacity: 0.7 }}>
+      [builtin diff 待实装]
+    </div>
+  );
+}
+
+/** builtin window type → diff 组件。 */
 export const BUILTIN_DIFF: Record<string, ComponentType<WindowDiffProps>> = {
-  file: FileDiff as ComponentType<WindowDiffProps>,
-  knowledge: KnowledgeDiff as ComponentType<WindowDiffProps>,
-  search: SearchDiff as ComponentType<WindowDiffProps>,
-  program: ProgramDiff as ComponentType<WindowDiffProps>,
-  plan: PlanDiff as ComponentType<WindowDiffProps>,
+  // ⏳ 待 builtin 实装 visible/diff.tsx 后切到 ObjectClientRenderer + ?file=diff 路径
+  file: PlaceholderDiff,
+  knowledge: PlaceholderDiff,
+  search: PlaceholderDiff,
+  program: PlaceholderDiff,
+  plan: PlaceholderDiff,
+  // ✅ 本目录自有组件 — 保留
   talk: TalkDiff as ComponentType<WindowDiffProps>,
-  do: DoDiff as ComponentType<WindowDiffProps>,
   method_exec: MethodExecDiff as ComponentType<WindowDiffProps>,
+  // do_window 已退役 (issue B 合并入 talk), 2026-06-29 删
 };
