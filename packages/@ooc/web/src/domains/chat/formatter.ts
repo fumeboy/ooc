@@ -632,13 +632,14 @@ export function formatThread(thread?: ThreadContext): ChatLine[] {
 }
 
 /**
- * thread 是否正卡在 HITL 审批上（有未决 permission_card）。
+ * **退役**(issue S10, 2026-06-29): permission_ask / HITL pause 机制在新 OOC 设计权威无对应。
+ * 用户裁决: "permission_ask 退役, 之后系统设计稳定后再加入"。
  *
- * 这是区分两类 paused 的唯一可靠信号：HITL pause 一定先写 permission_ask 再 paused，
- * 系统级 pause（session / global）一定不写 permission event。故「有未决 permission_card」
- * ⟺「HITL 等审批」；仅凭 thread.status === "paused" 无法区分二者。
- * 未决 = permission_card 且尚未 approve/reject（decided === undefined）。
+ * 本函数保留签名作 future HITL 通路占位, 永返 false ⇒ UI 中 permission_card 永不命中、
+ * 不展示 approve/reject 按钮。relevant formatter 仍可识别 permission_card line 类型作 dead
+ * branch, 但 thread.events 不再产 permission_ask event(backend 永不写), so dead path 永不触发。
  */
 export function threadHasPendingPermission(thread?: ThreadContext): boolean {
-  return formatThread(thread).some((line) => line.kind === "permission_card" && !line.decided);
+  void thread;
+  return false;
 }

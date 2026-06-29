@@ -38,12 +38,14 @@ export function fetchSessionThreads(sessionId: string) {
 }
 
 /**
- * Q0c: HITL 决议 chat 面板 permission_card 的 approve / reject。
+ * **已退役**(issue S10, 2026-06-29): permission_ask / HITL 机制在新 OOC 设计权威中无对应位置
+ * (knowledge/index.md §A-E 各维度均未含此通路, 4 个 tool 原语恒定为 exec/close/wait/open)。
  *
- * eventId = `${toolCallId}_ask`(与 LoopTimeline.buildDecideBody 同款 fallback 规则,避免后端
- * 在多 pending ask 场景下选错事件)。toolCallId 缺失时不传 eventId,由 backend 自动选最近一条。
+ * 用户裁决: "permission_ask 退役, 之后系统设计稳定后再加入"。
  *
- * 成功后 backend 会翻 thread.status=running + 触发 jobManager 重启,前端 polling 会自动同步。
+ * 本函数保留作 future HITL 通路恢复时的占位 — 永抛 TODO "已退役"。配合
+ * threadHasPendingPermission() 恒返 false, UI 中 permission card 永不展示。
+ * 若未来重新引入 HITL, 重新设计 endpoint 协议后再解桩(或这套通道整体重写)。
  */
 export function decideChatPermission(args: {
   sessionId: string;
@@ -52,8 +54,9 @@ export function decideChatPermission(args: {
   toolCallId?: string;
   action: "approve" | "reject";
 }) {
+  void args;
   return TODO_async<{ ok?: boolean }>(
-    `HITL 决议 permission_ask 事件(approve/reject): session=${args.sessionId} object=${args.objectId} thread=${args.threadId} toolCall=${args.toolCallId ?? "(latest pending)"} action=${args.action}; 应翻 thread.status=running + 触发 jobManager 重启`,
+    `[退役] permission_ask 机制在新 OOC 设计权威中无对应位置(4 tool 原语恒定); 用户裁决 S10 退役; 系统设计稳定后另起 issue 重新评估 HITL 通路`,
   );
 }
 
