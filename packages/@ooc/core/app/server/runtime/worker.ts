@@ -113,7 +113,11 @@ async function runOnce(w: WorkerState): Promise<void> {
   } catch (err) {
     ok = false;
     errMsg = (err as Error).message;
-    observeLog("worker.runScheduler.error", `[worker] ${errMsg}`);
+    // ENOENT 通常是 thread GC 后正常竞态(thread inst 已删,worker tick 仍读 .flow.json),
+    // 降级日志避免噪声;其他 error 仍 observeLog。
+    if (!errMsg.includes("ENOENT")) {
+      observeLog("worker.runScheduler.error", `[worker] ${errMsg}`);
+    }
   } finally {
     w.busy = false;
     if (jobId) finishJob(jobId, ok, errMsg);
