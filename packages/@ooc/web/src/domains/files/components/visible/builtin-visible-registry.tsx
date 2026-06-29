@@ -22,7 +22,6 @@ import type { ContextWindow } from "../../context-snapshot";
 import MethodExecWindowDetail from "../MethodExecWindowDetail";
 import FeishuChatWindowDetail from "./FeishuChatWindowDetail";
 import FeishuDocWindowDetail from "./FeishuDocWindowDetail";
-import DoWindowDetail from "./DoWindowDetail";
 import TalkWindowDetail from "./TalkWindowDetail";
 
 /**
@@ -56,6 +55,6 @@ export const BUILTIN_VISIBLE: Record<string, ComponentType<{ window: ContextWind
   method_exec: MethodExecWindowDetail as unknown as ComponentType<{ window: ContextWindow }>,
   feishu_chat: FeishuChatWindowDetail,
   feishu_doc: FeishuDocWindowDetail,
-  do: DoWindowDetail,
   talk: TalkWindowDetail,
+  // do_window 已退役 (issue B 合并入 talk), 2026-06-29 删
 };

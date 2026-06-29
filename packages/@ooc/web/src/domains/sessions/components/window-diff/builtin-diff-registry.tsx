@@ -11,7 +11,6 @@ import type { WindowDiffProps } from "./window-diff-props";
 
 // 无 builtin 目录,web 本地:
 import TalkDiff from "./TalkDiff";
-import DoDiff from "./DoDiff";
 import MethodExecDiff from "./MethodExecDiff";
 
 /** 占位 diff 组件 — builtin diff.tsx 未实装时使用。 */
@@ -33,6 +32,6 @@ export const BUILTIN_DIFF: Record<string, ComponentType<WindowDiffProps>> = {
   plan: PlaceholderDiff,
   // ✅ 本目录自有组件 — 保留
   talk: TalkDiff as ComponentType<WindowDiffProps>,
-  do: DoDiff as ComponentType<WindowDiffProps>,
   method_exec: MethodExecDiff as ComponentType<WindowDiffProps>,
+  // do_window 已退役 (issue B 合并入 talk), 2026-06-29 删
 };
