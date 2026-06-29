@@ -293,6 +293,18 @@ export type ThreadContext = {
    * 非版本化运行时事实，不进 VERSIONED_FIELDS。
    */
   callerSessionId?: string;
+  /**
+   * **skip_scheduling**(S5, 2026-06-29 落地): thread 不参与 scheduler 调度。
+   *
+   * 用户裁决: "新建 session 时,给 user 创建一个名为 root 的 thread, 这个 thread 和普通的
+   * thread 一样的结构, 只是不参与 thread 调度"。
+   *
+   * 典型用例: user.root thread — 持 transcript / contextWindows (子 thread refs),
+   * 但永不"思考"。scheduler.runScheduler 扫 session 内 thread 时跳过此类。
+   *
+   * 非版本化运行时事实, 不进 VERSIONED_FIELDS。
+   */
+  skip_scheduling?: boolean;
 };
 
 export type Data = ThreadContext;

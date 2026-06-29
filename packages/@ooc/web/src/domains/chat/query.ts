@@ -15,11 +15,19 @@ export function fetchThread(sessionId: string, objectId: string, threadId = "roo
 /**
  * 控制面"用户回复"通道。
  *
- * 待 S5 (sessions + user.root thread) 落地, S5 endpoint `POST /api/flows/:sid/continue` 接通。
+ * S5 (2026-06-29) 解桩 — 走 POST /api/flows/:sid/continue:
+ *   - text append 进 target thread.messages (from="caller")
+ *   - targetWindowId 显式给 → 用; 缺省 → user.root.contextWindows 末尾 (最新加入)
+ *   - 触发 scheduleSession 唤醒目标 worker
+ *   - 返回 { jobId?, targetObjectId, targetThreadId }
  */
 export function continueThread(sessionId: string, text: string, targetWindowId?: string) {
-  return TODO_async<{ jobId?: string; targetObjectId: string; targetThreadId: string }>(
-    `[S5 待落地] 控制面用户回复: session=${sessionId} text=<${text.length} chars> targetWindowId=${targetWindowId ?? "(default first child of user.root)"}; 应 append message 到 target thread.transcript + scheduleSession 唤醒 worker; 返回 jobId / targetObjectId / targetThreadId`,
+  return requestJson<{ jobId?: string; targetObjectId: string; targetThreadId: string }>(
+    endpoints.continueThread(sessionId),
+    {
+      method: "POST",
+      body: JSON.stringify({ text, ...(targetWindowId ? { targetWindowId } : {}) }),
+    },
   );
 }
 

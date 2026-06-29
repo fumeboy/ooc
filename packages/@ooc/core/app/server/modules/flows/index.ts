@@ -23,13 +23,39 @@ import {
 import { hydrateSession, saveObjectData } from "@ooc/core/persistable/runtime-object-io.js";
 import { THREAD_CLASS_ID } from "@ooc/core/types/constants.js";
 import type { ThreadContext } from "@ooc/builtins/agent/children/thread/types.js";
+import {
+  addTalkWindowOnSession,
+  continueOnSession,
+} from "../sessions/index.js";
+import { enqueueScheduler } from "../../runtime/worker.js";
+import { createLlmClient } from "@ooc/core/thinkable/llm/client.js";
+import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
+import type { WorldRuntime } from "@ooc/core/runtime/world-runtime.js";
 
 export interface FlowsModuleConfig {
   baseDir: string;
+  llm?: LlmClient;
+  autoEnqueue?: boolean;
+  worldRuntime?: WorldRuntime;
 }
 
 export function buildFlowsModule(config: FlowsModuleConfig) {
   const { baseDir } = config;
+  const autoEnqueue = config.autoEnqueue ?? true;
+  let _llm: LlmClient | undefined;
+  function getLlm(): LlmClient {
+    if (config.llm) return config.llm;
+    if (!_llm) _llm = createLlmClient();
+    return _llm;
+  }
+  async function maybeEnqueue(sessionId: string): Promise<void> {
+    if (!autoEnqueue) return;
+    try {
+      await enqueueScheduler(sessionId, getLlm(), baseDir, config.worldRuntime?.reloadTable);
+    } catch (err) {
+      console.warn(`[flows] enqueue skipped: ${(err as Error).message}`);
+    }
+  }
 
   return new Elysia({ prefix: "/api/flows" })
     .post(
@@ -162,6 +188,75 @@ export function buildFlowsModule(config: FlowsModuleConfig) {
           };
         }
         return inst.data as ThreadContext;
+      },
+    )
+    // S5: POST /api/flows/:sid/talk-windows — 在已存在 session 上加新 target thread + push 进 user.root.contextWindows
+    .post(
+      "/:sid/talk-windows",
+      async ({ params, body, set }) => {
+        try {
+          const result = await addTalkWindowOnSession({
+            baseDir,
+            sessionId: params.sid,
+            targetObjectId: body.targetObjectId,
+            initialMessage: body.initialMessage,
+          });
+          if (!result.ok) {
+            set.status = result.error.code === "USER_NOT_FOUND" ? 404 : 400;
+            return result;
+          }
+          if (result.created && body.initialMessage) {
+            void maybeEnqueue(params.sid);
+          }
+          return result;
+        } catch (err) {
+          set.status = 500;
+          return {
+            ok: false,
+            error: { code: "INTERNAL", message: (err as Error).message, stack: (err as Error).stack },
+          };
+        }
+      },
+      {
+        body: t.Object({
+          targetObjectId: t.String(),
+          initialMessage: t.Optional(t.String()),
+        }),
+      },
+    )
+    // S5: POST /api/flows/:sid/continue — user 经 user.root 投递消息到 target thread + 唤醒
+    .post(
+      "/:sid/continue",
+      async ({ params, body, set }) => {
+        try {
+          const result = await continueOnSession({
+            baseDir,
+            sessionId: params.sid,
+            text: body.text,
+            targetWindowId: body.targetWindowId,
+          });
+          if (!result.ok) {
+            set.status =
+              result.error.code === "USER_NOT_FOUND" ? 404 :
+              result.error.code === "TARGET_THREAD_NOT_FOUND" ? 404 :
+              400;
+            return result;
+          }
+          void maybeEnqueue(params.sid);
+          return result;
+        } catch (err) {
+          set.status = 500;
+          return {
+            ok: false,
+            error: { code: "INTERNAL", message: (err as Error).message, stack: (err as Error).stack },
+          };
+        }
+      },
+      {
+        body: t.Object({
+          text: t.String(),
+          targetWindowId: t.Optional(t.String()),
+        }),
       },
     );
 }

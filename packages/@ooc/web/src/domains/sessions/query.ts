@@ -1,17 +1,27 @@
-import { TODO_async } from "../../transport/todo";
+import { requestJson } from "../../transport/http";
+import { endpoints } from "../../transport/endpoints";
 import type { CreateSessionInput, CreatedSession } from "./model";
 
 /**
- * 创建 session:等价于 user 对 target object 的初次 talk。
+ * 创建 session — 等价于 user 对 target object 的初次 talk。
  *
- * 旧契约(ooc-6,2026-06-29 桩化前): 后端 POST /api/sessions 一次性 seed session
- * + user flow object + user.root 上指向 target 的 talk_window + 派送 initialMessage
- * 到 callee thread。
+ * S5 (2026-06-29) 解桩 — 走 POST /api/sessions:
+ *   - backend 创建 user inst (若不存在)
+ *   - 创建 user.root thread (skip_scheduling=true) 作 transcript 容器
+ *   - 创建 target agent thread (target=targetObjectId), initialMessage 作为初始 message
+ *   - user.root.contextWindows 含指向 target thread 的 ref
+ *   - 经 enqueueScheduler 唤醒 worker 推 target thread
  */
 export async function createSessionWithObject(input: CreateSessionInput): Promise<CreatedSession> {
-  return TODO_async<CreatedSession>(
-    `创建一个 session(等价于 user 对 target object 的初次 talk): sessionId=${input.sessionId} target=${input.targetObjectId} initialMessage=${input.initialMessage ? "(present)" : "(none)"}; 应在后端创建 session 实体 + user flow object + user.root 上指向 target 的 talk_window + 派送 initialMessage`,
-  );
+  return requestJson<CreatedSession>(endpoints.sessions, {
+    method: "POST",
+    body: JSON.stringify({
+      sessionId: input.sessionId,
+      title: input.title ?? input.sessionId,
+      targetObjectId: input.targetObjectId,
+      initialMessage: input.initialMessage,
+    }),
+  });
 }
 
 export interface AddUserTalkWindowResult {
@@ -28,14 +38,16 @@ export interface AddUserTalkWindowResult {
 /**
  * 在已存在 session 的 user.root 上追加新 talk_window 指向 targetObjectId。
  *
- * - initialMessage 缺省 → 仅挂 talk_window 不派送,targetThreadId/jobId 为 undefined
- * - 同 target 已存在非 creator talk_window → 幂等返回,created=false
+ * S5 (2026-06-29) 解桩 — 走 POST /api/flows/:sid/talk-windows:
+ *   - 已存在 session, 加新 target thread + push ref 进 user.root.contextWindows
+ *   - 同 target 已存在 → created=false (idempotent)
  */
 export async function addUserTalkWindow(
   sessionId: string,
   input: { targetObjectId: string; initialMessage?: string },
 ): Promise<AddUserTalkWindowResult> {
-  return TODO_async<AddUserTalkWindowResult>(
-    `在 session(${sessionId}) 的 user.root 上追加 talk_window 指向 target=${input.targetObjectId}; 应幂等(同 target 已有 talk_window 直接返回); 携 initialMessage 时同步派送到 callee thread`,
-  );
+  return requestJson<AddUserTalkWindowResult>(endpoints.addUserTalkWindow(sessionId), {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
