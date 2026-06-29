@@ -25,8 +25,10 @@ OOC Agent 由 **8 个能力维度**组合，按 object→agent 分层：object b
 `.ooc-world-meta/stones/main/objects/supervisor/`（大局观+核心哲学+harness 组织+测试策略，见其 knowledge/）
 及其 `children/<dim>/`（8 维度 thinkable/executable/collaborable/reflectable/readable/visible/persistable/lifecycle
 + 非维度 observable + 横向 object〔对象模型〕/app）。每个对象 self.md 先陈述**核心设计**、含**名词解释** + knowledge。
-**任何"X 维度/模块是什么、怎么设计的"先看对应对象。** `meta/` 与 `docs/ooc-6/` 的旧设计文档正按维度
-吸收进对象树后逐步删除；与代码冲突时一律信代码。
+**任何"X 维度/模块是什么、怎么设计的"先看对应对象。** `meta/` 已删除(2026-06-28),`docs/` 历史
+推理痕迹已大规模清退(2026-06-29,issue 2026-06-28-docs-legacy-sweep landed),仅保留
+`docs/ooc-6/storybook/` 作 storybook 框架设计权威。与代码冲突时一律信代码;
+跨维度工程惯例见 supervisor `knowledge/engineering-conventions.md`。
 
 OOC 的定义、维度设计、工程协作模型、测试策略、外部场景 case、建对象 cookbook **已全部迁入对象树**。
 `packages/@ooc/meta/` 旧文档（object.doc.ts / engineering.* / app.*.doc.ts / case.* / cookbook.* /
