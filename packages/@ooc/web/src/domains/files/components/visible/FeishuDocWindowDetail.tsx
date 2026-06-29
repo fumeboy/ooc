@@ -35,13 +35,11 @@ async function fetchWorldConfigCached(): Promise<WorldConfigCache> {
   if (worldConfigInflight) return worldConfigInflight;
   worldConfigInflight = (async () => {
     try {
-      // 直接 fetch 避免引入 transport 依赖循环
-      const res = await fetch("/api/world/config");
-      const data = (await res.json()) as WorldConfigCache;
-      worldConfigCache = data;
-      worldConfigFetchedAt = Date.now();
-      for (const cb of worldConfigSubscribers) cb();
-      return data;
+      // 桩化(2026-06-29):本来 fetch /api/world/config 拿 { siteName, lark? };
+      // 重新实现时恢复 fetch + 解析 + cache update。
+      throw new Error(
+        `[TODO] 读 world config(GET /api/world/config); 返回 { siteName, lark? { feishuPrefix? } }; FeishuDocWindowDetail 用 lark.feishuPrefix 把 feishu_doc_window 中的 token 拼成可点击链接`,
+      );
     } finally {
       worldConfigInflight = null;
     }

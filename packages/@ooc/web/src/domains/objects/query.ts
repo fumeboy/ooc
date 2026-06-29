@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { requestJson } from "../../transport/http";
+import { TODO_async } from "../../transport/todo";
 import type { DisplayName } from "./model";
 
 /**
@@ -104,8 +104,8 @@ export function __isLikelyStoneObjectIdForTest(objectId: string | undefined): bo
 export async function fetchSelfFirstLine(objectId: string): Promise<string | null> {
   if (!isLikelyStoneObjectId(objectId)) return null;
   try {
-    const res = await requestJson<{ text?: string }>(
-      `/api/stones/${encodeURIComponent(objectId)}/self`,
+    const res = await TODO_async<{ text?: string }>(
+      `读 stones/main/objects/${objectId}/self.md 的全文(返回 { text }); 解析第一行 markdown # title 后由本函数 derive displayName; 用于 self.md 第一行派生 spec`,
     );
     const text = typeof res?.text === "string" ? res.text : "";
     if (!text) return null;
@@ -296,8 +296,8 @@ async function loadReadable(objectId: string): Promise<string | null> {
       // pass through, text remains null
     } else {
       try {
-        const res = await requestJson<{ text?: string }>(
-          `/api/stones/${encodeURIComponent(objectId)}/readable`,
+        const res = await TODO_async<{ text?: string }>(
+          `读 stones/main/objects/${objectId}/readable.md 的全文(返回 { text }); peer readable 详情面板用; 公开自述`,
         );
         text = typeof res?.text === "string" ? res.text : null;
       } catch {

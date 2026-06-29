@@ -18,9 +18,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { MarkdownContent } from "../../shared/ui/MarkdownContent";
-import { requestJson } from "../../transport/http";
+import { TODO_async } from "../../transport/todo";
 import { fetchTree } from "../files/query";
-import { endpoints } from "../../transport/endpoints";
 import type { FileTreeNode } from "../files/model";
 import { useDisplayName } from "../objects";
 
@@ -53,7 +52,9 @@ function useStoneExists(objectId: string): ExistenceState {
   useEffect(() => {
     let cancelled = false;
     setState({ loading: true });
-    requestJson<{ items?: { objectId: string }[] }>(endpoints.stones)
+    TODO_async<{ items?: { objectId: string }[] }>(
+      `列出 world 内所有 stone object(GET /api/stones); 用于 stone fallback 判 objectId 是否存在 (exists=列表中是否含该 id); 不存在则显示 'Stone not found' 卡片而非空模板`,
+    )
       .then((res) => {
         if (cancelled) return;
         const items = Array.isArray(res?.items) ? res.items : [];
@@ -319,11 +320,9 @@ function useStoneText(objectId: string, kind: "self" | "readable"): TextState {
   useEffect(() => {
     let cancelled = false;
     setState({ text: "", loading: true });
-    const url =
-      kind === "self"
-        ? `/api/stones/${encodeURIComponent(objectId)}/self`
-        : `/api/stones/${encodeURIComponent(objectId)}/readable`;
-    requestJson<{ text?: string }>(url)
+    TODO_async<{ text?: string }>(
+      `读 stones/main/objects/${objectId}/${kind}.md 全文(GET /api/stones/<id>/${kind}); 返回 { text }; StoneFallback 展示 self/readable 卡片用`,
+    )
       .then((res) => {
         if (cancelled) return;
         setState({ text: typeof res?.text === "string" ? res.text : "", loading: false });
@@ -389,7 +388,9 @@ function useRecentSessionsForStone(objectId: string): RecentSessionsState {
     setState({ items: [], loading: true });
     (async () => {
       try {
-        const flows = await requestJson<{ items?: FlowSummary[] }>(endpoints.flows);
+        const flows = await TODO_async<{ items?: FlowSummary[] }>(
+          `列出所有 flow session(GET /api/flows); 用于 StoneFallback 探测哪些 session 引用了本 stone object`,
+        );
         const items = Array.isArray(flows.items) ? flows.items : [];
         // 按 updatedAt 倒序 take 上限以控制并发, 避免拉太多 sessionThreads
         const sorted = [...items].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
@@ -397,8 +398,8 @@ function useRecentSessionsForStone(objectId: string): RecentSessionsState {
         const results = await Promise.all(
           probe.map(async (f) => {
             try {
-              const tr = await requestJson<{ items?: { objectId: string }[] }>(
-                endpoints.sessionThreads(f.sessionId),
+              const tr = await TODO_async<{ items?: { objectId: string }[] }>(
+                `列 session(${f.sessionId}) 的 threads(GET /api/flows/<sid>/threads); 用于探测引用本 stone 的 session`,
               );
               const has = (tr.items ?? []).some((t) => t.objectId === objectId);
               return has ? f : null;

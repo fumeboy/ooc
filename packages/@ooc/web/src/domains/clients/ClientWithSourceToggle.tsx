@@ -16,8 +16,7 @@ import {
 import { FileViewer } from "../files/components/FileViewer";
 import type { FileContent } from "../files";
 import { fetchAnyFile } from "../files";
-import { endpoints } from "../../transport/endpoints";
-import { requestJson } from "../../transport/http";
+import { TODO_async } from "../../transport/todo";
 // matchClientTarget + deriveClientPath moved to client-path.ts to share with
 // routing.ts (file-link shortcut) and FileViewer (visible preview dispatch).
 export { matchClientTarget, isClientEntryPath, deriveClientPath } from "./client-path";
@@ -34,14 +33,13 @@ export { matchClientTarget, isClientEntryPath, deriveClientPath } from "./client
  * 转译后的模块，不能用作源码展示，故走读任意文件的 endpoint 取磁盘原文）。
  */
 async function fetchClientSource(target: ClientTarget): Promise<FileContent> {
-  const url =
+  const targetDesc =
     target.scope === "stone"
-      ? endpoints.clientSourceUrl("stone", target.objectId)
-      : endpoints.clientSourceUrl("flow", target.objectId, {
-          sessionId: target.sessionId,
-          page: target.page,
-        });
-  const { absPath } = await requestJson<{ absPath: string; fsUrl: string }>(url);
+      ? `stone objectId=${target.objectId}`
+      : `flow sessionId=${target.sessionId} objectId=${target.objectId} page=${target.page}`;
+  const { absPath } = await TODO_async<{ absPath: string; fsUrl: string }>(
+    `GET /api/objects/:scope/:objectId/client-source-url for ${targetDesc}; 同 ObjectClientRenderer 取 absPath, 用于展示源码 (而非 fsUrl 转译模块)`,
+  );
   const file = await fetchAnyFile(absPath);
   return { path: file.path, content: file.content, size: file.size };
 }

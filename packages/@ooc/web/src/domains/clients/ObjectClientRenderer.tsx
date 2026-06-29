@@ -21,8 +21,7 @@ import {
   lazy,
   useMemo,
 } from "react";
-import { endpoints } from "../../transport/endpoints";
-import { requestJson } from "../../transport/http";
+import { TODO_async } from "../../transport/todo";
 import { StoneFallback } from "./StoneFallback";
 
 /**
@@ -60,21 +59,19 @@ interface ClientSourceResolution {
 }
 
 async function resolveClientSource(target: ClientTarget): Promise<ClientSourceResolution> {
-  const url =
+  const targetDesc =
     target.scope === "stone"
-      ? endpoints.clientSourceUrl("stone", target.objectId)
-      : endpoints.clientSourceUrl("flow", target.objectId, {
-          sessionId: target.sessionId,
-          page: target.page,
-        });
+      ? `stone objectId=${target.objectId}`
+      : `flow sessionId=${target.sessionId} objectId=${target.objectId} page=${target.page}`;
   try {
-    const res = await requestJson<{ absPath: string; fsUrl: string }>(url);
+    const res = await TODO_async<{ absPath: string; fsUrl: string }>(
+      `GET /api/objects/:scope/:objectId/client-source-url for ${targetDesc}; backend 给出权威 { absPath, fsUrl } 让前端动态 import; stone scope 读 stones/.../visible/index.tsx (legacy: client/index.tsx); flow scope 读 flows/<sid>/objects/<oid>/client/pages/<page>.tsx; 文件不存在 → 404 NOT_FOUND → notFound=true 走 fallback`,
+    );
     return { absPath: res.absPath, fsUrl: res.fsUrl, notFound: false };
   } catch (e) {
-    // 任何错误（404 / 网络）走 fallback；上层用 absPath="" 的占位，notFound=true 触发 StoneFallback/NotProducedYet。
     const msg = e instanceof Error ? e.message : String(e);
-    // 仅 NOT_FOUND 是预期失败（无 client 文件，走 fallback）；其它错误 console.warn 供排查。
-    if (!/not\s*found|404/i.test(msg)) {
+    // 仅 NOT_FOUND 是预期失败(无 client 文件,走 fallback);其它错误 console.warn 供排查。
+    if (!/not\s*found|404|TODO/i.test(msg)) {
       console.warn("[ObjectClientRenderer] resolveClientSource failed:", msg);
     }
     return { absPath: "", fsUrl: "", notFound: true };
@@ -83,17 +80,15 @@ async function resolveClientSource(target: ClientTarget): Promise<ClientSourceRe
 
 function callMethodFor(target: ClientTarget) {
   return async (method: string, args: object = {}) => {
-    const url =
+    const targetDesc =
       target.scope === "stone"
-        ? endpoints.stoneCallMethod(target.objectId)
-        : endpoints.flowCallMethod(target.sessionId, target.objectId);
-    const body = JSON.stringify({ method, args });
-    // 废 ui_methods 维度后，call_method 响应即标准 MethodOutcome：
-    // 结构化数据走 data、消息文本走 result，!ok 抛 error。
-    const response = await requestJson<{ ok: boolean; data?: unknown; result?: string; error?: string }>(url, {
-      method: "POST",
-      body,
-    });
+        ? `stone objectId=${target.objectId}`
+        : `flow sessionId=${target.sessionId} objectId=${target.objectId}`;
+    // 废 ui_methods 维度后,call_method 响应即标准 MethodOutcome:
+    // 结构化数据走 data、消息文本走 result,!ok 抛 error。
+    const response = await TODO_async<{ ok: boolean; data?: unknown; result?: string; error?: string }>(
+      `POST /api/${target.scope === "stone" ? "stones/<id>" : "flows/<sid>/<oid>"}/call_method body={method=${method}, args=${JSON.stringify(args).slice(0, 80)}} for ${targetDesc}; dispatch 到 visible/server for-ui method (人类侧专路, ctx 有 world/session/object-self、无 thinkloop thread); 改 data → persistable.save (非版本化); 注意:新设计 callMethod 仅 flow scope (stone /call_method 已移除),桩化重新实现时按新设计走`,
+    );
     if (!response.ok) throw new Error(response.error ?? `method '${method}' failed`);
     return response.data ?? response.result;
   };

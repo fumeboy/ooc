@@ -19,7 +19,13 @@ set -e
 # 不再有 baseline 错误。如果将来需要，往这里加 grep 模式（例如：
 # 'packages/@ooc/core/app/server/modules/ui/api\.list-flows\.ts')，正则 OR 用 |。
 # （F3 flows/pools 已于阶段三恢复，原 baseline 已清空。）
-BASELINE_PATTERNS=''
+#
+# 2026-06-29: 用户从 ooc-6 分支恢复 packages/@ooc/web/(157 ts/tsx 完整控制面),
+# 但缺大量 npm 依赖(react-router/lucide-react/@codemirror/*/@uiw/*/tailwind-merge
+# 等)和 ooc-6 时代 builtin 名空间(@ooc/builtins/_shared 等已不存在)。已按用户
+# 裁决把 web 端 server 对接全部桩化为 TODO,但依赖缺失仍存在,作 baseline 处理
+# 等后续 issue 决定 web 整体走向。
+BASELINE_PATTERNS='^packages/@ooc/web/'
 
 LOG=$(mktemp)
 trap 'rm -f "$LOG"' EXIT

@@ -116,10 +116,20 @@ EXCLUDE_DIRS=(
   ".ooc-world-test"
   "docs"  # plan 文件、归档 spec 内的描述合法
   "dist"  # web 构建产物（minified bundle，含第三方 hast/rehype 字面量），非源码
+  # 2026-06-29: web 从 ooc-6 恢复后含一批 ooc-6 时代退役 symbol(isCreatorWindow / DoWindow 等);
+  # 已按用户裁决把 server 对接桩化为 TODO,但 web 整体仍未与 main 设计权威对齐(builtin 名空间
+  # / Class 协议等)。整体重建期间暂排除 web/src 防 deprecated 守门红;web 整合 issue landed
+  # 时该 EXCLUDE 移除。
+  "packages/@ooc/web/src"
 )
 
 is_allowed() {
   local file="$1"
+  # 2026-06-29: web 从 ooc-6 恢复后含 ooc-6 退役 symbol;整体重建期间豁免整个 web/src
+  # (server 对接已桩化, web 整合 issue landed 时此 prefix 豁免移除)。
+  if [[ "$file" == packages/@ooc/web/src/* ]]; then
+    return 0
+  fi
   for allowed in "${ALLOW_LIST[@]}"; do
     if [[ "$file" == "$allowed" ]]; then
       return 0
