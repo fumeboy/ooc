@@ -309,15 +309,22 @@ export async function mergeFeatBranch(
   const head = gitHead(repo);
   if (!head.ok) return { ok: false, code: "GIT", gitCode: head.code, stderr: head.stderr };
 
-  // 失效 ServerLoader 按 mtime 缓存的 stale class entry（reflectable 路径 A：PR merge 后清缓存）。
-  // 用 dynamic import 避开 persistable → runtime 的循环依赖（server-loader 已 import persistable）。
+  // 失效缓存 + 通知所有 WorldRuntime 实例 (C1 dogfood, 2026-06-29):
+  // - defaultServerLoader.invalidateStone: 默认单例缓存 (历史路径)
+  // - notifyAllWorldRuntimes: 经 stoneRegistry.invalidate 触发每个 WorldRuntime 内的 listener
+  //   写 reloadTable + 经其 serverLoader 也 invalidate, 让 lifecycle.on_reload 在下次 active 派发
+  // 用 dynamic import 避开 persistable → runtime 的循环依赖。
   try {
     const { defaultServerLoader } = await import("../runtime/server-loader.js");
     for (const oid of objectIds) {
       await defaultServerLoader.invalidateStone({ baseDir, objectId: oid });
     }
+    const { notifyAllWorldRuntimes } = await import("../runtime/world-runtime-registry.js");
+    for (const oid of objectIds) {
+      await notifyAllWorldRuntimes(baseDir, oid);
+    }
   } catch {
-    // best-effort：loader 不可达不影响 merge 成功；hot-reload 推模式仍会兜底。
+    // best-effort:loader/registry 不可达不影响 merge 成功
   }
 
   await cleanupWorktreeAfterMerge(repo, worktreePath(baseDir, branch), baseDir, branch, reason);
@@ -533,6 +540,14 @@ export async function httpDirectMainWrite(
       } as const;
     }
     await syncMergedObjectToPackages(input.baseDir, input.authorObjectId);
+    // C1 dogfood (2026-06-29): 通知所有 WorldRuntime 实例 stone 变了 → reloadTable +
+    // serverLoader.invalidateStone, 让 lifecycle.on_reload 在下次 active 派发
+    try {
+      const { notifyAllWorldRuntimes } = await import("../runtime/world-runtime-registry.js");
+      await notifyAllWorldRuntimes(input.baseDir, input.authorObjectId);
+    } catch {
+      // best-effort
+    }
     return { ok: true, commitSha: commit.value, merged: true } as const;
   });
 }
