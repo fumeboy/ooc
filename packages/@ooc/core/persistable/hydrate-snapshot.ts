@@ -75,14 +75,20 @@ export async function recordHydrate(
   await writeSnapshot(baseDir, sessionId, snap);
 }
 
-/** 读 snapshot；缺则空对象。 */
+/** 读 snapshot；缺则空对象。JSON parse 失败也回退空对象 (并发写半态时的 graceful 兜底)。 */
 export async function readSnapshot(
   baseDir: string,
   sessionId: string,
 ): Promise<FlowHydrateSnapshot> {
   try {
     const raw = await readFile(snapshotPath(baseDir, sessionId), "utf8");
-    return JSON.parse(raw) as FlowHydrateSnapshot;
+    try {
+      return JSON.parse(raw) as FlowHydrateSnapshot;
+    } catch {
+      // 并发 hydrate 时 snapshot 文件可能处于半写态; 此时返空 baseline,下一轮
+      // hydrate 完成的 writeSnapshot 会修复(原子 fsync write)。
+      return {};
+    }
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return {};
     throw e;
@@ -96,5 +102,10 @@ async function writeSnapshot(
 ): Promise<void> {
   const path = snapshotPath(baseDir, sessionId);
   await mkdir(join(baseDir, "flows", sessionId), { recursive: true });
-  await writeFile(path, JSON.stringify(snap, null, 2), "utf8");
+  // Atomic 写: 先写 .tmp,再 rename 替换原文件 (POSIX rename 原子)。
+  // 防并发 hydrate 时 readSnapshot 看到半写态 JSON。
+  const tmp = `${path}.tmp.${process.pid}.${Math.random().toString(36).slice(2)}`;
+  await writeFile(tmp, JSON.stringify(snap, null, 2), "utf8");
+  const { rename } = await import("node:fs/promises");
+  await rename(tmp, path);
 }

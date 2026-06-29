@@ -51,6 +51,10 @@ export async function runScheduler(
     iterateSessionObjectTable(sessionId, (inst) => {
       if (inst.class !== THREAD_CLASS_ID) return;
       const t = inst.data as ThreadContext;
+      // S5 (2026-06-29): user.root 等 skip_scheduling=true 的 thread 不参与调度。
+      // 这类 thread 作为 transcript 容器 (持 contextWindows 子 thread refs),
+      // 但永不被 scheduler tick 推进 — 人类经 server endpoint 直写其 transcript。
+      if (t.skip_scheduling) return;
       if (t.status !== "running" && t.status !== "waiting") return;
       threads.push(t);
     });
