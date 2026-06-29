@@ -173,6 +173,16 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
       if (!record) return { error: "not found" };
       return record;
     })
+    // S7 (2026-06-29): job-manager — GET /api/runtime/jobs/:id
+    .get("/jobs/:id", async ({ params, set }) => {
+      const { getJob } = await import("../../runtime/job-manager.js");
+      const job = getJob(params.id);
+      if (!job) {
+        set.status = 404;
+        return { ok: false, error: { code: "JOB_NOT_FOUND", message: `job ${params.id} not found` } };
+      }
+      return job;
+    })
     // S8 (2026-06-29): global-pause toggle + status
     .get("/global-pause/status", async () => {
       const { isGlobalPaused } = await import("../../runtime/pause-store.js");
@@ -202,7 +212,44 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
       const { setDebugEnabled } = await import("../../runtime/debug-store.js");
       setDebugEnabled(false);
       return { enabled: false };
-    });
+    })
+    // S9 (2026-06-29): loop debug list + get
+    .get(
+      "/flows/:sid/:oid/threads/:tid/debug/loops",
+      async ({ params }) => {
+        const { listLoops } = await import("../../runtime/loop-debug.js");
+        const loops = await listLoops({
+          baseDir,
+          sessionId: params.sid,
+          objectId: params.oid,
+          threadId: params.tid,
+        });
+        return { loops };
+      },
+    )
+    .get(
+      "/flows/:sid/:oid/threads/:tid/debug/loops/:loopIndex",
+      async ({ params, set }) => {
+        const idx = parseInt(params.loopIndex, 10);
+        if (!Number.isFinite(idx) || idx < 0) {
+          set.status = 400;
+          return { ok: false, error: { code: "INVALID_LOOP_INDEX", message: "loopIndex must be non-negative integer" } };
+        }
+        const { readLoopDebug } = await import("../../runtime/loop-debug.js");
+        const result = await readLoopDebug({
+          baseDir,
+          sessionId: params.sid,
+          objectId: params.oid,
+          threadId: params.tid,
+          loopIndex: idx,
+        });
+        if (!result.ok) {
+          set.status = result.code === "LOOP_NOT_FOUND" ? 404 : 500;
+          return { ok: false, error: { code: result.code, message: result.message } };
+        }
+        return { ok: true, input: result.input, output: result.output, meta: result.meta };
+      },
+    );
 }
 
 /** @deprecated use buildRuntimeModule(config). 留作历史兼容。 */

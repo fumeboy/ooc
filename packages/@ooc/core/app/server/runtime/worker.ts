@@ -6,6 +6,10 @@
  *
  * **issue F1 (2026-06-29)**：加 `reloadTable` opt 透传 — 经 scheduler → thinkable.think →
  * ThreadRuntime → maybeDispatchOnReload，兑现 lifecycle.on_reload 在生产 server 的派发。
+ *
+ * **issue S7 (2026-06-29)**: 加 job-manager 集成。enqueueScheduler 返 `{ jobId }` 让
+ * HTTP 控制面前端拿到 job id 用于 polling 状态。runOnce 内 startJob/finishJob 推进
+ * job 状态机 (queued → running → done|failed)。
  */
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
 import type { ReloadTable } from "@ooc/core/runtime/reload-table.js";
@@ -13,49 +17,66 @@ import { runScheduler } from "@ooc/builtins/agent/children/thread/thinkable/inde
 import { persistSession } from "@ooc/core/persistable/runtime-object-io.js";
 import { observeLog } from "@ooc/core/observable/index.js";
 import { isGlobalPaused, isSessionPaused } from "./pause-store.js";
+import { createJob, startJob, finishJob } from "./job-manager.js";
+import { writeLoopDebug } from "./loop-debug.js";
 
 interface WorkerState {
   sessionId: string;
   llm: LlmClient;
   baseDir: string;
-  /**
-   * lifecycle on_reload 派发标记表（issue F1）。worker 注册时捕获该引用,后续 runOnce 透给
-   * scheduler / thinkable.think / ThreadRuntime。server 不重启则 worker 持同一 reloadTable
-   * 引用;server 重启 `clearWorkers()` 后下次 enqueue 重新捕获新表。
-   */
+  /** lifecycle on_reload 派发标记表（issue F1）。 */
   reloadTable?: ReloadTable;
   busy: boolean;
   pending: boolean;
+  /** 当前正在推进的 jobId (run-thread); pending 信号会派生新 job。 */
+  currentJobId?: string;
+  /** pending 信号待消费的 jobId (busy 期间 enqueue 触发的新 job)。 */
+  pendingJobId?: string;
 }
 
 const workers = new Map<string, WorkerState>();
 
-/** 给 session 入队一次调度信号；已 busy 则置 pending 等当前 tick 结束再跑一次。 */
+/**
+ * 给 session 入队一次调度信号；已 busy 则置 pending 等当前 tick 结束再跑一次。
+ *
+ * 返回 `{ jobId }` (S7 集成) — 即使 paused / no-op 也返回 jobId, 状态会即时 finish 为 done
+ * (与 S4 pause 语义对齐: pause 不抛 error,只跳过入队,job 视为已完成的 no-op)。
+ */
 export async function enqueueScheduler(
   sessionId: string,
   llm: LlmClient,
   baseDir: string,
   reloadTable?: ReloadTable,
-): Promise<void> {
-  // S4 + S8 (2026-06-29): pause 闸 — global pause / per-session pause 命中即跳过入队。
-  // 已 busy 的 worker 仍可继续 (pause 不打断 inflight LLM, 仅禁新调度信号入队)。
+): Promise<{ jobId: string }> {
+  // S4 + S8: pause 闸 — 命中即不入队, 但仍 return job (no-op job, status=done)
   if (isGlobalPaused() || isSessionPaused(sessionId)) {
-    return;
+    const job = createJob("run-thread", sessionId);
+    finishJob(job.id, true); // done immediately (paused, no work)
+    return { jobId: job.id };
   }
   let w = workers.get(sessionId);
   if (!w) {
     w = { sessionId, llm, baseDir, reloadTable, busy: false, pending: false };
     workers.set(sessionId, w);
   }
+  const job = createJob("run-thread", sessionId);
   if (w.busy) {
     w.pending = true;
-    return;
+    w.pendingJobId = job.id;
+    // job 进入 queued 状态, 等 runOnce pending pass 处理 (会 startJob/finishJob)
+    return { jobId: job.id };
   }
+  w.currentJobId = job.id;
   await runOnce(w);
+  return { jobId: job.id };
 }
 
 async function runOnce(w: WorkerState): Promise<void> {
   w.busy = true;
+  const jobId = w.currentJobId;
+  if (jobId) startJob(jobId);
+  let ok = true;
+  let errMsg: string | undefined;
   try {
     await runScheduler(w.sessionId, w.llm, {
       maxTicks: 15,
@@ -64,26 +85,45 @@ async function runOnce(w: WorkerState): Promise<void> {
       onDataEdit: async () => {
         await persistSession(w.baseDir, w.sessionId);
       },
-      /**
-       * issue G：把 enqueueScheduler 闭包注入 ThreadRuntime.scheduleSession 钩子。
-       * say / reply / talk-super append 写盘后调用 → 跨 session 唤醒对端 worker。
-       * 此处 fire-and-forget（enqueueScheduler 是 async 但 wakeSession 签名同步）；
-       * 投递失败不阻塞当前 think 一轮，crash 容忍由 scheduler 启动 / 周期 tick 扫 inbox 兜底。
-       * **issue F1**: reloadTable 透传保持(同 session 共用同一表)。
-       */
       wakeSession: (sid: string) => {
         void enqueueScheduler(sid, w.llm, w.baseDir, w.reloadTable);
       },
+      // S9 (2026-06-29): loop debug 落盘 hook — debug=on 时落 loop_NNNN.{input,output,meta}.json
+      onLoopComplete: async (info) => {
+        const meta = info.meta as { threadId?: string; sessionId?: string };
+        if (!meta.threadId || !meta.sessionId) return;
+        // objectId = thread.calleeObjectId (LoopTimeline 按此寻址 debug 路径)
+        const reg = await import("@ooc/core/runtime/object-registry.js");
+        const inst = reg.getSessionRegistry(meta.sessionId).getObject(meta.threadId);
+        const calleeObjectId = (inst?.data as { calleeObjectId?: string } | undefined)?.calleeObjectId;
+        if (!calleeObjectId) return;
+        await writeLoopDebug({
+          baseDir: w.baseDir,
+          sessionId: meta.sessionId,
+          objectId: calleeObjectId,
+          threadId: meta.threadId,
+          loopIndex: info.loopIndex,
+          input: info.input,
+          output: info.output,
+          meta: info.meta,
+        });
+      },
     });
-    // 每轮 tick 结束后兜底落盘
     await persistSession(w.baseDir, w.sessionId);
   } catch (err) {
-    observeLog("worker.runScheduler.error", `[worker] ${(err as Error).message}`);
+    ok = false;
+    errMsg = (err as Error).message;
+    observeLog("worker.runScheduler.error", `[worker] ${errMsg}`);
   } finally {
     w.busy = false;
+    if (jobId) finishJob(jobId, ok, errMsg);
+    w.currentJobId = undefined;
   }
   if (w.pending) {
     w.pending = false;
+    // 把 pending 期间累计的 jobId 接到下一轮 runOnce
+    w.currentJobId = w.pendingJobId;
+    w.pendingJobId = undefined;
     await runOnce(w);
   }
 }

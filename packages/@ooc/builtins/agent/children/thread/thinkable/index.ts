@@ -32,6 +32,10 @@ const thinkable: ThinkableModule<ThreadContext> = {
       wakeSession: deps.wakeSession,
       // issue 2026-06-28: reloadTable 可选透传, 缺省 ThreadRuntime 静默跳过 on_reload
       reloadTable: deps.reloadTable as ReloadTable | undefined,
+      // S9 (2026-06-29): loop debug 落盘 hook (worker 注入)
+      onLoopComplete: deps.onLoopComplete as
+        | ((info: { loopIndex: number; input: unknown; output: unknown; meta: Record<string, unknown> }) => Promise<void> | void)
+        | undefined,
     });
   },
   active: (data: ThreadContext) => {

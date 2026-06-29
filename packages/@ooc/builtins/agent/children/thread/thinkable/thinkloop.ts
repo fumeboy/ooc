@@ -33,6 +33,19 @@ export interface ThinkOptions {
    * 测试态可缺省 → ThreadRuntime 静默跳过 on_reload。
    */
   reloadTable?: ReloadTable;
+  /**
+   * loop debug 落盘 hook (issue S9, 2026-06-29)。
+   *
+   * 一轮 think 完成时 (无论成功失败) 调用,把 input/output/meta 三元组交给 caller
+   * (server.worker) 决定是否落盘 (依 debug-store toggle)。thinkloop 自身不感知 debug 开关、
+   * 不直接 fs.writeFile (避 builtin → server 循环依赖)。
+   */
+  onLoopComplete?: (info: {
+    loopIndex: number;
+    input: unknown;
+    output: unknown;
+    meta: Record<string, unknown>;
+  }) => Promise<void> | void;
 }
 
 /** 单轮 think —— 一次完整的 LLM 互动 + tool dispatch。 */
@@ -54,6 +67,9 @@ export async function think(
   });
 
   let result;
+  // S9 (2026-06-29): 算 loopIndex (本轮 call_started 之前 thread 已有的 call_started 计数 + 0)
+  // = call_started 总数 - 1 (call_started 已 push)
+  const loopIndex = thread.events.filter((e) => "kind" in e && e.kind === "call_started").length - 1;
   try {
     result = await llm.generate({
       input,
@@ -64,7 +80,37 @@ export async function think(
     thread.status = "failed";
     thread.statusReason = (err as Error).name === "LlmTimeoutError" ? "llm_timeout" : "think_error";
     thread.lastError = (err as Error).message;
+    // S9: debug 落盘 (failed 也落, 便于诊断)
+    if (opts.onLoopComplete) {
+      await opts.onLoopComplete({
+        loopIndex,
+        input,
+        output: { error: thread.lastError, statusReason: thread.statusReason },
+        meta: {
+          createdAt: callStartedAt,
+          finishedAt: Date.now(),
+          status: "failed",
+          threadId: thread.id,
+          sessionId: thread.sessionId,
+        },
+      });
+    }
     return;
+  }
+  // S9: 成功后落 debug
+  if (opts.onLoopComplete) {
+    await opts.onLoopComplete({
+      loopIndex,
+      input,
+      output: result,
+      meta: {
+        createdAt: callStartedAt,
+        finishedAt: Date.now(),
+        status: "ok",
+        threadId: thread.id,
+        sessionId: thread.sessionId,
+      },
+    });
   }
 
   // 写 text / thinking 事件
