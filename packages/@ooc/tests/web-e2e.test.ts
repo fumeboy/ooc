@@ -24,19 +24,22 @@ describe("web e2e (without browser)", () => {
     const root = process.cwd();
     const webRoot = join(root, "packages/@ooc/web");
     webDist = join(webRoot, "dist");
+    // 2026-06-29 (A1+A2 web build fix): web 端 ooc-6 依赖问题已修, vite build 可跑;
+    // env OOC_WORLD_DIR 必传 (vite.config.ts 启动期 advisory check)。timeout 30s 应足。
     const r = spawnSync("bun", ["--bun", "vite", "build"], {
       cwd: webRoot,
       encoding: "utf8",
+      timeout: 60_000,
+      env: { ...process.env, OOC_WORLD_DIR: baseDir },
     });
     viteBuildOk = r.status === 0;
-    // 2026-06-29: web 端从 ooc-6 恢复后缺依赖 + server 对接已桩化, vite build 暂期望失败。
-    // server endpoint e2e test 仍可单独跑(不依赖 web build)。
-  });
+  }, 90_000);
   afterAll(async () => {
     await rm(baseDir, { recursive: true, force: true });
   });
 
-  it.skipIf(!viteBuildOk)("web build produces dist/index.html + bundled JS", async () => {
+  it("web build produces dist/index.html + bundled JS", async () => {
+    if (!viteBuildOk) throw new Error("vite build failed in beforeAll");
     const html = await stat(join(webDist, "index.html"));
     expect(html.isFile()).toBe(true);
     // 检查至少有一个 JS bundle

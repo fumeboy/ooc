@@ -1,16 +1,23 @@
 /**
  * MethodExecWindowDetail — UI for the method_exec form.
  *
- * Moved here from `@ooc/builtins/command_exec/visible/index.tsx`.
- * The command_exec package is being deleted because form is an Object built-in feature
- * managed in core, not a stand-alone builtin object.
+ * 2026-06-29 (A2): @ooc/core/executable/windows/method_exec/types 已不存在,
+ * 本地 inline 一个 minimal type (与 ooc-6 时代 MethodExecWindow shape 兼容)。
  */
-import type { MethodExecWindow } from "@ooc/core/executable/windows/method_exec/types.js";
 import React from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json as jsonLanguage } from "@codemirror/lang-json";
 import { parseEditArgs, FileEditDiffView } from "./FileEditDiffView";
-import { formatJson, previewText, statusToTone } from "@ooc/builtins/_shared/visible/utils";
+import { formatJson, previewText, statusToTone } from "../../../shared/visible-utils";
+
+/**
+ * MethodExecWindow shape — 本地 inline (核心 module 已退役)。
+ * 字段全部 any-loose, 因 ooc-6 时代 union shape 复杂 (refine/submit/closed 等 status
+ * 各异);web build 通过即可,真 visible/server S2 已落地,本组件等真 visible/index.tsx
+ * 接通后整体替换。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MethodExecWindow = any;
 
 export default function MethodExecWindowDetail({ window }: { window: MethodExecWindow }) {
   return (
@@ -47,7 +54,7 @@ export default function MethodExecWindowDetail({ window }: { window: MethodExecW
               </tr>
             </thead>
             <tbody>
-              {Object.entries(window.schema.args).map(([name, spec]) => {
+              {Object.entries(window.schema.args).map(([name, spec]: [string, any]) => {
                 const fill = window.fill?.[name];
                 const statusClass = fill?.status === "invalid"
                   ? "is-error"
@@ -82,7 +89,7 @@ export default function MethodExecWindowDetail({ window }: { window: MethodExecW
           </table>
           {(() => {
             const missing = Object.entries(window.schema.args)
-              .filter(([name, spec]) => spec.required && window.fill?.[name]?.status !== "provided")
+              .filter(([name, spec]: [string, any]) => spec.required && window.fill?.[name]?.status !== "provided")
               .map(([name]) => name);
             if (missing.length === 0) return null;
             return (
