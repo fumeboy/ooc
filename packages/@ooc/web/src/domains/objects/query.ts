@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { TODO_async } from "../../transport/todo";
+import { requestJson } from "../../transport/http";
+import { endpoints } from "../../transport/endpoints";
 import type { DisplayName } from "./model";
 
 /**
@@ -104,10 +105,11 @@ export function __isLikelyStoneObjectIdForTest(objectId: string | undefined): bo
 export async function fetchSelfFirstLine(objectId: string): Promise<string | null> {
   if (!isLikelyStoneObjectId(objectId)) return null;
   try {
-    const res = await TODO_async<{ text?: string }>(
-      `读 stones/main/objects/${objectId}/self.md 的全文(返回 { text }); 解析第一行 markdown # title 后由本函数 derive displayName; 用于 self.md 第一行派生 spec`,
+    // S1 (2026-06-29): 走通用 file 原语读 self.md (替代旧 /api/stones/<id>/self)
+    const res = await requestJson<{ ok: boolean; content?: string }>(
+      endpoints.stoneFile(objectId, "self.md"),
     );
-    const text = typeof res?.text === "string" ? res.text : "";
+    const text = typeof res?.content === "string" ? res.content : "";
     if (!text) return null;
     const firstLine = text.split("\n")[0]?.trim() ?? "";
     // 必须以一个或多个 `#` 起首,再跟空白 — 标准 markdown H1/H2
@@ -296,10 +298,11 @@ async function loadReadable(objectId: string): Promise<string | null> {
       // pass through, text remains null
     } else {
       try {
-        const res = await TODO_async<{ text?: string }>(
-          `读 stones/main/objects/${objectId}/readable.md 的全文(返回 { text }); peer readable 详情面板用; 公开自述`,
+        // S1 (2026-06-29): 走通用 file 原语读 readable.md (替代旧 /api/stones/<id>/readable)
+        const res = await requestJson<{ ok: boolean; content?: string }>(
+          endpoints.stoneFile(objectId, "readable.md"),
         );
-        text = typeof res?.text === "string" ? res.text : null;
+        text = typeof res?.content === "string" ? res.content : null;
       } catch {
         text = null;
       }

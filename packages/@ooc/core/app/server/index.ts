@@ -14,6 +14,7 @@ import { createWorldRuntime, type WorldRuntime } from "@ooc/core/runtime/world-r
 import { parseServerConfig } from "./bootstrap/config.js";
 import { healthModule } from "./modules/health/index.js";
 import { buildRuntimeModule, type RuntimeModuleConfig } from "./modules/runtime/index.js";
+import { buildStonesModule } from "./modules/stones/index.js";
 
 export interface BuildServerConfig extends RuntimeModuleConfig {
   /** dev 模式开关 — 默认 true (开 hot-reload watcher + lifecycle.on_reload 派发)。 */
@@ -28,6 +29,11 @@ export interface BuildServerConfig extends RuntimeModuleConfig {
  *
  * 返回的 app 持 `worldRuntime` 字段,关停时调用方需调 `app.stop()` + `worldRuntime.dispose()`
  * 释放 hot-reload watcher 与缓存。
+ *
+ * Modules:
+ *   - health  : /health 健康检查
+ *   - runtime : /api/runtime/* (F1 已落地)
+ *   - stones  : /api/stones/:id/file (S1 通用 file-edit/read 原语)
  */
 export function buildServer(config: BuildServerConfig) {
   const worldRuntime = createWorldRuntime({
@@ -38,9 +44,9 @@ export function buildServer(config: BuildServerConfig) {
     .decorate("baseDir", config.baseDir)
     .decorate("worldRuntime", worldRuntime)
     .use(healthModule)
-    .use(buildRuntimeModule({ ...config, worldRuntime }));
+    .use(buildRuntimeModule({ ...config, worldRuntime }))
+    .use(buildStonesModule({ baseDir: config.baseDir }));
   // 把 worldRuntime 暴露在 app 对象上, 调用方 (test / runner) 可显式 dispose。
-  // (Elysia decorator 只对 handler ctx 可见, 不暴露给 app 持有者。)
   return Object.assign(app, { worldRuntime });
 }
 

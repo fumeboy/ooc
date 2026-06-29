@@ -2,6 +2,21 @@ export const endpoints = {
   health: "/api/health",
   stones: "/api/stones",
   /**
+   * 通用 stone file-edit/read 原语 (S1, 2026-06-29 落地)。
+   * 替代 ooc-6 时代专用 `/api/stones/:id/self` 与 `/api/stones/:id/readable`。
+   *
+   * - GET /api/stones/:id/file?path=<rel>  → { ok, content, size, ... }
+   * - PUT /api/stones/:id/file?path=<rel>  body { content } → { ok, commitSha, ... }
+   *
+   * Path 三层防护(白名单 + safe-path + ensure-inside):
+   *   仅允许 self.md / readable.md / executable/index.ts / visible/index.tsx /
+   *   visible/server/index.ts / knowledge/*.md
+   *
+   * 设计权威: app/self.md L16
+   */
+  stoneFile: (objectId: string, path: string) =>
+    `/api/stones/${encodeURIComponent(objectId)}/file?path=${encodeURIComponent(path)}`,
+  /**
    * knowledge 实际写入 pool 层，路径迁到 `/api/pools/...`。
    * 旧 `/api/stones/.../knowledge/...` 在后端保留兼容并加 `X-Deprecated` header。
    */
