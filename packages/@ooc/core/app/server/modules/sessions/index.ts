@@ -128,8 +128,8 @@ export function buildSessionsModule(config: SessionsModuleConfig) {
         let jobId: string | undefined;
         if (autoEnqueue) {
           try {
-            await enqueueScheduler(sessionId, getLlm(), baseDir, config.worldRuntime?.reloadTable);
-            // worker 当前无 jobId 概念 (S7 待落地); 留 undefined
+            const r = await enqueueScheduler(sessionId, getLlm(), baseDir, config.worldRuntime?.reloadTable);
+            jobId = r.jobId; // S7 (2026-06-29): worker enqueue 返 jobId
           } catch (err) {
             console.warn(`[sessions] auto-enqueue skipped: ${(err as Error).message}`);
           }

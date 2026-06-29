@@ -96,4 +96,9 @@ export interface ThinkableDeps {
    * 类型用 unknown 保 contract 层零运行时依赖（thread 实现 cast 为 ReloadTable）。
    */
   reloadTable?: unknown;
+  /**
+   * loop debug 落盘 hook (issue S9, 2026-06-29) — server worker 注入实现。
+   * Optional, 缺则 thinkloop 跳过落盘。类型用 unknown 保 contract 层零运行时依赖。
+   */
+  onLoopComplete?: unknown;
 }

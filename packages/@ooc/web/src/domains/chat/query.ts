@@ -32,8 +32,9 @@ export function continueThread(sessionId: string, text: string, targetWindowId?:
 }
 
 export function fetchJob(jobId: string) {
-  return TODO_async<{ status?: string }>(
-    `[S7 待落地] 查询 job(${jobId}) 状态: queued / running / done / failed; 需先建 job-manager (worker.ts 当前无 job 实体)`,
+  // S7 (2026-06-29) 解桩 — 走 GET /api/runtime/jobs/:id
+  return requestJson<{ status?: string; kind?: string; sessionId?: string; createdAt?: number; finishedAt?: number; error?: string }>(
+    endpoints.job(jobId),
   );
 }
 

@@ -35,6 +35,16 @@ export interface SchedulerOptions {
    * worker 从 WorldRuntime 取并透传；缺省 ThreadRuntime 静默跳过 on_reload 派发。
    */
   reloadTable?: ReloadTable;
+  /**
+   * loop debug 落盘 hook (issue S9, 2026-06-29) — worker 注入实现, scheduler 透传给 think。
+   * 接 server runtime/loop-debug.ts writeLoopDebug (依 debug-store toggle 决定是否真落)。
+   */
+  onLoopComplete?: (info: {
+    loopIndex: number;
+    input: unknown;
+    output: unknown;
+    meta: Record<string, unknown>;
+  }) => Promise<void> | void;
 }
 
 /** 在一个 session 内跑调度循环，直到所有 thread 终态/waiting 或 maxTicks 耗尽。 */
@@ -95,6 +105,7 @@ export async function runScheduler(
       onDataEdit: opts.onDataEdit,
       wakeSession: opts.wakeSession,
       reloadTable: opts.reloadTable,
+      onLoopComplete: opts.onLoopComplete,
     });
   }
 }
