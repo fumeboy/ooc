@@ -22,6 +22,7 @@ import { hydrateSession, saveObjectData } from "@ooc/core/persistable/runtime-ob
 import { enqueueScheduler } from "../../runtime/worker.js";
 import { createLlmClient } from "@ooc/core/thinkable/llm/client.js";
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
+import type { WorldRuntime } from "@ooc/core/runtime/world-runtime.js";
 
 export interface RuntimeModuleConfig {
   baseDir: string;
@@ -29,6 +30,12 @@ export interface RuntimeModuleConfig {
   llm?: LlmClient;
   /** auto-enqueue 开关 —— 创建 thread / 推消息后是否自动调度。缺省 true。 */
   autoEnqueue?: boolean;
+  /**
+   * WorldRuntime 句柄（issue F1）—— buildServer 经 createWorldRuntime 启动时注入,
+   * runtime module 据此把 reloadTable 透给 enqueueScheduler,兑现 lifecycle.on_reload
+   * 在生产 server 路径派发。
+   */
+  worldRuntime?: WorldRuntime;
 }
 
 export function buildRuntimeModule(config: RuntimeModuleConfig) {
@@ -45,7 +52,7 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
   async function maybeEnqueue(sessionId: string): Promise<void> {
     if (!autoEnqueue) return;
     try {
-      await enqueueScheduler(sessionId, getLlm(), baseDir);
+      await enqueueScheduler(sessionId, getLlm(), baseDir, config.worldRuntime?.reloadTable);
     } catch (err) {
       // LLM env 未配置时 createLlmClient 抛错；记录但不阻塞 HTTP 响应
       console.warn(`[runtime] enqueue skipped: ${(err as Error).message}`);

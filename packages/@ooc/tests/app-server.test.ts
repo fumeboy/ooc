@@ -27,17 +27,18 @@ const mockLlm: LlmClient = {
 describe("app server", () => {
   it("GET /health returns ok", async () => {
     const baseDir = await mkdtemp(join(tmpdir(), "ooc-srv-test-"));
-    const app = buildServer({ baseDir, llm: mockLlm, autoEnqueue: false });
+    const app = buildServer({ baseDir, llm: mockLlm, autoEnqueue: false, dev: false });
     const res = await app.handle(new Request("http://localhost/health"));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
+    await app.worldRuntime.dispose();
     await rm(baseDir, { recursive: true, force: true });
   });
 
   it("POST /api/runtime/threads creates thread", async () => {
     const baseDir = await mkdtemp(join(tmpdir(), "ooc-srv-test-"));
-    const app = buildServer({ baseDir, llm: mockLlm, autoEnqueue: false });
+    const app = buildServer({ baseDir, llm: mockLlm, autoEnqueue: false, dev: false });
     const res = await app.handle(
       new Request("http://localhost/api/runtime/threads", {
         method: "POST",
@@ -53,6 +54,7 @@ describe("app server", () => {
     const body = (await res.json()) as { threadId: string; sessionId: string };
     expect(body.sessionId).toBe("app-test-s1");
     expect(body.threadId).toMatch(/^thread_/);
+    await app.worldRuntime.dispose();
     await rm(baseDir, { recursive: true, force: true });
   });
 
@@ -71,7 +73,7 @@ describe("app server", () => {
         };
       },
     };
-    const app = buildServer({ baseDir, llm, autoEnqueue: true });
+    const app = buildServer({ baseDir, llm, autoEnqueue: true, dev: false });
     const res = await app.handle(
       new Request("http://localhost/api/runtime/threads", {
         method: "POST",
@@ -87,6 +89,7 @@ describe("app server", () => {
     // wait for background enqueue
     await new Promise((r) => setTimeout(r, 250));
     expect(calls).toBeGreaterThan(0);
+    await app.worldRuntime.dispose();
     await rm(baseDir, { recursive: true, force: true });
   });
 });
