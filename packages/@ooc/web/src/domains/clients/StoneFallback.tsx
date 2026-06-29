@@ -19,6 +19,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { MarkdownContent } from "../../shared/ui/MarkdownContent";
 import { TODO_async } from "../../transport/todo";
+import { requestJson } from "../../transport/http";
+import { endpoints } from "../../transport/endpoints";
 import { fetchTree } from "../files/query";
 import type { FileTreeNode } from "../files/model";
 import { useDisplayName } from "../objects";
@@ -320,12 +322,14 @@ function useStoneText(objectId: string, kind: "self" | "readable"): TextState {
   useEffect(() => {
     let cancelled = false;
     setState({ text: "", loading: true });
-    TODO_async<{ text?: string }>(
-      `读 stones/main/objects/${objectId}/${kind}.md 全文(GET /api/stones/<id>/${kind}); 返回 { text }; StoneFallback 展示 self/readable 卡片用`,
+    // S1 (2026-06-29): 走通用 file 原语读 self.md / readable.md
+    // (替代旧 /api/stones/<id>/self 与 /api/stones/<id>/readable typed endpoints)
+    requestJson<{ ok: boolean; content?: string }>(
+      endpoints.stoneFile(objectId, `${kind}.md`),
     )
       .then((res) => {
         if (cancelled) return;
-        setState({ text: typeof res?.text === "string" ? res.text : "", loading: false });
+        setState({ text: typeof res?.content === "string" ? res.content : "", loading: false });
       })
       .catch(() => {
         if (cancelled) return;
