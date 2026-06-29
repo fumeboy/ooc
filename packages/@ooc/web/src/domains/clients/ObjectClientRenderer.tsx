@@ -22,6 +22,7 @@ import {
   useMemo,
 } from "react";
 import { TODO_async } from "../../transport/todo";
+import { requestJson } from "../../transport/http";
 import { StoneFallback } from "./StoneFallback";
 
 /**
@@ -79,18 +80,27 @@ async function resolveClientSource(target: ClientTarget): Promise<ClientSourceRe
 }
 
 function callMethodFor(target: ClientTarget) {
+  // S2 (2026-06-29): 设计裁决 — callMethod **仅 flow scope** (visible/self.md);
+  // stone client 只读, stone /call_method 已退役。
+  if (target.scope === "stone") {
+    return async () => {
+      throw new Error(
+        "[visible] stone client is read-only; callMethod requires flow scope (per visible/self.md)",
+      );
+    };
+  }
   return async (method: string, args: object = {}) => {
-    const targetDesc =
-      target.scope === "stone"
-        ? `stone objectId=${target.objectId}`
-        : `flow sessionId=${target.sessionId} objectId=${target.objectId}`;
-    // 废 ui_methods 维度后,call_method 响应即标准 MethodOutcome:
-    // 结构化数据走 data、消息文本走 result,!ok 抛 error。
-    const response = await TODO_async<{ ok: boolean; data?: unknown; result?: string; error?: string }>(
-      `POST /api/${target.scope === "stone" ? "stones/<id>" : "flows/<sid>/<oid>"}/call_method body={method=${method}, args=${JSON.stringify(args).slice(0, 80)}} for ${targetDesc}; dispatch 到 visible/server for-ui method (人类侧专路, ctx 有 world/session/object-self、无 thinkloop thread); 改 data → persistable.save (非版本化); 注意:新设计 callMethod 仅 flow scope (stone /call_method 已移除),桩化重新实现时按新设计走`,
+    const response = await requestJson<{ ok: boolean; data?: unknown; error?: { code?: string; message?: string } }>(
+      `/api/flows/${encodeURIComponent(target.sessionId)}/${encodeURIComponent(target.objectId)}/call_method`,
+      {
+        method: "POST",
+        body: JSON.stringify({ method, args }),
+      },
     );
-    if (!response.ok) throw new Error(response.error ?? `method '${method}' failed`);
-    return response.data ?? response.result;
+    if (!response.ok) {
+      throw new Error(response.error?.message ?? `method '${method}' failed`);
+    }
+    return response.data;
   };
 }
 

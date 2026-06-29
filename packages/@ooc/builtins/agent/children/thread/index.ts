@@ -17,6 +17,7 @@ import executable from "./executable/index.js";
 import readable from "./readable/index.js";
 import persistable from "./persistable/index.js";
 import thinkable from "./thinkable/index.js";
+import visibleServer from "./visible/server/index.js";
 import { type Data, VERSIONED_FIELDS } from "./types.js";
 import { generateMessageId, generateThreadId } from "./executable/utils.js";
 
@@ -82,6 +83,7 @@ export const Class: OocClass<Data> = {
   readable,
   persistable,
   thinkable,
+  visible: visibleServer,
   // lifecycle 维度模块（issue 2026-06-28：从裸 unactive 字段迁入 lifecycle 模块槽）。
   lifecycle: {
     unactive,
