@@ -1,0 +1,93 @@
+import { useState } from "react";
+import { LoaderCircle, SendHorizontal } from "lucide-react";
+
+/**
+ * ChatComposer — 输入与发送。pause 按钮已搬至 RightPanel 的 right-footer
+ * （pause 与 status pill 同栏展示，参见 RightPanel）。
+ *
+ * `paused` 表示 thread 处于 paused（两类 pause 都 disable textarea）。
+ * `awaitingApproval` 单独区分「是 HITL 审批 pause」（有未决 permission_card），
+ * 仅用于切 placeholder 文案——只有此情况才提「审批 / 决议卡」；系统级 pause
+ * （session / global）走通用「已暂停」文案，不误导用户去找不存在的决议卡。
+ */
+export function ChatComposer({
+  disabled,
+  paused = false,
+  awaitingApproval = false,
+  /** 当前 thread 对方 objectId — 用于派生 placeholder（A4 fix），缺省时退回通用文案 */
+  peerObjectId,
+  /** 对方 displayName(从 self.md 第一行派生) — 优先用于 placeholder 文本; 缺省回退到 peerObjectId */
+  peerDisplayName,
+  onSend,
+}: {
+  disabled?: boolean;
+  paused?: boolean;
+  awaitingApproval?: boolean;
+  peerObjectId?: string;
+  peerDisplayName?: string;
+  onSend: (text: string) => Promise<void>;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const cannotSend = disabled || paused || busy || !text.trim();
+
+  // placeholder / button hint 都标 `(⌘↵ to send)` 却没挂任何
+  // keyboard handler — 是 false advertising。这里实装:
+  // - Mac: Cmd+Enter; Win/Linux: Ctrl+Enter (统一 `e.metaKey || e.ctrlKey`)
+  // - 普通 Enter 保留 textarea 原生换行
+  // - cannotSend 状态下 hotkey 直接 return,避免空 message 入 thread
+  async function trySend() {
+    if (cannotSend) return;
+    setBusy(true);
+    try {
+      await onSend(text);
+      setText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== "Enter") return;
+    if (!(event.metaKey || event.ctrlKey)) return;
+    event.preventDefault();
+    if (cannotSend) return;
+    void trySend();
+  }
+  // 原写死 'Continue root thread...' 与 callee thread 现实脱节。
+  // 改为从 peer 派生 `Reply to <name>...`(优先 displayName,缺省回退 objectId);缺 peer 时退回通用 `Continue thread...`。
+  const peerLabel = peerDisplayName || peerObjectId;
+  const idlePlaceholder = peerLabel ? `回复 ${peerLabel}…` : "继续这个 thread…";
+  // composer send 通道只支持 ⌘↵, 在 placeholder 末尾增加 hint, 与 send button title 共同消除
+  // "新用户找不到发送方式" 的体验问题。
+  const placeholder = awaitingApproval
+    ? "thread 等待审批中，先在上方决议卡处理…"
+    : paused
+      ? "session 已暂停，恢复后继续…"
+      : `${idlePlaceholder}（⌘↵ 发送）`;
+
+  return (
+    <div className="chat-composer panel">
+      <div className="chat-composer-card">
+        <textarea
+          className="chat-composer-input"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          disabled={disabled || busy || paused}
+        />
+        <button
+          type="button"
+          className="chat-composer-side-btn chat-send-btn"
+          aria-label={busy ? "发送中（⌘↵）" : "发送消息（⌘↵）"}
+          title={busy ? "发送中…" : "发送（⌘↵）"}
+          disabled={cannotSend}
+          onClick={() => { void trySend(); }}
+        >
+          {busy ? <LoaderCircle size={16} className="chat-side-icon is-spinning" /> : <SendHorizontal size={16} className="chat-side-icon" />}
+        </button>
+      </div>
+    </div>
+  );
+}
