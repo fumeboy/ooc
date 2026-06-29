@@ -1,10 +1,13 @@
 /**
  * MainLogo — 左边栏专用 Logo 组件
  *
- * 结构与视觉直接对齐旧 Web 的 MainLogo；接入后端真实 runtime / health 状态。
+ * 结构与视觉直接对齐旧 Web 的 MainLogo;接入后端真实 runtime / health 状态。
+ *
+ * S8 (2026-06-29): world-config / global-pause / debug toggle 全解桩,真接通。
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { TODO_async } from "../../transport/todo";
+import { requestJson } from "../../transport/http";
+import { endpoints } from "../../transport/endpoints";
 import { OocLogo } from "./OocLogo";
 
 const PILL_STYLE = "flex items-center gap-2 rounded-lg text-[10px] transition-colors whitespace-nowrap p-0.5 justify-center flex-1";
@@ -65,9 +68,7 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   // 一次性拉 world config(站名极少变;不进 REFRESH_MS 周期里)。
   useEffect(() => {
     let cancelled = false;
-    void TODO_async<{ siteName: string }>(
-      `读 world config(GET /api/world/config); 返回 { siteName, externalSkillsDir? }; 从 <baseDir>/.world.json 读取; 站名极少变, 一次性 fetch`,
-    ).then((cfg) => {
+    void requestJson<{ siteName?: string }>(endpoints.worldConfig).then((cfg) => {
       if (cancelled) return;
       if (typeof cfg?.siteName === "string" && cfg.siteName.trim().length > 0) {
         setSiteName(cfg.siteName.trim());
@@ -80,16 +81,10 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
 
   const refreshStatus = useCallback(async () => {
     try {
-      await TODO_async<{ ok: boolean }>(
-        `health 检查(GET /api/health); 返回 { ok, at }`,
-      );
+      await requestJson<{ ok: boolean }>(endpoints.health);
       const [pause, debug] = await Promise.all([
-        TODO_async<{ enabled: boolean }>(
-          `查全局 pause 状态(GET /api/runtime/global-pause/status); 返回 { enabled }`,
-        ),
-        TODO_async<{ enabled: boolean }>(
-          `查 runtime debug 状态(GET /api/runtime/debug/status); 返回 { enabled }`,
-        ),
+        requestJson<{ enabled: boolean }>(endpoints.runtimeGlobalPauseStatus),
+        requestJson<{ enabled: boolean }>(endpoints.runtimeDebugStatus),
       ]);
       setOnline(true);
       setGlobalPaused(pause.enabled);
@@ -110,8 +105,9 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   const handleToggleGlobalPause = useCallback(async () => {
     setPauseBusy(true);
     try {
-      const result = await TODO_async<{ enabled: boolean }>(
-        `切换全局 pause(POST /api/runtime/global-pause/${globalPaused ? "disable" : "enable"}); 返回 { enabled }; pause 期间禁所有 thread 入队、不打断 inflight LLM`,
+      const result = await requestJson<{ enabled: boolean }>(
+        globalPaused ? endpoints.runtimeGlobalPauseDisable : endpoints.runtimeGlobalPauseEnable,
+        { method: "POST" },
       );
       setGlobalPaused(result.enabled);
       setOnline(true);
@@ -125,8 +121,9 @@ export function MainLogo({ isMobile }: { isMobile?: boolean }) {
   const handleToggleDebug = useCallback(async () => {
     setDebugBusy(true);
     try {
-      const result = await TODO_async<{ enabled: boolean }>(
-        `切换 runtime debug 模式(POST /api/runtime/debug/${debugEnabled ? "disable" : "enable"}); 返回 { enabled }; debug 期间 thread 每轮 loop 落盘 input/output/meta JSON 供 LoopTimeline 查看`,
+      const result = await requestJson<{ enabled: boolean }>(
+        debugEnabled ? endpoints.runtimeDebugDisable : endpoints.runtimeDebugEnable,
+        { method: "POST" },
       );
       setDebugEnabled(result.enabled);
       setOnline(true);

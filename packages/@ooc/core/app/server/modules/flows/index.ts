@@ -16,6 +16,8 @@
  *   - S5: POST /api/flows/:sid/talk-windows, POST /api/flows/:sid/continue
  */
 import { Elysia, t } from "elysia";
+import { readdir, stat } from "node:fs/promises";
+import { join } from "node:path";
 import {
   getSessionRegistry,
   iterateSessionObjectTable,
@@ -28,6 +30,11 @@ import {
   continueOnSession,
 } from "../sessions/index.js";
 import { enqueueScheduler } from "../../runtime/worker.js";
+import {
+  pauseSession as pauseSessionStore,
+  resumeSession as resumeSessionStore,
+  isSessionPaused,
+} from "../../runtime/pause-store.js";
 import { createLlmClient } from "@ooc/core/thinkable/llm/client.js";
 import type { LlmClient } from "@ooc/core/thinkable/llm/types.js";
 import type { WorldRuntime } from "@ooc/core/runtime/world-runtime.js";
@@ -257,6 +264,83 @@ export function buildFlowsModule(config: FlowsModuleConfig) {
           text: t.String(),
           targetWindowId: t.Optional(t.String()),
         }),
+      },
+    )
+    // S4: GET /api/flows — list all sessions
+    .get(
+      "",
+      async () => {
+        const flowsRoot = join(baseDir, "flows");
+        let entries;
+        try {
+          entries = await readdir(flowsRoot, { withFileTypes: true });
+        } catch (e) {
+          if ((e as NodeJS.ErrnoException).code === "ENOENT") return { items: [], hash: "0" };
+          throw e;
+        }
+        const items: Array<{
+          sessionId: string;
+          paused?: boolean;
+          updatedAt?: number;
+          title?: string;
+        }> = [];
+        for (const e of entries) {
+          if (!e.isDirectory()) continue;
+          if (e.name.startsWith(".")) continue;
+          const sid = e.name;
+          let updatedAt: number | undefined;
+          try {
+            const st = await stat(join(flowsRoot, sid));
+            updatedAt = st.mtimeMs;
+          } catch {
+            // ignore
+          }
+          items.push({
+            sessionId: sid,
+            paused: isSessionPaused(sid) || undefined,
+            updatedAt,
+          });
+        }
+        // 简单 list-level hash (基于 ids + mtime), 用于轮询去抖
+        const hash = items
+          .map((i) => `${i.sessionId}:${i.updatedAt ?? 0}:${i.paused ? 1 : 0}`)
+          .join("|");
+        return { items, hash };
+      },
+    )
+    // S4: POST /api/flows/:sid/pause — 进程内 pause
+    .post(
+      "/:sid/pause",
+      async ({ params }) => {
+        pauseSessionStore(params.sid);
+        return { sessionId: params.sid, paused: true as const };
+      },
+    )
+    // S4: POST /api/flows/:sid/resume — 进程内 resume + 扫待推进 thread 重新入队
+    .post(
+      "/:sid/resume",
+      async ({ params }) => {
+        resumeSessionStore(params.sid);
+        // 扫 session 内 running/waiting (非 skip_scheduling) thread, 重启入队
+        await hydrateSession(baseDir, params.sid);
+        const resumedThreadIds: string[] = [];
+        const jobIds: string[] = [];
+        iterateSessionObjectTable(params.sid, (inst) => {
+          if (inst.class !== THREAD_CLASS_ID) return;
+          const t = inst.data as ThreadContext;
+          if (t.skip_scheduling) return;
+          if (t.status === "running" || t.status === "waiting") {
+            resumedThreadIds.push(t.id);
+          }
+        });
+        // 唤醒 worker (尝试入队, 若 LLM env 缺失则 console.warn 不阻塞)
+        void maybeEnqueue(params.sid);
+        return {
+          sessionId: params.sid,
+          paused: false as const,
+          resumedThreadIds,
+          jobIds,
+        };
       },
     );
 }

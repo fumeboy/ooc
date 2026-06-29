@@ -172,6 +172,36 @@ export function buildRuntimeModule(config: RuntimeModuleConfig) {
       const record = await loadPrIssue(baseDir, params.id);
       if (!record) return { error: "not found" };
       return record;
+    })
+    // S8 (2026-06-29): global-pause toggle + status
+    .get("/global-pause/status", async () => {
+      const { isGlobalPaused } = await import("../../runtime/pause-store.js");
+      return { enabled: isGlobalPaused() };
+    })
+    .post("/global-pause/enable", async () => {
+      const { setGlobalPaused } = await import("../../runtime/pause-store.js");
+      setGlobalPaused(true);
+      return { enabled: true };
+    })
+    .post("/global-pause/disable", async () => {
+      const { setGlobalPaused } = await import("../../runtime/pause-store.js");
+      setGlobalPaused(false);
+      return { enabled: false };
+    })
+    // S8 (2026-06-29): debug toggle + status
+    .get("/debug/status", async () => {
+      const { isDebugEnabled } = await import("../../runtime/debug-store.js");
+      return { enabled: isDebugEnabled() };
+    })
+    .post("/debug/enable", async () => {
+      const { setDebugEnabled } = await import("../../runtime/debug-store.js");
+      setDebugEnabled(true);
+      return { enabled: true };
+    })
+    .post("/debug/disable", async () => {
+      const { setDebugEnabled } = await import("../../runtime/debug-store.js");
+      setDebugEnabled(false);
+      return { enabled: false };
     });
 }
 

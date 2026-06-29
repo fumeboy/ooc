@@ -17,6 +17,7 @@ import { buildRuntimeModule, type RuntimeModuleConfig } from "./modules/runtime/
 import { buildStonesModule } from "./modules/stones/index.js";
 import { buildFlowsModule } from "./modules/flows/index.js";
 import { buildSessionsModule } from "./modules/sessions/index.js";
+import { buildWorldConfigModule } from "./modules/world-config/index.js";
 
 export interface BuildServerConfig extends RuntimeModuleConfig {
   /** dev 模式开关 — 默认 true (开 hot-reload watcher + lifecycle.on_reload 派发)。 */
@@ -26,19 +27,13 @@ export interface BuildServerConfig extends RuntimeModuleConfig {
 /**
  * 构建一个完整的 OOC app server 实例。
  *
- * 启动时自动 `createWorldRuntime({ worldPath: config.baseDir, dev: config.dev ?? true })`,
- * 把 WorldRuntime 挂在 Elysia decorator 上 (`ctx.worldRuntime`),并透给 runtime module。
- *
- * 返回的 app 持 `worldRuntime` 字段,关停时调用方需调 `app.stop()` + `worldRuntime.dispose()`
- * 释放 hot-reload watcher 与缓存。
- *
  * Modules:
- *   - health   : /health 健康检查
- *   - runtime  : /api/runtime/* (F1 已落地)
- *   - stones   : /api/stones/:id/file (S1 通用 file-edit/read 原语)
- *   - flows    : /api/flows/:sid/:oid/call_method + threads list/detail + talk-windows + continue
- *               (S2 callMethod + S6 thread + S5 talk/continue)
- *   - sessions : /api/sessions (S5 seed user.root thread + target thread)
+ *   - health        : /health 健康检查
+ *   - runtime       : /api/runtime/* (F1 + S8 global-pause/debug)
+ *   - stones        : /api/stones, /api/stones/:id/file (S1+S3 list/create + file-edit)
+ *   - flows         : /api/flows, /api/flows/:sid/{...} (S2+S4+S5+S6)
+ *   - sessions      : /api/sessions (S5)
+ *   - world-config  : /api/world/config (S8)
  */
 export function buildServer(config: BuildServerConfig) {
   const worldRuntime = createWorldRuntime({
@@ -52,8 +47,8 @@ export function buildServer(config: BuildServerConfig) {
     .use(buildRuntimeModule({ ...config, worldRuntime }))
     .use(buildStonesModule({ baseDir: config.baseDir }))
     .use(buildFlowsModule({ ...config, worldRuntime }))
-    .use(buildSessionsModule({ ...config, worldRuntime }));
-  // 把 worldRuntime 暴露在 app 对象上, 调用方 (test / runner) 可显式 dispose。
+    .use(buildSessionsModule({ ...config, worldRuntime }))
+    .use(buildWorldConfigModule({ baseDir: config.baseDir }));
   return Object.assign(app, { worldRuntime });
 }
 

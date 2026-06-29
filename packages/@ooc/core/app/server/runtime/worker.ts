@@ -12,6 +12,7 @@ import type { ReloadTable } from "@ooc/core/runtime/reload-table.js";
 import { runScheduler } from "@ooc/builtins/agent/children/thread/thinkable/index.js";
 import { persistSession } from "@ooc/core/persistable/runtime-object-io.js";
 import { observeLog } from "@ooc/core/observable/index.js";
+import { isGlobalPaused, isSessionPaused } from "./pause-store.js";
 
 interface WorkerState {
   sessionId: string;
@@ -36,6 +37,11 @@ export async function enqueueScheduler(
   baseDir: string,
   reloadTable?: ReloadTable,
 ): Promise<void> {
+  // S4 + S8 (2026-06-29): pause 闸 — global pause / per-session pause 命中即跳过入队。
+  // 已 busy 的 worker 仍可继续 (pause 不打断 inflight LLM, 仅禁新调度信号入队)。
+  if (isGlobalPaused() || isSessionPaused(sessionId)) {
+    return;
+  }
   let w = workers.get(sessionId);
   if (!w) {
     w = { sessionId, llm, baseDir, reloadTable, busy: false, pending: false };
